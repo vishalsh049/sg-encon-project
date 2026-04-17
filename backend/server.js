@@ -74,8 +74,13 @@ registerRoute("./routes/nsoRoutes", "/api/nso");
 registerRoute("./routes/fiberRoutes", "/api/fiber");
 
 // Test Route
-app.get("/", (req, res) => {
-  res.send("API Running...");
+const path = require("path");
+
+// Serve frontend build
+app.use(express.static(path.join(__dirname, "../frontend/dist")));
+
+app.get("*", (req, res) => {
+  res.sendFile(path.join(__dirname, "../frontend/dist/index.html"));
 });
 
 const PORT = process.env.PORT || 5000;
