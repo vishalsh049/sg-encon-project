@@ -2,7 +2,213 @@
 @tailwind components;
 @tailwind utilities;
 
-/* 🔥 Hide scrollbar utility */
+@layer base {
+  :root {
+    color-scheme: light;
+    --color-background: 248 250 252;
+    --color-surface: 255 255 255;
+    --color-surface-muted: 241 245 249;
+    --color-surface-elevated: 255 255 255;
+    --color-text-primary: 15 23 42;
+    --color-text-secondary: 71 85 105;
+    --color-text-muted: 100 116 139;
+    --color-border: 226 232 240;
+    --color-border-strong: 203 213 225;
+    --color-primary: 79 70 229;
+    --color-success: 22 163 74;
+    --color-danger: 220 38 38;
+    --color-warning: 245 158 11;
+    --color-overlay: 15 23 42;
+  }
+
+  .dark {
+    color-scheme: dark;
+    --color-background: 2 6 23;
+    --color-surface: 15 23 42;
+    --color-surface-muted: 15 23 42;
+    --color-surface-elevated: 30 41 59;
+    --color-text-primary: 226 232 240;
+    --color-text-secondary: 148 163 184;
+    --color-text-muted: 148 163 184;
+    --color-border: 51 65 85;
+    --color-border-strong: 71 85 105;
+    --color-primary: 129 140 248;
+    --color-success: 74 222 128;
+    --color-danger: 248 113 113;
+    --color-warning: 251 191 36;
+    --color-overlay: 2 6 23;
+  }
+
+  html,
+  body,
+  #root {
+    min-height: 100%;
+  }
+
+  body {
+    @apply bg-background text-text-primary transition-colors duration-300;
+  }
+}
+
+@layer components {
+  .app-shell {
+    @apply min-h-screen bg-background text-text-primary;
+  }
+
+  .app-surface {
+    @apply rounded-2xl border border-border-color bg-surface shadow-panel;
+  }
+
+  .app-surface-soft {
+    @apply rounded-2xl border border-border-color bg-surface-muted shadow-soft;
+  }
+
+  .app-card {
+    @apply rounded-2xl border border-border-color bg-surface shadow-soft;
+  }
+
+  .app-header {
+    @apply border-b border-border-color bg-surface/90 backdrop-blur-xl;
+  }
+
+  .app-text-primary {
+    @apply text-text-primary;
+  }
+
+  .app-text-secondary {
+    @apply text-text-secondary;
+  }
+
+  .app-text-muted {
+    @apply text-text-muted;
+  }
+
+  .app-input {
+    @apply h-10 rounded-lg border border-border-color bg-surface px-3 text-sm text-text-primary outline-none transition focus:border-primary;
+  }
+
+  .app-input-lg {
+    @apply h-11 rounded-xl border border-border-color bg-surface px-4 text-sm text-text-primary outline-none transition focus:border-primary;
+  }
+
+  .app-select {
+    @apply h-10 rounded-lg border border-border-color bg-surface px-3 text-sm text-text-primary outline-none transition focus:border-primary;
+  }
+
+  .app-date-input {
+    @apply h-10 w-full rounded-xl border border-white/70 bg-white/75 pl-4 pr-11 text-sm text-text-primary outline-none transition duration-200 placeholder:text-text-muted focus:border-primary;
+    backdrop-filter: blur(20px);
+    box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
+  }
+
+  .app-date-trigger {
+    @apply absolute right-2 top-1/2 inline-flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-lg text-text-muted transition duration-200 hover:bg-slate-100 hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  .app-date-popover {
+    @apply absolute left-0 top-[calc(100%+0.65rem)] z-[80] w-[19rem] rounded-2xl border border-white/70 bg-white/75 p-3 text-text-primary transition duration-200 ease-out;
+    backdrop-filter: blur(20px);
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.08);
+  }
+
+  .app-date-header {
+    @apply mb-3 flex items-center justify-between gap-3 px-1;
+  }
+
+  .app-date-title {
+    @apply text-sm font-semibold tracking-[-0.02em] text-slate-800;
+  }
+
+  .app-date-nav {
+    @apply inline-flex h-9 w-9 items-center justify-center rounded-xl border border-white/70 bg-white/70 text-slate-600 transition duration-200 hover:bg-slate-100 hover:text-slate-900;
+    box-shadow: 0 6px 18px rgba(15, 23, 42, 0.06);
+  }
+
+  .app-date-weekdays {
+    @apply mb-2 grid grid-cols-7 gap-2 px-1 text-center text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400;
+  }
+
+  .app-date-grid {
+    @apply grid grid-cols-7 gap-2;
+  }
+
+  .app-date-cell {
+    @apply inline-flex h-10 items-center justify-center rounded-[10px] text-sm font-medium text-slate-700 transition duration-200 hover:bg-slate-100;
+  }
+
+  .app-date-cell-outside {
+    @apply text-slate-400;
+  }
+
+  .app-date-cell-today {
+    @apply border-2 border-indigo-500;
+  }
+
+  .app-date-cell-selected {
+    @apply border-transparent text-white hover:text-white;
+    background: linear-gradient(135deg, #3b82f6, #6366f1);
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+  }
+
+  .app-date-footer {
+    @apply mt-4 flex items-center justify-between px-1;
+  }
+
+  .app-date-link {
+    @apply text-sm font-medium text-slate-500 transition duration-200 hover:text-slate-800 hover:underline;
+  }
+
+  .app-date-soft {
+    @apply inline-flex items-center justify-center rounded-xl border border-white/70 bg-white/75 px-3 py-2 text-sm font-medium text-slate-700 transition duration-200 hover:bg-slate-100 hover:text-slate-900;
+    box-shadow: 0 6px 18px rgba(15, 23, 42, 0.06);
+  }
+
+  .app-button-primary {
+    @apply inline-flex items-center justify-center rounded-xl bg-primary px-4 py-2 text-sm font-medium text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  .app-button-success {
+    @apply inline-flex items-center justify-center rounded-xl bg-success px-4 py-2 text-sm font-medium text-slate-950 transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  .app-button-danger {
+    @apply inline-flex items-center justify-center rounded-xl bg-danger px-4 py-2 text-sm font-medium text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  .app-button-ghost {
+    @apply inline-flex items-center justify-center rounded-xl border border-border-color bg-surface px-4 py-2 text-sm font-medium text-text-secondary transition hover:bg-surface-muted;
+  }
+
+  .app-badge {
+    @apply rounded-full bg-surface-muted px-3 py-1 text-xs font-medium text-text-secondary;
+  }
+
+  .app-table-wrap {
+    @apply overflow-hidden rounded-2xl border border-border-color bg-surface;
+  }
+
+  .app-table {
+    @apply w-full text-sm text-text-secondary;
+  }
+
+  .app-table thead {
+    @apply bg-surface-muted text-text-secondary;
+  }
+
+  .app-table th,
+  .app-table td {
+    @apply border-b border-border-color px-4 py-3 text-left;
+  }
+
+  .app-table tbody tr {
+    @apply transition hover:bg-surface-muted/70;
+  }
+
+  .app-table tbody tr:last-child td {
+    @apply border-b-0;
+  }
+}
+
 .hide-scrollbar::-webkit-scrollbar {
   display: none;
 }
@@ -11,3 +217,4 @@
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+

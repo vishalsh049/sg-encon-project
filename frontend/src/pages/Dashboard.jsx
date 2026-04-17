@@ -1,6 +1,16 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { buildApiUrl } from "../lib/api";
+import { hasPermission } from "../lib/session";
+import Select, { components as ReactSelectComponents } from "react-select";
+import {
+  ChevronDown,
+  Filter as FilterIcon,
+  RefreshCcw,
+  Sparkles,
+  ChevronUp,
+  Loader2,
+} from "lucide-react";
 import {
   LineChart,
   Line,
@@ -19,13 +29,15 @@ import {
 import { PieChart as PieIcon, TrendingUp } from "lucide-react";
 
 const initialStats = {
-  totalSites: 0,
-  totalManpower: 0,
-  totalScrum: 0,
+  totalSites: null,
+  totalFiber: null,
+  totalManpower: null,
+  totalScrum: null,
   siteBreakdown: [],
   manpowerBreakdown: [],
   uptimeData: [],
   monthlyData: [],
+  fiberBreakdown: [],
 };
 
 const weeklyFallback = [
@@ -95,70 +107,586 @@ function isDashboardPayload(data) {
   );
 }
 
+function formatDisplayDate(value) {
+  if (!value) return "";
+  const d = new Date(value);
+  if (Number.isNaN(d.valueOf())) return "";
+  return d.toLocaleDateString("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+function formatFiberValue(value) {
+  return Number(value || 0).toFixed(2);
+}
+
+function formatNumber(value) {
+  return Number(value).toFixed(2).replace(/\.00$/, "");
+}
+
 function Dashboard() {
+  const canViewDashboard = hasPermission("dashboard.view");
+  const canViewWifi = hasPermission("site.WIFI");
+  const canViewGsc = hasPermission("site.GSC");
   const [stats, setStats] = useState(initialStats);
   const [activeIndex, setActiveIndex] = useState(0);
-  const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("weekly");
   const [errorMessage, setErrorMessage] = useState("");
+  const [roleSummary, setRoleSummary] = useState([
+  { category: "Loading...", total: 0 }
+   ]);
 
+  const [filters, setFilters] = useState({
+    circle: [],
+    cmp: [],
+    domain: [],
+  });
+
+  const [scrumCount, setScrumCount] = useState(0);
   useEffect(() => {
-    let isMounted = true;
+  fetch(buildApiUrl("/api/manpower/scrum/count"))
+    .then(res => res.json())
+    .then(data => setScrumCount(data.total))
+    .catch(err => console.log(err));
+}, []);
 
-    axios
-      .get(buildApiUrl("/api/dashboard/stats"))
-      .then((res) => {
-        if (!isMounted) return;
+useEffect(() => {
+  fetch(buildApiUrl("/api/manpower/scrum/job-role-summary"))
+    .then(res => res.json())
+    .then(data => setRoleSummary(data))
+    .catch(err => console.log(err));
+}, []);
 
-        if (!isDashboardPayload(res.data)) {
-          setErrorMessage(
-            "Dashboard API is not returning valid JSON data. Your frontend domain is likely serving HTML instead of the backend /api route."
-          );
-          return;
-        }
+ const circleOptions = [
+  ...["Delhi", "Haryana", "Punjab", "Uttar Pradesh (East)"].map((v) => ({
+    value: v,
+    label: v,
+  })),
+];
 
-        setStats({
-          ...initialStats,
-          ...res.data,
-        });
-      })
-      .catch(() => {
-        if (!isMounted) return;
+  const circleToCmp = {
+    Delhi: [
+      "Delhi-1 (West)",
+      "Delhi-2 (South)",
+      "Delhi-3 (Central-East)",
+      "Delhi-4 (North)",
+      "Faridabad (NCR)",
+      "Ghaziabad (NCR)",
+      "Gurgaon (NCR)",
+      "Noida (NCR)",
+    ],
+    Haryana: ["Ambala", "Hissar", "Karnal", "Panipat", "Rewari", "Rohtak"],
+    Punjab: [
+      "Amritsar",
+      "Bhatinda",
+      "Chandigarh",
+      "Jalandhar",  
+      "Ludhiana-1",
+      "Ludhiana-2",
+      "Pathankot",
+      "Patiala",
+      "Sangrur",
+    ],
+    "Uttar Pradesh (East)": [
+      "Allahabad",
+      "Azamgarh",
+      "Faizabad",
+      "Gorakhpur",
+      "Raebareilly",
+      "Varanasi",
+    ],
+  };
 
-        setErrorMessage(
-          "Unable to load dashboard data from the backend API. Check your backend URL, Node app, and database settings."
-        );
-      })
-      .finally(() => {
-        if (isMounted) {
-          setLoading(false);
-        }
+const domainOptions = [
+  ...["Fiber", "FTTX", "Utility", "Others"].map((v) => ({
+    value: v,
+    label: v,
+  })),
+];
+
+ const cmpOptions = useMemo(() => {
+  if (!filters.circle.length) return [];
+
+  const cmpList = filters.circle
+    .map((c) => circleToCmp[c.value] || [])
+    .flat();
+
+  const uniqueOptions = Array.from(new Set(cmpList)).map((value) => ({
+    value,
+    label: value,
+  }));
+
+  return [
+    { value: "__all__", label: "Select All" },
+    ...uniqueOptions,
+  ];
+}, [filters.circle]);
+
+  // Summary-only chips: keep single-line, no overflow
+  const SummaryValueContainer = (props) => {
+  const { getValue, hasValue, children } = props;
+  const values = getValue();
+
+  // ✅ If NO value → show default placeholder (IMPORTANT)
+  if (!hasValue) {
+    return (
+      <ReactSelectComponents.ValueContainer {...props}>
+        {children}
+      </ReactSelectComponents.ValueContainer>
+    );
+  }
+
+  // ✅ If value exists → show summary
+  if (values.length === props.selectProps.options.length - 1 && props.selectProps.options[0].value === "__all__") {
+  return (
+    <ReactSelectComponents.ValueContainer {...props}>
+      <span className="text-[13px] text-gray-800">All Selected</span>
+      {children[1]}
+    </ReactSelectComponents.ValueContainer>
+  );
+}
+
+const summary =
+  values.length === 1
+    ? values[0].label
+    : `${values[0].label} +${values.length - 1} more`;
+
+  return (
+    <ReactSelectComponents.ValueContainer {...props}>
+      <span className="block max-w-[180px] truncate text-[13px] text-gray-800">
+        {summary}
+      </span>
+
+      {/* keep input */}
+      {children[1]}
+    </ReactSelectComponents.ValueContainer>
+  );
+};
+
+ const CheckboxOption = (props) => {
+  const isAll = props.value === "__all__";
+  const selected = props.selectProps.value || [];
+  const total = props.options.length - 1;
+
+  let checked = props.isSelected;
+  let indeterminate = false;
+
+  if (isAll) {
+    checked = selected.length === total;
+    indeterminate = selected.length > 0 && selected.length < total;
+  }
+
+  return (
+    <ReactSelectComponents.Option {...props}>
+      <div className="flex items-center gap-2">
+        <input
+          type="checkbox"
+          checked={checked}
+          ref={(el) => {
+            if (el) el.indeterminate = indeterminate;
+          }}
+          readOnly
+          className="h-4 w-4 rounded border-gray-300 text-indigo-600"
+        />
+        <span className="text-[13px] text-gray-800">{props.label}</span>
+      </div>
+    </ReactSelectComponents.Option>
+  );
+};
+
+  const selectStyles = {
+    container: (base) => ({
+      ...base,
+      width: "100%",
+    }),
+    control: (base, state) => ({
+      ...base,
+      borderRadius: 12,
+      borderColor: state.isFocused ? "rgb(var(--color-primary))" : "rgb(var(--color-border))",
+      boxShadow: state.isFocused ? "0 0 0 3px rgba(99,102,241,0.15)" : "none",
+      padding: "4px 10px",
+minHeight: 44,
+height: 44,
+      backgroundColor: "rgb(var(--color-surface))",
+      color: "rgb(var(--color-text-primary))",
+      transition: "all 120ms ease",
+    }),
+    valueContainer: (base) => ({
+      ...base,
+      gap: 6,
+      overflow: "hidden",
+      flexWrap: "nowrap",
+    }),
+    input: (base) => ({
+      ...base,
+      margin: 0,
+      padding: 0,
+      color: "rgb(var(--color-text-primary))",
+    }),
+    placeholder: (base) => ({
+      ...base,
+      color: "rgb(var(--color-text-muted))",
+      fontWeight: 400,
+    }),
+    singleValue: (base) => ({
+      ...base,
+      color: "rgb(var(--color-text-primary))",
+      fontSize: 13,
+    }),
+    multiValue: () => null,
+    option: (base, state) => ({
+      ...base,
+      borderRadius: 8,
+      padding: "10px 12px",
+      backgroundColor: state.isSelected
+        ? "rgba(var(--color-primary), 0.12)"
+        : state.isFocused
+        ? "rgba(var(--color-primary), 0.08)"
+        : "rgb(var(--color-surface))",
+      color: "rgb(var(--color-text-primary))",
+      boxShadow: state.isFocused ? "inset 0 0 0 1px rgba(var(--color-primary), 0.3)" : "none",
+      display: "flex",
+      alignItems: "center",
+      gap: 8,
+      fontWeight: 400,
+    }),
+    menu: (base) => ({
+      ...base,
+      borderRadius: 14,
+      overflow: "hidden",
+      backgroundColor: "rgb(var(--color-surface-elevated))",
+      color: "rgb(var(--color-text-primary))",
+      boxShadow:
+        "0 15px 45px rgba(17,24,39,0.12), 0 5px 15px rgba(99,102,241,0.12)",
+    }),
+    menuPortal: (base) => ({
+      ...base,
+      zIndex: 9999,
+    }),
+    menuList: (base) => ({
+      ...base,
+      padding: 8,
+      maxHeight: 260,
+    }),
+    indicatorSeparator: () => ({ display: "none" }),
+    dropdownIndicator: (base) => ({
+      ...base,
+      color: "rgb(var(--color-text-muted))",
+      ":hover": { color: "rgb(var(--color-primary))" },
+    }),
+    clearIndicator: (base) => ({
+      ...base,
+      color: "rgb(var(--color-text-muted))",
+      ":hover": { color: "rgb(var(--color-danger))" },
+    }),
+    noOptionsMessage: (base) => ({
+      ...base,
+      color: "rgb(var(--color-text-secondary))",
+      padding: "12px 8px",
+    }),
+  };
+
+  const fetchStats = async () => {
+    setErrorMessage("");
+
+    try {
+      const res = await axios.get(buildApiUrl("/api/dashboard/stats"), {
+        params: {
+          circle: toParam(filters.circle),
+          cmp: toParam(filters.cmp),
+          domain: toParam(filters.domain),
+        },
       });
 
-    return () => {
-      isMounted = false;
-    };
-  }, []);
+      if (!isDashboardPayload(res.data)) {
+        setErrorMessage(
+          "Dashboard API is not returning valid JSON data. Your frontend domain is likely serving HTML instead of the backend /api route."
+        );
+        return;
+      }
+
+      setStats(res.data);
+
+// ✅ save latest data
+localStorage.setItem("dashboard", JSON.stringify(res.data));
+
+    } catch (err) {
+      setErrorMessage(err?.response?.data?.message || "");
+    } finally {
+    }
+  };
+
+  useEffect(() => {
+  setStats(initialStats); // reset before fetch
+  fetchStats();
+}, [filters.circle, filters.cmp, filters.domain]);
+
+  useEffect(() => {
+  const interval = setInterval(() => {
+    fetchStats();
+  }, 30000);
+
+  return () => clearInterval(interval);
+}, []);
+
+ const handleFilterChange = (key, value) => {
+  if (!value) {
+    setFilters((prev) => ({ ...prev, [key]: [] }));
+    return;
+  }
+
+  if (key === "cmp") {
+    const isAllSelected = value.some((v) => v.value === "__all__");
+
+    const allOptions = cmpOptions.filter((o) => o.value !== "__all__");
+
+    // ✅ Click Select All
+    if (isAllSelected) {
+      setFilters((prev) => ({
+        ...prev,
+        cmp: allOptions,
+      }));
+      return;
+    }
+
+    // ✅ Auto-select when all manually selected
+    if (value.length === allOptions.length) {
+      setFilters((prev) => ({
+        ...prev,
+        cmp: allOptions,
+      }));
+      return;
+    }
+
+    setFilters((prev) => ({ ...prev, cmp: value }));
+    return;
+  }
+
+  if (key === "circle") {
+    setFilters({
+      circle: value,
+      cmp: [],
+      domain: filters.domain,
+    });
+    return;
+  }
+
+  setFilters((prev) => ({ ...prev, [key]: value }));
+};
+
+
+  const resetFilters = () => {
+    setFilters({ circle: [], cmp: [], domain: [] });
+  };
+
+  const toParam = (arr) => (arr && arr.length ? arr.map((o) => o.value).join(",") : "");
 
   const totalManpowerCount = (stats.manpowerBreakdown || []).reduce(
     (sum, item) => sum + Number(item.count || 0),
     0
   );
 
+  const siteBreakdownView = useMemo(() => {
+  return (stats.siteBreakdown || [])
+    .filter((item) => item?.type)
+    .filter((item) => {
+      const normalizedType = String(item.type).toUpperCase();
+      if (normalizedType === "WIFI" && !canViewWifi) return false;
+      if (normalizedType === "GSC" && !canViewGsc) return false;
+      return true;
+    })
+    .map((item) => ({
+      type: String(item.type).toUpperCase(),
+      count: Number(item.count || 0),
+      latestDate: item.latestDate || null,
+    }));
+}, [stats.siteBreakdown, canViewWifi, canViewGsc]);
+
+// ✅ FIBER GROUPING
+const fiberBreakdownView = useMemo(() => {
+  const grouped = {};
+
+  (stats.fiberBreakdown || []).forEach((item) => {
+    const category = item.fiberType || item.category || "Other";
+
+    if (!grouped[category]) {
+      grouped[category] = {
+        aerial: 0,
+        ug: 0,
+        total: 0,
+      };
+    }
+
+    grouped[category].aerial += Number(item.aerial || 0);
+    grouped[category].ug += Number(item.ug || 0);
+    grouped[category].total += Number(item.aerial || 0) + Number(item.ug || 0);
+  });
+
+  Object.values(grouped).forEach((item) => {
+    item.aerial = Number(item.aerial.toFixed(2));
+    item.ug = Number(item.ug.toFixed(2));
+    item.total = Number(item.total.toFixed(2));
+  });
+
+  return grouped;
+}, [stats.fiberBreakdown]);
+
+// ✅ TOTAL FIBER (THIS WAS MISSING ❗)
+const totalFiberCount = useMemo(() => {
+  return Object.values(fiberBreakdownView).reduce(
+    (sum, item) => sum + item.total,
+    0
+  );
+}, [fiberBreakdownView]);
+
+  if (!canViewDashboard) {
+    return (
+      <div className="rounded-2xl border border-border-color bg-surface p-8 text-text-secondary shadow-soft">
+        You do not have permission to view the dashboard.
+      </div>
+    );
+  }
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 text-text-primary">
+
+      {/* Filters */}
+      <div className="relative">
+        <div className="app-surface relative overflow-visible px-4 py-3">
+<div className="absolute inset-x-0 top-0 h-[1px] bg-gradient-to-r from-transparent via-border-color to-transparent" />
+        
+            <div className="relative flex flex-col gap-3">
+
+  {/* 🔥 HEADER */}
+  <div className="flex items-center justify-between">
+    <div className="flex items-center gap-2 text-sm font-semibold text-text-primary">
+      <FilterIcon size={16} className="text-indigo-500" />
+      Filters
+    </div>
+  </div>
+
+  {/* 🔥 DIVIDER */}
+  <div className="h-[1px] bg-border-color" />
+
+  {/* 🔥 FILTER ROW */}
+  <div className="flex items-center gap-4">
+     
+              <div className="flex items-center gap-4 flex-nowrap overflow-hidden whitespace-nowrap">
+               <div className="w-[260px] shrink-0">
+                  <Select
+                    isMulti
+                    placeholder="Select Circle"
+                    value={filters.circle}
+                    options={circleOptions}
+                    onChange={(val) => handleFilterChange("circle", val)}
+                    className="react-select-container"
+                    classNamePrefix="rs"
+                    styles={selectStyles}
+                    menuPortalTarget={typeof document !== "undefined" ? document.body : undefined}
+                    menuPosition="fixed"
+                    menuPlacement="auto"
+                    components={{
+                      Option: CheckboxOption,
+                      MultiValue: () => null,
+                      ValueContainer: SummaryValueContainer,
+                    }}
+                    closeMenuOnSelect={true}
+                    blurInputOnSelect={true}
+                    hideSelectedOptions={false}
+                  />
+                </div>
+
+                <div className="w-[260px] shrink-0 border-l border-border-color pl-3">
+                  <Select
+                    isMulti
+                    isDisabled={!filters.circle.length}
+                    placeholder={filters.circle.length ? "Select CMP" : "Select Circle first"}
+                    value={filters.cmp}
+                    options={cmpOptions}
+                    onChange={(val) => handleFilterChange("cmp", val)}
+                    className="react-select-container"
+                    classNamePrefix="rs"
+                    styles={selectStyles}
+                    components={{
+                      Option: CheckboxOption,
+                      MultiValue: () => null,
+                      ValueContainer: SummaryValueContainer,
+                    }}
+                    title={!filters.circle.length ? "Select Circle first" : ""}
+                    menuPortalTarget={typeof document !== "undefined" ? document.body : undefined}
+                    menuPosition="fixed"
+                    menuPlacement="auto"
+                    maxMenuHeight={220}
+                    closeMenuOnSelect={true}
+                    blurInputOnSelect={true}
+                    hideSelectedOptions={false}
+                    noOptionsMessage={() =>
+                      filters.circle.length ? "No CMP found for selection" : "Select Circle first"
+                    }
+                  />
+                </div>
+
+                <div className="w-[260px] shrink-0 border-l border-border-color pl-3">
+                  <Select
+                    isMulti
+                    placeholder="Select Domain"
+                    value={filters.domain}
+                    options={domainOptions}
+                    onChange={(val) => handleFilterChange("domain", val)}
+                    className="react-select-container"
+                    classNamePrefix="rs"
+                    styles={selectStyles}
+                    components={{
+                      Option: CheckboxOption,
+                      MultiValue: () => null,
+                      ValueContainer: SummaryValueContainer,
+                    }}
+                    menuPortalTarget={typeof document !== "undefined" ? document.body : undefined}
+                    menuPosition="fixed"
+                    menuPlacement="auto"
+                    maxMenuHeight={220}
+                    closeMenuOnSelect={true}
+                    blurInputOnSelect={true}
+                    hideSelectedOptions={false}
+                  />
+                </div>
+              </div>
+
+               <div className="flex items-center gap-2 ml-auto shrink-0">
+                <button
+                  onClick={resetFilters}
+                  className="app-button-ghost px-3 py-1.5 text-[12px]"
+                >
+                  <RefreshCcw size={14} />
+                  Reset
+                </button>
+               
+              </div>
+              </div>
+            </div>
+            
+        </div>
+      </div>
+
       {errorMessage ? (
         <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           {errorMessage}
         </div>
       ) : null}
 
-      <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
-        <div className="flex items-center justify-between rounded-xl border-t-[3px] border-blue-500 bg-white p-5 shadow-sm">
+      <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-4">
+        <div className="app-card flex items-center justify-between  
+      bg-white/70 backdrop-blur-md 
+      border border-white/40 
+      shadow-[0_8px_30px_rgba(0,0,0,0.06)] 
+      rounded-2xl p-5 transition-all duration-300 
+      hover:shadow-[0_12px_40px_rgba(0,0,0,0.08)]">
           <div>
-            <p className="mb-1 text-sm text-gray-500">Total Active Sites</p>
-            <h2 className="text-2xl font-bold text-gray-800">
-              {loading ? "..." : stats.totalSites}
+            <p className="mb-1 text-sm text-text-secondary">Total Active Sites</p>
+            <h2 className="text-2xl font-bold text-text-primary">
+             {stats.totalSites !== null ? formatNumber(stats.totalSites) : "--"}
             </h2>
           </div>
 
@@ -173,11 +701,40 @@ function Dashboard() {
           </LineChart>
         </div>
 
-        <div className="flex items-center justify-between rounded-xl border-t-[3px] border-blue-500 bg-white p-5 shadow-sm">
+        <div className="app-card flex items-center justify-between 
+bg-white/70 backdrop-blur-md 
+border border-white/40 
+shadow-[0_8px_30px_rgba(0,0,0,0.06)] 
+rounded-2xl p-5 transition-all duration-300 
+hover:shadow-[0_12px_40px_rgba(0,0,0,0.08)]">
+  <div>
+    <p className="mb-1 text-sm text-text-secondary">Total Active Fiber</p>
+    <h2 className="text-2xl font-bold text-text-primary">
+     {totalFiberCount !== null ? formatFiberValue(totalFiberCount) : "--"}
+    </h2>
+  </div>
+
+  <LineChart width={80} height={40} data={siteData}>
+    <Line
+      type="monotone"
+      dataKey="value"
+      stroke="#6366f1"
+      strokeWidth={2}
+      dot={false}
+    />
+  </LineChart>
+</div>
+
+        <div className="app-card flex items-center justify-between 
+bg-white/70 backdrop-blur-md 
+border border-white/40 
+shadow-[0_8px_30px_rgba(0,0,0,0.06)] 
+rounded-2xl p-5 transition-all duration-300 
+hover:shadow-[0_12px_40px_rgba(0,0,0,0.08)]">
           <div>
-            <p className="mb-1 text-sm text-gray-500">Total Active Manpower</p>
-            <h2 className="text-2xl font-bold text-gray-800">
-              {loading ? "..." : stats.totalManpower}
+            <p className="mb-1 text-sm text-text-secondary">Total Active Manpower</p>
+            <h2 className="text-2xl font-bold text-text-primary">
+             {stats.totalManpower !== null ? stats.totalManpower : "--"}
             </h2>
           </div>
 
@@ -192,13 +749,18 @@ function Dashboard() {
           </LineChart>
         </div>
 
-        <div className="flex items-center justify-between rounded-xl border-t-[3px] border-green-500 bg-white p-5 shadow-sm">
+        <div className="app-card flex items-center justify-between 
+bg-white/70 backdrop-blur-md 
+border border-white/40 
+shadow-[0_8px_30px_rgba(0,0,0,0.06)] 
+rounded-2xl p-5 transition-all duration-300 
+hover:shadow-[0_12px_40px_rgba(0,0,0,0.08)]">
           <div>
-            <p className="mb-1 text-sm text-gray-500">
+            <p className="mb-1 text-sm text-text-secondary">
               Total Manpower (Scrum Based)
             </p>
-            <h2 className="text-2xl font-bold text-gray-800">
-              {loading ? "..." : stats.totalScrum}
+            <h2 className="text-2xl font-bold text-text-primary">
+              {scrumCount || 0}
             </h2>
           </div>
 
@@ -214,25 +776,37 @@ function Dashboard() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
-        <div className="flex h-[300px] flex-col rounded-xl border bg-white p-5 shadow-sm transition duration-300 hover:shadow-md">
-          <h4 className="mb-4 flex items-center justify-between text-md font-semibold text-gray-700">
+      <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-4">
+        <div className="flex h-[300px] flex-col rounded-2xl 
+bg-white/70 backdrop-blur-md 
+border border-white/40 
+shadow-[0_10px_35px_rgba(0,0,0,0.05)] 
+p-5">
+          <h4 className="mb-4 flex items-center justify-between text-md font-semibold text-slate-800">
             Site Types
             <span className="text-xs text-gray-400">Overview</span>
           </h4>
 
-          <div className="hide-scrollbar max-h-48 space-y-3 overflow-y-auto pr-1">
-            {(stats.siteBreakdown || []).map((item, index) => (
+          <div className="hide-scrollbar max-h-64 space-y-3 overflow-y-auto pr-1">
+            {siteBreakdownView.map((item, index) => (
               <div
                 key={index}
-                className="flex items-center justify-between rounded-lg bg-gray-50 px-3 py-2 transition hover:bg-gray-100"
+                className="flex items-center justify-between rounded-lg px-3 py-2 transition bg-white/60 hover:bg-white/90 
+backdrop-blur-sm 
+border border-white/30 
+shadow-sm"
               >
                 <div className="flex items-center gap-2">
                   <div className="h-2 w-2 rounded-full bg-green-500"></div>
-                  <span className="text-sm font-medium text-gray-700">
-                    {item.type}
-                  </span>
-                </div>
+                  <div className="flex flex-col">
+                    <span className="text-sm font-medium text-slate-800">
+                      {item.type}
+                    </span>
+                    <div className="text-[11px] text-gray-400">
+                      Date: {item.latestDate ? formatDisplayDate(item.latestDate) : "No Data"}
+                    </div>
+        </div>
+       </div>
 
                 <span className="rounded-md bg-green-100 px-2 py-1 text-xs font-semibold text-green-600">
                   {item.count}
@@ -242,8 +816,66 @@ function Dashboard() {
           </div>
         </div>
 
-        <div className="flex h-[300px] flex-col rounded-xl border bg-white p-5 shadow-sm transition duration-300 hover:shadow-md">
-          <h4 className="mb-4 flex items-center justify-between text-md font-semibold text-gray-700">
+        <div className="flex h-[300px] flex-col rounded-2xl 
+bg-white/70 backdrop-blur-md 
+border border-white/40 
+shadow-[0_10px_35px_rgba(0,0,0,0.05)] 
+p-5">
+  <h4 className="mb-4 flex items-center justify-between text-md font-semibold text-slate-800">
+    Fiber Inventory
+    <span className="text-xs text-gray-400">Overview</span>
+  </h4>
+
+  <div className="hide-scrollbar max-h-64 space-y-3 overflow-y-auto pr-1">
+   {Object.entries(fiberBreakdownView).map(([category, data], index) => (
+  <div
+    key={index}
+    className="rounded-xl 
+bg-white/70 backdrop-blur-sm 
+border border-white/40 
+px-4 py-3 
+shadow-sm hover:shadow-lg transition"
+  >
+    {/* HEADER */}
+    <div className="flex justify-between items-center mb-2">
+      <span className="text-sm font-semibold text-gray-800">
+        {category}
+      </span>
+
+      <span className="text-xs font-bold bg-indigo-100 text-indigo-600 px-2 py-1 rounded-md">
+        {formatFiberValue(data.total)}
+      </span>
+    </div>
+
+    {/* SUB ITEMS */}
+    <div className="space-y-1 text-xs text-slate-600">
+      <div className="flex justify-between">
+        <span className="flex items-center gap-1">
+          <span className="h-2 w-2 rounded-full bg-blue-500"></span>
+          Aerial
+        </span>
+        <span>{formatFiberValue(data.aerial)}</span>
+      </div>
+
+      <div className="flex justify-between">
+        <span className="flex items-center gap-1">
+          <span className="h-2 w-2 rounded-full bg-purple-500"></span>
+          UG
+        </span>
+        <span>{formatFiberValue(data.ug)}</span>
+      </div>
+    </div>
+  </div>
+))}
+  </div>
+</div>
+
+        <div className="flex h-[300px] flex-col rounded-2xl 
+bg-white/70 backdrop-blur-md 
+border border-white/40 
+shadow-[0_10px_35px_rgba(0,0,0,0.05)] 
+p-5">
+          <h4 className="mb-4 flex items-center justify-between text-md font-semibold text-slate-800">
             Manpower Roles
             <span className="text-xs text-gray-400">Active</span>
           </h4>
@@ -252,10 +884,13 @@ function Dashboard() {
             {(stats.manpowerBreakdown || []).map((item, index) => (
               <div
                 key={index}
-                className="flex items-center justify-between rounded-lg bg-gray-50 px-3 py-2 transition hover:bg-gray-100"
+                className="flex items-center justify-between rounded-lg px-3 py-2 transition bg-white/60 hover:bg-white/90 
+backdrop-blur-sm 
+border border-white/30 
+shadow-sm"
               >
                 <div className="flex flex-col">
-                  <span className="text-sm font-medium text-gray-700">
+                  <span className="text-sm font-medium text-slate-800">
                     {item.role}
                   </span>
                   <span className="text-xs text-gray-400">Active Role</span>
@@ -269,41 +904,48 @@ function Dashboard() {
           </div>
         </div>
 
-        <div className="flex h-[300px] flex-col justify-between rounded-xl border bg-white p-5 shadow-sm transition duration-300 hover:shadow-md">
-          <h4 className="mb-4 text-md font-semibold text-gray-700">
-            Dashboard Summary
+        <div className="flex h-[300px] flex-col rounded-2xl 
+bg-white/70 backdrop-blur-md 
+border border-white/40 
+shadow-[0_10px_35px_rgba(0,0,0,0.05)] 
+p-5">
+          <h4 className="mb-4 text-md font-semibold text-slate-800">
+            Job Roles
           </h4>
 
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-500">Total Sites</span>
-              <span className="font-semibold text-blue-600">
-                {stats.totalSites}
-              </span>
-            </div>
+      <div className="hide-scrollbar max-h-64 space-y-3 overflow-y-auto pr-1">
+  {roleSummary.map((item, index) => (
+    <div
+      key={item.category}
+      className="flex items-center justify-between rounded-lg px-3 py-2 transition bg-white/60 hover:bg-white/90 backdrop-blur-sm border border-white/30 shadow-sm"
+    >
+      <div className="flex items-center gap-2">
+        <div className="h-2 w-2 rounded-full bg-blue-500"></div>
 
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-500">Total Manpower</span>
-              <span className="font-semibold text-green-600">
-                {stats.totalManpower}
-              </span>
-            </div>
+        <div className="flex flex-col">
+          <span className="text-sm font-medium text-slate-800">
+            {item.category}
+          </span>
+          <span className="text-[11px] text-gray-400">
+            Job Role
+          </span>
+        </div>
+      </div>
 
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-500">Scrum Manpower</span>
-              <span className="font-semibold text-purple-600">
-                {stats.totalScrum}
-              </span>
-            </div>
-          </div>
+      <span className="rounded-md bg-indigo-100 px-2 py-1 text-xs font-semibold text-indigo-600">
+        {item.total}
+      </span>
+    </div>
+  ))}
+</div>
 
-          <div className="mt-4 text-xs text-gray-400">Live Overview</div>
+    
         </div>
       </div>
 
       <div className="mt-6 grid grid-cols-1 gap-6 md:grid-cols-3">
         <div className="rounded-xl border bg-white p-5 shadow-sm md:col-span-1">
-          <h4 className="mb-4 flex items-center gap-2 text-md font-semibold text-gray-700">
+          <h4 className="mb-4 flex items-center gap-2 text-md font-semibold text-slate-800">
             <PieIcon size={18} />
             Manpower Distribution
           </h4>
@@ -338,7 +980,7 @@ function Dashboard() {
                 y="48%"
                 textAnchor="middle"
                 dominantBaseline="middle"
-                style={{ fontSize: "20px", fontWeight: "600", fill: "#374151" }}
+                className="fill-slate-700 text-[20px] font-semibold"
               >
                 {totalManpowerCount}
               </text>
@@ -348,7 +990,7 @@ function Dashboard() {
                 y="60%"
                 textAnchor="middle"
                 dominantBaseline="middle"
-                style={{ fontSize: "12px", fill: "#9ca3af" }}
+                className="fill-slate-400 text-[12px]"
               >
                 Total
               </text>
@@ -371,7 +1013,7 @@ function Dashboard() {
 
         <div className="rounded-xl border bg-white p-5 shadow-sm md:col-span-2">
           <div className="mb-2 flex items-center justify-between">
-            <h4 className="flex items-center gap-2 text-md font-semibold text-gray-700">
+            <h4 className="flex items-center gap-2 text-md font-semibold text-slate-800">
               <TrendingUp size={18} />
               Uptime Trend
             </h4>
@@ -381,8 +1023,8 @@ function Dashboard() {
                 onClick={() => setFilter("weekly")}
                 className={`rounded-md px-3 py-1 text-xs ${
                   filter === "weekly"
-                    ? "bg-blue-500 text-white"
-                    : "bg-gray-100 text-gray-600"
+                    ? "bg-gradient-to-r from-indigo-500 to-blue-500 text-white shadow-md"
+                    : "bg-gray-100 text-slate-600"
                 }`}
               >
                 Weekly
@@ -392,8 +1034,8 @@ function Dashboard() {
                 onClick={() => setFilter("monthly")}
                 className={`rounded-md px-3 py-1 text-xs ${
                   filter === "monthly"
-                    ? "bg-blue-500 text-white"
-                    : "bg-gray-100 text-gray-600"
+                    ? "bg-gradient-to-r from-indigo-500 to-blue-500 text-white shadow-md"
+                    : "bg-gray-100 text-slate-600"
                 }`}
               >
                 Monthly
