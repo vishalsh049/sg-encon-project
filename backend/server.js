@@ -74,12 +74,11 @@ registerRoute("./routes/nsoRoutes", "/api/nso");
 registerRoute("./routes/fiberRoutes", "/api/fiber");
 
 // Test Route
-const path = require("path");
 
 // Serve frontend build
 app.use(express.static(path.join(__dirname, "../frontend/dist")));
 
-app.get("*", (req, res) => {
+app.get("/*", (req, res) => {
   res.sendFile(path.join(__dirname, "../frontend/dist/index.html"));
 });
 

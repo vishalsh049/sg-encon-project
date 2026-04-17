@@ -30,7 +30,7 @@ npm start
 Frontend:
 1. Create `frontend/.env.development` with:
 ```
-VITE_API_BASE_URL=http://localhost:5000
+VITE_API_BASE_URL=
 ```
 2. Run:
 ```
