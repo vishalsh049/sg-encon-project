@@ -23,7 +23,7 @@ function resolveEnvFile() {
 }
 
 const envPath = resolveEnvFile();
-dotenv.config(envPath ? { path: envPath } : undefined);
+dotenv.config(); 
 console.log("Using ENV file:", envPath || "(process env only)");
 
 const express = require("express");
@@ -74,12 +74,12 @@ registerRoute("./routes/nsoRoutes", "/api/nso");
 registerRoute("./routes/fiberRoutes", "/api/fiber");
 
 // Test Route
+app.get("/", (req, res) => {
+  res.send("API running ✅");
+});
 
-// Serve frontend build
-app.use(express.static(path.join(__dirname, "../frontend/dist")));
-
-app.get("*", (req, res) => {
-  res.sendFile(path.join(__dirname, "../frontend/dist/index.html"));
+app.use((req, res) => {
+  res.status(404).json({ message: "Route not found" });
 });
 
 const PORT = process.env.PORT || 5000;

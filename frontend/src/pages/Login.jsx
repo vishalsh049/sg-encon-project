@@ -9,38 +9,43 @@ function Login() {
   const [errorMessage, setErrorMessage] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const handleLogin = async (e) => {
-    e.preventDefault();
-    setErrorMessage("");
-    setLoading(true);
+const handleLogin = async (e) => {
+  e.preventDefault();
+  console.log("LOGIN ATTEMPT:", { email });
 
-    try {
-      const res = await axios.post(buildApiUrl("/api/auth/login"), {
-        email,
-        password,
-      });
+  setErrorMessage("");
+  setLoading(true);
 
-      localStorage.setItem("token", res.data.token);
-      if (res.data.user) {
-        setStoredSession(res.data.user);
-      }
-      window.location.href = "/dashboard";
-    } catch (err) {
-      const backendMessage = err?.response?.data?.message;
-      const networkMessage =
-        err?.message === "Network Error"
-          ? `"Cannot reach backend. Make sure server is running on localhost:5000". Make sure the server is running.`
-          : undefined;
+  try {
+    const res = await axios.post(
+ buildApiUrl("/api/auth/login"),
+ { email: email.trim().toLowerCase(), password },
+ { withCredentials: false }
+);
 
-      setErrorMessage(
-        backendMessage ||
-          networkMessage ||
-          "Login failed. Please double-check your credentials and try again."
-      );
-    }
+    console.log("LOGIN RESPONSE:", res.data);
 
+   if (res.data?.token) {
+ setStoredSession(res.data.token);
+ window.location.href = "/dashboard";
+ return;
+} 
+
+    // No token but success
+    setErrorMessage(res.data?.message || "Login failed - no token received");
+    
+  } catch (err) {
+    console.error("LOGIN ERROR:", err.response?.data || err.message);
+    
+    const errorMsg = err.response?.data?.message || 
+                    err.response?.data?.error || 
+                    err.message || 
+                    "Login failed";
+    setErrorMessage(errorMsg);
+  } finally {
     setLoading(false);
-  };
+  }
+};
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">

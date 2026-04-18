@@ -130,10 +130,13 @@ function Dashboard() {
   const canViewDashboard = hasPermission("dashboard.view");
   const canViewWifi = hasPermission("site.WIFI");
   const canViewGsc = hasPermission("site.GSC");
-  const [stats, setStats] = useState(initialStats);
   const [activeIndex, setActiveIndex] = useState(0);
   const [filter, setFilter] = useState("weekly");
   const [errorMessage, setErrorMessage] = useState("");
+
+  const [stats, setStats] = useState(initialStats);
+const [apiStatus, setApiStatus] = useState("checking"); 
+
   const [roleSummary, setRoleSummary] = useState([
   { category: "Loading...", total: 0 }
    ]);
@@ -388,38 +391,48 @@ height: 44,
     }),
   };
 
-  const fetchStats = async () => {
-    setErrorMessage("");
+ const fetchStats = async () => {
+  setErrorMessage("");
 
-    try {
-      const res = await axios.get(buildApiUrl("/api/dashboard/stats"), {
-        params: {
-          circle: toParam(filters.circle),
-          cmp: toParam(filters.cmp),
-          domain: toParam(filters.domain),
-        },
-      });
+  try {
+    const res = await axios.get(buildApiUrl("/api/dashboard/stats"), {
+      params: {
+        circle: toParam(filters.circle),
+        cmp: toParam(filters.cmp),
+        domain: toParam(filters.domain),
+      },
+    });
 
-      if (!isDashboardPayload(res.data)) {
-        setErrorMessage(
-          "Dashboard API is not returning valid JSON data. Your frontend domain is likely serving HTML instead of the backend /api route."
-        );
-        return;
-      }
-
-      setStats(res.data);
-
-// ✅ save latest data
-localStorage.setItem("dashboard", JSON.stringify(res.data));
-
-    } catch (err) {
-      setErrorMessage(err?.response?.data?.message || "");
-    } finally {
+    if (!isDashboardPayload(res.data)) {
+      setErrorMessage("Invalid API response");
+      setApiStatus("offline");
+      return;
     }
-  };
+
+    // ✅ ALWAYS USE LIVE DATA
+    setStats(res.data);
+
+    // ✅ SAVE CACHE
+    localStorage.setItem("dashboard", JSON.stringify(res.data));
+
+    // ✅ STATUS
+    setApiStatus("live");
+
+  } catch (err) {
+    console.log(err);
+
+    // ⚠️ FALLBACK TO CACHE ONLY IF ERROR
+    const cached = localStorage.getItem("dashboard");
+
+    if (cached) {
+      setStats(JSON.parse(cached));
+    }
+
+    setApiStatus("offline");
+  }
+};
 
   useEffect(() => {
-  setStats(initialStats); // reset before fetch
   fetchStats();
 }, [filters.circle, filters.cmp, filters.domain]);
 
@@ -561,11 +574,54 @@ const totalFiberCount = useMemo(() => {
 
   {/* 🔥 HEADER */}
   <div className="flex items-center justify-between">
-    <div className="flex items-center gap-2 text-sm font-semibold text-text-primary">
-      <FilterIcon size={16} className="text-indigo-500" />
-      Filters
+
+  {/* LEFT SIDE */}
+  <div className="flex items-center gap-2">
+    <div className="p-2 rounded-lg bg-indigo-50 text-indigo-600">
+      {/* icon optional */}
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        className="h-4 w-4"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+      >
+        <path strokeWidth="2" d="M3 4h18M6 12h12M10 20h4" />
+      </svg>
+    </div>
+
+    <div>
+      <h2 className="text-sm font-semibold text-gray-800">
+        Filters
+      </h2>
+      <p className="text-xs text-gray-400">
+        Narrow down your dashboard data
+      </p>
     </div>
   </div>
+
+  {/* RIGHT SIDE STATUS */}
+  <div
+    className={`flex items-center gap-2 px-3 py-1 rounded-full 
+    text-xs font-medium backdrop-blur-md border shadow-sm
+    ${
+      apiStatus === "live"
+        ? "bg-emerald-50/60 border-emerald-200 text-emerald-700"
+        : "bg-rose-50/60 border-rose-200 text-rose-700"
+    }`}
+  >
+    <span
+      className={`h-2 w-2 rounded-full ${
+        apiStatus === "live"
+          ? "bg-emerald-500 animate-pulse"
+          : "bg-rose-500"
+      }`}
+    ></span>
+
+    {apiStatus === "live" ? "Live" : "Offline"}
+  </div>
+
+</div>
 
   {/* 🔥 DIVIDER */}
   <div className="h-[1px] bg-border-color" />
