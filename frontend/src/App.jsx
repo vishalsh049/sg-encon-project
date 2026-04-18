@@ -1,4 +1,4 @@
-import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { HashRouter, Route, Routes } from "react-router-dom";
 import { Toaster } from "react-hot-toast";  
 import DashboardLayout from "./layout/DashboardLayout";
 import AddData from "./pages/AddData";
@@ -17,7 +17,7 @@ function App() {
   return (
 
     <UserProvider>
-    <BrowserRouter>
+    <HashRouter>
     <Toaster position="top-right" />
 
       <Routes>
@@ -52,8 +52,9 @@ function App() {
 
 
         </Route>
+         <Route path="*" element={<Login />} />
       </Routes>
-    </BrowserRouter>
+    </HashRouter>
     </UserProvider>
   );
 }

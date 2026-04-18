@@ -16,8 +16,8 @@ import { buildApiUrl, getAuthHeaders } from "../lib/api";
 const initialUserForm = {
   name: "",
   designation: "",
-  circle: "",
-  domain: "",
+  circle: "ALL",
+  domain: "ALL",
   email: "",
   password: "",
   roleId: "",
@@ -135,7 +135,11 @@ function UsersAccessPage() {
   console.log("OPEN USER MODAL");
 
   setEditingUser(null);
-  setUserForm(initialUserForm);
+  setUserForm({
+  ...initialUserForm,
+  circle: "ALL",
+  domain: "ALL",
+ });
   setUserModalOpen(true);
 };
 
@@ -172,17 +176,29 @@ function UsersAccessPage() {
     setRoleModalOpen(true);
   };
 
+const handleGiveAllAccess = () => {
+  // take all permission IDs from backend list
+  const allPermissionIds = permissions.map((p) => p.id);
+
+  setUserForm((prev) => ({
+    ...prev,
+    permissionIds: allPermissionIds,
+  }));
+
+  toast.success("All permissions selected");
+};
+
 const saveUser = async () => {
     console.log("SAVE CLICKED", userForm);
   // ✅ VALIDATION
-  if (
-    !userForm.name ||
-    !userForm.designation ||
-    !userForm.circle ||
-    !userForm.domain ||
-    !userForm.email ||
-    (!editingUser && !userForm.password)
-  ) {
+if (
+  !userForm.name ||
+  !userForm.designation ||
+  (!userForm.circle && userForm.circle !== "ALL") ||
+  (!userForm.domain && userForm.domain !== "ALL") ||
+  !userForm.email ||
+  (!editingUser && !userForm.password)
+) {
     console.log("VALIDATION FAILED", userForm);
     toast.error("All fields are required");
     return;
@@ -191,9 +207,9 @@ const saveUser = async () => {
   try {
     console.log("BEFORE API CALL");
     const payload = {
-      ...userForm,
-      roleId: userForm.roleId ? Number(userForm.roleId) : null,
-    };
+  ...userForm,
+  roleId: userForm.roleId ? Number(userForm.roleId) : null,
+  };
 console.log("PAYLOAD", payload);
 
     if (editingUser) {
@@ -640,7 +656,8 @@ setUsers((prev) => [
                 className="app-select"
               >
                 <option value="">Select Circle</option>
-                {circleOptions.map((circle) => (
+                <option value="ALL">All Circles</option>
+                {circleOptions.filter(c => c !== "ALL").map((circle) => (
                   <option key={circle} value={circle}>
                     {circle}
                   </option>
@@ -654,6 +671,7 @@ setUsers((prev) => [
                 className="app-select"
               >
                 <option value="">Select Domain</option>
+                <option value="ALL">All Domains</option>
                 {domainOptions.map((domain) => (
                   <option key={domain} value={domain}>
                     {domain}
@@ -704,9 +722,19 @@ setUsers((prev) => [
               </select>
 
               <div className="md:col-span-2 rounded-2xl border border-border-color bg-gradient-to-br from-gray-50 to-white p-4 shadow-sm border border-gray-100">
-                <div className="mb-3 text-sm font-semibold tracking-wide text-gray-600 text-text-primary">
-                  Direct Permissions
-                </div>
+                <div className="mb-3 flex items-center justify-between">
+             <div className="text-sm font-semibold tracking-wide text-gray-600 text-text-primary">
+             Direct Permissions
+             </div>
+
+             <button          
+             type="button"
+            onClick={handleGiveAllAccess}
+             className="text-xs bg-indigo-600 text-white px-3 py-1 rounded-md hover:bg-indigo-700"
+                >
+            Give All Access
+            </button>
+              </div>
                 <div className="grid gap-4 md:grid-cols-2">
                   {Object.entries(permissionGroups).map(([group, groupPermissions]) => (
                     <div key={group} className="rounded-2xl border border-border-color bg-surface p-4">
