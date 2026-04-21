@@ -34,10 +34,17 @@ const initialStats = {
   totalManpower: null,
   totalScrum: null,
   siteBreakdown: [],
-  manpowerBreakdown: [],
   uptimeData: [],
   monthlyData: [],
+  yearlyData: [],
   fiberBreakdown: [],
+};
+
+const initialScrumFunctionSummary = {
+  fiber: 0,
+  fttx: 0,
+  utility: 0,
+  others: 0,
 };
 
 const weeklyFallback = [
@@ -50,10 +57,10 @@ const weeklyFallback = [
 ];
 
 const monthlyFallback = [
-  { day: "Week 1", uptime: 93 },
-  { day: "Week 2", uptime: 95 },
-  { day: "Week 3", uptime: 92 },
-  { day: "Week 4", uptime: 96 },
+  { week: "Week 1", uptime: 93 },
+  { week: "Week 2", uptime: 95 },
+  { week: "Week 3", uptime: 92 },
+  { week: "Week 4", uptime: 96 },
 ];
 
 const siteData = [
@@ -94,6 +101,37 @@ const COLORS = [
   "#64748b",
 ];
 
+const SCRUM_MANPOWER_COLORS = {
+  Fiber: {
+    solid: "#ef4444",
+    start: "#fb7185",
+    end: "#dc2626",
+    depth: "#991b1b",
+    label: "#7f1d1d",
+  },
+  FTTx: {
+    solid: "#06b6d4",
+    start: "#67e8f9",
+    end: "#0891b2",
+    depth: "#0e7490",
+    label: "#164e63",
+  },
+  Utility: {
+    solid: "#f59e0b",
+    start: "#fcd34d",
+    end: "#f97316",
+    depth: "#c2410c",
+    label: "#9a3412",
+  },
+  Others: {
+    solid: "#84cc16",
+    start: "#bef264",
+    end: "#65a30d",
+    depth: "#4d7c0f",
+    label: "#365314",
+  },
+};
+
 function isDashboardPayload(data) {
   return (
     data &&
@@ -126,16 +164,109 @@ function formatNumber(value) {
   return Number(value).toFixed(2).replace(/\.00$/, "");
 }
 
+function ScrumManpowerTooltip({ active, payload }) {
+  if (!active || !payload || !payload.length) {
+    return null;
+  }
+
+  const item = payload[0]?.payload;
+
+  if (!item) {
+    return null;
+  }
+
+  return (
+    <div
+      className="rounded-2xl border border-slate-200 bg-white/95 px-3 py-2 shadow-[0_12px_30px_rgba(15,23,42,0.12)] backdrop-blur-md"
+    >
+      <div className="text-sm font-semibold text-slate-800">{item.name}</div>
+      <div className="mt-1 text-xs text-slate-500">
+        Count: <span className="font-semibold text-slate-700">{item.value}</span>
+      </div>
+      <div className="text-xs text-slate-500">
+        Share: <span className="font-semibold text-slate-700">{item.percentage}%</span>
+      </div>
+    </div>
+  );
+}
+
+const renderOutsideLabel = ({ cx, cy, midAngle, outerRadius, payload }) => {
+  const RADIAN = Math.PI / 180;
+
+  const radius = outerRadius + 25; // distance outside
+  const x = cx + radius * Math.cos(-midAngle * RADIAN);
+  const y = cy + radius * Math.sin(-midAngle * RADIAN);
+
+  return (
+    <g>
+      {/* Line */}
+      <line
+        x1={cx + outerRadius * Math.cos(-midAngle * RADIAN)}
+        y1={cy + outerRadius * Math.sin(-midAngle * RADIAN)}
+        x2={x}
+        y2={y}
+        stroke="#cbd5e1"
+        strokeDasharray="3 3"
+      />
+
+      {/* Text */}
+      <text
+        x={x}
+        y={y - 10}
+        textAnchor={x > cx ? "start" : "end"}
+        className="fill-slate-700 text-[11px] font-semibold"
+      >
+        {payload.name}
+      </text>
+
+      <text
+        x={x}
+        y={y + 5}
+        textAnchor={x > cx ? "start" : "end"}
+        className="fill-slate-900 text-[14px] font-bold"
+      >
+        {payload.value}
+      </text>
+
+      <text
+        x={x}
+        y={y + 18}
+        textAnchor={x > cx ? "start" : "end"}
+        className="fill-slate-400 text-[11px]"
+      >
+        {payload.percentage}%
+      </text>
+    </g>
+  );
+};
+
+
 function Dashboard() {
-  const canViewDashboard = hasPermission("dashboard.view");
+  const session = JSON.parse(localStorage.getItem("sessionUser"));
+  const canViewDashboard =
+  session && session.token && hasPermission("view_dashboard");
+ 
+useEffect(() => {
+  const session = JSON.parse(localStorage.getItem("sessionUser"));
+
+  if (!session || !session.token) {
+    window.location.href = "/";
+  }
+}, []);
+
   const canViewWifi = hasPermission("site.WIFI");
   const canViewGsc = hasPermission("site.GSC");
   const [activeIndex, setActiveIndex] = useState(0);
-  const [filter, setFilter] = useState("weekly");
   const [errorMessage, setErrorMessage] = useState("");
-
   const [stats, setStats] = useState(initialStats);
-const [apiStatus, setApiStatus] = useState("checking"); 
+  const [uptimeTrend, setUptimeTrend] = useState([]);
+
+useEffect(() => {
+  fetchStats();   // ✅ always get fresh data from backend
+}, []);
+
+const [apiStatus, setApiStatus] = useState("checking");
+const [lastUpdated, setLastUpdated] = useState(null);
 
   const [roleSummary, setRoleSummary] = useState([
   { category: "Loading...", total: 0 }
@@ -148,19 +279,89 @@ const [apiStatus, setApiStatus] = useState("checking");
   });
 
   const [scrumCount, setScrumCount] = useState(0);
+  const [scrumPieActiveIndex, setScrumPieActiveIndex] = useState(0);
+  const [scrumFunctionSummary, setScrumFunctionSummary] = useState(() => {
+    try {
+      const cached = JSON.parse(localStorage.getItem("scrumFunctionSummary"));
+      return cached && typeof cached === "object"
+        ? {
+            fiber: Number(cached.fiber || 0),
+            fttx: Number(cached.fttx || 0),
+            utility: Number(cached.utility || 0),
+            others: Number(cached.others || 0),
+          }
+        : initialScrumFunctionSummary;
+    } catch {
+      return initialScrumFunctionSummary;
+    }
+  });
+ 
   useEffect(() => {
-  fetch(buildApiUrl("/api/manpower/scrum/count"))
-    .then(res => res.json())
-    .then(data => setScrumCount(data.total))
-    .catch(err => console.log(err));
+  const loadData = async () => {
+    try {
+      const [countRes, roleRes, functionSummaryRes] = await Promise.all([
+        fetch(buildApiUrl("/api/manpower/scrum/count")),
+        fetch(buildApiUrl("/api/manpower/scrum/job-role-summary")),
+        fetch(buildApiUrl("/api/manpower/scrum/function-summary")),
+      ]);
+
+      const countData = await countRes.json();
+      const roleData = await roleRes.json();
+      const functionSummaryData = await functionSummaryRes.json();
+
+      setScrumCount(Number(countData.total || 0));
+      setRoleSummary(Array.isArray(roleData) ? roleData : []);
+      const nextSummary = {
+        fiber: Number(functionSummaryData.fiber || 0),
+        fttx: Number(functionSummaryData.fttx || 0),
+        utility: Number(functionSummaryData.utility || 0),
+        others: Number(functionSummaryData.others || 0),
+      };
+      setScrumFunctionSummary(nextSummary);
+      localStorage.setItem("scrumFunctionSummary", JSON.stringify(nextSummary));
+    } catch (err) {
+      console.log(err);
+    }
+  };
+
+  loadData();
 }, []);
 
-useEffect(() => {
-  fetch(buildApiUrl("/api/manpower/scrum/job-role-summary"))
-    .then(res => res.json())
-    .then(data => setRoleSummary(data))
-    .catch(err => console.log(err));
-}, []);
+  useEffect(() => {
+     window.addEventListener("scrum-manpower-updated", handleScrumSummaryUpdated);
+    return () => {
+      window.removeEventListener("scrum-manpower-updated", handleScrumSummaryUpdated);
+    };
+  }, []);
+
+  const handleScrumSummaryUpdated = (event) => {
+  const detail = event.detail;
+
+  // ✅ STOP if no real data
+  if (
+    !detail ||
+    Object.keys(detail).length === 0 ||
+    (detail.fiber === undefined &&
+      detail.fttx === undefined &&
+      detail.utility === undefined &&
+      detail.others === undefined)
+  ) {
+    console.log("❌ Ignored empty scrum update");
+    return;
+  }
+
+  const nextSummary = {
+    fiber: Number(detail.fiber || 0),
+    fttx: Number(detail.fttx || 0),
+    utility: Number(detail.utility || 0),
+    others: Number(detail.others || 0),
+  };
+
+  console.log("✅ Updating Scrum:", nextSummary);
+
+  setScrumFunctionSummary(nextSummary);
+  localStorage.setItem("scrumFunctionSummary", JSON.stringify(nextSummary));
+};
 
  const circleOptions = [
   ...["Delhi", "Haryana", "Punjab", "Uttar Pradesh (East)"].map((v) => ({
@@ -310,8 +511,8 @@ const summary =
       borderColor: state.isFocused ? "rgb(var(--color-primary))" : "rgb(var(--color-border))",
       boxShadow: state.isFocused ? "0 0 0 3px rgba(99,102,241,0.15)" : "none",
       padding: "4px 10px",
-minHeight: 44,
-height: 44,
+      minHeight: 44,
+      height: 44,
       backgroundColor: "rgb(var(--color-surface))",
       color: "rgb(var(--color-text-primary))",
       transition: "all 120ms ease",
@@ -410,13 +611,16 @@ height: 44,
     }
 
     // ✅ ALWAYS USE LIVE DATA
-    setStats(res.data);
-
-    // ✅ SAVE CACHE
-    localStorage.setItem("dashboard", JSON.stringify(res.data));
+    setStats((prev) => ({
+  ...prev,
+  ...res.data,
+}));
+    console.log("API Response:", res.data);
+    console.log("Domain Data:", res.data.domainBreakdown);
 
     // ✅ STATUS
     setApiStatus("live");
+    setLastUpdated(new Date());
 
   } catch (err) {
     console.log(err);
@@ -431,18 +635,31 @@ height: 44,
     setApiStatus("offline");
   }
 };
+const getTimeAgo = (date) => {
+  if (!date) return "";
+
+  const seconds = Math.floor((new Date() - new Date(date)) / 1000);
+
+  if (seconds < 60) return `${seconds}s ago`;
+
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+
+  const hours = Math.floor(minutes / 60);
+  return `${hours}h ago`;
+};
 
   useEffect(() => {
+  if (
+    filters.circle.length === 0 &&
+    filters.cmp.length === 0 &&
+    filters.domain.length === 0
+  ) {
+    return; // ❌ STOP unnecessary API call
+  }
+
   fetchStats();
 }, [filters.circle, filters.cmp, filters.domain]);
-
-  useEffect(() => {
-  const interval = setInterval(() => {
-    fetchStats();
-  }, 30000);
-
-  return () => clearInterval(interval);
-}, []);
 
  const handleFilterChange = (key, value) => {
   if (!value) {
@@ -501,6 +718,47 @@ height: 44,
     0
   );
 
+  const scrumManpowerChartData = useMemo(() => {
+    const total =
+      Number(scrumFunctionSummary.fiber || 0) +
+      Number(scrumFunctionSummary.fttx || 0) +
+      Number(scrumFunctionSummary.utility || 0) +
+      Number(scrumFunctionSummary.others || 0);
+
+        if (total === 0) return []; // 🔥 IMPORTANT
+
+    return [
+      { name: "Fiber", value: Number(scrumFunctionSummary.fiber || 0) },
+      { name: "FTTx", value: Number(scrumFunctionSummary.fttx || 0) },
+      { name: "Utility", value: Number(scrumFunctionSummary.utility || 0) },
+      { name: "Others", value: Number(scrumFunctionSummary.others || 0) },
+    ].map((item) => ({
+      ...item,
+      percentage: total ? Number(((item.value / total) * 100).toFixed(1)) : 0,
+      color: SCRUM_MANPOWER_COLORS[item.name].solid,
+      labelColor: SCRUM_MANPOWER_COLORS[item.name].label,
+      depthColor: SCRUM_MANPOWER_COLORS[item.name].depth,
+      gradientId: `scrumGradient${item.name.replace(/[^a-zA-Z0-9]/g, "")}`,
+      depthGradientId: `scrumDepthGradient${item.name.replace(/[^a-zA-Z0-9]/g, "")}`,
+      displayIndex: String(
+        ["Fiber", "FTTx", "Utility", "Others"].indexOf(item.name) + 1
+      ).padStart(2, "0"),
+    }));
+  }, [scrumFunctionSummary]);
+
+  const scrumManpowerTotal = useMemo(
+    () =>
+      scrumManpowerChartData.reduce(
+        (sum, item) => sum + Number(item.value || 0),
+        0
+      ),
+    [scrumManpowerChartData]
+  );
+
+  const scrumManpowerPieData = useMemo(() => {
+  return scrumManpowerChartData;
+}, [scrumManpowerChartData]);
+
   const siteBreakdownView = useMemo(() => {
   return (stats.siteBreakdown || [])
     .filter((item) => item?.type)
@@ -548,6 +806,7 @@ const fiberBreakdownView = useMemo(() => {
 
 // ✅ TOTAL FIBER (THIS WAS MISSING ❗)
 const totalFiberCount = useMemo(() => {
+
   return Object.values(fiberBreakdownView).reduce(
     (sum, item) => sum + item.total,
     0
@@ -561,6 +820,10 @@ const totalFiberCount = useMemo(() => {
       </div>
     );
   }
+
+
+  
+  //main return //
 
   return (
     <div className="space-y-6 text-text-primary">
@@ -602,24 +865,36 @@ const totalFiberCount = useMemo(() => {
 
   {/* RIGHT SIDE STATUS */}
   <div
-    className={`flex items-center gap-2 px-3 py-1 rounded-full 
-    text-xs font-medium backdrop-blur-md border shadow-sm
-    ${
+  className={`flex items-center gap-2 px-3 py-1 rounded-full 
+  text-xs font-medium backdrop-blur-md border shadow-sm
+  ${
+    apiStatus === "live"
+      ? "bg-emerald-50/60 border-emerald-200 text-emerald-700"
+      : apiStatus === "checking"
+      ? "bg-yellow-50/60 border-yellow-200 text-yellow-700"
+      : "bg-rose-50/60 border-rose-200 text-rose-700"
+  }`}
+>
+  <span
+    className={`h-2 w-2 rounded-full ${
       apiStatus === "live"
-        ? "bg-emerald-50/60 border-emerald-200 text-emerald-700"
-        : "bg-rose-50/60 border-rose-200 text-rose-700"
+        ? "bg-emerald-500 animate-pulse"
+        : apiStatus === "checking"
+        ? "bg-yellow-500"
+        : "bg-rose-500"
     }`}
-  >
-    <span
-      className={`h-2 w-2 rounded-full ${
-        apiStatus === "live"
-          ? "bg-emerald-500 animate-pulse"
-          : "bg-rose-500"
-      }`}
-    ></span>
+  ></span>
 
-    {apiStatus === "live" ? "Live" : "Offline"}
-  </div>
+  {apiStatus === "live" && (
+    <>
+      Live • {lastUpdated ? getTimeAgo(lastUpdated) : ""}
+    </>
+  )}
+
+  {apiStatus === "checking" && "Checking..."}
+
+  {apiStatus === "offline" && "Offline"}
+</div>
 
 </div>
 
@@ -947,7 +1222,7 @@ shadow-sm"
               >
                 <div className="flex flex-col">
                   <span className="text-sm font-medium text-slate-800">
-                    {item.role}
+                    {item.function}
                   </span>
                   <span className="text-xs text-gray-400">Active Role</span>
                 </div>
@@ -999,117 +1274,22 @@ p-5">
         </div>
       </div>
 
-      <div className="mt-6 grid grid-cols-1 gap-6 md:grid-cols-3">
-        <div className="rounded-xl border bg-white p-5 shadow-sm md:col-span-1">
-          <h4 className="mb-4 flex items-center gap-2 text-md font-semibold text-slate-800">
-            <PieIcon size={18} />
-            Manpower Distribution
-          </h4>
+      <div className="mt-6 grid grid-cols-1 gap-6 md:grid-cols-3 items-stretch">
 
-          <ResponsiveContainer width="100%" height={250}>
-            <PieChart>
-              <Pie
-                data={stats.manpowerBreakdown || []}
-                dataKey="count"
-                nameKey="role"
-                cx="50%"
-                cy="50%"
-                outerRadius={90}
-                innerRadius={60}
-                paddingAngle={2}
-                activeIndex={activeIndex}
-                onMouseEnter={(_, index) => setActiveIndex(index)}
-              >
-                {(stats.manpowerBreakdown || []).map((entry, index) => (
-                  <Cell
-                    key={index}
-                    fill={COLORS[index % COLORS.length]}
-                    stroke="#fff"
-                    strokeWidth={2}
-                    opacity={index === activeIndex ? 1 : 0.6}
-                  />
-                ))}
-              </Pie>
-
-              <text
-                x="50%"
-                y="48%"
-                textAnchor="middle"
-                dominantBaseline="middle"
-                className="fill-slate-700 text-[20px] font-semibold"
-              >
-                {totalManpowerCount}
-              </text>
-
-              <text
-                x="50%"
-                y="60%"
-                textAnchor="middle"
-                dominantBaseline="middle"
-                className="fill-slate-400 text-[12px]"
-              >
-                Total
-              </text>
-
-              <Legend
-                layout="horizontal"
-                align="center"
-                verticalAlign="bottom"
-                wrapperStyle={{
-                  fontSize: "12px",
-                  lineHeight: "20px",
-                  paddingTop: "10px",
-                  maxWidth: "90%",
-                  margin: "0 auto",
-                }}
-              />
-            </PieChart>
-          </ResponsiveContainer>
-        </div>
-
-        <div className="rounded-xl border bg-white p-5 shadow-sm md:col-span-2">
+        <div className="flex h-full flex-col rounded-xl border bg-white p-5 shadow-sm md:col-span-2">
           <div className="mb-2 flex items-center justify-between">
             <h4 className="flex items-center gap-2 text-md font-semibold text-slate-800">
               <TrendingUp size={18} />
               Uptime Trend
             </h4>
 
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setFilter("weekly")}
-                className={`rounded-md px-3 py-1 text-xs ${
-                  filter === "weekly"
-                    ? "bg-gradient-to-r from-indigo-500 to-blue-500 text-white shadow-md"
-                    : "bg-gray-100 text-slate-600"
-                }`}
-              >
-                Weekly
-              </button>
 
-              <button
-                onClick={() => setFilter("monthly")}
-                className={`rounded-md px-3 py-1 text-xs ${
-                  filter === "monthly"
-                    ? "bg-gradient-to-r from-indigo-500 to-blue-500 text-white shadow-md"
-                    : "bg-gray-100 text-slate-600"
-                }`}
-              >
-                Monthly
-              </button>
-            </div>
+        
           </div>
 
-          <ResponsiveContainer width="100%" height={250}>
+          <ResponsiveContainer width="100%" height={365}>
             <AreaChart
-              data={
-                filter === "weekly"
-                  ? stats.uptimeData?.length
-                    ? stats.uptimeData
-                    : weeklyFallback
-                  : stats.monthlyData?.length
-                  ? stats.monthlyData
-                  : monthlyFallback
-              }
+              data={uptimeTrend.length ? uptimeTrend : weeklyFallback}
             >
               <defs>
                 <linearGradient id="colorUptime" x1="0" y1="0" x2="0" y2="1">
@@ -1119,9 +1299,9 @@ p-5">
               </defs>
 
               <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="day" tick={{ fontSize: 12 }} />
+        
               <YAxis
-                domain={[0, 40]}
+                domain={[80, 100]}
                 tick={{ fontSize: 12 }}
                 label={{ value: "Uptime %", angle: -90, position: "insideLeft" }}
               />
@@ -1145,6 +1325,163 @@ p-5">
             </AreaChart>
           </ResponsiveContainer>
         </div>
+         
+      {/* SCRUM MANPOWER CARD */}
+<div className="flex h-full flex-col rounded-2xl border border-white/60 bg-[radial-gradient(circle_at_top,#f8fbff,rgba(255,255,255,0.98)_52%,rgba(241,245,249,0.98)_100%)] p-4 shadow-[0_24px_55px_rgba(15,23,42,0.11)] backdrop-blur-md md:col-span-1">
+  <div className="mb-4 flex items-center justify-between">
+    <h4 className="text-md font-semibold text-slate-800">
+      Scrum Manpower
+    </h4>
+    <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+      Live
+    </span>
+  </div>
+
+  <div className="flex flex-1 items-center justify-center py-1">
+  <div className="h-[290px] w-full max-w-[325px] min-w-[280px]">
+    <ResponsiveContainer width="100%" height={290}>
+      <PieChart>
+        <defs>
+          {scrumManpowerPieData.map((item) => (
+            <g key={item.gradientId}>
+              <linearGradient
+                id={item.gradientId}
+                x1="0"
+                y1="0"
+                x2="1"
+                y2="1"
+              >
+                <stop
+                  offset="0%"
+                  stopColor={
+                    item.isPlaceholder
+                      ? "#f8fafc"
+                      : SCRUM_MANPOWER_COLORS[item.name].start
+                  }
+                />
+                <stop
+                  offset="50%"
+                  stopColor={
+                    item.isPlaceholder
+                      ? "#e2e8f0"
+                      : SCRUM_MANPOWER_COLORS[item.name].solid
+                  }
+                />
+                <stop
+                  offset="100%"
+                  stopColor={
+                    item.isPlaceholder
+                      ? "#cbd5e1"
+                      : SCRUM_MANPOWER_COLORS[item.name].end
+                  }
+                />
+              </linearGradient>
+              <linearGradient
+                id={item.depthGradientId}
+                x1="0"
+                y1="0"
+                x2="0"
+                y2="1"
+              >
+                <stop
+                  offset="0%"
+                  stopColor={item.isPlaceholder ? "#cbd5e1" : item.depthColor}
+                />
+                <stop
+                  offset="100%"
+                  stopColor={item.isPlaceholder ? "#94a3b8" : item.color}
+                />
+              </linearGradient>
+            </g>
+          ))}
+        </defs>
+
+        <Pie
+          data={scrumManpowerPieData.length ? scrumManpowerPieData : []}
+          dataKey="value"
+          nameKey="name"
+          cx="50%"
+          cy="50%"
+          innerRadius={55}
+          outerRadius={100}
+          paddingAngle={3}
+          cornerRadius={7}
+          activeIndex={scrumPieActiveIndex}
+          activeOuterRadius={128}
+          onMouseEnter={(_, index) => setScrumPieActiveIndex(index)}
+          onMouseLeave={() => setScrumPieActiveIndex(0)}
+          isAnimationActive
+          animationDuration={420}
+          filter="url(#scrumPieShadow)"
+          labelLine={false}
+          label={renderOutsideLabel}
+          labelLine={false}
+        >
+          {scrumManpowerPieData.map((item) => (
+            <Cell
+            key={item.name}
+           fill={`url(#${item.gradientId})`}
+           stroke="transparent"
+           strokeWidth={0}
+          />
+          ))}
+        </Pie>
+        <Tooltip content={<ScrumManpowerTooltip />} />
+        <text
+          x="50%"
+          y="50%"
+          textAnchor="middle"
+          dominantBaseline="middle"
+          className="fill-slate-800 text-[25px] font-semibold"
+        >
+          {scrumManpowerTotal}
+        </text>
+        <text
+          x="51%"
+          y="58%"
+          textAnchor="middle"
+          dominantBaseline="middle"
+          className="fill-slate-400 text-[10px] font-semibold uppercase tracking-[0.22em]"
+        >
+          {scrumManpowerTotal > 0 ? "Total" : "Waiting For Data"}
+        </text>
+      </PieChart>
+    </ResponsiveContainer>
+  </div>
+  </div>
+
+  <div className="mt-3 grid grid-cols-4 gap-2">
+    {scrumManpowerChartData.map((item) => (
+      <button
+        key={item.name}
+        type="button"
+        onMouseEnter={() =>
+          setScrumPieActiveIndex(
+            scrumManpowerChartData.findIndex((entry) => entry.name === item.name)
+          )
+        }
+        className={`rounded-xl border px-2 py-2 text-left transition ${
+          scrumManpowerChartData[scrumPieActiveIndex]?.name === item.name
+            ? "border-slate-300 bg-white shadow-md"
+            : "border-white/70 bg-white/70 hover:bg-white"
+        }`}
+      >
+        <div className="flex items-center gap-2">
+          <span
+            className="h-2.5 w-2.5 rounded-full"
+            style={{ backgroundColor: item.color }}
+          />
+          <span className="text-xs font-medium text-slate-700">{item.name}</span>
+        </div>
+        <div className="mt-1 flex items-center justify-between gap-1">
+          <span className="text-sm font-semibold text-slate-900">{item.value}</span>
+          <span className="text-[10px] font-medium text-slate-400">{item.percentage}%</span>
+        </div>
+      </button>
+    ))}
+  </div>
+</div>
+
       </div>
     </div>
   );

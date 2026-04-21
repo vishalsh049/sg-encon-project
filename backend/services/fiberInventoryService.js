@@ -1,14 +1,29 @@
 const fs = require("fs");
 const path = require("path");
-const util = require("util");
 const multer = require("multer");
 const xlsx = require("xlsx");
 const { db } = require("../config/db");
 
-const query = util.promisify(db.query).bind(db);
-const beginTransaction = util.promisify(db.beginTransaction).bind(db);
-const commit = util.promisify(db.commit).bind(db);
-const rollback = util.promisify(db.rollback).bind(db);
+const query = (sql, params = []) => {
+  return new Promise((resolve, reject) => {
+    db.query(sql, params, (err, results) => {
+      if (err) {
+        console.error("❌ Query Error:", err);
+        return reject(err);
+      }
+      resolve(results);
+    });
+  });
+};
+
+const getConnection = () => {
+  return new Promise((resolve, reject) => {
+    db.getConnection((err, conn) => {
+      if (err) return reject(err);
+      resolve(conn);
+    });
+  });
+};
 
 const uploadsDir = path.join(__dirname, "..", "uploads");
 const allowedExtensions = new Set(["xlsx", "csv"]);
@@ -548,7 +563,6 @@ function parseFiberRows(rows) {
 }
 
 async function createFiberUpload({ date, uploadedBy, fileName, rows }) {
-  await ensureFiberTables();
 
   const normalizedDate = normalizeDate(date);
   if (!normalizedDate) {
@@ -573,44 +587,64 @@ async function createFiberUpload({ date, uploadedBy, fileName, rows }) {
   const parsedRows = parseFiberRows(rows);
   const uploadScope = inferUploadScope(parsedRows);
 
-  await beginTransaction();
-  try {
-    const uploadResult = await query(
+ const conn = await getConnection();
+
+try {
+  await conn.beginTransaction();
+
+  const uploadResult = await new Promise((resolve, reject) => {
+    conn.query(
       `INSERT INTO fiber_uploads (date, uploaded_by, upload_scope, file_name) VALUES (?, ?, ?, ?)`,
-      [normalizedDate, cleanUploadedBy, uploadScope, fileName]
+      [normalizedDate, cleanUploadedBy, uploadScope, fileName],
+      (err, result) => {
+        if (err) return reject(err);
+        resolve(result);
+      }
     );
+  });
 
-    const uploadId = uploadResult.insertId;
-    if (parsedRows.length) {
-      const values = parsedRows.map((item) => [
-        uploadId,
-        item.fiberType,
-        item.spanType,
-        item.cmmAppd,
-        item.ug,
-        item.aerial,
-        item.rawRow,
-        item.sourceRowNumber,
-      ]);
+  const uploadId = uploadResult.insertId;
 
-      await query(
+  if (parsedRows.length) {
+    const values = parsedRows.map((item) => [
+      uploadId,
+      item.fiberType,
+      item.spanType,
+      item.cmmAppd,
+      item.ug,
+      item.aerial,
+      item.rawRow,
+      item.sourceRowNumber,
+    ]);
+
+    await new Promise((resolve, reject) => {
+      conn.query(
         `INSERT INTO fiber_inventory
-          (upload_id, fiber_type, span_type, cmm_appd, ug, aerial, raw_row, source_row_number)
-         VALUES ?`,
-        [values]
+        (upload_id, fiber_type, span_type, cmm_appd, ug, aerial, raw_row, source_row_number)
+        VALUES ?`,
+        [values],
+        (err) => {
+          if (err) return reject(err);
+          resolve();
+        }
       );
-    }
-
-    await commit();
-    return uploadId;
-  } catch (err) {
-    await rollback();
-    throw err;
+    });
   }
+
+  await conn.commit();
+  conn.release();
+
+  return uploadId;
+
+} catch (err) {
+  await conn.rollback();
+  conn.release();
+  throw err;
+}
+
 }
 
 async function getLatestFiberUpload() {
-  await ensureFiberTables();
   const rows = await query(
     `SELECT id, date, uploaded_by, upload_scope, file_name, uploaded_at
      FROM fiber_uploads
@@ -621,7 +655,6 @@ async function getLatestFiberUpload() {
 }
 
 async function getAllFiberUploads() {
-  await ensureFiberTables();
   return query(
     `SELECT id, date, uploaded_by, upload_scope, file_name, uploaded_at
      FROM fiber_uploads
@@ -630,7 +663,6 @@ async function getAllFiberUploads() {
 }
 
 async function getFiberUploadById(id) {
-  await ensureFiberTables();
   const rows = await query(
     `SELECT id, date, uploaded_by, upload_scope, file_name, uploaded_at
      FROM fiber_uploads
@@ -641,7 +673,6 @@ async function getFiberUploadById(id) {
 }
 
 async function getLatestFiberSummary() {
-  await ensureFiberTables();
   const latestUpload = await getLatestFiberUpload();
 
   const rows = await query(
@@ -744,7 +775,6 @@ async function getLatestFiberInventoryRows() {
 }
 
 async function updateFiberUpload(id, { date, uploadedBy }) {
-  await ensureFiberTables();
   const normalizedDate = normalizeDate(date);
   const cleanUploadedBy = String(uploadedBy || "").trim();
 
@@ -769,7 +799,6 @@ async function updateFiberUpload(id, { date, uploadedBy }) {
 }
 
 async function deleteFiberUpload(id) {
-  await ensureFiberTables();
   const upload = await getFiberUploadById(id);
   if (!upload) {
     const error = new Error("Upload not found.");
