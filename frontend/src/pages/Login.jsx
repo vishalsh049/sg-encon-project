@@ -26,7 +26,11 @@ const handleLogin = async (e) => {
     console.log("LOGIN RESPONSE:", res.data);
 
    if (res.data?.token) {
- setStoredSession(res.data.token);
+ setStoredSession({
+  token: res.data.token,
+  roleName: res.data.roleName || "admin",
+  permissions: res.data.permissions || ["view_dashboard"]
+});
  window.location.href = "/dashboard";
  return;
 } 

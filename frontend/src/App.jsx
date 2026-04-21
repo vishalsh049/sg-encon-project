@@ -1,11 +1,11 @@
-import { HashRouter, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { Toaster } from "react-hot-toast";  
 import DashboardLayout from "./layout/DashboardLayout";
 import AddData from "./pages/AddData";
 import Dashboard from "./pages/Dashboard";
 import Login from "./pages/Login";
 import PlaceholderPage from "./pages/PlaceholderPage";
-import ReportsPage from "./pages/ReportsPage";
+import TowerReports from "./pages/TowerReports";
 import UsersAccessPage from "./pages/UsersAccessPage";
 import { UserProvider } from "./context/UserContext";
 import NSOReports from "./pages/NsoReports";
@@ -17,7 +17,7 @@ function App() {
   return (
 
     <UserProvider>
-    <HashRouter>
+    <BrowserRouter>
     <Toaster position="top-right" />
 
       <Routes>
@@ -45,7 +45,7 @@ function App() {
           <Route path="kpi/tower" element={<div>Tower KPI Page</div>} />
           <Route path="kpi/fiber" element={<div>Fiber KPI Page</div>} />
 
-          <Route path="reports/:siteCategory" element={<ReportsPage />} />
+          <Route path="reports/:siteCategory" element={<TowerReports />} />
           <Route path="reports/view" element={<div>View Reports Page</div>} />
           <Route path="/dashboard/reports/fiber/nso" element={<NSOReports />} />
           <Route path="/dashboard/reports/fiber/inventory" element={<FiberInventory />} />
@@ -54,7 +54,7 @@ function App() {
         </Route>
          <Route path="*" element={<Login />} />
       </Routes>
-    </HashRouter>
+    </BrowserRouter>
     </UserProvider>
   );
 }

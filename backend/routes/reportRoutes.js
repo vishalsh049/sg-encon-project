@@ -254,7 +254,7 @@ const parseEnbRows = (rows, fallbackDate, fileId) => {
         .toString()
         .trim()
         .toLowerCase()
-        .replace(/\s+/g, " ");
+        .replace(/\s+/g, " ").trim();
 
       cleanRow[normalizedKey] = row[key];
     });
@@ -278,6 +278,8 @@ const cmp =
       return;
     }
 
+console.log("Availability Value:", cleanRow["overall cell availability"]);
+
     insertRows.push([
       fileId,
       String(circle).trim(),
@@ -295,7 +297,11 @@ const cmp =
       cleanRow["device type"],
       cleanRow["overall cnum count"],
       cleanRow["overall cell outage (sec)"],
-      cleanRow["overall cell availability"],
+      cleanRow["overall cell availability"] ||
+      cleanRow["overall availability"] ||
+      cleanRow["availability"] ||
+      cleanRow["cell availability"] ||
+      null,
       cleanRow["cells up"]
     ]);
 
@@ -373,6 +379,126 @@ const readWorksheetRows = (filePath) => {
   }
 
   return rows;
+};
+
+const normalizeSiteTypeValue = (value = "") =>
+  value.toString().trim().toLowerCase();
+
+const normalizeUptimeValue = (value) => {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const buildEnbTrendDatasets = (records = []) => {
+  const validRecords = records
+    .map((record) => {
+      const dateValue = normalizeDate(record.date);
+      const uptimeValue = normalizeUptimeValue(record.uptime);
+
+      if (!dateValue || uptimeValue === null) {
+        return null;
+      }
+
+      return {
+        date: new Date(`${dateValue}T00:00:00`),
+        uptime: uptimeValue,
+      };
+    })
+    .filter(Boolean);
+
+  const average = (items) =>
+    items.length
+      ? Number(
+          (
+            items.reduce((sum, item) => sum + Number(item.uptime || 0), 0) /
+            items.length
+          ).toFixed(2)
+        )
+      : 0;
+
+  const weeklyOrder = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+  const weekDayFormatter = new Intl.DateTimeFormat("en-US", { weekday: "short" });
+  const monthFormatter = new Intl.DateTimeFormat("en-US", { month: "short" });
+
+  const weeklyMap = new Map();
+  validRecords.forEach((record) => {
+    const key = weekDayFormatter.format(record.date);
+    const list = weeklyMap.get(key) || [];
+    list.push(record);
+    weeklyMap.set(key, list);
+  });
+
+  const weekly = weeklyOrder
+    .filter((key) => weeklyMap.has(key))
+    .map((key) => ({
+      day: key,
+      uptime: average(weeklyMap.get(key) || []),
+    }));
+
+  const monthlyMap = new Map();
+  validRecords.forEach((record) => {
+    const key = String(record.date.getDate()).padStart(2, "0");
+    const list = monthlyMap.get(key) || [];
+    list.push(record);
+    monthlyMap.set(key, list);
+  });
+
+  const monthly = Array.from(monthlyMap.entries())
+    .sort((a, b) => Number(a[0]) - Number(b[0]))
+    .map(([key, items]) => ({
+      day: key,
+      uptime: average(items),
+    }));
+
+  const yearlyMap = new Map();
+  validRecords.forEach((record) => {
+    const key = monthFormatter.format(record.date);
+    const list = yearlyMap.get(key) || [];
+    list.push(record);
+    yearlyMap.set(key, list);
+  });
+
+  const monthOrder = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const yearly = monthOrder
+    .filter((key) => yearlyMap.has(key))
+    .map((key) => ({
+      day: key,
+      uptime: average(yearlyMap.get(key) || []),
+    }));
+
+  return { weekly, monthly, yearly };
+};
+
+const getLatestEnbTrendDatasets = async () => {
+  await ensureEnbTable();
+
+  const latestFileRows = await query(
+    `SELECT file_id
+     FROM enb
+     WHERE site_type = 'enb'
+     ORDER BY created_at DESC, file_id DESC
+     LIMIT 1`
+  );
+
+  const latestFileId = latestFileRows[0]?.file_id;
+
+  if (!latestFileId) {
+    return { weekly: [], monthly: [], yearly: [] };
+  }
+
+  const rows = await query(
+    `SELECT date, COALESCE(availability, kpi_value) AS uptime
+     FROM enb
+     WHERE file_id = ?
+       AND site_type = 'enb'`,
+    [latestFileId]
+  );
+
+  return buildEnbTrendDatasets(rows);
 };
 
 const processSiteUploadRows = async ({ siteType, rows, date, fileId }) => {
@@ -685,6 +811,21 @@ router.get("/latest/count", async (req, res) => {
   }
 });
 
+router.get("/enb/uptime-trend", async (_req, res) => {
+  try {
+    const trends = await getLatestEnbTrendDatasets();
+    res.json(trends);
+  } catch (error) {
+    console.error("ENB uptime trend error:", error);
+    res.status(500).json({
+      message: "Failed to fetch ENB uptime trend",
+      weekly: [],
+      monthly: [],
+      yearly: [],
+    });
+  }
+});
+
 // ✅ Upload API with multer error handling
 router.post("/upload", (req, res) => {
   ensureUploadsDir();
@@ -697,6 +838,7 @@ router.post("/upload", (req, res) => {
       const { site_type, report_type, upload_type, date, uploadedBy } = req.body;
       const site_category = (req.body.siteCategory || "tower").toLowerCase();
       const uploadType = (upload_type || "single").toLowerCase();
+      const normalizedSiteType = normalizeSiteTypeValue(site_type);
 
       if (uploadType === "single") {
         if (!site_type || !report_type || !upload_type || !date || !uploadedBy) {
@@ -737,9 +879,10 @@ console.log("Excel Headers:", rows[0]);
 
       const fileId = Date.now();
       const totalRecords = rows.length;
+      let enbTrends = null;
 
 // 🔥 enb Upload
-if (site_type.toLowerCase() === "enb") {
+if (normalizedSiteType === "enb") {
   await ensureEnbTable();
 
   const { insertRows, errors } = parseEnbRows(rows, date, fileId);
@@ -751,10 +894,16 @@ if (site_type.toLowerCase() === "enb") {
   }
 
   await insertEnbRows(insertRows);
+  enbTrends = buildEnbTrendDatasets(
+    insertRows.map((row) => ({
+      date: row[4],
+      uptime: row[15],
+    }))
+  );
 }
 
 // 🔥 ESC Upload
-else if (site_type.toLowerCase() === "esc") {
+else if (normalizedSiteType === "esc") {
 
   await ensureEscTable();
 
@@ -770,7 +919,7 @@ else if (site_type.toLowerCase() === "esc") {
 }
 
 // 🔥 HPODSC Upload
-else if (site_type.toLowerCase() === "hpodsc") {
+else if (normalizedSiteType === "hpodsc") {
   await ensureHpodscTable();
   const { insertRows } = parseHpodscRows(rows, date, fileId);
 
@@ -778,7 +927,7 @@ else if (site_type.toLowerCase() === "hpodsc") {
 }
 
 // 🔥 ISC Upload  ✅ CORRECT PLACE
-else if (site_type.toLowerCase() === "isc") {
+else if (normalizedSiteType === "isc") {
   await ensureIscTable();
 
   const insertRows = [];
@@ -854,7 +1003,7 @@ else if (site_type.toLowerCase() === "isc") {
 }
 
 // 🔥 OSC Upload
-else if (site_type.toLowerCase() === "osc") {
+else if (normalizedSiteType === "osc") {
   await ensureOscTable();
   await ensureColumn("osc", "kpi_value", "DECIMAL(12,4) NULL");
 

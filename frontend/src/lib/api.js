@@ -1,12 +1,14 @@
-// Get base URL from environment
-const rawBase = import.meta.env.VITE_API_BASE_URL || "";
+const isLocalhost =
+  typeof window !== "undefined" &&
+  (window.location.hostname === "localhost" ||
+    window.location.hostname === "127.0.0.1");
 
-// Normalize to avoid double slashes
-const API_BASE_URL = rawBase.endsWith("/")
-  ? rawBase.slice(0, -1)
-  : rawBase;
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL ||
+  (isLocalhost
+    ? "http://localhost:5000"
+    : "https://sg-encon-project.onrender.com");
 
-// Build full API URL
 export function buildApiUrl(path) {
   let normalizedPath = path.startsWith("/") ? path : `/${path}`;
   return `${API_BASE_URL}${normalizedPath}`;

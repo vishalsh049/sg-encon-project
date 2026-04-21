@@ -1,3 +1,7 @@
+
+import PremiumDatePicker from "../components/PremiumDatePicker"
+
+import axios from "axios"; 
 import React, { useEffect, useMemo, useState } from "react";
 import {
   ArrowDownToLine,
@@ -51,6 +55,7 @@ export default function Scrum() {
   const [stateFilter, setStateFilter] = useState("");
   const [vendorFilter, setVendorFilter] = useState("");
   const [file, setFile] = useState(null);
+  const [uploading, setUploading] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [uploadDate, setUploadDate] = useState("");
   const [uploadedBy, setUploadedBy] = useState("");
@@ -59,6 +64,8 @@ export default function Scrum() {
   const [selected, setSelected] = useState([]); 
   const [uploads, setUploads] = useState([]);
   const [roleSummary, setRoleSummary] = useState([]);
+  const [progress, setProgress] = useState(0);
+  const [processing, setProcessing] = useState(false);
 
   const refreshScrumData = async () => {
     const [uploadsRes, dataRes, latestRes, roleRes] = await Promise.all([
@@ -130,10 +137,14 @@ export default function Scrum() {
   };
 }, [data]);
 
-  const handleUpload = async () => {
-    if (!file) return alert("Select file");
-    if (!uploadDate) return alert("Select date");
-    if (!uploadedBy) return alert("Enter uploaded by");
+const handleUpload = async () => {
+  if (!file) return alert("Select file");
+  if (!uploadDate) return alert("Select date");
+  if (!uploadedBy) return alert("Enter uploaded by");
+
+  try {
+    setUploading(true);
+    setProgress(0);
 
     const formData = new FormData();
     formData.append("file", file);
@@ -141,21 +152,48 @@ export default function Scrum() {
     formData.append("upload_date", uploadDate);
     formData.append("uploaded_by", uploadedBy);
 
-    const res = await fetch(buildApiUrl("/api/manpower/scrum/upload"), {
-      method: "POST",
-      body: formData,
-    });
+    const res = await axios.post(
+      buildApiUrl("/api/manpower/scrum/upload"),
+      formData,
+      {
+       onUploadProgress: (progressEvent) => {
+  const percent = Math.round(
+    (progressEvent.loaded * 100) / progressEvent.total
+  );
 
-    const result = await res.json();
-    if (!res.ok) {
-      throw new Error(result.message || "Upload failed");
+  setProgress(percent);
+
+  if (percent === 100) {
+    setProcessing(true); // ✅ start processing state
+  }
+},
+      }
+    );
+
+    if (res.data?.functionSummary) {
+      localStorage.setItem(
+        "scrumFunctionSummary",
+        JSON.stringify(res.data.functionSummary)
+      );
+      window.dispatchEvent(
+        new CustomEvent("scrum-manpower-updated", {
+          detail: res.data.functionSummary,
+        })
+      );
     }
-    alert(result.message);
+
+    alert(res.data.message);
     await refreshScrumData();
 
     setShowModal(false);
     setFile(null);
-  };
+  } catch (err) {
+    alert(err.response?.data?.message || "Upload failed");
+  } finally {
+    setUploading(false);
+    setProgress(0);
+  }
+};
 
   const handleDelete = async (id) => {
     if (!window.confirm("Are you sure you want to delete this file?")) return;
@@ -664,12 +702,11 @@ setSelected(prev => [...new Set([...prev, id])]);
                   <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
                     Upload Date
                   </label>
-                  <input
-                    type="date"
-                    value={uploadDate}
-                    onChange={(e) => setUploadDate(e.target.value)}
-                    className="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm text-slate-900 outline-none transition focus:border-cyan-400 focus:bg-white focus:ring-4 focus:ring-cyan-100"
-                  />
+                  <PremiumDatePicker
+                 value={uploadDate}
+                 onChange={setUploadDate}
+                 className="w-full"
+                 />
                 </div>
 
                 <div>
@@ -732,12 +769,48 @@ setSelected(prev => [...new Set([...prev, id])]);
                   Cancel
                 </button>
                 <button
-                  onClick={handleUpload}
-                  className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[linear-gradient(135deg,_#0891b2_0%,_#2563eb_100%)] px-5 py-3 text-sm font-semibold text-white shadow-[0_14px_35px_rgba(37,99,235,0.28)] transition hover:scale-[1.01]"
-                >
-                  <UploadCloud size={16} />
-                  Upload File
-                </button>
+  onClick={handleUpload}
+  disabled={uploading}
+  className={`inline-flex items-center justify-center gap-2 rounded-2xl px-5 py-3 text-sm font-semibold text-white transition 
+  ${uploading 
+    ? "bg-gray-400 cursor-not-allowed" 
+    : "bg-[linear-gradient(135deg,_#0891b2_0%,_#2563eb_100%)] hover:scale-[1.01]"
+  }`}
+>
+  <UploadCloud size={16} />
+  {uploading ? "Uploading..." : "Upload File"}
+</button>
+
+{uploading && (
+  <div className="mt-4">
+
+    {/* STATUS + % */}
+    <div className="flex justify-between items-center mb-2">
+      <span className={`text-xs font-semibold px-3 py-1 rounded-full
+        ${progress < 100 
+          ? "bg-blue-100 text-blue-600" 
+          : "bg-orange-100 text-orange-600"
+        }`}>
+        {progress < 100 ? "Uploading" : "Processing"}
+      </span>
+
+      <span className="text-xs text-slate-500">
+        {progress < 100 ? `${progress}%` : ""}
+      </span>
+    </div>
+
+    {/* PROGRESS BAR */}
+    <div className="w-full h-2 rounded-full bg-slate-200 overflow-hidden">
+      <div
+        className="h-full rounded-full transition-all duration-500
+        bg-gradient-to-r from-cyan-500 via-blue-500 to-indigo-500"
+        style={{ width: `${progress}%` }}
+      />
+    </div>
+
+  </div>
+)}
+
               </div>
             </div>
           </div>
