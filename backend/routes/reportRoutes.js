@@ -1171,7 +1171,7 @@ const formatDateOnly = (value) => {
               await query(`
   INSERT INTO report_uploads 
   (site_category, report_date, site_type, report_type, upload_type, uploaded_by, file_name, file_id, total_records, uploaded_at)
-  VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
 `, [
   site_category,
   finalDate,
@@ -1180,8 +1180,8 @@ const formatDateOnly = (value) => {
   upload_type,
   uploadedBy,
   file.filename,
-  totalRecords,
-  fileId
+   fileId,
+  totalRecords
 ]);
 
               res.status(200).json({
