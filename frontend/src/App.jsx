@@ -12,6 +12,7 @@ import NSOReports from "./pages/NsoReports";
 import FiberInventory from "./pages/FiberInventory";
 import Physical from "./pages/Physical";
 import Scrum from "./pages/Scrum";
+import BillingStatus from "./pages/BillingStatus";
 
 function App() {
   return (
@@ -28,7 +29,6 @@ function App() {
           <Route index element={<Dashboard />} />
           <Route path="add-data" element={<AddData />} />
 
-          <Route path="billing/status" element={<PlaceholderPage />} />
           <Route path="billing/revenue" element={<PlaceholderPage />} />
           <Route path="billing/penalties" element={<PlaceholderPage />} />
           <Route path="billing/penalties/kpis" element={<PlaceholderPage />} />
@@ -49,6 +49,7 @@ function App() {
           <Route path="reports/view" element={<div>View Reports Page</div>} />
           <Route path="/dashboard/reports/fiber/nso" element={<NSOReports />} />
           <Route path="/dashboard/reports/fiber/inventory" element={<FiberInventory />} />
+          <Route path="/dashboard/billing/status" element={<BillingStatus />} />
 
 
         </Route>

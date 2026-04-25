@@ -50,8 +50,11 @@ function PremiumDatePicker({
   placeholder = "YYYY-MM-DD",
   className = "",
   disabled = false,
-}) {
+  isDateDisabled, 
+})
+ {
   const rootRef = useRef(null);
+const [popoverPosition, setPopoverPosition] = useState(null);
   const selectedDate = useMemo(() => parseDateString(value), [value]);
   const [isOpen, setIsOpen] = useState(false);
   const [viewDate, setViewDate] = useState(selectedDate || new Date());
@@ -124,6 +127,31 @@ function PremiumDatePicker({
     handleSelectDate(current);
   };
 
+const updatePosition = () => {
+  if (!rootRef.current) return;
+
+  const rect = rootRef.current.getBoundingClientRect();
+  const calendarHeight = 320; // approx height
+
+  const spaceBelow = window.innerHeight - rect.bottom;
+  const spaceAbove = rect.top;
+
+  let top;
+
+  if (spaceBelow < calendarHeight && spaceAbove > calendarHeight) {
+    // 🔥 open upwards
+    top = rect.top + window.scrollY - calendarHeight - 6;
+  } else {
+    // 🔥 open downwards
+    top = rect.bottom + window.scrollY + 6;
+  }
+
+  setPopoverPosition({
+    top,
+    left: rect.left + window.scrollX,
+  });
+};
+
   const monthLabel = viewDate.toLocaleDateString("en-US", {
     month: "long",
     year: "numeric",
@@ -142,18 +170,21 @@ function PremiumDatePicker({
             if (!disabled) {
               setInputText(value || "");
               setViewDate(selectedDate || new Date());
+              updatePosition(); 
+              updatePosition();
               setIsOpen(true);
             }
           }}
           onChange={(event) => setInputText(event.target.value)}
           onBlur={commitInputValue}
-          className="app-date-input"
+          className="app-date-input w-full h-10 rounded-lg border px-3"
         />
         <button
           type="button"
           disabled={disabled}
           onClick={() => {
             if (!disabled) {
+               updatePosition(); 
               setIsOpen((prev) => !prev);
             }
           }}
@@ -164,13 +195,17 @@ function PremiumDatePicker({
         </button>
       </div>
 
-      <div
-        className={`app-date-popover ${
-          isOpen
-            ? "pointer-events-auto translate-y-0 scale-100 opacity-100"
-            : "pointer-events-none -translate-y-1 scale-[0.98] opacity-0"
-        }`}
-      >
+    <div
+  className={`fixed z-[9999] bg-white shadow-xl rounded-xl border ${
+    isOpen
+      ? "pointer-events-auto opacity-100"
+      : "pointer-events-none opacity-0"
+  }`}
+  style={{
+  top: popoverPosition?.top ?? -9999,
+  left: popoverPosition?.left ?? -9999,
+}}
+>
         <div className="app-date-header">
           <button
             type="button"
@@ -208,35 +243,44 @@ function PremiumDatePicker({
         </div>
 
         <div className="app-date-grid">
-          {calendarDays.map((date) => {
-            const isSelected = selectedDate ? isSameDay(date, selectedDate) : false;
-            const isToday = isSameDay(date, today);
-            const isOutsideMonth = date.getMonth() !== viewDate.getMonth();
+   {calendarDays.map((date) => {
+  const isSelected = selectedDate ? isSameDay(date, selectedDate) : false;
+  const isToday = isSameDay(date, today);
+  const isOutsideMonth = date.getMonth() !== viewDate.getMonth();
 
-            return (
-              <button
-                key={date.toISOString()}
-                type="button"
-                onClick={() => handleSelectDate(date)}
-                className={`app-date-cell ${
-                  isOutsideMonth ? "app-date-cell-outside" : ""
-                } ${isToday ? "app-date-cell-today" : ""} ${
-                  isSelected ? "app-date-cell-selected" : ""
-                }`}
-              >
-                {date.getDate()}
-              </button>
-            );
-          })}
-        </div>
+  const disabledDate = isDateDisabled ? isDateDisabled(date) : false;
+
+  return (
+    <button
+      key={date.toISOString()}
+      type="button"
+      disabled={disabledDate} // 🔥 disable click
+      onClick={() => !disabledDate && handleSelectDate(date)}
+      className={`app-date-cell 
+        ${isOutsideMonth ? "app-date-cell-outside" : ""}
+        ${isToday ? "app-date-cell-today" : ""}
+        ${isSelected ? "app-date-cell-selected" : ""}
+        ${disabledDate ? "opacity-40 cursor-not-allowed" : ""}
+      `}
+    >
+      {date.getDate()}
+    </button>
+  );
+})}
+  </div>
 
         <div className="app-date-footer">
           <button type="button" onClick={clearValue} className="app-date-link">
             Clear
           </button>
-          <button type="button" onClick={goToToday} className="app-date-soft">
-            Today
-          </button>
+          <button
+            type="button" 
+             onClick={goToToday}
+              disabled={true}
+              className="app-date-soft opacity-40 cursor-not-allowed"
+                >
+                 Today
+               </button>
         </div>
       </div>
     </div>

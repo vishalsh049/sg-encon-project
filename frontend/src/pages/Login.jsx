@@ -26,6 +26,7 @@ const handleLogin = async (e) => {
     console.log("LOGIN RESPONSE:", res.data);
 
    if (res.data?.token) {
+     localStorage.setItem("token", res.data.token);
  setStoredSession({
   token: res.data.token,
   roleName: res.data.roleName || "admin",

@@ -36,6 +36,7 @@
 
     const circle = req.query.circle ? String(req.query.circle) : "";
     const cmp = req.query.cmp ? String(req.query.cmp) : "";
+    const selectedDate = req.query.date;
 
     const filters = [];
     const params = [];
@@ -61,17 +62,13 @@
     const whereClause = filters.length ? `AND ${filters.join(" AND ")}` : "";
 
   const sql = `
-    SELECT COUNT(*) AS enbCount
-    FROM enb
-    WHERE file_id = (
-      SELECT file_id
-      FROM enb
-      WHERE date = (SELECT MAX(date) FROM enb)
-      ORDER BY created_at DESC, file_id DESC
-      LIMIT 1
-    )
-    ${whereClause}
-  `;
+  SELECT COUNT(*) AS enbCount
+  FROM enb
+  WHERE date = (
+    SELECT MAX(date) FROM enb
+  )
+  ${whereClause}
+`;
 
     try {
       const rows = await query(sql, params);
@@ -828,15 +825,14 @@
   SELECT SUM(count) AS totalSites
   FROM (
 
-    SELECT COUNT(*) AS count FROM enb
-    WHERE file_id = (
-      SELECT file_id FROM enb
-      WHERE date = (SELECT MAX(date) FROM enb)
-      ORDER BY created_at DESC, file_id DESC
-      LIMIT 1
-    )
-
-    ${buildAnd()}
+  SELECT COUNT(*) AS count FROM enb
+WHERE file_id = (
+  SELECT file_id FROM enb
+  WHERE date = (SELECT MAX(date) FROM enb)
+  ORDER BY created_at DESC, file_id DESC
+  LIMIT 1
+)
+    ${filters.length ? buildAnd() : ""}
 
     UNION ALL
     ${escCountSql}
@@ -855,63 +851,57 @@
     SELECT COALESCE(SUM(kpi_value), 0) FROM ag1
     WHERE file_id = (
       SELECT file_id FROM ag1
-      WHERE date = (SELECT MAX(date) FROM ag1)
       ORDER BY created_at DESC, file_id DESC
       LIMIT 1
     )
-    ${buildAnd()}
+    ${filters.length ? buildAnd() : ""}
 
     UNION ALL
     SELECT COALESCE(SUM(kpi_value), 0) FROM ag2
     WHERE file_id = (
       SELECT file_id FROM ag2
-      WHERE date = (SELECT MAX(date) FROM ag2)
       ORDER BY created_at DESC, file_id DESC
       LIMIT 1
     )
-    ${buildAnd()}
+   ${filters.length ? buildAnd() : ""}
 
     UNION ALL
     SELECT COALESCE(SUM(kpi_value), 0) FROM ila
     WHERE file_id = (
       SELECT file_id FROM ila
-      WHERE date = (SELECT MAX(date) FROM ila)
       ORDER BY created_at DESC, file_id DESC
       LIMIT 1
     )
-    ${buildAnd()}
+    ${filters.length ? buildAnd() : ""}
 
     UNION ALL
     SELECT COALESCE(SUM(kpi_value), 0) FROM gnb
     WHERE file_id = (
       SELECT file_id FROM gnb
-      WHERE date = (SELECT MAX(date) FROM gnb)
       ORDER BY created_at DESC, file_id DESC
       LIMIT 1
     )
-    ${buildAnd()}
+   ${filters.length ? buildAnd() : ""}
 
     UNION ALL
     SELECT COALESCE(SUM(kpi_value), 0) FROM gsc
     WHERE file_id = (
       SELECT file_id FROM gsc
-      WHERE date = (SELECT MAX(date) FROM gsc)
       ORDER BY created_at DESC, file_id DESC
       LIMIT 1
     )
-    ${buildAnd()}
+    ${filters.length ? buildAnd() : ""}
 
     UNION ALL
     SELECT COALESCE(SUM(kpi_value), 0) FROM wifi
     WHERE file_id = (
       SELECT file_id FROM wifi
-      WHERE date = (SELECT MAX(date) FROM wifi)
       ORDER BY created_at DESC, file_id DESC
       LIMIT 1
     )
-    ${buildAnd()}
+    ${filters.length ? buildAnd() : ""}
 
-  )
+  ) AS total
   `;
 
   const manpowerActiveQuery = `
@@ -927,15 +917,19 @@
     // 🔥 SITE TYPES (Only ENB, ESC, ISC, OSC, HPODSC)
   const siteQuery = `
 
-  SELECT 'ENB' AS type, COUNT(*) AS count, MAX(date) AS latestDate
+ SELECT 
+  'ENB' AS type, 
+  COUNT(*) AS count, 
+  MAX(date) AS latestDate
+FROM enb
+WHERE file_id = (
+  SELECT file_id 
   FROM enb
-  WHERE file_id = (
-    SELECT file_id FROM enb
-    WHERE date = (SELECT MAX(date) FROM enb)
-    ORDER BY created_at DESC, file_id DESC
-    LIMIT 1
-  )
-  ${buildAnd()}
+  WHERE date = (SELECT MAX(date) FROM enb)
+  ORDER BY created_at DESC, file_id DESC
+  LIMIT 1
+)
+${buildAnd()}
 
   UNION ALL
   ${escSiteSql}
@@ -956,7 +950,10 @@
   FROM ag1
   WHERE file_id = (
     SELECT file_id FROM ag1
-    WHERE date = (SELECT MAX(date) FROM ag1)
+    WHERE date = (
+    SELECT MAX(date)
+    FROM ag1
+    )
     ORDER BY created_at DESC, file_id DESC
     LIMIT 1
   )
@@ -967,7 +964,10 @@
   FROM ag2
   WHERE file_id = (
     SELECT file_id FROM ag2
-    WHERE date = (SELECT MAX(date) FROM ag2)
+    WHERE date = (
+  SELECT MAX(date)
+  FROM ag2
+)
     ORDER BY created_at DESC, file_id DESC
     LIMIT 1
   )
@@ -978,7 +978,10 @@
   FROM ila
   WHERE file_id = (
     SELECT file_id FROM ila
-    WHERE date = (SELECT MAX(date) FROM ila)
+      WHERE date = (
+      SELECT MAX(date)
+      FROM ila
+      )
     ORDER BY created_at DESC, file_id DESC
     LIMIT 1
   )
@@ -989,7 +992,10 @@
   FROM gnb
   WHERE file_id = (
     SELECT file_id FROM gnb
-    WHERE date = (SELECT MAX(date) FROM gnb)
+    WHERE date = (
+      SELECT MAX(date)
+      FROM gnb
+    )
     ORDER BY created_at DESC, file_id DESC
     LIMIT 1
   )
@@ -1000,7 +1006,10 @@
   FROM gsc
   WHERE file_id = (
     SELECT file_id FROM gsc
-    WHERE date = (SELECT MAX(date) FROM gsc)
+    WHERE date = (
+      SELECT MAX(date)
+      FROM gsc
+    )
     ORDER BY created_at DESC, file_id DESC
     LIMIT 1
   )
@@ -1011,7 +1020,10 @@
   FROM wifi
   WHERE file_id = (
     SELECT file_id FROM wifi
-    WHERE date = (SELECT MAX(date) FROM wifi)
+    WHERE date = (
+      SELECT MAX(date)
+      FROM wifi
+    )
     ORDER BY created_at DESC, file_id DESC
     LIMIT 1
   )
@@ -1124,7 +1136,7 @@
       
       await Promise.all([
         query(latestUploadDateQueryV2),
-        query(siteCountQueryV2),
+        query(siteCountQuery, repeatedFilterParams),
         query(manpowerActiveQuery),     // remove params
         query(manpowerTotalQuery),
         query(siteQuery, repeatedFilterParams),
@@ -1218,77 +1230,18 @@
 
 router.get("/uptime-trend", async (req, res) => {
   try {
-    const { type } = req.query;
 
-    let sql = "";
+   const sql = `
+  SELECT 
+    date,
+    ROUND(AVG(availability), 2) AS uptime
+  FROM enb
+  WHERE availability IS NOT NULL
+  GROUP BY date
+  ORDER BY date ASC
+`;
 
-    // 🔥 GET LATEST FILE ID
-    const [latest] = await db.query(`
-      SELECT file_id 
-      FROM enb 
-      ORDER BY created_at DESC 
-      LIMIT 1
-    `);
-
-    const fileId = latest[0]?.file_id;
-
-    if (!fileId) {
-      return res.json([]);
-    }
-
-    // ✅ LAST 7 DAYS (DAY WISE)
-    if (type === "last7") {
-      sql = `
-        SELECT 
-          DAYNAME(date) AS day,
-          ROUND(AVG(availability), 2) AS uptime
-        FROM enb
-        WHERE file_id = ?
-          AND availability > 0
-        GROUP BY DAYNAME(date)
-      `;
-    }
-
-    // ✅ WEEKLY (WEEK 1,2,3,4)
-    else if (type === "weekly") {
-      sql = `
-        SELECT 
-          CONCAT('Week ', WEEK(date)) AS week,
-          ROUND(AVG(availability), 2) AS uptime
-        FROM enb
-        WHERE file_id = ?
-          AND availability > 0
-        GROUP BY WEEK(date)
-      `;
-    }
-
-    // ✅ MONTHLY (DATE WISE)
-    else if (type === "monthly") {
-      sql = `
-        SELECT 
-          DATE_FORMAT(date, '%d') AS date,
-          ROUND(AVG(availability), 2) AS uptime
-        FROM enb
-        WHERE file_id = ?
-          AND availability > 0
-        GROUP BY DATE(date)
-      `;
-    }
-
-    // ✅ YEARLY (MONTH WISE)
-    else if (type === "yearly") {
-      sql = `
-        SELECT 
-          MONTHNAME(date) AS month,
-          ROUND(AVG(availability), 2) AS uptime
-        FROM enb
-        WHERE file_id = ?
-          AND availability > 0
-        GROUP BY MONTH(date)
-      `;
-    }
-
-    const [rows] = await db.query(sql, [fileId]);
+    const rows = await query(sql);
 
     res.json(rows);
 
@@ -1297,5 +1250,5 @@ router.get("/uptime-trend", async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 });
-
+ 
   module.exports = router;  

@@ -49,13 +49,16 @@ const canDownloadFiles = true;
     [allowedSiteTypes]
   );
 
-  const today = useMemo(() => {
-    const d = new Date();
-    const yyyy = d.getFullYear();
-    const mm = String(d.getMonth() + 1).padStart(2, "0");
-    const dd = String(d.getDate()).padStart(2, "0");
-    return `${yyyy}-${mm}-${dd}`;
-  }, []);
+ const today = useMemo(() => {
+  const d = new Date();
+  d.setDate(d.getDate() - 1); // 🔥 yesterday only
+
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+
+  return `${yyyy}-${mm}-${dd}`;
+}, []);
 
   const [rows, setRows] = useState([]);
   const [filterDate, setFilterDate] = useState("");
@@ -64,7 +67,6 @@ const [filterReportType, setFilterReportType] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedIds, setSelectedIds] = useState([]);
   const [tableLoading, setTableLoading] = useState(false);
-  const [modalOpen, setModalOpen] = useState(false);
   const [modalMessage, setModalMessage] = useState("");
   const [modalMessageType, setModalMessageType] = useState("success");
   const [modalLoadingText, setModalLoadingText] = useState("");
@@ -88,26 +90,37 @@ const [filterReportType, setFilterReportType] = useState("");
     { date: today, site_type: "", report_type: "", file: null },
   ]);
 
-  const toSafeDate = (value, dateOnly = false) => {
-    if (!value) return null;
-    if (
-      dateOnly &&
-      typeof value === "string" &&
-      /^\d{4}-\d{2}-\d{2}$/.test(value)
-    ) {
-      return new Date(`${value}T00:00:00`);
-    }
-    let normalized = value;
-    if (typeof value === "string") {
-      // If MySQL returns "YYYY-MM-DD HH:mm:ss" (no timezone),
-      // treat it as IST (+05:30) to match stored DB time.
-      if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(value)) {
-        normalized = `${value.replace(" ", "T")}+05:30`;
-      }
-    }
-    const d = new Date(normalized);
-    return Number.isNaN(d.valueOf()) ? null : d;
+const [modalOpen, setModalOpen] = useState(false);
+useEffect(() => {
+  if (modalOpen) {
+    document.body.style.overflow = "hidden"; // 🔥 lock background
+  } else {
+    document.body.style.overflow = "auto"; // 🔥 unlock
+  }
+
+  return () => {
+    document.body.style.overflow = "auto";
   };
+}, [modalOpen]);
+
+const toSafeDate = (value, dateOnly = false) => {
+  if (!value) return null;
+
+  if (
+    dateOnly &&
+    typeof value === "string" &&
+    /^\d{4}-\d{2}-\d{2}$/.test(value)
+  ) {
+    return new Date(`${value}T00:00:00`);
+  }
+
+ const d = new Date(
+  typeof value === "string"
+    ? value.replace(" ", "T")  
+    : value
+);  
+  return Number.isNaN(d.valueOf()) ? null : d;
+};
 
   const formatTimestamp = (value) => {
     const d = toSafeDate(value);
@@ -575,10 +588,18 @@ if (uploadType === "single") {
   <div className="flex flex-col gap-1">
     <label className="text-xs text-text-secondary">Date</label>
     <PremiumDatePicker
-      value={filterDate}
-      onChange={setFilterDate}
-      className="w-full"
-    />
+  value={filterDate}
+  onChange={setFilterDate}
+  isDateDisabled={(d) => {
+    const today = new Date();
+    today.setHours(0,0,0,0);
+
+    const selected = new Date(d);
+    selected.setHours(0,0,0,0);
+
+    return selected >= today;
+  }}
+/>
   </div>
 
   {/* SITE TYPE */}
@@ -690,7 +711,8 @@ if (uploadType === "single") {
                      {formatTimestamp(row.uploaded_at)}
                       </td>
 
-<td className="py-3 pr-4 flex gap-2">
+<td className="py-3 pr-4">
+  <div className="flex items-center gap-3">
 
   {canDownloadFiles ? (
   <button
@@ -718,7 +740,7 @@ if (uploadType === "single") {
     Delete
   </button>
   ) : null}
-
+</div>
 </td>
 
                     </tr>
@@ -793,8 +815,8 @@ if (uploadType === "single") {
 </div>
 
       {modalOpen ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-          <div className="w-full max-w-4xl max-h-[90vh] flex flex-col rounded-2xl bg-white p-8 shadow-[0_20px_60px_rgba(15,23,42,0.2)]">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm overflow-hidden">
+          <div className="w-full max-w-4xl max-h-[90vh] flex flex-col rounded-2xl bg-white p-8 shadow-[0_20px_60px_rgba(15,23,42,0.2)] overflow-hidden">
             <div className="mb-4 flex items-center justify-between">
               <div>
                 <div className="text-xs uppercase tracking-wide text-gray-500">
@@ -825,22 +847,28 @@ if (uploadType === "single") {
             ) : null}
 
             {modalLoadingText ? (
-              <div className="mb-3 text-xs text-gray-500">
-                {modalLoadingText}
-              </div>
+              <div className="mb-3 text-xs text-gray-500 h-4">
+              {modalLoadingText || ""}
+             </div>
             ) : null}
 
-            <div className="flex-1 overflow-y-auto px-8 py-4 hide-scrollbar">
+            <div className="flex-1 overflow-y-auto px-8 py-4">
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               {uploadType === "single" ? (
                 <>
                   <div className="flex flex-col gap-1">
                     <label className="text-xs text-gray-600">Date</label>
                     <PremiumDatePicker
-                      value={date}
-                      onChange={setDate}
-                      className="w-full"
-                    />
+                   value={date}
+                     onChange={setDate}
+                     isDateDisabled={(d) => {
+                      const today = new Date();
+                      today.setHours(0,0,0,0);
+                      const selected = new Date(d);
+                        selected.setHours(0,0,0,0);
+                       return selected >= today; // ❌ block today + future
+                        }}
+                      />
                   </div>
 
                   <div className="flex flex-col gap-1">
@@ -937,21 +965,27 @@ if (uploadType === "single") {
                     </button>
                   </div>
 
-                  <div className="max-h-[50vh] overflow-y-auto pr-2 space-y-4">
+                 <div className="max-h-[50vh] overflow-y-auto pr-2 space-y-6 relative">
                     {bulkRows.map((row, index) => (
                       <div
-                        key={index}
-                        className="grid grid-cols-1 gap-4 rounded-xl border border-gray-200 p-4 md:grid-cols-8"
-                      >
+                         key={index}
+                         className="relative grid grid-cols-1 gap-4 rounded-xl border border-gray-200 p-4 md:grid-cols-8"
+                        >
                         <div className="md:col-span-2">
                           <label className="text-sm text-gray-600">Date</label>
                           <PremiumDatePicker
-                            value={row.date}
-                            onChange={(nextValue) =>
-                              handleBulkRowChange(index, "date", nextValue)
-                            }
-                            className="w-full"
-                          />
+                          value={row.date}
+                          onChange={(nextValue) =>
+                             handleBulkRowChange(index, "date", nextValue)
+                             }
+                               isDateDisabled={(d) => {
+                               const today = new Date();
+                               today.setHours(0,0,0,0);
+                                  const selected = new Date(d);
+                                 selected.setHours(0,0,0,0);
+                                    return selected >= today;
+                                   }}
+                               />
                         </div>
 
                         <div className="md:col-span-2">
@@ -1054,20 +1088,20 @@ if (uploadType === "single") {
             </div>
             </div>
 
-            <div className="mt-6 flex items-center justify-end gap-2">
+            <div className="mt-4 pt-4 border-t flex items-center justify-end gap-2 bg-white">
               <button
                 onClick={() => setModalOpen(false)}
                 className="rounded-lg border border-gray-200 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
               >
                 Cancel
               </button>
-              <button
-                onClick={handleUpload}
-                disabled={uploading}
-                className={`inline-flex items-center gap-2 rounded-lg px-5 py-2 text-sm text-white transition disabled:cursor-not-allowed ${accent.button}`}
-              >
-                {uploading ? "Uploading..." : "Upload"}
-              </button>
+             <button
+  onClick={handleUpload}
+  disabled={uploading}
+  className={`inline-flex items-center justify-center gap-2 rounded-lg px-5 py-2 text-sm text-white transition disabled:cursor-not-allowed min-w-[120px] ${accent.button}`}
+>
+                   {uploading ? "Uploading..." : "Upload"}
+                   </button>
             </div>
           </div>
 

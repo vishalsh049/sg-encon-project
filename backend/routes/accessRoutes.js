@@ -1,5 +1,4 @@
 const express = require("express");
-const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const {
   ensureAccessTables,
@@ -131,7 +130,7 @@ async function replaceUserPermissions(userId, permissionIds) {
   );
 }
 
-router.get("/permissions", authMiddleware, async (_req, res) => {
+router.get("/permissions", authMiddleware, requirePermission("users.view"), async (_req, res) => {
   try {
     const permissions = await listPermissions();
     res.json({ rows: permissions });
@@ -140,7 +139,7 @@ router.get("/permissions", authMiddleware, async (_req, res) => {
   }
 });
 
-router.get("/roles", authMiddleware, async (_req, res) => {
+router.get("/roles", authMiddleware, requirePermission("users.view"), async (_req, res) => {
   try {
     const roles = await listRoles();
     res.json({ rows: roles });
@@ -232,7 +231,7 @@ router.delete(
   }
 );
 
-router.get("/users", authMiddleware, requirePermission("users.manage"), async (_req, res) => {
+router.get("/users", authMiddleware, requirePermission("users.view"), async (_req, res) => {
   try {
     const users = await listUsers();
     res.json({ rows: users });
@@ -272,23 +271,44 @@ router.post(
         });
       }
 
-      const hashedPassword = await bcrypt.hash(password, 10);
+      const hashedPassword = password;
+
+          const roleRow = await query(
+          "SELECT name FROM roles WHERE id = ? LIMIT 1",
+          [roleId]
+          );
+
+const roleName = roleRow[0]?.name || null;
+
       const result = await query(
         `
-          INSERT INTO users (name, designation, email, password, role_id, circle, domain, status)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+          INSERT INTO users (name, designation, email, password, role_id, role, circle, domain, status)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         `,
-        [
-          name.trim(),
-          designation.trim(),
-          email.trim().toLowerCase(),
-          hashedPassword,
-          roleId ? Number(roleId) : null,
-          circle || null,
-          domain || null,
-          status,
-        ]
+
+[
+  name.trim(),
+  designation.trim(),
+  email.trim().toLowerCase(),
+  hashedPassword,
+  roleId && roleId !== "" ? Number(roleId) : null,
+  roleName, 
+  circle || null,
+  domain || null,
+  status,
+]
       );
+
+      // ✅ FORCE UPDATE ROLE NAME (FINAL FIX)
+await query(
+  `
+    UPDATE users u
+    JOIN roles r ON r.id = u.role_id
+    SET u.role = r.name
+    WHERE u.id = ?
+  `,
+  [result.insertId]
+);
 
       await replaceUserPermissions(result.insertId, permissionIds);
 
@@ -349,7 +369,7 @@ router.put(
       `;
 
       if (password?.trim()) {
-        const hashedPassword = await bcrypt.hash(password, 10);
+        const hashedPassword = password;
         sql += `, password = ? WHERE id = ?`;
         updates.splice(7, 0, hashedPassword);
       } else {
