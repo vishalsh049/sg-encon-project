@@ -1,3 +1,5 @@
+import { ReferenceLine } from "recharts";
+import { LabelList } from "recharts";
 import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { buildApiUrl } from "../lib/api";
@@ -48,19 +50,19 @@ const initialScrumFunctionSummary = {
 };
 
 const weeklyFallback = [
-  { day: "Mon", uptime: 92 },
-  { day: "Tue", uptime: 95 },
-  { day: "Wed", uptime: 90 },
-  { day: "Thu", uptime: 97 },
-  { day: "Fri", uptime: 94 },
-  { day: "Sat", uptime: 96 },
+  { label: "Mon", uptime: 92 },
+  { label: "Tue", uptime: 95 },
+  { label: "Wed", uptime: 90 },
+  { label: "Thu", uptime: 97 },
+  { label: "Fri", uptime: 94 },
+  { label: "Sat", uptime: 96 },
 ];
 
 const monthlyFallback = [
-  { week: "Week 1", uptime: 93 },
-  { week: "Week 2", uptime: 95 },
-  { week: "Week 3", uptime: 92 },
-  { week: "Week 4", uptime: 96 },
+  { label: "Week 1", uptime: 93 },
+  { label: "Week 2", uptime: 95 },
+  { label: "Week 3", uptime: 92 },
+  { label: "Week 4", uptime: 96 },
 ];
 
 const siteData = [
@@ -260,10 +262,15 @@ useEffect(() => {
   const [errorMessage, setErrorMessage] = useState("");
   const [stats, setStats] = useState(initialStats);
   const [uptimeTrend, setUptimeTrend] = useState([]);
+  const [trendFilter, setTrendFilter] = useState("last7");
 
 useEffect(() => {
   fetchStats();   // ✅ always get fresh data from backend
 }, []);
+
+useEffect(() => {
+  fetchUptimeTrend(trendFilter);
+}, [trendFilter]);
 
 const [apiStatus, setApiStatus] = useState("checking");
 const [lastUpdated, setLastUpdated] = useState(null);
@@ -604,6 +611,8 @@ const summary =
       },
     });
 
+    console.log("Uptime API:", res.data);
+
     if (!isDashboardPayload(res.data)) {
       setErrorMessage("Invalid API response");
       setApiStatus("offline");
@@ -617,6 +626,7 @@ const summary =
 }));
     console.log("API Response:", res.data);
     console.log("Domain Data:", res.data.domainBreakdown);
+
 
     // ✅ STATUS
     setApiStatus("live");
@@ -635,6 +645,27 @@ const summary =
     setApiStatus("offline");
   }
 };
+
+const fetchUptimeTrend = async (type) => {
+  try {
+    const res = await axios.get(
+      buildApiUrl(`/api/dashboard/uptime-trend?type=${type}`)
+    );
+
+  setUptimeTrend(
+  (res.data || [])
+    .slice(-7)   // ✅ KEEP ONLY LAST 7 RECORDS
+    .map((item) => ({
+      label: formatDisplayDate(item.date),
+      uptime: Number(item.uptime),
+    }))
+);
+
+  } catch (err) {
+    console.log("Uptime error:", err);
+  }
+};
+
 const getTimeAgo = (date) => {
   if (!date) return "";
 
@@ -821,7 +852,17 @@ const totalFiberCount = useMemo(() => {
     );
   }
 
+const getTrendColor = (data) => {
+  if (!data.length) return "#3b82f6";
 
+  const last = data[data.length - 1]?.uptime;
+
+  if (last >= 99.5) return "#16a34a";   // green 🔥
+  if (last >= 98) return "#2563eb";     // blue
+  return "#dc2626";                     // red
+};
+
+const trendColor = getTrendColor(uptimeTrend);
   
   //main return //
 
@@ -1276,53 +1317,143 @@ p-5">
 
       <div className="mt-6 grid grid-cols-1 gap-6 md:grid-cols-3 items-stretch">
 
-        <div className="flex h-full flex-col rounded-xl border bg-white p-5 shadow-sm md:col-span-2">
-          <div className="mb-2 flex items-center justify-between">
-            <h4 className="flex items-center gap-2 text-md font-semibold text-slate-800">
-              <TrendingUp size={18} />
-              Uptime Trend
-            </h4>
-
-
+        <div className="flex h-full flex-col rounded-2xl 
+                      bg-white/70 backdrop-blur-md 
+                         border border-white/40 
+                         shadow-[0_10px_40px_rgba(0,0,0,0.08)] 
+                        p-5 md:col-span-2">
         
-          </div>
+        <div className="mb-4 flex items-center justify-between">
+  <h4 className="flex items-center gap-2 text-md font-semibold text-slate-800">
+    <TrendingUp size={18} />
+    Uptime Trend
+  </h4>
 
-          <ResponsiveContainer width="100%" height={365}>
-            <AreaChart
-              data={uptimeTrend.length ? uptimeTrend : weeklyFallback}
-            >
-              <defs>
-                <linearGradient id="colorUptime" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.4} />
-                  <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
-                </linearGradient>
-              </defs>
+ <div className="flex items-center bg-gray-100 p-1 rounded-xl shadow-inner">
 
-              <CartesianGrid strokeDasharray="3 3" />
-        
-              <YAxis
-                domain={[80, 100]}
-                tick={{ fontSize: 12 }}
-                label={{ value: "Uptime %", angle: -90, position: "insideLeft" }}
-              />
-              <Tooltip
-                formatter={(value) => [`${value}%`, "Uptime"]}
-                contentStyle={{
-                  borderRadius: "10px",
-                  border: "none",
-                  boxShadow: "0 2px 10px rgba(0,0,0,0.1)",
-                }}
-              />
-              <Area
-                type="monotone"
-                dataKey="uptime"
-                stroke="#3b82f6"
-                strokeWidth={3}
-                fill="url(#colorUptime)"
-                dot={{ r: 4 }}
-                activeDot={{ r: 6 }}
-              />
-            </AreaChart>
+  {[
+    { key: "last7", label: "Last 7 Days" },
+    { key: "monthly", label: "Monthly" },
+    { key: "yearly", label: "Yearly" },
+  ].map((item) => (
+    <button
+      key={item.key}
+      onClick={() => setTrendFilter(item.key)}
+      className={`px-4 py-1.5 text-xs font-semibold rounded-lg transition-all duration-300 ${
+        trendFilter === item.key
+          ? "bg-white text-blue-600 shadow-md scale-105"
+          : "text-gray-500 hover:text-gray-700"
+      }`}
+    >
+      {item.label}
+    </button>
+  ))}
+
+</div>
+</div>
+
+  <ResponsiveContainer width="100%" height={365}>
+           <AreaChart
+             data={uptimeTrend}
+             margin={{ top: 30, right: 25, left: -10, bottom: 0 }}  
+             >
+
+  <defs>
+    <linearGradient id="colorUptime" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stopColor={trendColor} stopOpacity={0.4} />
+      <stop offset="60%" stopColor={trendColor} stopOpacity={0.15} />
+      <stop offset="100%" stopColor={trendColor} stopOpacity={0} />
+    </linearGradient>
+  </defs>
+
+  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" opacity={0.4} />
+
+  <XAxis
+  dataKey="label"
+  type="category"
+  interval={0}
+  tick={{ fontSize: 12, fill: "#6b7280" }}
+  axisLine={false}
+  tickLine={false}
+  padding={{ left: 30, right: 20 }} 
+/>
+
+  <YAxis
+  domain={[97, 100]}   // or your dynamic domain
+  ticks={[
+     97, 97.5, 98, 98.5, 99, 99.5, 100
+  ]}
+  tick={{ fontSize: 12, fill: "#6b7280" }}
+  axisLine={false}
+  tickLine={false}
+/>
+
+  {/* 🔥 Benchmark Line */}
+  <ReferenceLine
+    y={99}
+    stroke="#10b981"
+    strokeDasharray="4 4"
+    strokeWidth={1.5}
+  />
+
+  <Tooltip
+    formatter={(value) => [`${value}%`, "Uptime"]}
+    contentStyle={{
+      borderRadius: "12px",
+      border: "none",
+      boxShadow: "0 8px 25px rgba(0,0,0,0.1)",
+      fontSize: "13px",
+    }}
+  />
+
+  <Area
+  type="monotone"
+  dataKey="uptime"
+  stroke={trendColor}
+  strokeWidth={3.5}
+  fill="url(#colorUptime)"
+  dot={(props) => {
+    const { cx, cy, index } = props;
+    const lastIndex = uptimeTrend.length - 1;
+
+    if (index === lastIndex) {
+      return (
+        <circle
+          cx={cx}
+          cy={cy}
+          r={6}
+          fill={trendColor}
+          stroke="#fff"
+          strokeWidth={2}
+        />
+      );
+    }
+
+    return <circle cx={cx} cy={cy} r={3} fill={trendColor} />;
+  }}
+  activeDot={{
+    r: 7,
+    stroke: trendColor,
+    strokeWidth: 2,
+    fill: "#fff",
+  }}
+>
+
+  {/* ✅ MUST BE INSIDE */}
+ <LabelList
+  dataKey="uptime"
+  position="top"
+  offset={10}   // slight adjust
+  formatter={(value) => `${value}%`}
+  style={{
+    fontSize: "11px",
+    fill: "#2563eb",
+    fontWeight: 600,
+  }}
+/>
+
+</Area>
+ </AreaChart>
           </ResponsiveContainer>
         </div>
          
@@ -1410,7 +1541,7 @@ p-5">
           activeOuterRadius={128}
           onMouseEnter={(_, index) => setScrumPieActiveIndex(index)}
           onMouseLeave={() => setScrumPieActiveIndex(0)}
-          isAnimationActive
+          isAnimationActive={false}
           animationDuration={420}
           filter="url(#scrumPieShadow)"
           labelLine={false}

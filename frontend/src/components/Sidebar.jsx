@@ -132,15 +132,14 @@ function Sidebar({ closeSidebar, collapsed, onCollapseToggle, onExpandRequest })
     },
   ],
 },
-          {
-            key: "users-access",
-            label: "Users & Access",
-            path: "/dashboard/users-access",
-            icon: ShieldCheck,
-            description: "Roles & permissions",
-            permission: "users.manage",
-            roles: ["admin"],
-          },
+         {
+  key: "users-access",
+  label: "Users & Access",
+  path: "/dashboard/users-access",
+  icon: ShieldCheck,
+  description: "Roles & permissions",
+  roles: ["admin"], 
+},
         ],
         role
       ),

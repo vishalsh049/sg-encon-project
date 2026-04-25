@@ -46,8 +46,9 @@
   }
 
   body {
-    @apply bg-background text-text-primary transition-colors duration-300;
-  }
+  @apply text-text-primary transition-colors duration-300;
+  background: linear-gradient(135deg, #f5f7fb, #eef1f7);
+}
 }
 
 @layer components {
@@ -218,3 +219,25 @@
   scrollbar-width: none;
 }
 
+/* PREMIUM GLASS CARD */
+.status-badge {
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.status-badge.success {
+  background: #ecfdf5;
+  color: #059669;
+}
+
+.status-badge.pending {
+  background: #fffbeb;
+  color: #d97706;
+}
+
+.status-badge.warning {
+  background: #fef2f2;
+  color: #dc2626;
+}

@@ -2,7 +2,6 @@ const express = require("express");
 const router = express.Router();
 
 const { db, isConnected } = require("../config/db");
-const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const {
   ensureAccessTables,
@@ -66,23 +65,10 @@ router.post("/login", (req, res) => {
       }
 
       let passwordMatches = false;
-      try {
-        passwordMatches = await bcrypt.compare(password, user.password);
-        console.log("Bcrypt compare result:", passwordMatches ? "MATCH" : "NO MATCH");
-        console.log("Stored hash preview:", user.password?.substring(0,10) + "...");
-      } catch (hashError) {
-        console.log("Bcrypt compare ERROR:", hashError.message);
-        passwordMatches = false;
-      }
-
-      // Auto-hash fallback
-      if (!passwordMatches && password === user.password) {
-        console.log("AUTO-HASHING PLAIN PASSWORD");
-        const hashedPassword = await bcrypt.hash(password, 10);
-        await query(`UPDATE users SET password = ? WHERE id = ?`, [hashedPassword, user.id]);
-        passwordMatches = true;
-        user.password = hashedPassword;
-      }
+// ✅ DIRECT PASSWORD CHECK
+if (password === user.password) {
+  passwordMatches = true;
+}
 
       if (!passwordMatches) {
         console.log("PASSWORD MISMATCH");
