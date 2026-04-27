@@ -241,31 +241,22 @@ const formatDateOnly = (value) => {
   return `${year}-${month}-${day}`;
 };
 
-
-    const normalizeDate = (value) => {
+const normalizeDate = (value) => {
   if (!value) return null;
 
-  // Handle DD/MM/YYYY string format
+  // already correct format → return directly
+  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return value;
+  }
+
+  // handle DD/MM/YYYY
   if (typeof value === "string" && value.includes("/")) {
     const [dd, mm, yyyy] = value.split("/");
     return `${yyyy}-${mm}-${dd}`;
   }
 
-  // Handle YYYY-MM-DD string format
-  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-    return value;
-  }
-
-  const d = new Date(value);
-  if (!Number.isNaN(d.valueOf())) {
-    // ✅ FIX: Use local components instead of .toISOString()
-    const year = d.getFullYear();
-    const month = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-  }
-
-  return null;
+  // 🚀 IMPORTANT: do not use new Date()
+  return value;
 };
 
 
@@ -298,12 +289,7 @@ const formatDateOnly = (value) => {
           cleanRow["CMP"] ||
           cleanRow["Cmp"];
 
-          const excelDate =
-          cleanRow["date"] ||
-          cleanRow["Date"] ||
-          cleanRow["DATE"];
-
-          const normalizedDate = fallbackDate; 
+const normalizedDate = normalizeDate(fallbackDate);
 
             if (!circle || !cmp) {
               errors.push(index + 2);
@@ -311,6 +297,35 @@ const formatDateOnly = (value) => {
             }
 
         console.log("Availability Value:", cleanRow["overall cell availability"]);
+
+     let availability = cleanRow["overall cell availability"];
+
+if (availability === undefined) {
+  console.log("❌ Column not found: overall cell availability");
+  return;
+}
+
+availability = Number(availability);
+
+if (availability <= 1) {
+  availability = availability * 100;
+}
+
+if (isNaN(availability)) {
+  return;
+}
+
+if (availability !== null) {
+  availability = Number(availability);
+
+  if (availability <= 1) {
+    availability = availability * 100;
+  }
+
+ if (availability === null || isNaN(availability)) {
+  return;
+}
+}
 
             insertRows.push([
               fileId,
@@ -329,15 +344,11 @@ const formatDateOnly = (value) => {
               cleanRow["device type"],
               cleanRow["overall cnum count"],
               cleanRow["overall cell outage (sec)"],
-              cleanRow["overall cell availability"] ||
-              cleanRow["overall availability"] ||
-              cleanRow["availability"] ||
-              cleanRow["cell availability"] ||
-              null,
+              availability,
               cleanRow["cells up"]
             ]);
 
-          }); // ✅ VERY IMPORTANT
+          }); 
 
           return { insertRows, errors };
         };    
@@ -443,14 +454,16 @@ const formatDateOnly = (value) => {
             .filter(Boolean);
 
           const average = (items) =>
-            items.length
-              ? Number(
-                  (
-                    items.reduce((sum, item) => sum + Number(item.uptime || 0), 0) /
-                    items.length
-                  ).toFixed(2)
-                )
-              : 0;
+              items.length
+                ? Number(
+              (
+                   Math.round(
+                   (items.reduce((sum, item) => sum + Number(item.uptime || 0), 0) /
+                   items.length) * 100
+                     ) / 100
+                   ).toFixed(2)
+                      )
+                  : 0;
 
           const weeklyOrder = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
           const weekDayFormatter = new Intl.DateTimeFormat("en-US", { weekday: "short" });
@@ -1196,38 +1209,107 @@ const formatDateOnly = (value) => {
           });
         });
 
-        router.post("/bulk-delete", async (req, res) => {
-          try {
-            const { ids } = req.body;
+       router.post("/bulk-delete", async (req, res) => {
+  try {
 
-            if (!ids || ids.length === 0) {
-              return res.status(400).json({ message: "No IDs provided" });
-            }
+   let { ids } = req.body;
 
-            // get file names first
-            const rows = await query(
-              `SELECT file_name FROM report_uploads WHERE id IN (?)`,
-              [ids]
-            );
+// 🔥 FIX: convert + remove invalid values
+ids = ids
+  .map((id) => Number(id))
+  .filter((id) => !isNaN(id));
 
-            // delete files
-            rows.forEach((row) => {
-              const filePath = path.join(__dirname, "..", "uploads", row.file_name);
-              if (fs.existsSync(filePath)) {
-                fs.unlinkSync(filePath);
-              }
-            });
+if (!ids || ids.length === 0) {
+  return res.status(400).json({ message: "Invalid IDs" });
+}
 
-            // delete from DB
-            await query(`DELETE FROM report_uploads WHERE id IN (?)`, [ids]);
+    // 🔥 GET FULL DATA (IMPORTANT)
+    const placeholders = ids.map(() => "?").join(",");
 
-            res.json({ message: "Deleted successfully" });
+const rows = await query(
+  `SELECT id, file_name, site_type, file_id 
+   FROM report_uploads 
+   WHERE id IN (${placeholders})`,
+  ids   // 🔥 NOT [ids]
+);
 
-          } catch (err) {
-            console.error(err);
-            res.status(500).json({ message: "Bulk delete failed" });
-          }
-        });
+    // 🔥 DELETE FILES
+    rows.forEach((row) => {
+      const filePath = path.join(__dirname, "..", "uploads", row.file_name);
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+      }
+    });
+
+    // 🔥 DELETE FROM ALL TABLES BASED ON TYPE
+    for (const row of rows) {
+  const file_id = parseInt(row.file_id); // 🔥 FIX
+  const type = String(row.site_type).toLowerCase();
+
+  if (!file_id) {
+    console.log("❌ Invalid file_id:", row);
+    continue;
+  }
+
+  console.log("✅ Bulk deleting:", type, file_id);
+
+  if (type === "enb") {
+  await query("DELETE FROM enb WHERE file_id = ?", [file_id]);
+
+  const after = await query(`SELECT COUNT(*) as count FROM enb WHERE file_id = ?`, [file_id]);
+  console.log("After delete ENB:", after[0].count);
+} 
+
+     if (type === "esc") {
+  await query("DELETE FROM esc WHERE file_id = ?", [file_id]);
+
+  const after = await query(`SELECT COUNT(*) as count FROM esc WHERE file_id = ?`, [file_id]);
+  console.log("After delete ESC:", after[0].count);
+}
+
+    if (type === "isc") {
+  await query("DELETE FROM isc WHERE file_id = ?", [file_id]);
+
+  const after = await query(`SELECT COUNT(*) as count FROM isc WHERE file_id = ?`, [file_id]);
+  console.log("After delete ISC:", after[0].count);
+}
+
+     if (type === "osc") {
+  await query("DELETE FROM osc WHERE file_id = ?", [file_id]);
+
+  const after = await query(`SELECT COUNT(*) as count FROM osc WHERE file_id = ?`, [file_id]);
+  console.log("After delete OSC:", after[0].count);
+}
+      
+if (type === "hpodsc") {
+  await query("DELETE FROM hpodsc WHERE file_id = ?", [file_id]);
+
+  const after = await query(`SELECT COUNT(*) as count FROM hpodsc WHERE file_id = ?`, [file_id]);
+  console.log("After delete HPODSC:", after[0].count);
+}
+
+    }
+
+    // 🔥 DELETE FROM uploads table (LAST)
+    await query(
+  `DELETE FROM report_uploads WHERE id IN (${placeholders})`,
+  ids
+);
+
+    // 🔥 FINAL CLEANUP (REMOVE ORPHAN DATA)
+    await query(`DELETE FROM enb WHERE file_id NOT IN (SELECT file_id FROM report_uploads)`);
+    await query(`DELETE FROM esc WHERE file_id NOT IN (SELECT file_id FROM report_uploads)`);
+    await query(`DELETE FROM isc WHERE file_id NOT IN (SELECT file_id FROM report_uploads)`);
+    await query(`DELETE FROM osc WHERE file_id NOT IN (SELECT file_id FROM report_uploads)`);
+    await query(`DELETE FROM hpodsc WHERE file_id NOT IN (SELECT file_id FROM report_uploads)`);
+
+    res.json({ message: "Bulk delete successful (file + data)" });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Bulk delete failed" });
+  }
+});
 
         const archiver = require("archiver");
 
@@ -1327,17 +1409,17 @@ const formatDateOnly = (value) => {
                   fileId,
                 });
 
-                insertRows.push([
+               insertRows.push([
                 site_category, 
                 date,
-                String(site_type).trim(),
-                String(report_type).trim(),
+                site_type,
+                report_type,
                 "bulk",
                 uploadedBy,
                 file.filename,
+                fileId,      
                 totalRecords,
-                 fileId, 
-                 new Date()
+                new Date()
                 ]);
               }
 
@@ -1381,15 +1463,16 @@ router.delete("/:id", async (req, res) => {
     const id = req.params.id;
 
     const rows = await query(
-      "SELECT file_name, report_date, site_type FROM report_uploads WHERE id = ?",
-      [id]
-    );
+  "SELECT file_name, report_date, site_type, file_id FROM report_uploads WHERE id = ?",
+  [id]
+);
 
     if (!rows.length) {
       return res.status(404).json({ message: "Record not found" });
     }
 
-    const { file_name, report_date, site_type } = rows[0];
+   const { file_name, report_date, site_type } = rows[0];
+   const file_id = Number(rows[0].file_id);
 
     // delete file
     const filePath = path.join(__dirname, "..", "uploads", file_name);
@@ -1398,21 +1481,82 @@ router.delete("/:id", async (req, res) => {
     }
 
     // delete DB data
-    if (site_type.toLowerCase() === "enb") {
-      await query("DELETE FROM enb WHERE date = ?", [report_date]);
-    }
+
+    {/* ENB */}
+
+   if (site_type.toLowerCase() === "enb") {
+  await query("DELETE FROM enb WHERE file_id = ?", [file_id]);
+
+  // 🔥 EXTRA SAFETY (remove orphan data if mismatch)
+  await query(`
+    DELETE FROM enb 
+    WHERE file_id NOT IN (SELECT file_id FROM report_uploads)
+  `);
+}
+
+{/* ESC */}
 
     if (site_type.toLowerCase() === "esc") {
-      await query("DELETE FROM esc WHERE date = ?", [report_date]);
-    }
+  const file_id = Number(rows[0].file_id);
 
-    if (site_type.toLowerCase() === "isc") {
-      await query("DELETE FROM isc WHERE date = ?", [report_date]);
-    }
+  console.log("Deleting ESC file_id:", file_id);
 
-    if (site_type.toLowerCase() === "osc") {
-      await query("DELETE FROM osc WHERE date = ?", [report_date]);
-    }
+  await query("DELETE FROM esc WHERE file_id = ?", [file_id]);
+
+  // 🔥 safety cleanup (optional but recommended)
+  await query(`
+    DELETE FROM esc 
+    WHERE file_id NOT IN (SELECT file_id FROM report_uploads)
+  `);
+}
+
+{/* ISC */}
+
+   if (site_type.toLowerCase() === "isc") {
+  const file_id = Number(rows[0].file_id);
+
+  console.log("Deleting ISC file_id:", file_id);
+
+  await query("DELETE FROM isc WHERE file_id = ?", [file_id]);
+
+  // 🔥 safety cleanup (recommended)
+  await query(`
+    DELETE FROM isc
+    WHERE file_id NOT IN (SELECT file_id FROM report_uploads)
+  `);
+}
+
+{ /* OSC */}
+
+   if (site_type.toLowerCase() === "osc") {
+  const file_id = Number(rows[0].file_id);
+
+  console.log("Deleting OSC file_id:", file_id);
+
+  await query("DELETE FROM osc WHERE file_id = ?", [file_id]);
+
+  // 🔥 safety cleanup
+  await query(`
+    DELETE FROM osc
+    WHERE file_id NOT IN (SELECT file_id FROM report_uploads)
+  `);
+}
+
+{/* HPODSC */}
+
+if (site_type.toLowerCase() === "hpodsc") {
+  const file_id = Number(rows[0].file_id);
+
+  console.log("Deleting HPODSC file_id:", file_id);
+
+  await query("DELETE FROM hpodsc WHERE file_id = ?", [file_id]);
+
+  // 🔥 safety cleanup
+  await query(`
+    DELETE FROM hpodsc
+    WHERE file_id NOT IN (SELECT file_id FROM report_uploads)
+  `);
+}
 
     // delete from uploads table
     await query("DELETE FROM report_uploads WHERE id = ?", [id]);
