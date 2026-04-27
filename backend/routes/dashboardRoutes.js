@@ -61,11 +61,16 @@
     addFilter("cmp", cmp);
     const whereClause = filters.length ? `AND ${filters.join(" AND ")}` : "";
 
-  const sql = `
+ const sql = `
   SELECT COUNT(*) AS enbCount
   FROM enb
-  WHERE date = (
-    SELECT MAX(date) FROM enb
+  WHERE file_id = (
+    SELECT file_id
+    FROM enb
+    WHERE 1=1
+    ${whereClause}
+    ORDER BY date DESC, created_at DESC, file_id DESC
+    LIMIT 1
   )
   ${whereClause}
 `;
@@ -672,16 +677,19 @@
     const buildAnd = () =>
     filters.length ? ` AND (${filters.join(" AND ")})` : "";
 
-    const escCountSql = filters.length
-      ? `SELECT COUNT(*) FROM esc
-    WHERE file_id = (
-      SELECT file_id FROM esc
-      WHERE date = (SELECT MAX(date) FROM esc)
-      ORDER BY created_at DESC, file_id DESC
-      LIMIT 1
-    )
-    ${buildAnd()}`
-      : `SELECT COALESCE(MAX(latest.total_records), 0) AS count
+const escCountSql = `
+  SELECT COUNT(*) AS count
+  FROM esc
+  WHERE file_id = (
+    SELECT file_id
+    FROM esc
+    ORDER BY date DESC, created_at DESC, file_id DESC
+    LIMIT 1
+  )
+  ${filters.length ? buildAnd() : ""}
+`;
+
+ `SELECT COALESCE(MAX(latest.total_records), 0) AS count
     FROM (
       SELECT total_records
       FROM report_uploads
@@ -690,16 +698,20 @@
       LIMIT 1
     ) latest`;
 
-    const iscCountSql = filters.length
-      ? `SELECT COUNT(*) FROM isc
-    WHERE file_id = (
-      SELECT file_id FROM isc
-      WHERE date = (SELECT MAX(date) FROM isc)
-      ORDER BY created_at DESC, file_id DESC
-      LIMIT 1
-    )
-    ${buildAnd()}`
-      : `SELECT COALESCE(MAX(latest.total_records), 0) AS count
+   const iscCountSql = `
+  SELECT COUNT(*) AS count
+  FROM isc
+  WHERE file_id = (
+    SELECT file_id
+    FROM isc
+    ORDER BY date DESC, created_at DESC, file_id DESC
+    LIMIT 1
+  )
+  ${filters.length ? buildAnd() : ""}
+`;
+
+
+      `SELECT COALESCE(MAX(latest.total_records), 0) AS count
     FROM (
       SELECT total_records
       FROM report_uploads
@@ -708,16 +720,19 @@
       LIMIT 1
     ) latest`;
 
-    const oscCountSql = filters.length
-      ? `SELECT COUNT(*) FROM osc
-    WHERE file_id = (
-      SELECT file_id FROM osc
-      WHERE date = (SELECT MAX(date) FROM osc)
-      ORDER BY created_at DESC, file_id DESC
-      LIMIT 1
-    )
-    ${buildAnd()}`
-      : `SELECT COALESCE(MAX(latest.total_records), 0) AS count
+    const oscCountSql = `
+  SELECT COUNT(*) AS count
+  FROM osc
+  WHERE file_id = (
+    SELECT file_id
+    FROM osc
+    ORDER BY date DESC, created_at DESC, file_id DESC
+    LIMIT 1
+  )
+  ${filters.length ? buildAnd() : ""}
+`;
+
+       `SELECT COALESCE(MAX(latest.total_records), 0) AS count
     FROM (
       SELECT total_records
       FROM report_uploads
@@ -726,16 +741,18 @@
       LIMIT 1
     ) latest`;
 
-    const hpodscCountSql = filters.length
-      ? `SELECT COUNT(*) FROM hpodsc
-    WHERE file_id = (
-      SELECT file_id FROM hpodsc
-      WHERE date = (SELECT MAX(date) FROM hpodsc)
-      ORDER BY created_at DESC, file_id DESC
-      LIMIT 1
-    )
-    ${buildAnd()}`
-      : `SELECT COALESCE(MAX(latest.total_records), 0) AS count
+   const hpodscCountSql = `
+  SELECT COUNT(*) AS count
+  FROM hpodsc
+  WHERE file_id = (
+    SELECT file_id
+    FROM hpodsc
+    ORDER BY date DESC, created_at DESC, file_id DESC
+    LIMIT 1
+  )
+  ${filters.length ? buildAnd() : ""}
+`;
+     `SELECT COALESCE(MAX(latest.total_records), 0) AS count
     FROM (
       SELECT total_records
       FROM report_uploads
@@ -825,13 +842,15 @@
   SELECT SUM(count) AS totalSites
   FROM (
 
-  SELECT COUNT(*) AS count FROM enb
+SELECT COUNT(*) AS count
+FROM enb
 WHERE file_id = (
-  SELECT file_id FROM enb
-  WHERE date = (SELECT MAX(date) FROM enb)
-  ORDER BY created_at DESC, file_id DESC
+  SELECT file_id
+  FROM enb
+  ORDER BY date DESC, created_at DESC, file_id DESC
   LIMIT 1
 )
+
     ${filters.length ? buildAnd() : ""}
 
     UNION ALL
@@ -917,18 +936,18 @@ WHERE file_id = (
     // 🔥 SITE TYPES (Only ENB, ESC, ISC, OSC, HPODSC)
   const siteQuery = `
 
- SELECT 
-  'ENB' AS type, 
-  COUNT(*) AS count, 
+SELECT 
+  'ENB' AS type,
+  COUNT(*) AS count,
   MAX(date) AS latestDate
 FROM enb
 WHERE file_id = (
-  SELECT file_id 
+  SELECT file_id
   FROM enb
-  WHERE date = (SELECT MAX(date) FROM enb)
-  ORDER BY created_at DESC, file_id DESC
+  ORDER BY date DESC, created_at DESC, file_id DESC
   LIMIT 1
 )
+
 ${buildAnd()}
 
   UNION ALL
@@ -946,87 +965,87 @@ ${buildAnd()}
   -- 🔥 NEW TYPES
 
   UNION ALL
-  SELECT 'AG1' AS type, COALESCE(SUM(kpi_value), 0) AS count, MAX(date) AS latestDate
-  FROM ag1
-  WHERE file_id = (
-    SELECT file_id FROM ag1
-    WHERE date = (
-    SELECT MAX(date)
-    FROM ag1
-    )
-    ORDER BY created_at DESC, file_id DESC
-    LIMIT 1
-  )
+  SELECT 
+  'AG1' AS type,
+  COALESCE(latest.total_records, 0) AS count,
+  latest.report_date AS latestDate
+FROM (
+  SELECT total_records, report_date
+  FROM report_uploads
+  WHERE UPPER(TRIM(site_type)) = 'AG1'
+  ORDER BY report_date DESC, uploaded_at DESC, id DESC
+  LIMIT 1
+) latest
   ${buildAnd()}
 
   UNION ALL
-  SELECT 'AG2' AS type, COALESCE(SUM(kpi_value), 0) AS count, MAX(date) AS latestDate
-  FROM ag2
-  WHERE file_id = (
-    SELECT file_id FROM ag2
-    WHERE date = (
-  SELECT MAX(date)
-  FROM ag2
-)
-    ORDER BY created_at DESC, file_id DESC
-    LIMIT 1
-  )
+  SELECT 
+  'AG2' AS type,
+  COALESCE(latest.total_records, 0) AS count,
+  latest.report_date AS latestDate
+FROM (
+  SELECT total_records, report_date
+  FROM report_uploads
+  WHERE UPPER(TRIM(site_type)) = 'AG2'
+  ORDER BY report_date DESC, uploaded_at DESC, id DESC
+  LIMIT 1
+) latest
   ${buildAnd()}
 
   UNION ALL
-  SELECT 'ILA' AS type, COALESCE(SUM(kpi_value), 0) AS count, MAX(date) AS latestDate
-  FROM ila
-  WHERE file_id = (
-    SELECT file_id FROM ila
-      WHERE date = (
-      SELECT MAX(date)
-      FROM ila
-      )
-    ORDER BY created_at DESC, file_id DESC
-    LIMIT 1
-  )
+ SELECT 
+  'ILA' AS type,
+  COALESCE(latest.total_records, 0) AS count,
+  latest.report_date AS latestDate
+FROM (
+  SELECT total_records, report_date
+  FROM report_uploads
+  WHERE UPPER(TRIM(site_type)) = 'ILA'
+  ORDER BY report_date DESC, uploaded_at DESC, id DESC
+  LIMIT 1
+) latest
   ${buildAnd()}
 
   UNION ALL
-  SELECT 'GNB' AS type, COALESCE(SUM(kpi_value), 0) AS count, MAX(date) AS latestDate
-  FROM gnb
-  WHERE file_id = (
-    SELECT file_id FROM gnb
-    WHERE date = (
-      SELECT MAX(date)
-      FROM gnb
-    )
-    ORDER BY created_at DESC, file_id DESC
-    LIMIT 1
-  )
+  SELECT 
+  'GNB' AS type,
+  COALESCE(latest.total_records, 0) AS count,
+  latest.report_date AS latestDate
+FROM (
+  SELECT total_records, report_date
+  FROM report_uploads
+  WHERE UPPER(TRIM(site_type)) = 'GNB'
+  ORDER BY report_date DESC, uploaded_at DESC, id DESC
+  LIMIT 1
+) latest
   ${buildAnd()}
 
   UNION ALL
-  SELECT 'GSC' AS type, COALESCE(SUM(kpi_value), 0) AS count, MAX(date) AS latestDate
-  FROM gsc
-  WHERE file_id = (
-    SELECT file_id FROM gsc
-    WHERE date = (
-      SELECT MAX(date)
-      FROM gsc
-    )
-    ORDER BY created_at DESC, file_id DESC
-    LIMIT 1
-  )
+  SELECT 
+  'GSC' AS type,
+  COALESCE(latest.total_records, 0) AS count,
+  latest.report_date AS latestDate
+FROM (
+  SELECT total_records, report_date
+  FROM report_uploads
+  WHERE UPPER(TRIM(site_type)) = 'GSC'
+  ORDER BY report_date DESC, uploaded_at DESC, id DESC
+  LIMIT 1
+) latest
   ${buildAnd()}
 
   UNION ALL
-  SELECT 'WIFI' AS type, COALESCE(SUM(kpi_value), 0) AS count, MAX(date) AS latestDate
-  FROM wifi
-  WHERE file_id = (
-    SELECT file_id FROM wifi
-    WHERE date = (
-      SELECT MAX(date)
-      FROM wifi
-    )
-    ORDER BY created_at DESC, file_id DESC
-    LIMIT 1
-  )
+  SELECT 
+  'WIFI' AS type,
+  COALESCE(latest.total_records, 0) AS count,
+  latest.report_date AS latestDate
+FROM (
+  SELECT total_records, report_date
+  FROM report_uploads
+  WHERE UPPER(TRIM(site_type)) = 'WIFI'
+  ORDER BY report_date DESC, uploaded_at DESC, id DESC
+  LIMIT 1
+) latest
   ${buildAnd()}
 
   `;
@@ -1049,7 +1068,7 @@ ${buildAnd()}
     SELECT
       UPPER(TRIM(site_type)) AS type,
       SUM(COALESCE(total_records, 0)) AS count,
-      DATE(MAX(uploaded_at)) AS latestDate
+      MAX(report_date) AS latestDate
     FROM report_uploads
     WHERE DATE(uploaded_at) = (
       SELECT DATE(MAX(uploaded_at)) FROM report_uploads
@@ -1139,7 +1158,7 @@ ${buildAnd()}
         query(siteCountQuery, repeatedFilterParams),
         query(manpowerActiveQuery),     // remove params
         query(manpowerTotalQuery),
-        query(siteQuery, repeatedFilterParams),
+        query(siteQuery),
         query(distinctSiteTypesQueryV2),
         query(uptimeQuery),
         query(monthlyQuery),
@@ -1234,7 +1253,7 @@ router.get("/uptime-trend", async (req, res) => {
    const sql = `
   SELECT 
     date,
-    ROUND(AVG(availability), 2) AS uptime
+    AVG(availability) AS uptime
   FROM enb
   WHERE availability IS NOT NULL
   GROUP BY date

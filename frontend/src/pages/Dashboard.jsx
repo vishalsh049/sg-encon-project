@@ -149,8 +149,25 @@ function isDashboardPayload(data) {
 
 function formatDisplayDate(value) {
   if (!value) return "";
+
+  // ✅ FIX: handle DD/MM/YYYY format
+  const parts = value.split("/");
+
+  if (parts.length === 3) {
+    const [day, month, year] = parts;
+    const d = new Date(`${year}-${month}-${day}`);
+    
+    return d.toLocaleDateString("en-GB", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    });
+  }
+
+  // fallback
   const d = new Date(value);
   if (Number.isNaN(d.valueOf())) return "";
+
   return d.toLocaleDateString("en-GB", {
     day: "2-digit",
     month: "short",
@@ -164,6 +181,10 @@ function formatFiberValue(value) {
 
 function formatNumber(value) {
   return Number(value).toFixed(2).replace(/\.00$/, "");
+}
+
+function truncateTo2(value) {
+  return Number(Number(value).toFixed(2));
 }
 
 function ScrumManpowerTooltip({ active, payload }) {
@@ -263,6 +284,7 @@ useEffect(() => {
   const [stats, setStats] = useState(initialStats);
   const [uptimeTrend, setUptimeTrend] = useState([]);
   const [trendFilter, setTrendFilter] = useState("last7");
+  const [selectedDate, setSelectedDate] = useState("");
 
 useEffect(() => {
   fetchStats();   // ✅ always get fresh data from backend
@@ -657,7 +679,7 @@ const fetchUptimeTrend = async (type) => {
     .slice(-7)   // ✅ KEEP ONLY LAST 7 RECORDS
     .map((item) => ({
       label: formatDisplayDate(item.date),
-      uptime: Number(item.uptime),
+      uptime: truncateTo2(item.uptime),  
     }))
 );
 
@@ -790,8 +812,10 @@ const getTimeAgo = (date) => {
   return scrumManpowerChartData;
 }, [scrumManpowerChartData]);
 
-  const siteBreakdownView = useMemo(() => {
-  return (stats.siteBreakdown || [])
+const siteBreakdownView = useMemo(() => {
+  if (!stats.siteBreakdown || !stats.siteBreakdown.length) return [];
+
+  return stats.siteBreakdown
     .filter((item) => item?.type)
     .filter((item) => {
       const normalizedType = String(item.type).toUpperCase();
@@ -799,11 +823,16 @@ const getTimeAgo = (date) => {
       if (normalizedType === "GSC" && !canViewGsc) return false;
       return true;
     })
-    .map((item) => ({
-      type: String(item.type).toUpperCase(),
-      count: Number(item.count || 0),
-      latestDate: item.latestDate || null,
-    }));
+    .map((item) => {
+      // ✅ FIX: use count-based latest date
+      return {
+        type: String(item.type).toUpperCase(),
+        count: Number(item.count || 0),
+
+        // 🔥 IMPORTANT FIX HERE
+        latestDate: item.reportDate || item.latestDate || null,
+      };
+    });
 }, [stats.siteBreakdown, canViewWifi, canViewGsc]);
 
 // ✅ FIBER GROUPING
@@ -1175,7 +1204,7 @@ shadow-sm"
                       {item.type}
                     </span>
                     <div className="text-[11px] text-gray-400">
-                      Date: {item.latestDate ? formatDisplayDate(item.latestDate) : "No Data"}
+                    Date: {item.latestDate ? formatDisplayDate(item.latestDate) : "No Data"}
                     </div>
         </div>
        </div>
@@ -1397,7 +1426,7 @@ p-5">
   />
 
   <Tooltip
-    formatter={(value) => [`${value}%`, "Uptime"]}
+    formatter={(value) => [`${truncateTo2(value)}%`, "Uptime"]}
     contentStyle={{
       borderRadius: "12px",
       border: "none",
@@ -1444,7 +1473,7 @@ p-5">
   dataKey="uptime"
   position="top"
   offset={10}   // slight adjust
-  formatter={(value) => `${value}%`}
+  formatter={(value) => `${truncateTo2(value)}%`}
   style={{
     fontSize: "11px",
     fill: "#2563eb",
