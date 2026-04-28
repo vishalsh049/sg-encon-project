@@ -170,11 +170,55 @@
     return summary;
   };
 
+  const parseFilterList = (value) =>
+    String(value || "")
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
+
+  const buildScrumFilterClause = (req) => {
+    const filters = [`UPPER(TRIM(vendor)) = 'S G ENCON PVT LTD'`];
+    const params = [];
+
+    const circles = parseFilterList(req.query.circle);
+    const cmps = parseFilterList(req.query.cmp);
+    const domains = parseFilterList(req.query.domain);
+
+    if (circles.length) {
+      filters.push(`state IN (${circles.map(() => "?").join(",")})`);
+      params.push(...circles);
+    }
+
+    if (cmps.length) {
+      filters.push(`maintenance_point IN (${cmps.map(() => "?").join(",")})`);
+      params.push(...cmps);
+    }
+
+    if (domains.length) {
+      filters.push(`
+        CASE
+          WHEN LOWER(function_name) LIKE '%fttx%' THEN 'FTTx'
+          WHEN LOWER(function_name) LIKE '%fiber%' OR LOWER(function_name) LIKE '%fibre%' THEN 'Fiber'
+          WHEN LOWER(function_name) LIKE '%utility%' THEN 'Utility'
+          ELSE 'Others'
+        END IN (${domains.map(() => "?").join(",")})
+      `);
+      params.push(...domains);
+    }
+
+    return {
+      whereClause: `WHERE ${filters.join(" AND ")}`,
+      params,
+    };
+  };
+
     // ✅ 1. SCRUM COUNT (FIRST)
     router.get("/scrum/count", (req, res) => {
       if (!isConnected()) {
         return res.status(503).json({ message: "DB not connected" });
       }
+
+  const { whereClause, params } = buildScrumFilterClause(req);
 
   const sql = `
     SELECT 
@@ -182,13 +226,13 @@
   SUM(CASE WHEN status='Active' THEN 1 ELSE 0 END) as active,
   SUM(CASE WHEN status!='Active' THEN 1 ELSE 0 END) as inactive
 FROM scrum_manpower 
-WHERE UPPER(TRIM(vendor)) = 'S G ENCON PVT LTD'
+${whereClause}
 AND manual_date = (
   SELECT MAX(manual_date) FROM scrum_manpower
 )
   `;
 
-      db.query(sql, (err, result) => {
+      db.query(sql, params, (err, result) => {
         if (err) return res.status(500).json(err);
         res.json(result[0]);
       });
@@ -268,10 +312,12 @@ AND manual_date = (
         return res.status(503).json({ message: "DB not connected" });
       }
 
+      const { whereClause, params } = buildScrumFilterClause(req);
+
       const sql = `
         SELECT function_name
         FROM scrum_manpower
-        WHERE UPPER(TRIM(vendor)) = 'S G ENCON PVT LTD'
+        ${whereClause}
           AND upload_batch_id = (
             SELECT upload_batch_id
             FROM scrum_manpower
@@ -280,7 +326,7 @@ AND manual_date = (
           )
       `;
 
-      db.query(sql, (err, result) => {
+      db.query(sql, params, (err, result) => {
         if (err) {
           console.log("FUNCTION SUMMARY ERROR:", err);
           return res.status(500).json({ message: "Error fetching function summary" });
@@ -634,6 +680,8 @@ VALUES ?
   });
 
    router.get("/scrum/job-role-summary", (req, res) => {
+  const { whereClause, params } = buildScrumFilterClause(req);
+
   const sql = `
     SELECT 
      CASE
@@ -662,8 +710,7 @@ VALUES ?
 END AS category,
       COUNT(*) AS total
     FROM scrum_manpower
-    WHERE 
-      UPPER(TRIM(vendor)) = 'S G ENCON PVT LTD'
+    ${whereClause}
       AND manual_date = (
         SELECT MAX(manual_date) FROM scrum_manpower
       )
@@ -672,7 +719,7 @@ END AS category,
     ORDER BY total DESC
   `;
 
-  db.query(sql, (err, result) => {
+  db.query(sql, params, (err, result) => {
     if (err) {
       console.log("ROLE SUMMARY ERROR:", err);
       return res.status(500).json({ message: "Error fetching summary" });

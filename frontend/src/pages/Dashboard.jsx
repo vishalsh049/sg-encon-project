@@ -285,6 +285,22 @@ useEffect(() => {
   const [uptimeTrend, setUptimeTrend] = useState([]);
   const [trendFilter, setTrendFilter] = useState("last7");
   const [selectedDate, setSelectedDate] = useState("");
+  const [filters, setFilters] = useState({
+    circle: [],
+    cmp: [],
+    domain: [],
+  });
+
+  const toParam = (arr) => (arr && arr.length ? arr.map((o) => o.value).join(",") : "");
+
+  const filterParams = useMemo(
+    () => ({
+      circle: toParam(filters.circle),
+      cmp: toParam(filters.cmp),
+      domain: toParam(filters.domain),
+    }),
+    [filters.circle, filters.cmp, filters.domain]
+  );
 
 useEffect(() => {
   fetchStats();   // ✅ always get fresh data from backend
@@ -292,7 +308,7 @@ useEffect(() => {
 
 useEffect(() => {
   fetchUptimeTrend(trendFilter);
-}, [trendFilter]);
+}, [trendFilter, filters.circle, filters.cmp]);
 
 const [apiStatus, setApiStatus] = useState("checking");
 const [lastUpdated, setLastUpdated] = useState(null);
@@ -300,12 +316,6 @@ const [lastUpdated, setLastUpdated] = useState(null);
   const [roleSummary, setRoleSummary] = useState([
   { category: "Loading...", total: 0 }
    ]);
-
-  const [filters, setFilters] = useState({
-    circle: [],
-    cmp: [],
-    domain: [],
-  });
 
   const [scrumCount, setScrumCount] = useState(0);
   const [scrumPieActiveIndex, setScrumPieActiveIndex] = useState(0);
@@ -329,14 +339,14 @@ const [lastUpdated, setLastUpdated] = useState(null);
   const loadData = async () => {
     try {
       const [countRes, roleRes, functionSummaryRes] = await Promise.all([
-        fetch(buildApiUrl("/api/manpower/scrum/count")),
-        fetch(buildApiUrl("/api/manpower/scrum/job-role-summary")),
-        fetch(buildApiUrl("/api/manpower/scrum/function-summary")),
+        axios.get(buildApiUrl("/api/manpower/scrum/count"), { params: filterParams }),
+        axios.get(buildApiUrl("/api/manpower/scrum/job-role-summary"), { params: filterParams }),
+        axios.get(buildApiUrl("/api/manpower/scrum/function-summary"), { params: filterParams }),
       ]);
 
-      const countData = await countRes.json();
-      const roleData = await roleRes.json();
-      const functionSummaryData = await functionSummaryRes.json();
+      const countData = countRes.data || {};
+      const roleData = roleRes.data || [];
+      const functionSummaryData = functionSummaryRes.data || {};
 
       setScrumCount(Number(countData.total || 0));
       setRoleSummary(Array.isArray(roleData) ? roleData : []);
@@ -354,7 +364,7 @@ const [lastUpdated, setLastUpdated] = useState(null);
   };
 
   loadData();
-}, []);
+}, [filterParams]);
 
   useEffect(() => {
      window.addEventListener("scrum-manpower-updated", handleScrumSummaryUpdated);
@@ -626,11 +636,7 @@ const summary =
 
   try {
     const res = await axios.get(buildApiUrl("/api/dashboard/stats"), {
-      params: {
-        circle: toParam(filters.circle),
-        cmp: toParam(filters.cmp),
-        domain: toParam(filters.domain),
-      },
+      params: filterParams,
     });
 
     console.log("Uptime API:", res.data);
@@ -670,9 +676,13 @@ const summary =
 
 const fetchUptimeTrend = async (type) => {
   try {
-    const res = await axios.get(
-      buildApiUrl(`/api/dashboard/uptime-trend?type=${type}`)
-    );
+    const res = await axios.get(buildApiUrl("/api/dashboard/uptime-trend"), {
+      params: {
+        type,
+        circle: filterParams.circle,
+        cmp: filterParams.cmp,
+      },
+    });
 
   setUptimeTrend(
   (res.data || [])
@@ -702,17 +712,9 @@ const getTimeAgo = (date) => {
   return `${hours}h ago`;
 };
 
-  useEffect(() => {
-  if (
-    filters.circle.length === 0 &&
-    filters.cmp.length === 0 &&
-    filters.domain.length === 0
-  ) {
-    return; // ❌ STOP unnecessary API call
-  }
-
-  fetchStats();
-}, [filters.circle, filters.cmp, filters.domain]);
+ useEffect(() => {
+  fetchStats();   // ✅ ALWAYS CALL API
+}, [filterParams]);
 
  const handleFilterChange = (key, value) => {
   if (!value) {
@@ -763,9 +765,6 @@ const getTimeAgo = (date) => {
   const resetFilters = () => {
     setFilters({ circle: [], cmp: [], domain: [] });
   };
-
-  const toParam = (arr) => (arr && arr.length ? arr.map((o) => o.value).join(",") : "");
-
   const totalManpowerCount = (stats.manpowerBreakdown || []).reduce(
     (sum, item) => sum + Number(item.count || 0),
     0
@@ -896,86 +895,20 @@ const trendColor = getTrendColor(uptimeTrend);
   //main return //
 
   return (
-    <div className="space-y-6 text-text-primary">
+    <div className="space-y-3 text-text-primary">
 
       {/* Filters */}
-      <div className="relative">
-        <div className="app-surface relative overflow-visible px-4 py-3">
+      <div className="relative -mt-6">
+      <div className="app-surface relative overflow-visible px-4 py-2">
 <div className="absolute inset-x-0 top-0 h-[1px] bg-gradient-to-r from-transparent via-border-color to-transparent" />
         
-            <div className="relative flex flex-col gap-3">
-
-  {/* 🔥 HEADER */}
-  <div className="flex items-center justify-between">
-
-  {/* LEFT SIDE */}
-  <div className="flex items-center gap-2">
-    <div className="p-2 rounded-lg bg-indigo-50 text-indigo-600">
-      {/* icon optional */}
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
-        className="h-4 w-4"
-        fill="none"
-        viewBox="0 0 24 24"
-        stroke="currentColor"
-      >
-        <path strokeWidth="2" d="M3 4h18M6 12h12M10 20h4" />
-      </svg>
-    </div>
-
-    <div>
-      <h2 className="text-sm font-semibold text-gray-800">
-        Filters
-      </h2>
-      <p className="text-xs text-gray-400">
-        Narrow down your dashboard data
-      </p>
-    </div>
-  </div>
-
-  {/* RIGHT SIDE STATUS */}
-  <div
-  className={`flex items-center gap-2 px-3 py-1 rounded-full 
-  text-xs font-medium backdrop-blur-md border shadow-sm
-  ${
-    apiStatus === "live"
-      ? "bg-emerald-50/60 border-emerald-200 text-emerald-700"
-      : apiStatus === "checking"
-      ? "bg-yellow-50/60 border-yellow-200 text-yellow-700"
-      : "bg-rose-50/60 border-rose-200 text-rose-700"
-  }`}
->
-  <span
-    className={`h-2 w-2 rounded-full ${
-      apiStatus === "live"
-        ? "bg-emerald-500 animate-pulse"
-        : apiStatus === "checking"
-        ? "bg-yellow-500"
-        : "bg-rose-500"
-    }`}
-  ></span>
-
-  {apiStatus === "live" && (
-    <>
-      Live • {lastUpdated ? getTimeAgo(lastUpdated) : ""}
-    </>
-  )}
-
-  {apiStatus === "checking" && "Checking..."}
-
-  {apiStatus === "offline" && "Offline"}
-</div>
-
-</div>
-
-  {/* 🔥 DIVIDER */}
-  <div className="h-[1px] bg-border-color" />
+            <div className="relative flex flex-col gap-1">
 
   {/* 🔥 FILTER ROW */}
-  <div className="flex items-center gap-4">
+  <div className="flex items-center w-full">
      
-              <div className="flex items-center gap-4 flex-nowrap overflow-hidden whitespace-nowrap">
-               <div className="w-[260px] shrink-0">
+              <div className="flex items-center gap-3 flex-1">
+               <div className="w-[220px] shrink-0">
                   <Select
                     isMulti
                     placeholder="Select Circle"
@@ -999,7 +932,7 @@ const trendColor = getTrendColor(uptimeTrend);
                   />
                 </div>
 
-                <div className="w-[260px] shrink-0 border-l border-border-color pl-3">
+                <div className="w-[220px] shrink-0">
                   <Select
                     isMulti
                     isDisabled={!filters.circle.length}
@@ -1029,7 +962,7 @@ const trendColor = getTrendColor(uptimeTrend);
                   />
                 </div>
 
-                <div className="w-[260px] shrink-0 border-l border-border-color pl-3">
+                <div className="w-[220px] shrink-0">
                   <Select
                     isMulti
                     placeholder="Select Domain"
@@ -1053,22 +986,54 @@ const trendColor = getTrendColor(uptimeTrend);
                     hideSelectedOptions={false}
                   />
                 </div>
-              </div>
-
-               <div className="flex items-center gap-2 ml-auto shrink-0">
-                <button
-                  onClick={resetFilters}
-                  className="app-button-ghost px-3 py-1.5 text-[12px]"
-                >
-                  <RefreshCcw size={14} />
-                  Reset
-                </button>
-               
-              </div>
-              </div>
             </div>
-            
-        </div>
+
+
+  {/* RIGHT SIDE (NOW CORRECT) */}
+  <div className="ml-auto flex items-center gap-3">
+
+    <button
+      onClick={resetFilters}
+      className="app-button-ghost px-3 py-1.5 text-[12px]"
+    >
+      <RefreshCcw size={14} />
+      Reset
+    </button>
+
+    <div
+      className={`flex items-center gap-2 px-3 py-1 rounded-full 
+      text-xs font-medium border
+      ${
+        apiStatus === "live"
+          ? "bg-green-100 text-green-700 border-green-200"
+          : apiStatus === "checking"
+          ? "bg-yellow-100 text-yellow-700 border-yellow-200"
+          : "bg-red-100 text-red-700 border-red-200"
+      }`}
+    >
+      <span
+        className={`h-2 w-2 rounded-full ${
+          apiStatus === "live"
+            ? "bg-green-500 animate-pulse"
+            : apiStatus === "checking"
+            ? "bg-yellow-500"
+            : "bg-red-500"
+        }`}
+      ></span>
+
+      {apiStatus === "live" && (
+        <>Live • {lastUpdated ? getTimeAgo(lastUpdated) : ""}</>
+      )}
+
+      {apiStatus === "checking" && "Checking..."}
+      {apiStatus === "offline" && "Offline"}
+    </div>
+
+  </div>
+</div>
+
+          </div>
+      </div>
       </div>
 
       {errorMessage ? (
@@ -1077,13 +1042,10 @@ const trendColor = getTrendColor(uptimeTrend);
         </div>
       ) : null}
 
-      <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-4">
-        <div className="app-card flex items-center justify-between  
-      bg-white/70 backdrop-blur-md 
-      border border-white/40 
-      shadow-[0_8px_30px_rgba(0,0,0,0.06)] 
-      rounded-2xl p-5 transition-all duration-300 
-      hover:shadow-[0_12px_40px_rgba(0,0,0,0.08)]">
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <div className="app-card flex items-center justify-between bg-white/70
+         backdrop-blur-md border border-white/40 shadow-[0_8px_30px_rgba(0,0,0,0.06)] 
+         rounded-2xl px-4 py-3 transition-all duration-300 hover:shadow-[0_12px_40px_rgba(0,0,0,0.08)]">
           <div>
             <p className="mb-1 text-sm text-text-secondary">Total Active Sites</p>
             <h2 className="text-2xl font-bold text-text-primary">
@@ -1102,12 +1064,9 @@ const trendColor = getTrendColor(uptimeTrend);
           </LineChart>
         </div>
 
-        <div className="app-card flex items-center justify-between 
-bg-white/70 backdrop-blur-md 
-border border-white/40 
-shadow-[0_8px_30px_rgba(0,0,0,0.06)] 
-rounded-2xl p-5 transition-all duration-300 
-hover:shadow-[0_12px_40px_rgba(0,0,0,0.08)]">
+        <div className="app-card flex items-center justify-between bg-white/70
+         backdrop-blur-md border border-white/40 shadow-[0_8px_30px_rgba(0,0,0,0.06)] 
+         rounded-2xl px-4 py-3 transition-all duration-300 hover:shadow-[0_12px_40px_rgba(0,0,0,0.08)]">
   <div>
     <p className="mb-1 text-sm text-text-secondary">Total Active Fiber</p>
     <h2 className="text-2xl font-bold text-text-primary">
@@ -1126,12 +1085,9 @@ hover:shadow-[0_12px_40px_rgba(0,0,0,0.08)]">
   </LineChart>
 </div>
 
-        <div className="app-card flex items-center justify-between 
-bg-white/70 backdrop-blur-md 
-border border-white/40 
-shadow-[0_8px_30px_rgba(0,0,0,0.06)] 
-rounded-2xl p-5 transition-all duration-300 
-hover:shadow-[0_12px_40px_rgba(0,0,0,0.08)]">
+        <div className="app-card flex items-center justify-between bg-white/70
+         backdrop-blur-md border border-white/40 shadow-[0_8px_30px_rgba(0,0,0,0.06)] 
+         rounded-2xl p-4 transition-all duration-300 hover:shadow-[0_12px_40px_rgba(0,0,0,0.08)]">
           <div>
             <p className="mb-1 text-sm text-text-secondary">Total Active Manpower</p>
             <h2 className="text-2xl font-bold text-text-primary">
@@ -1150,15 +1106,12 @@ hover:shadow-[0_12px_40px_rgba(0,0,0,0.08)]">
           </LineChart>
         </div>
 
-        <div className="app-card flex items-center justify-between 
-bg-white/70 backdrop-blur-md 
-border border-white/40 
-shadow-[0_8px_30px_rgba(0,0,0,0.06)] 
-rounded-2xl p-5 transition-all duration-300 
-hover:shadow-[0_12px_40px_rgba(0,0,0,0.08)]">
+        <div className="app-card flex items-center justify-between bg-white/70 
+        backdrop-blur-md border border-white/40 shadow-[0_8px_30px_rgba(0,0,0,0.06)] 
+        rounded-2xl px-4 py-3 transition-all duration-300 hover:shadow-[0_12px_40px_rgba(0,0,0,0.08)]">
           <div>
             <p className="mb-1 text-sm text-text-secondary">
-              Total Manpower (Scrum Based)
+              Total (Scrum Manpower)
             </p>
             <h2 className="text-2xl font-bold text-text-primary">
               {scrumCount || 0}
@@ -1177,26 +1130,20 @@ hover:shadow-[0_12px_40px_rgba(0,0,0,0.08)]">
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-4">
-        <div className="flex h-[300px] flex-col rounded-2xl 
-bg-white/70 backdrop-blur-md 
-border border-white/40 
-shadow-[0_10px_35px_rgba(0,0,0,0.05)] 
-p-5">
-          <h4 className="mb-4 flex items-center justify-between text-md font-semibold text-slate-800">
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <div className="flex h-[300px] flex-col rounded-2xl bg-white/70 backdrop-blur-md 
+         border border-white/40 shadow-[0_10px_35px_rgba(0,0,0,0.05)] p-4">
+          <h4 className="mb-2 flex items-center justify-between text-sm font-semibold text-slate-800">
             Site Types
             <span className="text-xs text-gray-400">Overview</span>
           </h4>
 
           <div className="hide-scrollbar max-h-64 space-y-3 overflow-y-auto pr-1">
             {siteBreakdownView.map((item, index) => (
-              <div
-                key={index}
-                className="flex items-center justify-between rounded-lg px-3 py-2 transition bg-white/60 hover:bg-white/90 
-backdrop-blur-sm 
-border border-white/30 
-shadow-sm"
-              >
+              <div key={index}
+                className="flex items-center justify-between rounded-lg px-2 py-2 transition 
+                bg-white/60 hover:bg-white/90 backdrop-blur-sm border border-white/30 
+                shadow-sm">
                 <div className="flex items-center gap-2">
                   <div className="h-2 w-2 rounded-full bg-green-500"></div>
                   <div className="flex flex-col">
@@ -1217,12 +1164,9 @@ shadow-sm"
           </div>
         </div>
 
-        <div className="flex h-[300px] flex-col rounded-2xl 
-bg-white/70 backdrop-blur-md 
-border border-white/40 
-shadow-[0_10px_35px_rgba(0,0,0,0.05)] 
-p-5">
-  <h4 className="mb-4 flex items-center justify-between text-md font-semibold text-slate-800">
+        <div className="flex h-[300px] flex-col rounded-2xl bg-white/70 backdrop-blur-md 
+         border border-white/40 shadow-[0_10px_35px_rgba(0,0,0,0.05)] p-4">
+   <h4 className="mb-2 flex items-center justify-between text-sm font-semibold text-slate-800">
     Fiber Inventory
     <span className="text-xs text-gray-400">Overview</span>
   </h4>
@@ -1231,12 +1175,9 @@ p-5">
    {Object.entries(fiberBreakdownView).map(([category, data], index) => (
   <div
     key={index}
-    className="rounded-xl 
-bg-white/70 backdrop-blur-sm 
-border border-white/40 
-px-4 py-3 
-shadow-sm hover:shadow-lg transition"
-  >
+    className="rounded-xl bg-white/70 backdrop-blur-sm border border-white/40 
+      px-2 py-2 shadow-sm hover:shadow-lg transition">
+
     {/* HEADER */}
     <div className="flex justify-between items-center mb-2">
       <span className="text-sm font-semibold text-gray-800">
@@ -1271,12 +1212,9 @@ shadow-sm hover:shadow-lg transition"
   </div>
 </div>
 
-        <div className="flex h-[300px] flex-col rounded-2xl 
-bg-white/70 backdrop-blur-md 
-border border-white/40 
-shadow-[0_10px_35px_rgba(0,0,0,0.05)] 
-p-5">
-          <h4 className="mb-4 flex items-center justify-between text-md font-semibold text-slate-800">
+        <div className="flex h-[300px] flex-col rounded-2xl bg-white/70 backdrop-blur-md 
+         border border-white/40 shadow-[0_10px_35px_rgba(0,0,0,0.05)] p-4">
+          <h4 className="mb-2 flex items-center justify-between text-sm font-semibold text-slate-800">
             Manpower Roles
             <span className="text-xs text-gray-400">Active</span>
           </h4>
@@ -1285,11 +1223,9 @@ p-5">
             {(stats.manpowerBreakdown || []).map((item, index) => (
               <div
                 key={index}
-                className="flex items-center justify-between rounded-lg px-3 py-2 transition bg-white/60 hover:bg-white/90 
-backdrop-blur-sm 
-border border-white/30 
-shadow-sm"
-              >
+                className="flex items-center justify-between rounded-lg px-2 py-2 transition 
+                bg-white/60 hover:bg-white/90 backdrop-blur-sm border border-white/30 
+                shadow-sm">
                 <div className="flex flex-col">
                   <span className="text-sm font-medium text-slate-800">
                     {item.function}
@@ -1305,12 +1241,9 @@ shadow-sm"
           </div>
         </div>
 
-        <div className="flex h-[300px] flex-col rounded-2xl 
-bg-white/70 backdrop-blur-md 
-border border-white/40 
-shadow-[0_10px_35px_rgba(0,0,0,0.05)] 
-p-5">
-          <h4 className="mb-4 text-md font-semibold text-slate-800">
+        <div className="flex h-[300px] flex-col rounded-2xl bg-white/70 backdrop-blur-md  
+        border border-white/40 shadow-[0_10px_35px_rgba(0,0,0,0.05)] p-4">
+          <h4 className="mb-2 text-sm font-semibold text-slate-800">
             Job Roles
           </h4>
 
@@ -1318,7 +1251,7 @@ p-5">
   {roleSummary.map((item, index) => (
     <div
       key={item.category}
-      className="flex items-center justify-between rounded-lg px-3 py-2 transition bg-white/60 hover:bg-white/90 backdrop-blur-sm border border-white/30 shadow-sm"
+      className="flex items-center justify-between rounded-lg px-2 py-2 transition bg-white/60 hover:bg-white/90 backdrop-blur-sm border border-white/30 shadow-sm"
     >
       <div className="flex items-center gap-2">
         <div className="h-2 w-2 rounded-full bg-blue-500"></div>
@@ -1338,25 +1271,20 @@ p-5">
       </span>
     </div>
   ))}
-</div>
-
-    
+</div>   
         </div>
       </div>
 
-      <div className="mt-6 grid grid-cols-1 gap-6 md:grid-cols-3 items-stretch">
+      <div className="mt-6 grid grid-cols-1 gap-3 md:grid-cols-3 items-stretch">
 
-        <div className="flex h-full flex-col rounded-2xl 
-                      bg-white/70 backdrop-blur-md 
-                         border border-white/40 
-                         shadow-[0_10px_40px_rgba(0,0,0,0.08)] 
-                        p-5 md:col-span-2">
+        <div className="flex h-full flex-col rounded-2xl bg-white/70 backdrop-blur-md 
+         border border-white/40 shadow-[0_10px_40px_rgba(0,0,0,0.08)]  p-5 md:col-span-2">
         
         <div className="mb-4 flex items-center justify-between">
-  <h4 className="flex items-center gap-2 text-md font-semibold text-slate-800">
-    <TrendingUp size={18} />
-    Uptime Trend
-  </h4>
+         <h4 className="flex items-center gap-2 text-md font-semibold text-slate-800">
+            <TrendingUp size={18} />
+              Uptime Trend
+              </h4>
 
  <div className="flex items-center bg-gray-100 p-1 rounded-xl shadow-inner">
 
