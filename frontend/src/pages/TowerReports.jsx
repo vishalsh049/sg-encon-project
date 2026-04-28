@@ -514,6 +514,39 @@ if (uploadType === "single") {
       setSelectedIds((prev) => prev.filter((id) => !allFilteredIds.includes(id)));
     };
 
+const kpiCards = useMemo(() => {
+  const result = {};
+
+  rows.forEach((row) => {
+    const type = row.site_type;
+    if (!type || !row.report_date) return;
+
+    const d = new Date(row.report_date);
+    const date = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+
+    if (!result[type]) result[type] = {};
+
+    // ✅ USE total_records (IMPORTANT)
+    result[type][date] = Number(row.total_records || 0);
+  });
+
+  return allowedSiteTypes.map((site) => {
+    const type = site.value;
+    const dates = result[type] || {};
+
+    const sortedDates = Object.keys(dates).sort((a, b) => new Date(b) - new Date(a));
+    const latestDate = sortedDates[0];
+
+    return {
+      type,
+      count: latestDate ? dates[latestDate] : 0,
+      date: latestDate ? formatDateOnly(latestDate) : "-",
+    };
+  });
+}, [rows, allowedSiteTypes]);
+
+{/* main return */}
+
     return (
       <div className="w-full pb-32 text-text-primary md:pb-36">
         <div className="mx-auto max-w-6xl">
@@ -578,6 +611,31 @@ if (uploadType === "single") {
           </div>
 
           <div className="app-surface p-4">
+
+            {/* 🔥 KPI CARDS UI (DESIGN ONLY) */}
+   <div className="flex gap-4 overflow-x-auto pb-2 mb-5">
+
+  {kpiCards.map((item, index) => (
+    <div
+      key={index}
+      className="min-w-[130px] flex-shrink-0 flex items-center justify-between rounded-2xl 
+     bg-white/70 backdrop-blur-md border border-white/40 
+     shadow-[0_10px_30px_rgba(0,0,0,0.05)] p-3">
+      <div>
+        <p className="text-xs text-gray-500">{item.type}</p>
+
+        <h2 className="text-xl font-semibold text-gray-800">
+          {item.count}
+        </h2>
+
+        <p className="text-xs text-gray-400">
+          Date: {item.date}
+        </p>
+      </div>
+    </div>
+  ))}
+
+</div>
 
     {/* 🔥 ADD FILTER UI HERE */}
     <div className="mb-5">
