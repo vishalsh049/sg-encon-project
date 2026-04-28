@@ -54,7 +54,6 @@ function PremiumDatePicker({
 })
  {
   const rootRef = useRef(null);
-const [popoverPosition, setPopoverPosition] = useState(null);
   const selectedDate = useMemo(() => parseDateString(value), [value]);
   const [isOpen, setIsOpen] = useState(false);
   const [viewDate, setViewDate] = useState(selectedDate || new Date());
@@ -127,30 +126,6 @@ const [popoverPosition, setPopoverPosition] = useState(null);
     handleSelectDate(current);
   };
 
-const updatePosition = () => {
-  if (!rootRef.current) return;
-
-  const rect = rootRef.current.getBoundingClientRect();
-  const calendarHeight = 320; // approx height
-
-  const spaceBelow = window.innerHeight - rect.bottom;
-  const spaceAbove = rect.top;
-
-  let top;
-
-  if (spaceBelow < calendarHeight && spaceAbove > calendarHeight) {
-    // 🔥 open upwards
-    top = rect.top + window.scrollY - calendarHeight - 6;
-  } else {
-    // 🔥 open downwards
-    top = rect.bottom + window.scrollY + 6;
-  }
-
-  setPopoverPosition({
-    top,
-    left: rect.left + window.scrollX,
-  });
-};
 
   const monthLabel = viewDate.toLocaleDateString("en-US", {
     month: "long",
@@ -170,8 +145,6 @@ const updatePosition = () => {
             if (!disabled) {
               setInputText(value || "");
               setViewDate(selectedDate || new Date());
-              updatePosition(); 
-              updatePosition();
               setIsOpen(true);
             }
           }}
@@ -184,7 +157,6 @@ const updatePosition = () => {
           disabled={disabled}
           onClick={() => {
             if (!disabled) {
-               updatePosition(); 
               setIsOpen((prev) => !prev);
             }
           }}
@@ -196,15 +168,10 @@ const updatePosition = () => {
       </div>
 
     <div
-  className={`fixed z-[9999] bg-white shadow-xl rounded-xl border ${
-    isOpen
-      ? "pointer-events-auto opacity-100"
-      : "pointer-events-none opacity-0"
-  }`}
-  style={{
-  top: popoverPosition?.top ?? -9999,
-  left: popoverPosition?.left ?? -9999,
-}}
+  className={`absolute z-50 mt-2 w-[300px] rounded-2xl bg-white border border-slate-200 
+    shadow-[0_20px_60px_rgba(0,0,0,0.12)] ${
+  isOpen ? "block" : "hidden"
+}`}
 >
         <div className="app-date-header">
           <button

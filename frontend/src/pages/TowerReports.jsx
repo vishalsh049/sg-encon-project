@@ -4,46 +4,64 @@
   import { hasPermission } from "../lib/session";
   import axios from "axios";
   import PremiumDatePicker from "../components/PremiumDatePicker";
+  import { Listbox } from "@headlessui/react";
+  import { ChevronDown } from "lucide-react";
 
-  function TowerReports() {
-    const { siteCategory } = useParams();
-    const normalizedCategory =
-      siteCategory?.toLowerCase() === "fiber" ? "fiber" : "tower";
-    const categoryLabel = normalizedCategory === "fiber" ? "Fiber" : "Tower";
-    const accent =
-      normalizedCategory === "fiber"
-        ? {
-            badge: "bg-emerald-50 text-emerald-700",
-            button: "bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-300",
-            ring: "focus:border-emerald-400",
-            file: "file:bg-emerald-600 hover:file:bg-emerald-700",
-          }
-        : {
-            badge: "bg-indigo-50 text-indigo-700",
-            button: "bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300",
-            ring: "focus:border-indigo-400",
-            file: "file:bg-indigo-600 hover:file:bg-indigo-700",
-          };
-    const canUploadReports = true;
+import {
+  Activity,
+  BarChart3,
+  Download,
+  Layers,
+  Pencil,
+  RotateCcw,
+  Search,
+  ShieldCheck,
+  Sparkles,
+  Trash2,
+  TrendingUp,
+  Upload,
+} from "lucide-react";
+
+function TowerReports() {
+  const { siteCategory } = useParams();
+  const normalizedCategory =
+    siteCategory?.toLowerCase() === "fiber" ? "fiber" : "tower";
+  const categoryLabel = normalizedCategory === "fiber" ? "Fiber" : "Tower";
+
+  const accent =
+    normalizedCategory === "fiber"
+      ? {
+          badge: "bg-emerald-50 text-emerald-700",
+          button: "bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-300",
+          ring: "focus:border-emerald-400",
+          file: "file:bg-emerald-600 hover:file:bg-emerald-700",
+        }
+      : {
+          badge: "bg-indigo-50 text-indigo-700",
+          button: "bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300",
+          ring: "focus:border-indigo-400",
+          file: "file:bg-indigo-600 hover:file:bg-indigo-700",
+        };
+  const canUploadReports = true;
   const canDeleteReports = true;
   const canDownloadFiles = true;
-    const allowedSiteTypes = useMemo(
-      () =>
-        [
-          { value: "AG2", label: "AG2" },
-          { value: "ILA", label: "ILA" },
-          { value: "AG1", label: "AG1" },
-          { value: "ENB", label: "ENB" },
-          { value: "GNB", label: "GNB" },
-          { value: "ESC", label: "ESC" },
-          { value: "HPODSC", label: "HPODSC" },
-          { value: "OSC", label: "OSC" },
-          { value: "GSC", label: "GSC", permission: "site.GSC" },
-          { value: "ISC", label: "ISC" },
-          { value: "WIFI", label: "WIFI", permission: "site.WIFI" },
-        ].filter((site) => !site.permission || hasPermission(site.permission)),
-      []
-    );
+  const allowedSiteTypes = useMemo(
+    () =>
+      [
+        { value: "AG2", label: "AG2" },
+        { value: "ILA", label: "ILA" },
+        { value: "AG1", label: "AG1" },
+        { value: "ENB", label: "ENB" },
+        { value: "GNB", label: "GNB" },
+        { value: "ESC", label: "ESC" },
+        { value: "HPODSC", label: "HPODSC" },
+        { value: "OSC", label: "OSC" },
+        { value: "GSC", label: "GSC", permission: "site.GSC" },
+        { value: "ISC", label: "ISC" },
+        { value: "WIFI", label: "WIFI", permission: "site.WIFI" },
+      ].filter((site) => !site.permission || hasPermission(site.permission)),
+    []
+  );
     const allowedSiteTypeValues = useMemo(
       () => allowedSiteTypes.map((site) => site.value),
       [allowedSiteTypes]
@@ -102,6 +120,12 @@
       document.body.style.overflow = "auto";
     };
   }, [modalOpen]);
+
+  const reportOptions = [
+  { value: "", label: "All Report Types" },
+  { value: "Outage", label: "Outage" },
+  { value: "Performance", label: "Performance" },
+];
 
   const toSafeDate = (value, dateOnly = false) => {
     if (!value) return null;
@@ -515,306 +539,396 @@ if (uploadType === "single") {
     };
 
 const kpiCards = useMemo(() => {
-  const result = {};
+  const cardOrder = [
+    { type: "AG2", label: "AG2", bg: "from-sky-100 to-sky-50", icon: BarChart3 },
+    { type: "ILA", label: "ILA", bg: "from-fuchsia-100 to-fuchsia-50", icon: Activity },
+    { type: "AG1", label: "AG1", bg: "from-cyan-100 to-cyan-50", icon: ShieldCheck },
+    { type: "ENB", label: "ENB", bg: "from-indigo-100 to-indigo-50", icon: Sparkles, highlight: true },
+    { type: "GNB", label: "GNB", bg: "from-emerald-100 to-emerald-50", icon: TrendingUp },
+    { type: "ESC", label: "ESC", bg: "from-amber-100 to-amber-50", icon: Layers },
+    { type: "HPODSC", label: "HPODSC", bg: "from-rose-100 to-rose-50", icon: Activity },
+    { type: "OSC", label: "OSC", bg: "from-lime-100 to-lime-50", icon: BarChart3 },
+    { type: "ISC", label: "ISC", bg: "from-violet-100 to-violet-50", icon: ShieldCheck },
+  ];
 
-  rows.forEach((row) => {
+  const snapshot = rows.reduce((memo, row) => {
     const type = row.site_type;
-    if (!type || !row.report_date) return;
+    const dateValue = row.report_date;
+    if (!type || !dateValue || !cardOrder.some((card) => card.type === type)) return memo;
 
-    const d = new Date(row.report_date);
-    const date = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    const currentDate = new Date(dateValue);
+    const existing = memo[type];
+    if (!existing || currentDate > existing.dateRaw) {
+      memo[type] = {
+        count: Number(row.total_records || 0),
+        dateRaw: currentDate,
+      };
+    }
+    return memo;
+  }, {});
 
-    if (!result[type]) result[type] = {};
-
-    // ✅ USE total_records (IMPORTANT)
-    result[type][date] = Number(row.total_records || 0);
-  });
-
-  return allowedSiteTypes.map((site) => {
-    const type = site.value;
-    const dates = result[type] || {};
-
-    const sortedDates = Object.keys(dates).sort((a, b) => new Date(b) - new Date(a));
-    const latestDate = sortedDates[0];
-
+  return cardOrder.map((card) => {
+    const metric = snapshot[card.type];
     return {
-      type,
-      count: latestDate ? dates[latestDate] : 0,
-      date: latestDate ? formatDateOnly(latestDate) : "-",
+      ...card,
+      count: metric?.count || 0,
+      date: metric?.dateRaw ? formatDateOnly(metric.dateRaw) : "-",
     };
   });
-}, [rows, allowedSiteTypes]);
+}, [rows]);
+
+  const primaryButtonClass =
+    "inline-flex h-10 items-center gap-2 rounded-2xl border border-transparent px-4 text-sm font-semibold text-white shadow-soft transition disabled:cursor-not-allowed disabled:opacity-50";
+  const secondaryButtonClass =
+    "inline-flex h-10 items-center gap-2 rounded-2xl border border-slate-200 bg-white/90 px-4 text-sm font-medium text-slate-600 shadow-sm transition hover:bg-slate-100";
+  const tableActionClass =
+    "inline-flex h-9 w-9 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-600 transition hover:bg-slate-50 shadow-sm";
 
 {/* main return */}
 
     return (
-      <div className="w-full pb-32 text-text-primary md:pb-36">
-        <div className="mx-auto max-w-6xl">
-          <div className="mb-4 flex items-center justify-between">
-            <div>
-              <div className="text-xs uppercase tracking-wide text-text-secondary">
-                {categoryLabel} Reports
+      <div className="min-h-screen w-full pb-28 text-slate-900 -mt-4">
+        <div className="sticky top-0 z-30 mb-4 overflow-hidden rounded-[22px] bg-slate-50 px-5 py-4 
+        shadow-[0_24px_80px_rgba(15,23,42,0.08)] backdrop-blur-xl">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div className="min-w-0 space-y-3">
+              <div className="space-y-0">
+                <h1 className="text-2xl font-semibold tracking-[-0.03em] text-slate-950">
+                  Tower Reports
+                </h1>
+                <p className="text-sm pt-1 text-slate-500">
+                  Category: <span className="font-semibold text-slate-900">{categoryLabel}</span>
+                </p>
               </div>
-              <h1 className="text-xl text-text-primary">{categoryLabel} Reports</h1>
             </div>
-            <div className="flex items-center gap-3">
-              <div className={`rounded-full px-3 py-1 text-xs ${accent.badge}`}>
-                Category: {categoryLabel}
-              </div>
-              {canUploadReports ? (
+            <div className="flex flex-wrap items-center justify-end gap-3">
               <button
                 onClick={() => {
-    setEditingId(null); // reset edit mode
-
-    setDate(today);
-    setSiteType("");
-    setReportType("");
-    setUploadType("single");
-    setUploadedBy(
-      localStorage.getItem("userName") ||
-      localStorage.getItem("name") ||
-      localStorage.getItem("username") ||
-      ""
-    );
-    setFile(null);
-    setBulkRows([{ date: today, site_type: "", report_type: "", file: null }]);
-
-    setModalOpen(true);
-  }}
-                className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm text-white transition ${accent.button}`}
+                  setEditingId(null);
+                  setDate(today);
+                  setSiteType("");
+                  setReportType("");
+                  setUploadType("single");
+                  setUploadedBy(
+                    localStorage.getItem("userName") ||
+                      localStorage.getItem("name") ||
+                      localStorage.getItem("username") ||
+                      ""
+                  );
+                  setFile(null);
+                  setBulkRows([{ date: today, site_type: "", report_type: "", file: null }]);
+                  setModalOpen(true);
+                }}
+                className={`${primaryButtonClass} bg-gradient-to-r from-sky-500 to-indigo-500 shadow-[0_16px_40px_rgba(56,189,248,0.24)]`}
               >
+                <Upload size={16} />
                 Upload Reports
               </button>
-              ) : null}
+              <button
+                onClick={handleBulkDelete}
+                disabled={selectedIds.length === 0}
+                className={`${secondaryButtonClass} border-transparent bg-red-50 text-red-700 shadow-sm hover:bg-red-100 disabled:opacity-40`}
+              >
+                <Trash2 size={16} />
+                Delete
+              </button>
+              <button
+                onClick={handleBulkDownload}
+                disabled={selectedIds.length === 0}
+                className={`${secondaryButtonClass} border-transparent bg-emerald-50 text-emerald-700 shadow-sm hover:bg-emerald-100 disabled:opacity-40`}
+              >
+                <Download size={16} />
+                Download
+              </button>
+            </div>
+          </div>
+        </div>
 
-              {canDeleteReports ? (
-    <button
-      onClick={handleBulkDelete}
-      disabled={selectedIds.length === 0}
-      className="rounded-lg bg-red-600 px-4 py-2 text-sm text-white disabled:bg-red-300"
-    >
-      Delete ({selectedIds.length})
-    </button>
-              ) : null}
+        <div className="space-y-5">
+          <div className="grid gap-4 xl:grid-cols-[1.85fr_1fr]">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">
+              {kpiCards.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <div
+                    key={item.type}
+                    className={`rounded-[20px] border border-white/85 bg-white/90 px-4 py-2 shadow-soft transition duration-200 
+                    hover:-translate-y-0.5 hover:shadow-[0_20px_60px_rgba(15,23,42,0.09)] ${item.highlight ? "ring-1 ring-indigo-100" : ""}`}>
+                    <div className="flex items-center justify-between gap-4">
+                      <div className="space-y-2">
+                        <p className="text-[11px] mt-1 font-semibold uppercase tracking-[0.2em] text-slate-500">
+                          {item.label}
+                        </p>
+                        <h2 className={`text-xl font-semibold tracking-[-0.03em] ${item.highlight ? "text-slate-950" : "text-slate-900"}`}>
+                          {item.count}
+                        </h2>
+                        <p className="text-xs text-slate-400">Date: {item.date}</p>
+                      </div>
+                      <div className={`flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br ${item.bg} text-slate-900 shadow-[0_12px_30px_rgba(15,23,42,0.08)]`}>
+                        <Icon size={16} />
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
 
-  {canDownloadFiles ? (
-  <button
-    onClick={handleBulkDownload}
-    disabled={selectedIds.length === 0}
-    className="rounded-lg bg-green-600 px-4 py-2 text-sm text-white disabled:bg-green-300"
-  >
-    Download ({selectedIds.length})
-  </button>
-              ) : null}
+            <div className="rounded-[24px] border border-white/80 bg-white/85 p-5 shadow-soft backdrop-blur-xl">
+              <div className="mb-4 flex items-center gap-2 text-xs uppercase tracking-[0.28em] text-slate-500">
+                <Search size={14} />
+                Search & Filters
+              </div>
+              <div className="space-y-4">
+                <div>
+                  <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                    Search Reports
+                  </label>
+                  <div className="flex h-11 items-center gap-3 overflow-hidden rounded-2xl border border-slate-200/70 bg-white px-3 text-sm text-slate-700 shadow-[0_14px_30px_rgba(15,23,42,0.06)] transition focus-within:ring-2 focus-within:ring-sky-200">
+                    <Search size={16} className="text-slate-400" />
+                    <input
+                      type="text"
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      placeholder="Search by file name, site type, report type..."
+                      className="w-full border-0 bg-transparent text-sm text-slate-700 outline-none placeholder:text-slate-400"
+                    />
+                  </div>
+                </div>
 
+                <div className="grid gap-3 md:grid-cols-2">
+                  <div className="space-y-2">
+  <label className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+    Date
+  </label>
+
+  <div className="relative">
+    <PremiumDatePicker
+      value={filterDate}
+      onChange={setFilterDate}
+      isDateDisabled={(d) => {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const selected = new Date(d);
+        selected.setHours(0, 0, 0, 0);
+        return selected >= today;
+      }}
+      
+    />
+  </div>
+</div>
+
+                  <div className="space-y-2">
+                    <label className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                      Site Type
+                    </label>
+                    <Listbox value={filterSiteType} onChange={setFilterSiteType}>
+               <div className="relative">
+
+    {/* Button */}
+    <Listbox.Button className="w-full h-11 rounded-2xl border border-slate-200 bg-white px-4
+     text-sm text-left shadow-sm flex items-center justify-between hover:border-sky-300 focus:ring-2 focus:ring-sky-100 transition">
+      <span className="truncate">
+        {filterSiteType
+          ? allowedSiteTypes.find((s) => s.value === filterSiteType)?.label
+          : "All Site Types"}
+      </span>
+      <ChevronDown size={16} className="text-slate-400" />
+    </Listbox.Button>
+
+    {/* Dropdown */}
+    <Listbox.Options className="absolute z-50 mt-2 w-full rounded-2xl bg-white border border-slate-200 shadow-[0_20px_60px_rgba(15,23,42,0.12)] p-1">
+
+      {/* Default Option */}
+      <Listbox.Option
+        value=""
+        className={({ active }) =>
+          `cursor-pointer rounded-xl px-3 py-2 text-sm ${
+            active ? "bg-slate-100 text-slate-900" : "text-slate-600"
+          }`
+        }
+      >
+        All Site Types
+      </Listbox.Option>
+
+      {/* Dynamic Options */}
+      {allowedSiteTypes.map((site) => (
+        <Listbox.Option
+          key={site.value}
+          value={site.value}
+          className={({ active }) =>
+            `cursor-pointer rounded-xl px-3 py-2 text-sm ${
+              active ? "bg-slate-100 text-slate-900" : "text-slate-600"
+            }`
+          }
+        >
+          {site.label}
+        </Listbox.Option>
+      ))}
+    </Listbox.Options>
+
+  </div>
+</Listbox>
+        </div>
+
+                  <div className="space-y-2">
+                    <label className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                      Report Type
+                    </label>
+                   <Listbox value={filterReportType} onChange={setFilterReportType}>
+  <div className="relative">
+    
+    {/* Button */}
+    <Listbox.Button className="w-full h-11 rounded-2xl bg-white border border-slate-200 px-4 text-sm text-left shadow-sm flex items-center 
+    justify-between hover:border-sky-300 focus:ring-2 focus:ring-sky-100 transition">
+      {reportOptions.find(o => o.value === filterReportType)?.label || "All Report Types"}
+      <ChevronDown size={16} className="text-slate-400" />
+    </Listbox.Button>
+
+    {/* Dropdown */}
+    <Listbox.Options className="absolute z-50 mt-2 w-full rounded-2xl bg-white shadow-[0_20px_60px_rgba(0,0,0,0.08)] p-1">
+      {reportOptions.map((option) => (
+        <Listbox.Option
+          key={option.value}
+          value={option.value}
+          className={({ active }) =>
+            `cursor-pointer rounded-xl px-3 py-2 text-sm ${
+              active ? "bg-slate-100 text-slate-900" : "text-slate-600"
+            }`
+          }
+        >
+          {option.label}
+        </Listbox.Option>
+      ))}
+    </Listbox.Options>
+
+  </div>
+</Listbox>
+                  </div>
+
+                  <div className="flex items-end">
+                    <button
+                      onClick={() => {
+                        setSearchTerm("");
+                        setFilterDate("");
+                        setFilterSiteType("");
+                        setFilterReportType("");
+                      }}
+                      className={`${secondaryButtonClass} w-full justify-center border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100`}
+                    >
+                      <RotateCcw size={16} />
+                      Reset
+                    </button>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 
-          <div className="app-surface p-4">
-
-            {/* 🔥 KPI CARDS UI (DESIGN ONLY) */}
-   <div className="flex gap-4 overflow-x-auto pb-2 mb-5">
-
-  {kpiCards.map((item, index) => (
-    <div
-      key={index}
-      className="min-w-[130px] flex-shrink-0 flex items-center justify-between rounded-2xl 
-     bg-white/70 backdrop-blur-md border border-white/40 
-     shadow-[0_10px_30px_rgba(0,0,0,0.05)] p-3">
-      <div>
-        <p className="text-xs text-gray-500">{item.type}</p>
-
-        <h2 className="text-xl font-semibold text-gray-800">
-          {item.count}
-        </h2>
-
-        <p className="text-xs text-gray-400">
-          Date: {item.date}
-        </p>
-      </div>
-    </div>
-  ))}
-
-</div>
-
-    {/* 🔥 ADD FILTER UI HERE */}
-    <div className="mb-5">
-      <label className="mb-1 block text-xs text-text-secondary">Search Reports</label>
-      <input
-        type="text"
-        value={searchTerm}
-        onChange={(e) => setSearchTerm(e.target.value)}
-        placeholder="Search by file name, site type, report type, upload type, uploaded by, or date"
-        className="app-input-lg w-full"
-      />
-    </div>
-
-    <div className="mb-5 grid grid-cols-1 md:grid-cols-4 gap-4">
-
-    {/* DATE */}
-    <div className="flex flex-col gap-1">
-      <label className="text-xs text-text-secondary">Date</label>
-      <PremiumDatePicker
-    value={filterDate}
-    onChange={setFilterDate}
-    isDateDisabled={(d) => {
-      const today = new Date();
-      today.setHours(0,0,0,0);
-
-      const selected = new Date(d);
-      selected.setHours(0,0,0,0);
-
-      return selected >= today;
-    }}
-  />
-    </div>
-
-    {/* SITE TYPE */}
-    <div className="flex flex-col gap-1">
-      <label className="text-xs text-text-secondary">Site Type</label>
-      <select
-        value={filterSiteType}
-        onChange={(e) => setFilterSiteType(e.target.value)}
-        className="app-select"
-      >
-        <option value="">Select Site Type</option>
-        {allowedSiteTypes.map((site) => (
-          <option key={site.value} value={site.value}>
-            {site.label}
-          </option>
-        ))}
-      </select>
-    </div>
-
-    {/* REPORT TYPE */}
-    <div className="flex flex-col gap-1">
-      <label className="text-xs text-text-secondary">Report Type</label>
-      <select
-        value={filterReportType}
-        onChange={(e) => setFilterReportType(e.target.value)}
-        className="app-select"
-      >
-        <option value="">All Reports</option>
-        <option value="Outage">Outage</option>
-        <option value="Performance">Performance</option>
-      </select>
-    </div>
-
-    {/* RESET BUTTON */}
-    <div className="flex items-end">
-      <button
-        onClick={() => {
-          setSearchTerm("");
-          setFilterDate("");
-          setFilterSiteType("");
-          setFilterReportType("");
-        }}
-        className="app-button-ghost h-10 w-full"
-      >
-        Reset Filters
-      </button>
-    </div>
-
-  </div>
-
-    {/* EXISTING CODE */}
-    <div className="overflow-x-auto rounded-2xl border border-border-color">
-              <table className="app-table">
+          <div className="overflow-hidden rounded-[24px] border border-white/80 bg-white/90 shadow-[0_24px_80px_rgba(15,23,42,0.1)]">
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-left text-sm text-slate-600">
                 <thead>
-                  <tr>
-                    <th className="py-3 pr-4">
-    <input
-      type="checkbox"
-      onChange={handleSelectAll}
-      checked={allFilteredSelected}
-    />
-  </th>
-                    <th className="py-3 pr-4">Date</th>
-                    <th className="py-3 pr-4">Site Type</th>
-                    <th className="py-3 pr-4">Report Type</th>
-                    <th className="py-3 pr-4">Upload Type</th>
-                    <th className="py-3 pr-4">Uploaded By</th>
-                    <th className="py-3 pr-4">File Name</th>
-                    <th className="py-3 pr-4">Uploaded At</th>
-                    <th className="py-3 pr-4">Actions</th>
+                  <tr className="bg-slate-50/90 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+                    <th className="px-4 py-3">
+                      <input
+                        type="checkbox"
+                        onChange={handleSelectAll}
+                        checked={allFilteredSelected}
+                        className="h-4 w-4 rounded border-slate-300"
+                      />
+                    </th>
+                    <th className="px-4 py-3">Date</th>
+                    <th className="px-4 py-3">Site Type</th>
+                    <th className="px-4 py-3">Report Type</th>
+                    <th className="px-4 py-3">Upload Type</th>
+                    <th className="px-4 py-3">Uploaded By</th>
+                    <th className="px-4 py-3">File Name</th>
+                    <th className="px-4 py-3">Uploaded At</th>
+                    <th className="px-4 py-3 text-right">Actions</th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody className="divide-y divide-slate-100">
                   {tableLoading ? (
                     <tr>
-                      <td className="py-6 text-text-secondary" colSpan={6}>
+                      <td className="px-4 py-8 text-sm text-slate-500" colSpan={9}>
                         Loading...
                       </td>
                     </tr>
                   ) : filteredRows.length ? (
                     paginatedRows.map((row) => (
-                      <tr key={row.id}>
-                        <td className="py-3 pr-4">
-    <input
-      type="checkbox"
-      checked={selectedIds.includes(row.id)}
-      onChange={() => handleSelect(row.id)}
-    />
-  </td>
-                        <td className="py-3 pr-4 text-text-primary">
+                      <tr key={row.id} className="transition duration-150 hover:bg-slate-50/70">
+                        <td className="px-4 py-3">
+                          <input
+                            type="checkbox"
+                            checked={selectedIds.includes(row.id)}
+                            onChange={() => handleSelect(row.id)}
+                            className="h-4 w-4 rounded border-slate-300"
+                          />
+                        </td>
+                        <td className="px-4 py-3 text-sm text-slate-700">
                           {formatDateOnly(row.report_date)}
                         </td>
-                        <td className="py-3 pr-4 text-text-primary">
-                          {row.site_type || "-"}
+                        <td className="px-4 py-3 text-sm text-slate-700">
+                          <span
+                            className={`inline-flex items-center rounded-full px-3 py-1 text-[11px] font-semibold ${
+                              row.site_type === "ENB"
+                                ? "bg-indigo-100 text-indigo-700 ring-1 ring-indigo-100"
+                                : "bg-slate-100 text-slate-700 ring-1 ring-slate-200"
+                            }`}>
+                            {row.site_type || "-"}
+                          </span>
                         </td>
-                        <td className="py-3 pr-4 text-text-primary">
+                        <td className="px-4 py-3 text-sm text-slate-700">
                           {row.report_type || "-"}
                         </td>
-                        <td className="py-3 pr-4 text-text-primary">
+                        <td className="px-4 py-3 text-sm text-slate-700">
                           {row.upload_type || "-"}
                         </td>
-                        <td className="py-3 pr-4 text-text-primary">
+                        <td className="px-4 py-3 text-sm text-slate-700">
                           {row.uploaded_by || "-"}
                         </td>
-                        <td className="py-3 pr-4 text-text-primary">
-                          {row.file_name || "-"}
+                        <td className="max-w-[260px] px-4 py-3 text-sm text-slate-700">
+                          <span className="block truncate">{row.file_name || "-"}</span>
                         </td>
-                        <td className="py-3 pr-4 text-text-primary">
-                      {formatTimestamp(row.uploaded_at)}
+                        <td className="whitespace-nowrap px-4 py-3 text-sm text-slate-700">
+                          {formatTimestamp(row.uploaded_at)}
                         </td>
-
-  <td className="py-3 pr-4">
-    <div className="flex items-center gap-3">
-
-    {canDownloadFiles ? (
-    <button
-    onClick={() => handleDownload(row.file_name)}
-    className="text-blue-600 hover:underline"
-  >
-    Download
-  </button>
-    ) : null}
-
-    {canUploadReports ? (
-    <button
-      onClick={() => handleEdit(row)}
-      className="text-green-600 hover:underline"
-    >
-      Edit
-    </button>
-    ) : null}
-
-    {canDeleteReports ? (
-    <button
-      onClick={() => handleDelete(row.id)}
-      className="text-red-600 hover:underline"
-    >
-      Delete
-    </button>
-    ) : null}
-  </div>
-  </td>
-
+                        <td className="px-4 py-3">
+                          <div className="flex items-center justify-end gap-2">
+                            {canDownloadFiles ? (
+                              <button
+                                onClick={() => handleDownload(row.file_name)}
+                                className={tableActionClass}
+                                title="Download"
+                              >
+                                <Download size={14} />
+                              </button>
+                            ) : null}
+                            {canUploadReports ? (
+                              <button
+                                onClick={() => handleEdit(row)}
+                                className={tableActionClass}
+                                title="Edit"
+                              >
+                                <Pencil size={14} />
+                              </button>
+                            ) : null}
+                            {canDeleteReports ? (
+                              <button
+                                onClick={() => handleDelete(row.id)}
+                                className={`${tableActionClass} text-red-500 hover:bg-red-50`}
+                                title="Delete"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            ) : null}
+                          </div>
+                        </td>
                       </tr>
                     ))
                   ) : (
                     <tr>
-                      <td className="py-6 text-text-secondary" colSpan={9}>
+                      <td className="px-4 py-8 text-sm text-slate-500" colSpan={9}>
                         No reports uploaded yet.
                       </td>
                     </tr>
@@ -822,32 +936,32 @@ const kpiCards = useMemo(() => {
                 </tbody>
               </table>
             </div>
-
           </div>
         </div>
 
-        <div className="fixed bottom-0 left-0 right-0 z-50 md:left-[var(--sidebar-width)]">
-          <div className="w-full border-t border-border-color bg-surface px-4 py-3 shadow-soft md:px-6">
 
-        <div className="flex justify-between items-center">
+        <div className="fixed bottom-0 left-0 right-0 z-50 md:left-[var(--sidebar-width)]">
+          <div className="w-full border-t border-slate-200/80 bg-white/90 px-3 py-3 shadow-[0_-8px_24px_rgba(15,23,42,0.04)] backdrop-blur md:px-4">
+
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
 
           {/* LEFT */}
-          <div className="text-sm text-text-secondary">
+          <div className="text-sm text-slate-500">
             Total files:
-            <span className="ml-1 font-semibold text-text-primary">
+            <span className="ml-1 font-medium text-slate-900">
               {totalFiles}
             </span>
           </div>
 
           {/* RIGHT */}
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center justify-end gap-2 rounded-lg bg-white/70 px-3 py-2 shadow-[0_8px_24px_rgba(15,23,42,0.05)] ring-1 ring-slate-200/70">
 
-            <span className="text-sm text-text-secondary">Show</span>
+            <span className="text-sm text-slate-500">Show</span>
 
             <select
               value={pageSize}
               onChange={(e) => setPageSize(Number(e.target.value))}
-              className="h-9 border rounded px-2 text-sm"
+              className="h-8 rounded-md border border-slate-200 bg-white px-2 text-sm text-slate-700"
             >
               {[10, 15, 30, 50, 100].map((size) => (
                 <option key={size} value={size}>{size}</option>
@@ -857,12 +971,12 @@ const kpiCards = useMemo(() => {
             <button
               onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
               disabled={currentPage === 1}
-              className="px-3 py-1 border rounded text-sm disabled:opacity-50"
+              className="inline-flex h-8 items-center rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-600 shadow-sm disabled:opacity-50"
             >
               Prev
             </button>
 
-            <span className="text-sm">
+            <span className="text-sm text-slate-600">
               Page {currentPage} of {totalPages}
             </span>
 
@@ -871,7 +985,7 @@ const kpiCards = useMemo(() => {
                 setCurrentPage((prev) => Math.min(totalPages, prev + 1))
               }
               disabled={currentPage === totalPages}
-              className="px-3 py-1 border rounded text-sm disabled:opacity-50"
+              className="inline-flex h-8 items-center rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-600 shadow-sm disabled:opacity-50"
             >
               Next
             </button>
@@ -882,20 +996,20 @@ const kpiCards = useMemo(() => {
   </div>
 
         {modalOpen ? (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm overflow-hidden">
-            <div className="w-full max-w-4xl max-h-[90vh] flex flex-col rounded-2xl bg-white p-8 shadow-[0_20px_60px_rgba(15,23,42,0.2)] overflow-hidden">
-              <div className="mb-4 flex items-center justify-between">
+          <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-slate-950/30 p-3 backdrop-blur-sm">
+            <div className="flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-xl">
+              <div className="flex items-center justify-between border-b border-slate-200 px-4 py-4">
                 <div>
-                  <div className="text-xs uppercase tracking-wide text-gray-500">
+                  <div className="text-xs font-medium uppercase tracking-[0.12em] text-slate-500">
                     {categoryLabel} Reports
                   </div>
-                  <h2 className="text-lg text-gray-800">
+                  <h2 className="mt-1 text-lg font-medium text-slate-900">
     {editingId ? "Edit Report" : "Upload Reports"}
   </h2>
                 </div>
                 <button
                   onClick={() => setModalOpen(false)}
-                  className="rounded-md border border-gray-200 px-3 py-1 text-sm text-gray-600 hover:bg-gray-50"
+                  className="rounded-md border border-slate-200 px-3 py-1 text-sm text-slate-600 hover:bg-slate-50"
                 >
                   Cancel
                 </button>
@@ -914,17 +1028,17 @@ const kpiCards = useMemo(() => {
               ) : null}
 
               {modalLoadingText ? (
-                <div className="mb-3 text-xs text-gray-500 h-4">
+                <div className="mb-3 h-4 text-xs text-slate-500">
                 {modalLoadingText || ""}
               </div>
               ) : null}
 
-              <div className="flex-1 overflow-y-auto px-8 py-4">
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <div className="flex-1 overflow-y-auto px-4 py-4">
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                 {uploadType === "single" ? (
                   <>
                     <div className="flex flex-col gap-1">
-                      <label className="text-xs text-gray-600">Date</label>
+                      <label className="text-xs text-slate-500">Date</label>
                       <PremiumDatePicker
                     value={date}
                       onChange={setDate}
@@ -939,11 +1053,11 @@ const kpiCards = useMemo(() => {
                     </div>
 
                     <div className="flex flex-col gap-1">
-                      <label className="text-xs text-gray-600">Site Type</label>
+                      <label className="text-xs text-slate-500">Site Type</label>
                       <select
                         value={siteType}
                         onChange={(e) => setSiteType(e.target.value)}
-                        className={`h-10 rounded-lg border border-gray-200 px-3 text-sm text-gray-800 focus:outline-none ${accent.ring}`}
+                        className={`h-9 rounded-md border border-slate-200 px-3 text-sm text-slate-700 focus:outline-none ${accent.ring}`}
                       >
 
                         <option value="">Select Site Type</option>
@@ -956,11 +1070,11 @@ const kpiCards = useMemo(() => {
                     </div>
 
                     <div className="flex flex-col gap-1">
-                      <label className="text-xs text-gray-600">Report Type</label>
+                      <label className="text-xs text-slate-500">Report Type</label>
                       <select
                         value={reportType}
                         onChange={(e) => setReportType(e.target.value)}
-                        className={`h-10 rounded-lg border border-gray-200 px-3 text-sm text-gray-800 focus:outline-none ${accent.ring}`}
+                        className={`h-9 rounded-md border border-slate-200 px-3 text-sm text-slate-700 focus:outline-none ${accent.ring}`}
                       >
                         <option value="">Select Report Type</option>
                         <option value="Outage">Outage Report</option>
@@ -971,8 +1085,8 @@ const kpiCards = useMemo(() => {
                 ) : null}
 
                 <div className="flex flex-col gap-1">
-                  <label className="text-xs text-gray-600">Upload Type</label>
-                  <div className="flex items-center gap-4 rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700">
+                  <label className="text-xs text-slate-500">Upload Type</label>
+                  <div className="flex h-9 items-center gap-3 rounded-md border border-slate-200 px-3 text-sm text-slate-700">
                     <label className="flex items-center gap-2">
                       <input
                         type="radio"
@@ -1007,39 +1121,39 @@ const kpiCards = useMemo(() => {
                 </div>
 
                 <div className="flex flex-col gap-1">
-                  <label className="text-xs text-gray-600">Uploaded By</label>
+                  <label className="text-xs text-slate-500">Uploaded By</label>
                   <input
                     type="text"
                     value={uploadedBy}
                     onChange={(e) => setUploadedBy(e.target.value)}
                     placeholder="Enter name"
-                    className={`h-10 rounded-lg border border-gray-200 px-3 text-sm text-gray-800 focus:outline-none ${accent.ring}`}
+                    className={`h-9 rounded-md border border-slate-200 px-3 text-sm text-slate-700 focus:outline-none ${accent.ring}`}
                   />
                 </div>
 
                 {uploadType === "bulk" ? (
                   <div className="md:col-span-2">
                     <div className="mb-3 flex items-center justify-between">
-                      <div className="text-sm text-gray-600">
+                      <div className="text-sm text-slate-600">
                         Bulk rows (each row = one file + one record)
                       </div>
                       <button
                         type="button"
                         onClick={addBulkRow}
-                        className="rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                        className="rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
                       >
                         + Add Row
                       </button>
                     </div>
 
-                  <div className="max-h-[50vh] overflow-y-auto pr-2 space-y-6 relative">
+                  <div className="relative max-h-[50vh] space-y-3 overflow-y-auto pr-2">
                       {bulkRows.map((row, index) => (
                         <div
                           key={index}
-                          className="relative grid grid-cols-1 gap-4 rounded-xl border border-gray-200 p-4 md:grid-cols-8"
+                          className="relative grid grid-cols-1 gap-3 rounded-lg border border-slate-200 bg-slate-50/60 p-3 md:grid-cols-8"
                           >
                           <div className="md:col-span-2">
-                            <label className="text-sm text-gray-600">Date</label>
+                            <label className="text-xs text-slate-500">Date</label>
                             <PremiumDatePicker
                             value={row.date}
                             onChange={(nextValue) =>
@@ -1056,7 +1170,7 @@ const kpiCards = useMemo(() => {
                           </div>
 
                           <div className="md:col-span-2">
-                            <label className="text-sm text-gray-600">
+                            <label className="text-xs text-slate-500">
                               Site Type
                             </label>
                             <select
@@ -1068,7 +1182,7 @@ const kpiCards = useMemo(() => {
                                   e.target.value
                                 )
                               }
-                              className={`h-12 w-full rounded-lg border border-gray-200 px-4 text-base text-gray-800 focus:outline-none ${accent.ring}`}
+                              className={`h-9 w-full rounded-md border border-slate-200 px-3 text-sm text-slate-700 focus:outline-none ${accent.ring}`}
                             >
 
                               <option value="">All Site Types</option>
@@ -1081,7 +1195,7 @@ const kpiCards = useMemo(() => {
                           </div>
 
                           <div className="md:col-span-2">
-                            <label className="text-sm text-gray-600">
+                            <label className="text-xs text-slate-500">
                               Report Type
                             </label>
                             <select
@@ -1093,7 +1207,7 @@ const kpiCards = useMemo(() => {
                                   e.target.value
                                 )
                               }
-                              className={`h-12 w-full rounded-lg border border-gray-200 px-4 text-base text-gray-800 focus:outline-none ${accent.ring}`}
+                              className={`h-9 w-full rounded-md border border-slate-200 px-3 text-sm text-slate-700 focus:outline-none ${accent.ring}`}
                             >
                               <option value="">Select Report Type</option>
                               <option value="Outage">Outage Report</option>
@@ -1102,7 +1216,7 @@ const kpiCards = useMemo(() => {
                           </div>
 
                           <div className="md:col-span-2">
-                            <label className="text-sm text-gray-600">File</label>
+                            <label className="text-xs text-slate-500">File</label>
                             <input
                               type="file"
                               accept=".xlsx,.xls,.xlsb,.csv"
@@ -1112,10 +1226,10 @@ const kpiCards = useMemo(() => {
                                   e.target.files?.[0] || null
                                 )
                               }
-                              className={`block w-full text-sm text-gray-700 file:mr-3 file:rounded-md file:border-0 file:px-3 file:py-2 file:text-white ${accent.file}`}
+                              className={`block w-full text-sm text-slate-700 file:mr-3 file:rounded-md file:border-0 file:px-3 file:py-2 file:text-white ${accent.file}`}
                             />
                             {row.file ? (
-                              <div className="mt-1 truncate text-sm text-gray-500">
+                              <div className="mt-1 truncate text-xs text-slate-500">
                                 {row.file.name}
                               </div>
                             ) : null}
@@ -1136,16 +1250,16 @@ const kpiCards = useMemo(() => {
                   </div>
                 ) : (
                   <div className="flex flex-col gap-1 md:col-span-2">
-                    <label className="text-xs text-gray-600">Excel/CSV File</label>
-                    <div className="flex items-center gap-3 rounded-lg border border-dashed border-gray-300 bg-gray-50 px-3 py-3">
+                    <label className="text-xs text-slate-500">Excel/CSV File</label>
+                    <div className="flex items-center gap-3 rounded-md border border-dashed border-slate-300 bg-slate-50 px-3 py-3">
                       <input
                         type="file"
                         accept=".xlsx,.xls,.xlsb,.csv"
                         onChange={handleFileChange}
-                        className={`block w-full text-sm text-gray-700 file:mr-4 file:rounded-md file:border-0 file:px-3 file:py-2 file:text-white ${accent.file}`}
+                        className={`block w-full text-sm text-slate-700 file:mr-4 file:rounded-md file:border-0 file:px-3 file:py-2 file:text-white ${accent.file}`}
                       />
                       {file ? (
-                        <span className="text-xs text-gray-500 truncate">
+                        <span className="truncate text-xs text-slate-500">
                           {file.name}
                         </span>
                       ) : null}
@@ -1155,18 +1269,19 @@ const kpiCards = useMemo(() => {
               </div>
               </div>
 
-              <div className="mt-4 pt-4 border-t flex items-center justify-end gap-2 bg-white">
+              <div className="flex items-center justify-end gap-2 border-t border-slate-200 bg-white px-4 py-4">
                 <button
                   onClick={() => setModalOpen(false)}
-                  className="rounded-lg border border-gray-200 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                  className="inline-flex h-9 items-center rounded-md border border-slate-200 px-4 text-sm text-slate-700 hover:bg-slate-50"
                 >
                   Cancel
                 </button>
               <button
     onClick={handleUpload}
     disabled={uploading}
-    className={`inline-flex items-center justify-center gap-2 rounded-lg px-5 py-2 text-sm text-white transition disabled:cursor-not-allowed min-w-[120px] ${accent.button}`}
+    className={`${primaryButtonClass} min-w-[112px] justify-center ${accent.button}`}
   >
+                    <Upload size={14} />
                     {uploading ? "Uploading..." : "Upload"}
                     </button>
               </div>
