@@ -70,11 +70,11 @@ const getStatusTone = (status) => {
 
 function MetricCard({ label, value, context, icon: Icon, iconTone }) {
   return (
-    <div className="group relative overflow-hidden rounded-[24px] border border-white/70 bg-white/70 p-4 shadow-[0_24px_80px_rgba(15,23,42,0.10)] backdrop-blur-2xl transition duration-300 hover:-translate-y-1.5 hover:shadow-[0_32px_90px_rgba(15,23,42,0.14)]">
+    <div className="group relative h-full overflow-hidden rounded-[24px] border border-white/70 bg-white/70 p-4 shadow-[0_24px_80px_rgba(15,23,42,0.10)] backdrop-blur-2xl transition duration-300 hover:-translate-y-1.5 hover:shadow-[0_32px_90px_rgba(15,23,42,0.14)]">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.92),transparent_40%)]" />
       <div className="relative flex items-start justify-between gap-4">
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">
             {label}
           </p>
           <h2 className="mt-2 text-2xl font-bold tracking-tight text-slate-800">
@@ -305,17 +305,27 @@ export default function BillingStatus() {
     );
   });
 
-  const totalTasks = data.length * 3;
+   const filteredStatsData = data.filter((row) => {
+  const monthFilter = getFilteredMonths();
 
-  const completedTasks = data.reduce((acc, row) => {
-    let count = 0;
-    if (row.sixty === "Done") count++;
-    if (row.forty === "Done") count++;
-    if (row.kpi === "Done") count++;
-    return acc + count;
-  }, 0);
+  return (
+    (!timeFilter || monthFilter.includes(row.month)) &&
+    (!circleFilter || row.circle === circleFilter) &&
+    (!billingFilter || row.billing_type === billingFilter)
+  );
+});
 
-  const pendingTasks = totalTasks - completedTasks;
+  const totalTasks = filteredStatsData.length * 3;
+
+const completedTasks = filteredStatsData.reduce((acc, row) => {
+  let count = 0;
+  if (row.sixty === "Done") count++;
+  if (row.forty === "Done") count++;
+  if (row.kpi === "Done") count++;
+  return acc + count;
+}, 0);
+
+const pendingTasks = totalTasks - completedTasks;
 
   useEffect(() => {
     const duration = 700;
@@ -535,11 +545,13 @@ export default function BillingStatus() {
   {/* The main return statement rendering the dashboard UI */ }
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen -mt-4">
       <div className="pointer-events-none fixed inset-0 opacity-[0.18] [background-image:radial-gradient(rgba(148,163,184,0.15)_0.7px,transparent_0.7px)] [background-size:16px_16px]" />
-      <div className="relative space-y-6">
+      <div className="relative space-y-4">
       
-        <div className="relative overflow-hidden rounded-[28px] border border-white/70 bg-[linear-gradient(135deg,rgba(219,234,254,0.82),rgba(255,255,255,0.9),rgba(237,233,254,0.9))] p-5 shadow-[0_30px_90px_rgba(59,130,246,0.12)] backdrop-blur-2xl">
+        <div className="relative overflow-hidden rounded-[28px] border border-white/70
+         bg-[linear-gradient(135deg,rgba(219,234,254,0.82),rgba(255,255,255,0.9),rgba(237,233,254,0.9))]
+          p-5 shadow-[0_30px_90px_rgba(59,130,246,0.12)] backdrop-blur-2xl">
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(96,165,250,0.25),transparent_35%),radial-gradient(circle_at_bottom_right,rgba(168,85,247,0.20),transparent_35%)]" />
           <div className="relative flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="max-w-2xl">
@@ -556,15 +568,18 @@ export default function BillingStatus() {
 
             <button
               onClick={() => setShowForm(true)}
-              className="inline-flex items-center justify-center gap-2 self-start rounded-full bg-gradient-to-r from-blue-600 via-indigo-500 to-violet-500 px-5 py-3 text-sm font-semibold text-white shadow-[0_20px_40px_rgba(79,70,229,0.30)] transition duration-300 hover:scale-[1.02] hover:from-blue-500 hover:to-violet-500 hover:shadow-[0_24px_60px_rgba(99,102,241,0.38)] lg:self-center"
-            >
+              className="inline-flex items-center justify-center gap-2 self-start rounded-full
+               bg-gradient-to-r from-blue-600 via-indigo-500 to-violet-500 px-5 py-3 text-sm font-semibold
+                text-white shadow-[0_20px_40px_rgba(79,70,229,0.30)] transition duration-300 hover:scale-[1.02]
+                 hover:from-blue-500 hover:to-violet-500 hover:shadow-[0_24px_60px_rgba(99,102,241,0.38)] 
+                 lg:self-center">
               <Plus className="h-4 w-4" />
               Add Data
             </button>
           </div>
         </div>
 
-        <div className="mt-4 grid gap-4 md:grid-cols-3">
+       <div className="mt-4 grid gap-3 md:grid-cols-[0.9fr_0.9fr_0.9fr_1.3fr] items-stretch">
           <MetricCard
             label="Total Tasks"
             value={displayCounts.total}
@@ -586,41 +601,64 @@ export default function BillingStatus() {
             icon={AlertTriangle}
             iconTone="bg-amber-100 text-amber-700 ring-amber-200"
           />
-        </div>
-        
 
-        <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+  <div className="flex h-full flex-col justify-center gap-2 rounded-[24px] border
+   border-white/70 bg-white/65 p-2 shadow-[0_24px_70px_rgba(15,23,42,0.10)]">
 
-          <div className="flex flex-col gap-3 rounded-[24px] border border-white/70 bg-white/65 p-3 
-          shadow-[0_24px_70px_rgba(15,23,42,0.10)] 
-          sm:flex-row sm:flex-wrap sm:items-center sm:justify-end overflow-visible">
-            <FilterSelect
-              value={timeFilter}
-              onChange={(e) => setTimeFilter(e.target.value)}
-              icon={CalendarRange}
-              placeholder="Select Range"
-              options={[
-                { value: "3", label: "Last 3 Months" },
-                { value: "6", label: "Last 6 Months" },
-                { value: "12", label: "Last 1 Year" }
-              ]}
-            />
-            <FilterSelect
-              value={circleFilter}
-              onChange={(e) => setCircleFilter(e.target.value)}
-              icon={RadioTower}
-              placeholder="Circle"
-              options={circleOptions.map((item) => ({ value: item, label: item }))}
-            />
-            <FilterSelect
-              value={billingFilter}
-              onChange={(e) => setBillingFilter(e.target.value)}
-              icon={ReceiptText}
-              placeholder="Billing Type"
-              options={billingOptions.map((item) => ({ value: item, label: item }))}
-            />
-          </div>
-        </div>
+  {/* Row 1 */}
+<div className="flex items-center justify-between gap-2">
+
+  {/* Left - Filter */}
+  <div className="flex-1">
+    <FilterSelect
+      value={timeFilter}
+      onChange={(e) => setTimeFilter(e.target.value)}
+      icon={CalendarRange}
+      placeholder="Last 3 Months"
+      options={[
+        { value: "3", label: "Last 3 Months" },
+        { value: "6", label: "Last 6 Months" },
+        { value: "12", label: "Last 1 Year" }
+      ]}
+    />
+  </div>
+
+  {/* Right - Reset Button */}
+  <button
+    onClick={() => {
+      setTimeFilter("3");
+      setCircleFilter("");
+      setBillingFilter("");
+    }}
+    className="whitespace-nowrap rounded-full border border-blue-100  px-4 py-3 text-xs font-semibold text-blue-700 transition hover:bg-blue-100"
+  >
+    Reset
+  </button>
+
+</div>
+
+  {/* Row 2 */}
+  <div className="grid grid-cols-2 gap-2">
+    <FilterSelect
+      value={circleFilter}
+      onChange={(e) => setCircleFilter(e.target.value)}
+      icon={RadioTower}
+      placeholder="Circle"
+      options={circleOptions.map((item) => ({ value: item, label: item }))}
+    />
+
+    <FilterSelect
+      value={billingFilter}
+      onChange={(e) => setBillingFilter(e.target.value)}
+      icon={ReceiptText}
+      placeholder="Billing Type"
+      options={billingOptions.map((item) => ({ value: item, label: item }))}
+    />
+  </div>
+
+</div>
+
+        </div>   
 
         {(timeFilter ? getFilteredMonths() : months).map((monthName) => {
           const filteredData = data.filter((row) => {
@@ -636,7 +674,7 @@ export default function BillingStatus() {
           return (
             <div
               key={monthName}
-              className="rounded-[28px] border border-white/70 bg-white/60 p-6 shadow-[0_24px_80px_rgba(15,23,42,0.10)] backdrop-blur-2xl lg:p-8"
+              className="rounded-[24px] border border-white/70 bg-white/60 p-4 shadow-[0_24px_80px_rgba(15,23,42,0.10)] backdrop-blur-2xl lg:p-5"
             >
               <div className="mb-2 flex items-center justify-between gap-4 border-b border-slate-200/70 pb-2">
                 <h2 className="text-xl font-bold tracking-tight text-slate-800">
@@ -647,11 +685,12 @@ export default function BillingStatus() {
                 </div>
               </div>
 
-              <div className="mb-4 hidden grid-cols-[1.2fr_1fr_1fr_1fr] gap-4 rounded-[20px] bg-slate-100 px-4 py-3 text-[12px] font-semibold uppercase tracking-[0.26em] text-slate-700 lg:grid">
-                <div>Circle + Billing Type</div>
-                <div>60% Billing Status</div>
-                <div>40% Billing Status</div>
-                <div>KPIs + GN Penalty Status</div>
+              <div className="mb-4 hidden grid-cols-[0.8fr_1.1fr_1.1fr_1.1fr] gap-4 rounded-[20px] bg-slate-100 
+              px-4 py-3 text-[12px] font-semibold uppercase tracking-[0.20em] text-slate-700 lg:grid">
+                <div className="pl-2">Circle + Billing Type</div>
+                <div className="pl-2">60% Billing Status</div>
+                <div className="pl-2">40% Billing Status</div>
+                <div className="pl-2">KPIs + GN Penalty Status</div>
               </div>
 
               <div className="mt-2">
@@ -661,10 +700,14 @@ export default function BillingStatus() {
                   return (
                     <div
                       key={i}
-                      className="mb-4 grid gap-4 rounded-[24px] border border-white/80 bg-[linear-gradient(135deg,rgba(255,255,255,0.96),rgba(248,250,252,0.86))] p-5 shadow-[0_18px_50px_rgba(15,23,42,0.08)] transition duration-300 hover:-translate-y-1 hover:scale-[1.01] hover:shadow-[0_28px_70px_rgba(15,23,42,0.12)] lg:grid-cols-[1.2fr_1fr_1fr_1fr] lg:items-start lg:p-6"
-                    >
+                      className="mb-3 grid gap-4 rounded-[24px] border border-white/80 
+                      bg-[linear-gradient(135deg,rgba(255,255,255,0.96),rgba(248,250,252,0.86))] p-5
+                      shadow-[0_18px_50px_rgba(15,23,42,0.08)] transition duration-300 hover:-translate-y-1
+                       hover:scale-[1.01] hover:shadow-[0_28px_70px_rgba(15,23,42,0.12)] lg:grid-cols-[0.8fr_1.1fr_1.1fr_1.1fr]
+                        lg:items-start lg:p-6">
                       <div className="flex items-start gap-4">
-                        <div className="mt-0.5 flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-100 via-white to-violet-100 text-blue-700 ring-1 ring-blue-200">
+                        <div className="mt-0.5 flex h-12 w-12 shrink-0 items-center justify-center rounded-full 
+                        bg-gradient-to-br from-blue-100 via-white to-violet-100 text-blue-700 ring-1 ring-blue-200">
                           <span className="text-sm font-bold">
                             {(r.circle || "?").slice(0, 2).toUpperCase()}
                           </span>

@@ -78,7 +78,7 @@ function Sidebar({ closeSidebar, collapsed, onCollapseToggle, onExpandRequest })
             icon: ReceiptText,
             description: "Finance flow",
             children: [
-              { key: "billing-status", label: "Billing Status", path: "/dashboard/billing/status", badge: "3" },
+              { key: "billing-status", label: "Billing Status", path: "/dashboard/billing/status" },
               { key: "revenue", label: "Revenue", path: "/dashboard/billing/revenue" },
               {
                 key: "penalties",
@@ -98,7 +98,7 @@ function Sidebar({ closeSidebar, collapsed, onCollapseToggle, onExpandRequest })
             description: "Teams & staffing",
             children: [
               { key: "physical", label: "Physical", path: "/dashboard/manpower/physical" },
-              { key: "scrum", label: "SCRUM", path: "/dashboard/manpower/scrum", badge: "Live" },
+              { key: "scrum", label: "SCRUM", path: "/dashboard/manpower/scrum" },
             ],
           },
           {
@@ -207,7 +207,7 @@ function Sidebar({ closeSidebar, collapsed, onCollapseToggle, onExpandRequest })
 
   return (
     <aside className="flex h-full flex-col overflow-hidden border-r border-border-color bg-surface/95 backdrop-blur-xl">
-      <div className="flex items-center justify-between gap-3 border-b border-border-color px-4 py-4">
+      <div className="flex items-center justify-between gap-3 border-b border-border-color px-4 py-3">
         <div className="flex min-w-0 items-center gap-3">
           <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-primary shadow-soft">
             <img src={logo} alt="logo" className="h-7 w-7 object-contain" />
@@ -238,12 +238,12 @@ function Sidebar({ closeSidebar, collapsed, onCollapseToggle, onExpandRequest })
         <button
           type="button"
           onClick={handleLogout}
-          className={`group flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-sm font-medium text-text-secondary transition hover:bg-danger/10 hover:text-danger ${
+          className={`group flex w-full items-center gap-3 rounded-2xl px-2 text-sm font-medium text-text-secondary transition hover:bg-danger/10 hover:text-danger ${
             collapsed ? "justify-center px-0" : ""
           }`}
         >
-          <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-surface-muted text-inherit transition group-hover:bg-danger/15">
-            <LogOut size={18} />
+          <span className="flex h-8 w-8 items-center justify-center rounded-2xl bg-surface-muted text-inherit transition group-hover:bg-danger/15">
+            <LogOut size={16} />
           </span>
           {!collapsed ? <span>Logout</span> : null}
         </button>
