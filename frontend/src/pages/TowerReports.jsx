@@ -5,12 +5,13 @@
   import axios from "axios";
   import PremiumDatePicker from "../components/PremiumDatePicker";
   import { Listbox } from "@headlessui/react";
-  import { ChevronDown } from "lucide-react";
-
 import {
   Activity,
   BarChart3,
+  Calendar,
+  ChevronDown,
   Download,
+  FileText,
   Layers,
   Pencil,
   RotateCcw,
@@ -20,6 +21,7 @@ import {
   Trash2,
   TrendingUp,
   Upload,
+  User,
 } from "lucide-react";
 
 function TowerReports() {
@@ -104,9 +106,6 @@ function TowerReports() {
     const [file, setFile] = useState(null);
     const [uploading, setUploading] = useState(false);
     const [editingId, setEditingId] = useState(null);
-    const [bulkRows, setBulkRows] = useState([
-      { date: today, site_type: "", report_type: "", file: null },
-    ]);
 
   const [modalOpen, setModalOpen] = useState(false);
   useEffect(() => {
@@ -203,7 +202,6 @@ function TowerReports() {
       if (uploadType === "bulk") {
         setSiteType("");
         setReportType("");
-        setBulkRows([{ date: today, site_type: "", report_type: "", file: null }]);
       }
     }, [uploadType, today]);
 
@@ -325,31 +323,6 @@ function TowerReports() {
     setEditingId(row.id);
   };
 
-  const handleBulkRowChange = (index, field, value) => {
-    setBulkRows((prev) =>
-      prev.map((row, i) => (i === index ? { ...row, [field]: value } : row))
-    );
-  };
-
-  const handleBulkFileChange = (index, fileValue) => {
-    setBulkRows((prev) =>
-      prev.map((row, i) =>
-        i === index ? { ...row, file: fileValue || null } : row
-      )
-    );
-  };
-
-  const addBulkRow = () => {
-    setBulkRows((prev) => [
-      ...prev,
-      { date: today, site_type: "", report_type: "", file: null },
-    ]);
-  };
-
-  const removeBulkRow = (index) => {
-    setBulkRows((prev) => prev.filter((_, i) => i !== index));
-  };
-
     const handleUpload = async () => {
       setModalMessage("");
       setModalLoadingText("Uploading...");
@@ -374,24 +347,7 @@ function TowerReports() {
           setModalMessage("Please select a valid file to upload.");
           return;
         }
-      } else {
-        if (!bulkRows.length) {
-          setModalMessageType("error");
-          setModalMessage("Please add at least one row.");
-          return;
-        }
-        const invalidRow = bulkRows.findIndex(
-          (row) => !row.date || !row.site_type || !row.report_type || !row.file
-        );
-        if (invalidRow !== -1) {
-          setModalMessageType("error");
-          setModalMessage(
-            `Please complete all fields in row ${invalidRow + 1}.`
-          );
-          return;
-        }
       }
-
 
    const formData = new FormData();
 
@@ -413,20 +369,8 @@ if (uploadType === "single") {
   formData.append("date", safeDate);
   formData.append("site_type", siteType);
   formData.append("report_type", reportType);
-} else {
-  const rowsPayload = bulkRows.map((row, index) => ({
-    date: row.date,
-    site_type: row.site_type,
-    report_type: row.report_type,
-    fileIndex: index,
-  }));
+} 
 
-  formData.append("rows", JSON.stringify(rowsPayload));
-
-  bulkRows.forEach((row) => {
-    formData.append("files", row.file);
-  });
-}
       try {
         setUploading(true);
         let response;
@@ -440,13 +384,6 @@ if (uploadType === "single") {
           });
         } 
         
-        else if (uploadType === "bulk") {
-    response = await axios.post(
-      buildApiUrl("/api/reports/upload-bulk"),
-      formData
-    );
-  }
-        
         else {
           response = await axios.post(buildApiUrl("/api/reports/upload"), formData);
         }
@@ -455,7 +392,6 @@ if (uploadType === "single") {
           response?.data?.message || "Upload completed successfully."
         );
         setFile(null);
-        setBulkRows([{ date: today, site_type: "", report_type: "", file: null }]);
         await fetchReports();
         setTimeout(() => {
           setModalOpen(false);
@@ -578,11 +514,15 @@ const kpiCards = useMemo(() => {
 }, [rows]);
 
   const primaryButtonClass =
-    "inline-flex h-10 items-center gap-2 rounded-2xl border border-transparent px-4 text-sm font-semibold text-white shadow-soft transition disabled:cursor-not-allowed disabled:opacity-50";
+    "inline-flex h-10 items-center justify-center gap-2 rounded-full border border-transparent px-5 text-sm font-semibold text-white shadow-[0_20px_60px_rgba(76,78,255,0.22)] transition duration-200 disabled:cursor-not-allowed disabled:opacity-50";
   const secondaryButtonClass =
-    "inline-flex h-10 items-center gap-2 rounded-2xl border border-slate-200 bg-white/90 px-4 text-sm font-medium text-slate-600 shadow-sm transition hover:bg-slate-100";
+    "inline-flex h-10 items-center justify-center gap-2 rounded-full border border-slate-300 bg-white px-5 text-sm font-medium text-slate-700 shadow-sm transition duration-200 hover:border-slate-400 hover:bg-slate-50";
   const tableActionClass =
     "inline-flex h-9 w-9 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-600 transition hover:bg-slate-50 shadow-sm";
+  const formFieldClass =
+    "rounded-2xl border border-slate-200/80 bg-slate-50 px-6 py-6 shadow-[0_24px_70px_rgba(15,23,42,0.08)]";
+  const inputControlClass =
+    "peer h-12 w-full rounded-2xl border border-slate-200/80 bg-white px-4 pl-12 text-sm text-slate-900 shadow-[inset_0_1px_2px_rgba(15,23,42,0.08)] outline-none transition duration-200 focus:border-violet-400 focus:ring-2 focus:ring-violet-100";
 
 {/* main return */}
 
@@ -617,7 +557,6 @@ const kpiCards = useMemo(() => {
                       ""
                   );
                   setFile(null);
-                  setBulkRows([{ date: today, site_type: "", report_type: "", file: null }]);
                   setModalOpen(true);
                 }}
                 className={`${primaryButtonClass} bg-gradient-to-r from-sky-500 to-indigo-500 shadow-[0_16px_40px_rgba(56,189,248,0.24)]`}
@@ -845,7 +784,7 @@ const kpiCards = useMemo(() => {
                     <th className="px-4 py-3">Uploaded By</th>
                     <th className="px-4 py-3">File Name</th>
                     <th className="px-4 py-3">Uploaded At</th>
-                    <th className="px-4 py-3 text-right">Actions</th>
+                    <th className="px-4 py-3">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -942,7 +881,7 @@ const kpiCards = useMemo(() => {
 
 
         <div className="fixed bottom-0 left-0 right-0 z-50 md:left-[var(--sidebar-width)]">
-          <div className="w-full border-t border-slate-200/80 bg-white/90 px-3 py-3 shadow-[0_-8px_24px_rgba(15,23,42,0.04)] backdrop-blur md:px-4">
+          <div className="w-full border-t border-slate-200/80 bg-white/90 px-3 py-1 shadow-[0_-8px_24px_rgba(15,23,42,0.04)] backdrop-blur md:px-4">
 
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
 
@@ -955,7 +894,7 @@ const kpiCards = useMemo(() => {
           </div>
 
           {/* RIGHT */}
-          <div className="flex flex-wrap items-center justify-end gap-2 rounded-lg bg-white/70 px-3 py-2 shadow-[0_8px_24px_rgba(15,23,42,0.05)] ring-1 ring-slate-200/70">
+          <div className="flex flex-wrap items-center justify-end gap-2 rounded-lg px-4 py-2">
 
             <span className="text-sm text-slate-500">Show</span>
 
@@ -997,298 +936,251 @@ const kpiCards = useMemo(() => {
   </div>
 
         {modalOpen ? (
-          <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-slate-950/30 p-3 backdrop-blur-sm">
-            <div className="flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-xl">
-              <div className="flex items-center justify-between border-b border-slate-200 px-4 py-4">
+          <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto px-4 py-6">
+            <div className="absolute inset-0 bg-slate-950/30 backdrop-blur-xl" />
+            <div className="relative z-10 mx-auto w-full max-w-[750px] max-h-[90vh] overflow-hidden rounded-[20px] border border-slate-200/80 bg-white shadow-[0_30px_90px_rgba(15,23,42,0.12)] animate-modal-enter">
+              <div className="flex items-center justify-between gap-4 border-b border-slate-200/70 px-6 py-5">
                 <div>
-                  <div className="text-xs font-medium uppercase tracking-[0.12em] text-slate-500">
+                  <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">
                     {categoryLabel} Reports
-                  </div>
-                  <h2 className="mt-1 text-lg font-medium text-slate-900">
-    {editingId ? "Edit Report" : "Upload Reports"}
-  </h2>
+                  </p>
+                  <h2 className="mt-2 text-xl font-semibold tracking-[-0.03em] text-slate-950">
+                    {editingId ? "Edit Report" : "Upload Reports"}
+                  </h2>
                 </div>
                 <button
                   onClick={() => setModalOpen(false)}
-                  className="rounded-md border border-slate-200 px-3 py-1 text-sm text-slate-600 hover:bg-slate-50"
+                  className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-sm transition duration-200 hover:bg-slate-100"
+                  aria-label="Close modal"
                 >
-                  Cancel
+                  <span className="text-xl leading-none">×</span>
                 </button>
               </div>
 
-              {modalMessage ? (
-                <div
-                  className={`mb-4 rounded-lg px-3 py-2 text-sm ${
-                    modalMessageType === "error"
-                      ? "border border-red-200 bg-red-50 text-red-700"
-                      : "border border-emerald-200 bg-emerald-50 text-emerald-700"
-                  }`}
-                >
-                  {modalMessage}
-                </div>
-              ) : null}
-
-              {modalLoadingText ? (
-                <div className="mb-3 h-4 text-xs text-slate-500">
-                {modalLoadingText || ""}
-              </div>
-              ) : null}
-
-              <div className="flex-1 overflow-y-auto px-4 py-4">
-              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                {uploadType === "single" ? (
-                  <>
-                    <div className="flex flex-col gap-1">
-                      <label className="text-xs text-slate-500">Date</label>
-                      <PremiumDatePicker
-                    value={date}
-                      onChange={setDate}
-                      isDateDisabled={(d) => {
-                        const today = new Date();
-                        today.setHours(0,0,0,0);
-                        const selected = new Date(d);
-                          selected.setHours(0,0,0,0);
-                        return selected >= today; // ❌ block today + future
-                          }}
-                        />
-                    </div>
-
-                    <div className="flex flex-col gap-1">
-                      <label className="text-xs text-slate-500">Site Type</label>
-                      <select
-                        value={siteType}
-                        onChange={(e) => setSiteType(e.target.value)}
-                        className={`h-9 rounded-md border border-slate-200 px-3 text-sm text-slate-700 focus:outline-none ${accent.ring}`}
-                      >
-
-                        <option value="">Select Site Type</option>
-                        {allowedSiteTypes.map((site) => (
-                          <option key={site.value} value={site.value}>
-                            {site.label}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div className="flex flex-col gap-1">
-                      <label className="text-xs text-slate-500">Report Type</label>
-                      <select
-                        value={reportType}
-                        onChange={(e) => setReportType(e.target.value)}
-                        className={`h-9 rounded-md border border-slate-200 px-3 text-sm text-slate-700 focus:outline-none ${accent.ring}`}
-                      >
-                        <option value="">Select Report Type</option>
-                        <option value="Outage">Outage Report</option>
-                        <option value="Performance">Performance Report</option>
-                      </select>
-                    </div>
-                  </>
+              <div className="space-y-3 px-4 py-4 overflow-visible">
+                {modalMessage ? (
+                  <div
+                    className={`rounded-3xl border px-4 py-3 text-sm shadow-sm ${
+                      modalMessageType === "error"
+                        ? "border-red-200 bg-red-50 text-red-700"
+                        : "border-emerald-200 bg-emerald-50 text-emerald-700"
+                    }`}
+                  >
+                    {modalMessage}
+                  </div>
                 ) : null}
 
-                <div className="flex flex-col gap-1">
-                  <label className="text-xs text-slate-500">Upload Type</label>
-                  <div className="flex h-9 items-center gap-3 rounded-md border border-slate-200 px-3 text-sm text-slate-700">
-                    <label className="flex items-center gap-2">
-                      <input
-                        type="radio"
-                        name="uploadType"
-                        value="single"
-                        checked={uploadType === "single"}
-                        onChange={(e) => setUploadType(e.target.value)}
-                        className={
-                          normalizedCategory === "fiber"
-                            ? "text-emerald-600"
-                            : "text-indigo-600"
-                        }
-                      />
-                      Single Upload
-                    </label>
-                    <label className="flex items-center gap-2">
-                      <input
-                        type="radio"
-                        name="uploadType"
-                        value="bulk"
-                        checked={uploadType === "bulk"}
-                        onChange={(e) => setUploadType(e.target.value)}
-                        className={
-                          normalizedCategory === "fiber"
-                            ? "text-emerald-600"
-                            : "text-indigo-600"
-                        }
-                      />
-                      Bulk Upload
-                    </label>
+                {modalLoadingText ? (
+                  <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600 shadow-sm">
+                    <span className="h-2.5 w-2.5 animate-spin rounded-full border border-slate-400 border-t-transparent" />
+                    {modalLoadingText}
                   </div>
-                </div>
+                ) : null}
 
-                <div className="flex flex-col gap-1">
-                  <label className="text-xs text-slate-500">Uploaded By</label>
-                  <input
-                    type="text"
-                    value={uploadedBy}
-                    onChange={(e) => setUploadedBy(e.target.value)}
-                    placeholder="Enter name"
-                    className={`h-9 rounded-md border border-slate-200 px-3 text-sm text-slate-700 focus:outline-none ${accent.ring}`}
-                  />
-                </div>
+                <section className={formFieldClass}>
+                  
+{/* ===== 2 COLUMN GRID (FIXED ORDER) ===== */}
+<div className="grid gap-3 md:grid-cols-2 items-end">
 
-                {uploadType === "bulk" ? (
-                  <div className="md:col-span-2">
-                    <div className="mb-3 flex items-center justify-between">
-                      <div className="text-sm text-slate-600">
-                        Bulk rows (each row = one file + one record)
-                      </div>
-                      <button
-                        type="button"
-                        onClick={addBulkRow}
-                        className="rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
-                      >
-                        + Add Row
-                      </button>
-                    </div>
+  {/* DATE */}
+  <div className="relative">
+    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
+      <Calendar size={18} />
+    </span>
 
-                  <div className="relative max-h-[50vh] space-y-3 overflow-y-auto pr-2">
-                      {bulkRows.map((row, index) => (
-                        <div
-                          key={index}
-                          className="relative grid grid-cols-1 gap-3 rounded-lg border border-slate-200 bg-slate-50/60 p-3 md:grid-cols-8"
-                          >
-                          <div className="md:col-span-2">
-                            <label className="text-xs text-slate-500">Date</label>
-                            <PremiumDatePicker
-                            value={row.date}
-                            onChange={(nextValue) =>
-                              handleBulkRowChange(index, "date", nextValue)
-                              }
-                                isDateDisabled={(d) => {
-                                const today = new Date();
-                                today.setHours(0,0,0,0);
-                                    const selected = new Date(d);
-                                  selected.setHours(0,0,0,0);
-                                      return selected >= today;
-                                    }}
-                                />
-                          </div>
+    <PremiumDatePicker
+  value={date}
+  onChange={setDate}
+  isDateDisabled={(d) => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
 
-                          <div className="md:col-span-2">
-                            <label className="text-xs text-slate-500">
-                              Site Type
-                            </label>
-                            <select
-                              value={row.site_type}
-                              onChange={(e) =>
-                                handleBulkRowChange(
-                                  index,
-                                  "site_type",
-                                  e.target.value
-                                )
-                              }
-                              className={`h-9 w-full rounded-md border border-slate-200 px-3 text-sm text-slate-700 focus:outline-none ${accent.ring}`}
-                            >
+    const selected = new Date(d);
+    selected.setHours(0, 0, 0, 0);
 
-                              <option value="">All Site Types</option>
-                              {allowedSiteTypes.map((site) => (
-                                <option key={site.value} value={site.value}>
-                                  {site.label}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
+    return selected >= today; // ❌ blocks today + future
+  }}
+/>
+  </div>
 
-                          <div className="md:col-span-2">
-                            <label className="text-xs text-slate-500">
-                              Report Type
-                            </label>
-                            <select
-                              value={row.report_type}
-                              onChange={(e) =>
-                                handleBulkRowChange(
-                                  index,
-                                  "report_type",
-                                  e.target.value
-                                )
-                              }
-                              className={`h-9 w-full rounded-md border border-slate-200 px-3 text-sm text-slate-700 focus:outline-none ${accent.ring}`}
-                            >
-                              <option value="">Select Report Type</option>
-                              <option value="Outage">Outage Report</option>
-                              <option value="Performance">Performance Report</option>
-                            </select>
-                          </div>
+   {/* UPLOADED BY */}
+  <div className="relative">
+    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
+      <User size={18} />
+    </span>
 
-                          <div className="md:col-span-2">
-                            <label className="text-xs text-slate-500">File</label>
-                            <input
-                              type="file"
-                              accept=".xlsx,.xls,.xlsb,.csv"
-                              onChange={(e) =>
-                                handleBulkFileChange(
-                                  index,
-                                  e.target.files?.[0] || null
-                                )
-                              }
-                              className={`block w-full text-sm text-slate-700 file:mr-3 file:rounded-md file:border-0 file:px-3 file:py-2 file:text-white ${accent.file}`}
-                            />
-                            {row.file ? (
-                              <div className="mt-1 truncate text-xs text-slate-500">
-                                {row.file.name}
-                              </div>
-                            ) : null}
-                          </div>
+    <input
+      type="text"
+      value={uploadedBy}
+      onChange={(e) => setUploadedBy(e.target.value)}
+      placeholder="Enter uploader name"
+      className="h-10 w-full rounded-2xl border border-slate-200 bg-white pl-12 pr-4 text-sm
+       outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-100"
+    />
+  </div>
 
-                          <div className="md:col-span-8">
-                            <button
-                              type="button"
-                              onClick={() => removeBulkRow(index)}
-                              className="text-sm text-red-600 hover:underline"
-                            >
-                              Remove Row
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ) : (
-                  <div className="flex flex-col gap-1 md:col-span-2">
-                    <label className="text-xs text-slate-500">Excel/CSV File</label>
-                    <div className="flex items-center gap-3 rounded-md border border-dashed border-slate-300 bg-slate-50 px-3 py-3">
-                      <input
-                        type="file"
-                        accept=".xlsx,.xls,.xlsb,.csv"
-                        onChange={handleFileChange}
-                        className={`block w-full text-sm text-slate-700 file:mr-4 file:rounded-md file:border-0 file:px-3 file:py-2 file:text-white ${accent.file}`}
-                      />
-                      {file ? (
-                        <span className="truncate text-xs text-slate-500">
-                          {file.name}
-                        </span>
-                      ) : null}
-                    </div>
-                  </div>
-                )}
-              </div>
-              </div>
+  {/* SITE TYPE */}
+  <div className="relative">
+    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
+      <Layers size={18} />
+    </span>
 
-              <div className="flex items-center justify-end gap-2 border-t border-slate-200 bg-white px-4 py-4">
-                <button
-                  onClick={() => setModalOpen(false)}
-                  className="inline-flex h-9 items-center rounded-md border border-slate-200 px-4 text-sm text-slate-700 hover:bg-slate-50"
-                >
-                  Cancel
-                </button>
-              <button
-    onClick={handleUpload}
-    disabled={uploading}
-    className={`${primaryButtonClass} min-w-[112px] justify-center ${accent.button}`}
-  >
-                    <Upload size={14} />
+   <Listbox value={siteType} onChange={setSiteType}>
+  <div className="relative">
+
+    {/* BUTTON */}
+    <Listbox.Button className="w-full h-10 rounded-2xl border border-slate-200 bg-white pl-4 pr-4 text-sm text-left shadow-sm flex items-center justify-between hover:border-violet-300 focus:ring-2 focus:ring-violet-100 transition">
+
+      {/* ICON + TEXT */}
+      <div className="flex items-center gap-2">
+        <Layers size={16} className="text-slate-400" />
+        <span>
+          {siteType
+            ? allowedSiteTypes.find((s) => s.value === siteType)?.label
+            : "Select Site Type"}
+        </span>
+      </div>
+
+      <ChevronDown size={16} className="text-slate-400" />
+    </Listbox.Button>
+
+    {/* DROPDOWN */}
+    <Listbox.Options className="absolute z-50 mt-2 w-full rounded-2xl bg-white border border-slate-200 shadow-[0_20px_60px_rgba(15,23,42,0.12)] p-1 max-h-60 overflow-auto">
+
+      {allowedSiteTypes.map((site) => (
+        <Listbox.Option
+          key={site.value}
+          value={site.value}
+          className={({ active }) =>
+            `cursor-pointer rounded-xl px-3 py-2 text-sm ${
+              active ? "bg-violet-50 text-violet-700" : "text-slate-600"
+            }`
+          }
+        >
+          {site.label}
+        </Listbox.Option>
+      ))}
+
+    </Listbox.Options>
+
+  </div>
+</Listbox>
+  </div>
+
+  {/* REPORT TYPE */}
+  <div className="relative">
+    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
+      <FileText size={18} />
+    </span>
+
+ <Listbox value={reportType} onChange={setReportType}>
+  <div className="relative">
+
+    <Listbox.Button className="w-full h-10 rounded-2xl border border-slate-200 bg-white pl-4 pr-4 text-sm text-left shadow-sm flex items-center justify-between hover:border-violet-300 focus:ring-2 focus:ring-violet-100 transition">
+
+      <div className="flex items-center gap-2">
+        <FileText size={16} className="text-slate-400" />
+        <span>
+          {reportType || "Select Report Type"}
+        </span>
+      </div>
+
+      <ChevronDown size={16} className="text-slate-400" />
+    </Listbox.Button>
+
+    <Listbox.Options className="absolute z-50 mt-2 w-full rounded-2xl bg-white border border-slate-200 shadow-[0_20px_60px_rgba(15,23,42,0.12)] p-1">
+
+      <Listbox.Option value="" className="px-3 py-2 text-sm text-slate-600">
+        Select Report Type
+      </Listbox.Option>
+
+      <Listbox.Option value="Outage" className="px-3 py-2 text-sm hover:bg-violet-50 cursor-pointer">
+        Outage Report
+      </Listbox.Option>
+
+      <Listbox.Option value="Performance" className="px-3 py-2 text-sm hover:bg-violet-50 cursor-pointer">
+        Performance Report
+      </Listbox.Option>
+
+    </Listbox.Options>
+
+  </div>
+</Listbox>
+  </div>
+
+ 
+
+</div>
+
+  {/* FILE UPLOAD */}
+<div className="space-y-4 mt-4">
+
+  {/* Header */}
+  <div className="flex items-center gap-4">
+    <div>
+      <div className="text-sm font-semibold text-slate-900">File Upload</div>
+      <p className="text-sm text-slate-500">
+        Drag & drop or browse your Excel / CSV report.
+      </p>
+    </div>
+    <div className="h-px flex-1 bg-slate-200/80" />
+  </div>
+
+  {/* Upload Box */}
+  <div className="relative rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center transition duration-200 hover:border-violet-300 hover:bg-white shadow-sm">
+
+    {/* Icon */}
+    <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-gradient-to-br from-violet-100 to-indigo-100 text-violet-600 shadow-sm">
+      <Upload size={26} />
+    </div>
+
+    {/* Text */}
+    <div className="mt-4 space-y-1">
+      <p className="text-sm font-semibold text-slate-900">
+        Click or drag file to upload
+      </p>
+      <p className="text-xs text-slate-500">
+        Supported: .xlsx, .xls, .xlsb, .csv
+      </p>
+    </div>
+
+    {/* Hidden Input */}
+    <input
+      type="file"
+      accept=".xlsx,.xls,.xlsb,.csv"
+      onChange={handleFileChange}
+      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+    />
+
+    {/* File Name */}
+    {file && (
+      <div className="mt-4 rounded-2xl bg-white border border-slate-200 px-4 py-2 text-sm text-slate-700">
+        {file.name}
+      </div>
+    )}
+  </div>
+
+</div>
+                </section> 
+
+                <div className="flex flex-col gap-3 border-t border-slate-200/70 pt-4 sm:flex-row sm:items-center sm:justify-end">
+                  <button
+                    onClick={() => setModalOpen(false)}
+                    className={secondaryButtonClass}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleUpload}
+                    disabled={uploading}
+                    className={`${primaryButtonClass} bg-gradient-to-r from-violet-500 via-indigo-500 to-sky-500 shadow-[0_20px_60px_rgba(76,78,255,0.24)]`}
+                  >
+                    <Upload size={16} />
                     {uploading ? "Uploading..." : "Upload"}
-                    </button>
+                  </button>
+                </div>
               </div>
             </div>
-
-
           </div>
         ) : null}
       </div>
