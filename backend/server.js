@@ -80,10 +80,10 @@ app.get("/api", (req, res) => {
 });
 
 // Serve frontend build
-app.use(express.static(path.join(__dirname, "../frontend/dist"))); // or build
+app.use(express.static(path.join(__dirname, "../frontend/dist")));
 
-// React SPA fallback (FIXED)
-app.get("/*", (req, res) => {
+// ✅ FINAL SAFE FIX (no wildcard crash)
+app.use((req, res) => {
   res.sendFile(path.join(__dirname, "../frontend/dist/index.html"));
 });
 
