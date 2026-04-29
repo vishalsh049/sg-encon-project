@@ -588,16 +588,17 @@ const kpiCards = useMemo(() => {
 
     return (
       <div className="min-h-screen w-full pb-28 text-slate-900 -mt-4">
-        <div className="sticky top-0 z-30 mb-4 overflow-hidden rounded-[22px] bg-slate-50 px-5 py-4 
+        <div className="sticky top-0 z-30 mb-4 overflow-hidden rounded-[22px] px-5 py-4 
+        bg-[linear-gradient(135deg,rgba(219,234,254,0.82),rgba(255,255,255,0.9),rgba(237,233,254,0.9))] 
         shadow-[0_24px_80px_rgba(15,23,42,0.08)] backdrop-blur-xl">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between ">
             <div className="min-w-0 space-y-3">
               <div className="space-y-0">
                 <h1 className="text-2xl font-semibold tracking-[-0.03em] text-slate-950">
                   Tower Reports
                 </h1>
                 <p className="text-sm pt-1 text-slate-500">
-                  Category: <span className="font-semibold text-slate-900">{categoryLabel}</span>
+                  Site Performance Insights
                 </p>
               </div>
             </div>
