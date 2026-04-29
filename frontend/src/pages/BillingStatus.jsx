@@ -11,6 +11,7 @@ import {
   Plus,
   RadioTower,
   ReceiptText,
+  RotateCcw,
   Sparkles
 } from "lucide-react";
 
@@ -180,6 +181,7 @@ export default function BillingStatus() {
   const [timeFilter, setTimeFilter] = useState("3");
   const [circleFilter, setCircleFilter] = useState("");
   const [billingFilter, setBillingFilter] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
   const [displayCounts, setDisplayCounts] = useState({
     total: 0,
     completed: 0,
@@ -389,85 +391,72 @@ const pendingTasks = totalTasks - completedTasks;
   };
 
   const handleSubmit = async () => {
+  if (isSaving) return; // prevent double click
+
+  setIsSaving(true);
+
+  try {
     if (!form.month) {
       alert("Please select Month");
+      setIsSaving(false);
       return;
     }
 
     if (!form.circle) {
       alert("Please select Circle");
+      setIsSaving(false);
       return;
     }
 
     if (!form.billingType) {
       alert("Please select Billing Type");
+      setIsSaving(false);
       return;
     }
 
     if (!form.sixty) {
       alert("Please select 60% status");
+      setIsSaving(false);
       return;
     }
 
     if (!form.forty) {
       alert("Please select 40% status");
+      setIsSaving(false);
       return;
     }
 
     if (!form.kpi) {
       alert("Please select KPI status");
+      setIsSaving(false);
       return;
     }
 
-    if (form.sixty === "Pending" && !form.sixty_note.trim()) {
-      alert("Please enter reason for 60%");
+    const res = await fetch(buildApiUrl("/api/billing/status"), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(form)
+    });
+
+    if (!res.ok) {
+      alert("Save failed");
+      setIsSaving(false);
       return;
     }
 
-    if (form.forty === "Pending" && !form.forty_note.trim()) {
-      alert("Please enter reason for 40%");
-      return;
-    }
+    alert("Saved successfully");
+    setShowForm(false);
+    fetchBillingStatus();
 
-    if (form.kpi === "Pending" && !form.kpi_note.trim()) {
-      alert("Please enter reason for KPI");
-      return;
-    }
-
-    try {
-      console.log("FINAL FORM DATA:", JSON.stringify(form, null, 2));
-
-      const res = await fetch(buildApiUrl("/api/billing/status"), {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify(form)
-      });
-
-      let result;
-      try {
-        result = await res.json();
-      } catch {
-        result = {};
-      }
-
-      console.log("RESPONSE:", result);
-
-      if (!res.ok) {
-        console.error("STATUS:", res.status);
-        alert("Save failed");
-        return;
-      }
-
-      alert("Saved successfully");
-      setShowForm(false);
-      fetchBillingStatus();
-    } catch (err) {
-      console.error("ERROR:", err);
-      alert("Server error");
-    }
-  };
+  } catch (err) {
+    console.error(err);
+    alert("Server error");
+  } finally {
+    setIsSaving(false); // always reset
+  }
+};
 
   const normalizeRow = (row) => {
     const get = (keys) => {
@@ -625,15 +614,17 @@ const pendingTasks = totalTasks - completedTasks;
 
   {/* Right - Reset Button */}
   <button
-    onClick={() => {
-      setTimeFilter("3");
-      setCircleFilter("");
-      setBillingFilter("");
-    }}
-    className="whitespace-nowrap rounded-full border border-blue-100  px-4 py-3 text-xs font-semibold text-blue-700 transition hover:bg-blue-100"
-  >
-    Reset
-  </button>
+  onClick={() => {
+    setTimeFilter("3");
+    setCircleFilter("");
+    setBillingFilter("");
+  }}
+  className="flex items-center gap-2 whitespace-nowrap rounded-full border
+   border-white/70 bg-white/65 shadow-[0_24px_70px_rgba(15,23,42,0.10)] px-4 py-3 text-xs font-semibold transition"
+>
+  <RotateCcw className="h-3.5 w-3.5" />
+  Reset
+</button>
 
 </div>
 
@@ -935,10 +926,12 @@ const pendingTasks = totalTasks - completedTasks;
                 </button>
 
                 <button
-                  onClick={handleSubmit}
-                  className="rounded-full bg-gradient-to-r from-indigo-600 to-purple-600 px-6 py-3 text-sm font-semibold text-white shadow-[0_18px_40px_rgba(99,102,241,0.30)] transition duration-300 hover:scale-[1.02] hover:shadow-[0_24px_60px_rgba(99,102,241,0.36)]"
-                >
-                  Save Changes
+              onClick={handleSubmit}
+              disabled={isSaving}
+               className="rounded-full bg-gradient-to-r from-indigo-600 to-purple-600 px-6 py-3 text-sm 
+               font-semibold text-white shadow-[0_18px_40px_rgba(99,102,241,0.30)] transition duration-300
+                hover:scale-[1.02] disabled:opacity-70 disabled:cursor-not-allowed">
+                  {isSaving ? "Saving..." : "Save Changes"}
                 </button>
               </div>
             </div>

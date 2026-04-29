@@ -79,8 +79,12 @@ app.get("/", (req, res) => {
   res.send("API running ✅");
 });
 
-app.use((req, res) => {
-  res.status(404).json({ message: "Route not found" });
+// Serve frontend build
+app.use(express.static(path.join(__dirname, "../frontend/dist"))); // or build
+
+// React SPA fallback (fix for refresh issue)
+app.get("*", (req, res) => {
+  res.sendFile(path.join(__dirname, "../frontend/dist/index.html"));
 });
 
 const PORT = process.env.PORT || 5000;

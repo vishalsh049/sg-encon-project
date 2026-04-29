@@ -54,6 +54,7 @@ function PremiumDatePicker({
 })
  {
   const rootRef = useRef(null);
+  const [openUp, setOpenUp] = useState(false);
   const selectedDate = useMemo(() => parseDateString(value), [value]);
   const [isOpen, setIsOpen] = useState(false);
   const [viewDate, setViewDate] = useState(selectedDate || new Date());
@@ -133,21 +134,27 @@ function PremiumDatePicker({
   });
 
   return (
-    <div ref={rootRef} className={`relative ${className}`}>
-      <div className="relative">
+    <div ref={rootRef} className={`relative overflow-visible ${className}`}>
+      <div className="relative overflow-visible">
         <input
           type="text"
           inputMode="numeric"
           value={displayedInputValue}
           placeholder={placeholder}
           disabled={disabled}
-          onFocus={() => {
-            if (!disabled) {
-              setInputText(value || "");
-              setViewDate(selectedDate || new Date());
-              setIsOpen(true);
-            }
-          }}
+          onFocus={(e) => {
+  if (!disabled) {
+    const rect = e.target.getBoundingClientRect();
+    const spaceBelow = window.innerHeight - rect.bottom;
+
+    // if not enough space below → open upward
+    setOpenUp(spaceBelow < 320);
+
+    setInputText(value || "");
+    setViewDate(selectedDate || new Date());
+    setIsOpen(true);
+  }
+}}
           onChange={(event) => setInputText(event.target.value)}
           onBlur={commitInputValue}
           className="app-date-input w-full h-10 rounded-lg border px-3"
@@ -167,12 +174,15 @@ function PremiumDatePicker({
         </button>
       </div>
 
-    <div
-  className={`absolute z-50 mt-2 w-[300px] rounded-2xl bg-white border border-slate-200 
-    shadow-[0_20px_60px_rgba(0,0,0,0.12)] ${
-  isOpen ? "block" : "hidden"
-}`}
->
+   <div
+    onMouseDown={(event) => event.preventDefault()}
+    className={`absolute z-[9999] left-0 w-[300px]
+      ${openUp ? "bottom-full mb-2" : "top-full mt-2"}
+      rounded-2xl bg-white border border-slate-200 
+      shadow-[0_20px_60px_rgba(0,0,0,0.12)]
+      ${isOpen ? "block" : "hidden"}
+    `}
+  >
         <div className="app-date-header">
           <button
             type="button"

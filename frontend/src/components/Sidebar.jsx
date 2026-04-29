@@ -208,16 +208,9 @@ function Sidebar({ closeSidebar, collapsed, onCollapseToggle, onExpandRequest })
   return (
     <aside className="flex h-full flex-col overflow-hidden border-r border-border-color bg-surface/95 backdrop-blur-xl">
       <div className="flex items-center justify-between gap-3 border-b border-border-color px-4 py-3">
-        <div className="flex min-w-0 items-center gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-primary shadow-soft">
-            <img src={logo} alt="logo" className="h-7 w-7 object-contain" />
-          </div>
-          {!collapsed ? (
-            <div className="min-w-0">
-              <div className="truncate text-sm font-semibold tracking-wide text-text-primary">SG ENCON</div>
-              <div className="truncate text-xs text-text-secondary">Operations Dashboard</div>
-            </div>
-          ) : null}
+        
+        <div className="flex items-center justify-center w-full">
+           <img src={logo} alt="logo" className="h-12 w-auto object-contain" />
         </div>
 
         <button
