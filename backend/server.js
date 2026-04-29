@@ -75,15 +75,15 @@ registerRoute("./routes/fiberRoutes", "/api/fiber");
 registerRoute("./routes/billingStatus", "/api");
 
 // Test Route
-app.get("/", (req, res) => {
+app.get("/api", (req, res) => {
   res.send("API running ✅");
 });
 
 // Serve frontend build
 app.use(express.static(path.join(__dirname, "../frontend/dist"))); // or build
 
-// React SPA fallback (fix for refresh issue)
-app.get("*", (req, res) => {
+// React SPA fallback (FIXED)
+app.get("/*", (req, res) => {
   res.sendFile(path.join(__dirname, "../frontend/dist/index.html"));
 });
 
