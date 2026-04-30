@@ -73,6 +73,7 @@ registerRoute("./routes/accessRoutes", "/api/access");
 registerRoute("./routes/nsoRoutes", "/api/nso"); 
 registerRoute("./routes/fiberRoutes", "/api/fiber");
 registerRoute("./routes/billingStatus", "/api");
+registerRoute("./routes/billingDashboard", "/api/billing");
 
 // Test Route
 app.get("/api", (req, res) => {
