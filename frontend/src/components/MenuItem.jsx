@@ -16,8 +16,8 @@ function MenuItem({
   const showTooltip = collapsed && depth === 0;
 
   const sharedClasses = [
-    "group relative flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left text-sm transition-all duration-200",
-    depth === 0 ? "min-h-[48px]" : "min-h-[42px]",
+    "group relative flex w-full items-center gap-3 rounded-2xl px-2 py-2 text-left text-sm transition-all duration-200",
+    depth === 0 ? "min-h-[40px]" : "min-h-[36px]",
     isActive
       ? "bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-md"
       : "text-text-secondary hover:bg-surface-muted hover:text-text-primary",
@@ -37,7 +37,7 @@ function MenuItem({
         ].join(" ")}
       >
         {Icon ? (
-          <Icon size={18} strokeWidth={2.1} />
+          <Icon size={16} strokeWidth={2.1} />
         ) : (
           <span className="h-2 w-2 rounded-full bg-current" />
         )}
@@ -74,7 +74,9 @@ function MenuItem({
       ) : null}
 
       {showTooltip ? (
-        <span className="pointer-events-none absolute left-[calc(100%+12px)] top-1/2 z-50 hidden -translate-y-1/2 whitespace-nowrap rounded-xl border border-border-color bg-surface-elevated px-3 py-2 text-xs font-medium text-text-primary shadow-soft group-hover:block">
+        <span className="pointer-events-none absolute left-[calc(100%+12px)] top-1/2 z-50
+         hidden -translate-y-1/2 whitespace-nowrap rounded-xl border border-border-color
+          bg-surface-elevated px-3 py-2 text-xs font-medium text-text-primary shadow-soft group-hover:block">
           {item.label}
         </span>
       ) : null}

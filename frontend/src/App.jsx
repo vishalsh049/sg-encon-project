@@ -13,6 +13,8 @@ import FiberInventory from "./pages/FiberInventory";
 import Physical from "./pages/Physical";
 import Scrum from "./pages/Scrum";
 import BillingStatus from "./pages/BillingStatus";
+import BillingDashboard from "./pages/BillingDashboard";
+import Revenue from "./pages/Revenue";
 
 function App() {
   return (
@@ -26,33 +28,40 @@ function App() {
         <Route path="/login" element={<Login />} />
 
         <Route path="/dashboard" element={<DashboardLayout />}>
-          <Route index element={<Dashboard />} />
-          <Route path="add-data" element={<AddData />} />
+  <Route index element={<Dashboard />} />
 
-          <Route path="billing/revenue" element={<PlaceholderPage />} />
-          <Route path="billing/penalties" element={<PlaceholderPage />} />
-          <Route path="billing/penalties/kpis" element={<PlaceholderPage />} />
-          <Route path="billing/penalties/general" element={<PlaceholderPage />} />
+  <Route path="add-data" element={<AddData />} />
 
-          <Route path="manpower/physical" element={<Physical />} />
-          <Route path="manpower/scrum" element={<Scrum />} />
-          <Route path="users-access" element={<UsersAccessPage />} />
+  {/* Billing */}
+  <Route path="billing" element={<BillingDashboard />} />
+  <Route path="billing/status" element={<BillingStatus />} />
+  <Route path="billing/revenue" element={<Revenue />} />
+  <Route path="billing/penalties" element={<PlaceholderPage />} />
 
-          <Route path="uptime/tower" element={<div>Tower Page</div>} />
-          <Route path="uptime/fiber" element={<div>Fiber Page</div>} />
-          <Route path="uptime/fttx" element={<div>FTTx Page</div>} />
+  {/* Manpower */}
+  <Route path="manpower/physical" element={<Physical />} />
+  <Route path="manpower/scrum" element={<Scrum />} />
 
-          <Route path="kpi/tower" element={<div>Tower KPI Page</div>} />
-          <Route path="kpi/fiber" element={<div>Fiber KPI Page</div>} />
+  {/* Users */}
+  <Route path="users-access" element={<UsersAccessPage />} />
 
-          <Route path="reports/:siteCategory" element={<TowerReports />} />
-          <Route path="reports/view" element={<div>View Reports Page</div>} />
-          <Route path="/dashboard/reports/fiber/nso" element={<NSOReports />} />
-          <Route path="/dashboard/reports/fiber/inventory" element={<FiberInventory />} />
-          <Route path="/dashboard/billing/status" element={<BillingStatus />} />
+  {/* Uptime */}
+  <Route path="uptime/tower" element={<div>Tower Page</div>} />
+  <Route path="uptime/fiber" element={<div>Fiber Page</div>} />
+  <Route path="uptime/fttx" element={<div>FTTx Page</div>} />
 
+  {/* KPI */}
+  <Route path="kpi/tower" element={<div>Tower KPI Page</div>} />
+  <Route path="kpi/fiber" element={<div>Fiber KPI Page</div>} />
 
-        </Route>
+  {/* Reports */}
+  <Route path="reports/:siteCategory" element={<TowerReports />} />
+  <Route path="reports/view" element={<div>View Reports Page</div>} />
+  <Route path="reports/fiber/nso" element={<NSOReports />} />
+  <Route path="reports/fiber/inventory" element={<FiberInventory />} />
+  
+</Route>
+        
          <Route path="*" element={<Login />} />
       </Routes>
     </BrowserRouter>

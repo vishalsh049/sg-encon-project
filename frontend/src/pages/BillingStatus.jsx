@@ -57,16 +57,27 @@ const normalizeMonth = (m) => {
   return map[m] || m;
 };
 
+const normalizeMonthValue = (month) => {
+  if (!month) return "";
+  const raw = String(month).trim();
+  const short = normalizeMonth(raw);
+  if (months.includes(short)) return short;
+  const firstWord = raw.split(" ")[0];
+  return normalizeMonth(firstWord) || firstWord;
+};
+
+const normalizeText = (value) => String(value || "").trim().toLowerCase();
+
 const getStatusTone = (status) => {
   if (status === "Done") {
-    return "bg-emerald-100/90 text-emerald-700 ring-1 ring-emerald-200 shadow-[0_12px_30px_rgba(16,185,129,0.18)]";
+    return "bg-gradient-to-r from-emerald-500/20 via-emerald-400/10 to-emerald-300/10 text-emerald-900 ring-1 ring-emerald-200/90 shadow-[0_18px_40px_rgba(16,185,129,0.18)]";
   }
 
   if (status === "Pending") {
-    return "bg-amber-100/90 text-amber-800 ring-1 ring-amber-200 shadow-[0_12px_30px_rgba(245,158,11,0.18)]";
+    return "bg-gradient-to-r from-amber-500/22 via-amber-400/12 to-amber-300/10 text-amber-900 ring-1 ring-amber-200/90 shadow-[0_18px_40px_rgba(245,158,11,0.18)]";
   }
 
-  return "bg-rose-100/90 text-rose-700 ring-1 ring-rose-200 shadow-[0_12px_30px_rgba(244,63,94,0.18)]";
+  return "bg-gradient-to-r from-rose-500/22 via-rose-400/12 to-rose-300/10 text-rose-900 ring-1 ring-rose-200/90 shadow-[0_18px_40px_rgba(244,63,94,0.18)]";
 };
 
 function MetricCard({ label, value, context, icon: Icon, iconTone }) {
@@ -156,15 +167,28 @@ function FilterSelect({ value, onChange, icon: Icon, placeholder, options }) {
 
 function StatusBlock({ label, status, note }) {
   return (
-    <div className="flex min-h-[76px] flex-col items-start rounded-[20px] bg-white p-4">
-      <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400 lg:hidden">
-        {label}
-      </p>
-      <span className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-semibold ${getStatusTone(status)}`}>
-        {status === "Done" ? <CheckCircle2 className="h-3.5 w-3.5" /> : <Clock3 className="h-3.5 w-3.5" />}
-        {status || "N/A"}
-      </span>
-      <p className="mt-3 text-sm leading-6 text-slate-500">
+    <div className="relative flex min-h-[88px] flex-col justify-between gap-3 overflow-hidden rounded-[20px] border border-white/80 bg-white/65 p-4 shadow-[0_18px_50px_rgba(15,23,42,0.08)] backdrop-blur-xl">
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.14),transparent_40%)]" />
+      <div className="relative flex items-start justify-between gap-3">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-slate-500">
+          {label}
+        </p>
+
+        <span
+          className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-semibold ${getStatusTone(
+            status
+          )}`}
+        >
+          {status === "Done" ? (
+            <CheckCircle2 className="h-3.5 w-3.5" />
+          ) : (
+            <Clock3 className="h-3.5 w-3.5" />
+          )}
+          {status || "N/A"}
+        </span>
+      </div>
+
+      <p className="relative text-sm leading-6 text-slate-600">
         {note || "No pending notes added."}
       </p>
     </div>
@@ -298,24 +322,30 @@ export default function BillingStatus() {
 
   const card1Data = data.filter((row) => {
     const monthFilter = getFilteredMonths();
+    const rowMonth = normalizeMonthValue(row.month);
+    const rowCircle = normalizeText(row.circle);
+    const rowBillingType = normalizeText(row.billing_type);
 
     return (
-      (!timeFilter || monthFilter.includes(row.month)) &&
-      (!card1Filter.month || row.month === card1Filter.month) &&
-      (!card1Filter.circle || row.circle === card1Filter.circle) &&
-      (!card1Filter.billingType || row.billing_type === card1Filter.billingType)
+      (!timeFilter || monthFilter.includes(rowMonth)) &&
+      (!card1Filter.month || normalizeMonthValue(card1Filter.month) === rowMonth) &&
+      (!card1Filter.circle || normalizeText(card1Filter.circle) === rowCircle) &&
+      (!card1Filter.billingType || normalizeText(card1Filter.billingType) === rowBillingType)
     );
   });
 
-   const filteredStatsData = data.filter((row) => {
-  const monthFilter = getFilteredMonths();
+  const filteredStatsData = data.filter((row) => {
+    const monthFilter = getFilteredMonths();
+    const rowMonth = normalizeMonthValue(row.month);
+    const rowCircle = normalizeText(row.circle);
+    const rowBillingType = normalizeText(row.billing_type);
 
-  return (
-    (!timeFilter || monthFilter.includes(row.month)) &&
-    (!circleFilter || row.circle === circleFilter) &&
-    (!billingFilter || row.billing_type === billingFilter)
-  );
-});
+    return (
+      (!timeFilter || monthFilter.includes(rowMonth)) &&
+      (!circleFilter || rowCircle === normalizeText(circleFilter)) &&
+      (!billingFilter || rowBillingType === normalizeText(billingFilter))
+    );
+  });
 
   const totalTasks = filteredStatsData.length * 3;
 
@@ -536,12 +566,11 @@ const pendingTasks = totalTasks - completedTasks;
   return (
     <div className="min-h-screen -mt-4">
       <div className="pointer-events-none fixed inset-0 opacity-[0.18] [background-image:radial-gradient(rgba(148,163,184,0.15)_0.7px,transparent_0.7px)] [background-size:16px_16px]" />
-      <div className="relative space-y-4">
+      <div className="relative z-[50] space-y-4">
       
-        <div className="relative overflow-hidden rounded-[28px] border border-white/70
-         bg-[linear-gradient(135deg,rgba(219,234,254,0.82),rgba(255,255,255,0.9),rgba(237,233,254,0.9))]
-          p-5 shadow-[0_30px_90px_rgba(59,130,246,0.12)] backdrop-blur-2xl">
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(96,165,250,0.25),transparent_35%),radial-gradient(circle_at_bottom_right,rgba(168,85,247,0.20),transparent_35%)]" />
+        <div className="relative overflow-hidden rounded-[28px] border border-white/85 bg-gradient-to-b from-white/90 via-indigo-50/25 to-fuchsia-50/20
+          p-6 shadow-[0_42px_140px_rgba(59,130,246,0.16)] backdrop-blur-2xl">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(96,165,250,0.30),transparent_40%),radial-gradient(circle_at_bottom_right,rgba(168,85,247,0.24),transparent_40%)]" />
           <div className="relative flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="max-w-2xl">
               <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.34em] text-indigo-600">
@@ -591,9 +620,8 @@ const pendingTasks = totalTasks - completedTasks;
             iconTone="bg-amber-100 text-amber-700 ring-amber-200"
           />
 
-  <div className="flex h-full flex-col justify-center gap-2 rounded-[24px] border
-   border-white/70 bg-white/65 p-2 shadow-[0_24px_70px_rgba(15,23,42,0.10)]">
-
+  <div className="relative z-[999] flex h-full flex-col justify-center gap-2 rounded-[24px] border border-white/85 bg-white/70 p-3
+    shadow-[0_30px_100px_rgba(15,23,42,0.10)] backdrop-blur-xl overflow-visible">
   {/* Row 1 */}
 <div className="flex items-center justify-between gap-2">
 
@@ -654,9 +682,9 @@ const pendingTasks = totalTasks - completedTasks;
         {(timeFilter ? getFilteredMonths() : months).map((monthName) => {
           const filteredData = data.filter((row) => {
             return (
-              normalizeMonth(row.month) === monthName &&
-              (!circleFilter || row.circle === circleFilter) &&
-              (!billingFilter || row.billing_type === billingFilter)
+              normalizeMonthValue(row.month) === monthName &&
+              (!circleFilter || normalizeText(row.circle) === normalizeText(circleFilter)) &&
+              (!billingFilter || normalizeText(row.billing_type) === normalizeText(billingFilter))
             );
           });
 
@@ -665,13 +693,14 @@ const pendingTasks = totalTasks - completedTasks;
           return (
             <div
               key={monthName}
-              className="rounded-[24px] border border-white/70 bg-white/60 p-4 shadow-[0_24px_80px_rgba(15,23,42,0.10)] backdrop-blur-2xl lg:p-5"
+              className="relative rounded-[24px] border border-white/85 bg-white/70 p-4 shadow-[0_30px_110px_rgba(15,23,42,0.10)] backdrop-blur-2xl lg:p-5 overflow-hidden"
             >
               <div className="mb-2 flex items-center justify-between gap-4 border-b border-slate-200/70 pb-2">
                 <h2 className="text-xl font-bold tracking-tight text-slate-800">
                   {fullMonthMap[monthName] || monthName}
                 </h2>
-                <div className="rounded-full bg-blue-100 px-4 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-blue-700">
+                <div className="rounded-full bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-white
+                  ring-1 ring-white/30 shadow-[0_18px_50px_rgba(37,99,235,0.25)]">
                   {filteredData.length} Records
                 </div>
               </div>
@@ -692,7 +721,7 @@ const pendingTasks = totalTasks - completedTasks;
                     <div
                       key={i}
                       className="mb-3 grid gap-4 rounded-[24px] border border-white/80 
-                      bg-[linear-gradient(135deg,rgba(255,255,255,0.96),rgba(248,250,252,0.86))] p-5
+                      bg-[linear-gradient(135deg,rgba(255,255,255,0.98),rgba(248,250,252,0.90),rgba(237,233,254,0.55))] p-5
                       shadow-[0_18px_50px_rgba(15,23,42,0.08)] transition duration-300 hover:-translate-y-1
                        hover:scale-[1.01] hover:shadow-[0_28px_70px_rgba(15,23,42,0.12)] lg:grid-cols-[0.8fr_1.1fr_1.1fr_1.1fr]
                         lg:items-start lg:p-6">

@@ -5,29 +5,14 @@ import axios from "axios";
 import { buildApiUrl } from "../lib/api";
 import { hasPermission } from "../lib/session";
 import Select, { components as ReactSelectComponents } from "react-select";
+import { ChevronDown, Filter as FilterIcon, RefreshCcw, Sparkles, ChevronUp, Loader2,
+  Globe, Cable, Users, Activity } from "lucide-react";
+
 import {
-  ChevronDown,
-  Filter as FilterIcon,
-  RefreshCcw,
-  Sparkles,
-  ChevronUp,
-  Loader2,
-} from "lucide-react";
-import {
-  LineChart,
-  Line,
-  PieChart,
-  Pie,
-  Cell,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-  Legend,
-  CartesianGrid,
-  AreaChart,
-  Area,
+  LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer,
+  Legend, CartesianGrid, AreaChart, Area,
 } from "recharts";
+
 import { PieChart as PieIcon, TrendingUp } from "lucide-react";
 
 const initialStats = {
@@ -898,7 +883,7 @@ const trendColor = getTrendColor(uptimeTrend);
     <div className="space-y-3 text-text-primary">
 
       {/* Filters */}
-      <div className="relative -mt-6">
+      <div className="relative -mt-5">
       <div className="app-surface relative overflow-visible px-4 py-2">
 <div className="absolute inset-x-0 top-0 h-[1px] bg-gradient-to-r from-transparent via-border-color to-transparent" />
         
@@ -1053,15 +1038,9 @@ const trendColor = getTrendColor(uptimeTrend);
             </h2>
           </div>
 
-          <LineChart width={80} height={40} data={siteData}>
-            <Line
-              type="monotone"
-              dataKey="value"
-              stroke="#3b82f6"
-              strokeWidth={2}
-              dot={false}
-            />
-          </LineChart>
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-100 text-blue-600">
+          <Globe size={20} />
+         </div>
         </div>
 
         <div className="app-card flex items-center justify-between bg-white/70
@@ -1074,15 +1053,9 @@ const trendColor = getTrendColor(uptimeTrend);
     </h2>
   </div>
 
-  <LineChart width={80} height={40} data={siteData}>
-    <Line
-      type="monotone"
-      dataKey="value"
-      stroke="#6366f1"
-      strokeWidth={2}
-      dot={false}
-    />
-  </LineChart>
+  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-100 text-indigo-600">
+  <Cable size={20} />
+   </div>
 </div>
 
         <div className="app-card flex items-center justify-between bg-white/70
@@ -1095,15 +1068,9 @@ const trendColor = getTrendColor(uptimeTrend);
             </h2>
           </div>
 
-          <LineChart width={80} height={40} data={manpowerData}>
-            <Line
-              type="monotone"
-              dataKey="value"
-              stroke="#3b82f6"
-              strokeWidth={2}
-              dot={false}
-            />
-          </LineChart>
+         <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-purple-100 text-purple-600">
+         <Users size={20} />
+         </div>
         </div>
 
         <div className="app-card flex items-center justify-between bg-white/70 
@@ -1118,15 +1085,9 @@ const trendColor = getTrendColor(uptimeTrend);
             </h2>
           </div>
 
-          <LineChart width={80} height={40} data={scrumData}>
-            <Line
-              type="monotone"
-              dataKey="value"
-              stroke="#22c55e"
-              strokeWidth={2}
-              dot={false}
-            />
-          </LineChart>
+         <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-green-100 text-green-600">
+          <Activity size={20} />
+          </div>
         </div>
       </div>
 
@@ -1216,7 +1177,7 @@ const trendColor = getTrendColor(uptimeTrend);
          border border-white/40 shadow-[0_10px_35px_rgba(0,0,0,0.05)] p-4">
           <h4 className="mb-2 flex items-center justify-between text-sm font-semibold text-slate-800">
             Manpower Roles
-            <span className="text-xs text-gray-400">Active</span>
+            <span className="text-xs text-gray-400">Overview</span>
           </h4>
 
           <div className="hide-scrollbar max-h-64 space-y-3 overflow-y-auto pr-2">
@@ -1243,8 +1204,9 @@ const trendColor = getTrendColor(uptimeTrend);
 
         <div className="flex h-[300px] flex-col rounded-2xl bg-white/70 backdrop-blur-md  
         border border-white/40 shadow-[0_10px_35px_rgba(0,0,0,0.05)] p-4">
-          <h4 className="mb-2 text-sm font-semibold text-slate-800">
+          <h4 className="mb-2 flex items-center justify-between text-sm font-semibold text-slate-800">
             Job Roles
+            <span className="text-xs text-gray-400">Overview</span>
           </h4>
 
       <div className="hide-scrollbar max-h-64 space-y-3 overflow-y-auto pr-1">

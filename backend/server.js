@@ -72,6 +72,7 @@ registerRoute("./routes/reportRoutes", "/api/reports");
 registerRoute("./routes/accessRoutes", "/api/access");
 registerRoute("./routes/nsoRoutes", "/api/nso"); 
 registerRoute("./routes/fiberRoutes", "/api/fiber");
+registerRoute("./routes/revenue", "/api/revenue");
 registerRoute("./routes/billingStatus", "/api");
 registerRoute("./routes/billingDashboard", "/api/billing");
 
