@@ -210,17 +210,14 @@ useEffect(() => {
 };
 
   return (
-    <div className="relative max-w-full overflow-x-clip bg-white">
+    <div className="relative max-w-full">
       <div className="pointer-events-none absolute -right-24 top-16 h-64 w-64 rounded-full  blur-3xl" />
 
       <div className={`relative flex min-w-0 h-full flex-col gap-6 ${showUploadModal ? "blur-sm" : ""}`}>
         <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
-          <div className="space-y-2">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400">
-              Fiber Operations
-            </p>
-            <div className="space-y-1">
-              <h1 className="text-3xl font-semibold tracking-[-0.05em] text-slate-900 md:text-[2.2rem]">
+          
+            <div className="space-y-2">
+              <h1 className="text-3xl font-semibold tracking-[-0.05em] text-slate-900 md:text-[1.6rem]">
                 Fiber Inventory
               </h1>
               <p className="max-w-3xl text-sm text-slate-500 md:text-[15px]">
@@ -228,7 +225,6 @@ useEffect(() => {
                 uploads do not replace Intercity or Intracity totals.
               </p>
             </div>
-          </div>
 
       <button
         type="button"

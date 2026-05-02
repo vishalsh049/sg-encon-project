@@ -403,22 +403,23 @@ function NsoReports() {
 
   return (
     <div className="w-full pb-24">
-      <div className="mx-auto max-w-7xl space-y-6">
-        <section className="relative overflow-hidden rounded-[28px] border border-slate-200 bg-[radial-gradient(circle_at_top_left,_rgba(14,165,233,0.2),_transparent_30%),linear-gradient(135deg,#f8fafc_0%,#eef6ff_45%,#fff8ed_100%)] p-6 shadow-[0_24px_60px_rgba(15,23,42,0.08)] md:p-8">
+      <div className="mx-auto w-full space-y-3">
+        <section className="relative overflow-hidden rounded-[28px] border border-slate-200
+         bg-[radial-gradient(circle_at_top_left,_rgba(14,165,233,0.2),_transparent_30%),linear-gradient(135deg,#f8fafc_0%,#eef6ff_45%,#fff8ed_100%)]
+          px-5 py-4 shadow-[0_24px_60px_rgba(15,23,42,0.08)]">
           <div className="absolute right-0 top-0 h-40 w-40 rounded-full bg-cyan-300/20 blur-3xl" />
           <div className="absolute bottom-0 left-1/3 h-32 w-32 rounded-full bg-amber-200/30 blur-3xl" />
 
           <div className="relative flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
             <div className="max-w-3xl">
-              <div className="mb-3 inline-flex items-center rounded-full border border-cyan-200 bg-white/80 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.28em] text-cyan-700">
+              <div className="mb-2 inline-flex items-center rounded-full border border-cyan-200 bg-white/80 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.28em] text-cyan-700">
                 Fiber Reports / NSO Console
               </div>
-              <h1 className="text-3xl font-semibold tracking-[-0.03em] text-slate-900 md:text-4xl">
+              <h1 className="text-2xl font-semibold tracking-[-0.03em] text-slate-900 md:text-2xl">
                 NSO reports with a real operations workflow
               </h1>
-              <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-600 md:text-base">
-                Upload files, search historical submissions, export clean report
-                logs, and manage NSO activity from one backend-connected page.
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600 md:text-base">
+                Upload, search, export, and manage NSO activity in one place.
               </p>
             </div>
 
@@ -441,20 +442,20 @@ function NsoReports() {
           </div>
         </section>
 
-        <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <section className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-4">
           {stats.map((stat) => {
             const Icon = stat.icon;
             return (
               <div
                 key={stat.label}
-                className="rounded-[24px] border border-slate-200 bg-white p-5 shadow-[0_12px_36px_rgba(15,23,42,0.05)]"
+                className="rounded-[24px] border border-slate-200 bg-white px-4 py-2 shadow-[0_12px_36px_rgba(15,23,42,0.05)]"
               >
-                <div className="mb-5 flex items-center justify-between">
+                <div className="mb-2 flex items-center justify-between">
                   <div className="text-sm font-medium text-slate-500">
                     {stat.label}
                   </div>
-                  <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-100 text-slate-700">
-                    <Icon size={18} />
+                  <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-100 text-slate-700">
+                    <Icon size={16} />
                   </div>
                 </div>
                 <div className="text-2xl font-semibold tracking-[-0.03em] text-slate-900">
@@ -469,12 +470,12 @@ function NsoReports() {
         </section>
 
         <section className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-[0_20px_50px_rgba(15,23,42,0.05)] md:p-6">
-          <div className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="mb-4 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
               <div className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">
                 Control Panel
               </div>
-              <h2 className="mt-1 text-xl font-semibold tracking-[-0.02em] text-slate-900">
+              <h2 className="mt-1 text-lg font-semibold tracking-[-0.02em] text-slate-700">
                 Search, filter, and act on NSO uploads
               </h2>
             </div>
@@ -506,14 +507,15 @@ function NsoReports() {
               </span>
               <Search
                 size={16}
-                className="pointer-events-none absolute left-4 top-[46px] text-slate-400"
+                className="pointer-events-none absolute left-4 top-[36px] text-slate-400"
               />
               <input
                 type="text"
                 value={searchTerm}
                 onChange={(event) => setSearchTerm(event.target.value)}
                 placeholder="File name, site, report, uploader, date"
-                className="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 pl-11 pr-4 text-sm text-slate-800 outline-none transition focus:border-cyan-400 focus:bg-white"
+                className="h-10 w-full rounded-2xl border border-slate-200 bg-slate-50 pl-10 pr-4
+                 text-sm text-slate-800 outline-none transition focus:border-cyan-400 focus:bg-white"
               />
             </label>
 
@@ -535,7 +537,8 @@ function NsoReports() {
               <select
                 value={filterSiteType}
                 onChange={(event) => setFilterSiteType(event.target.value)}
-                className="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm text-slate-800 outline-none transition focus:border-cyan-400 focus:bg-white"
+                className="h-10 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm
+                 text-slate-800 outline-none transition focus:border-cyan-400 focus:bg-white"
               >
                 <option value="">All site types</option>
                 {siteTypes.map((siteType) => (
@@ -553,7 +556,7 @@ function NsoReports() {
               <select
                 value={filterReportType}
                 onChange={(event) => setFilterReportType(event.target.value)}
-                className="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm text-slate-800 outline-none transition focus:border-cyan-400 focus:bg-white"
+                className="h-10 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm text-slate-800 outline-none transition focus:border-cyan-400 focus:bg-white"
               >
                 <option value="">All report types</option>
                 {Array.from(
@@ -576,7 +579,7 @@ function NsoReports() {
                 <select
                   value={filterUploadType}
                   onChange={(event) => setFilterUploadType(event.target.value)}
-                  className="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm text-slate-800 outline-none transition focus:border-cyan-400 focus:bg-white"
+                  className="h-10 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm text-slate-800 outline-none transition focus:border-cyan-400 focus:bg-white"
                 >
                   <option value="">All uploads</option>
                   {uploadTypes.map((type) => (
@@ -595,7 +598,7 @@ function NsoReports() {
                   setFilterReportType("");
                   setFilterUploadType("");
                 }}
-                className="inline-flex h-12 items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+                className="inline-flex h-10 items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
               >
                 Reset
               </button>

@@ -72,25 +72,46 @@ function Sidebar({ closeSidebar, collapsed, onCollapseToggle, onExpandRequest })
             icon: LayoutDashboard,
             description: "Overview",
           },
-          {
-            key: "billing",
-            label: "Billing",
-            icon: ReceiptText,
-            description: "Finance flow",
-            children: [
-              { key: "billing-status", label: "Billing Status", path: "/dashboard/billing/status" },
-              { key: "revenue", label: "Revenue", path: "/dashboard/billing/revenue" },
-              {
-                key: "penalties",
-                label: "Penalties",
-                path: "/dashboard/billing/penalties",
-                children: [
-                  { key: "kpis-penalty", label: "KPIs Penalty", path: "/dashboard/billing/penalties/kpis" },
-                  { key: "general-penalties", label: "General Penalties", path: "/dashboard/billing/penalties/general" },
-                ],
-              },
-            ],
-          },
+         {
+  key: "billing",
+  label: "Billing",
+  icon: ReceiptText,
+  description: "Finance flow",
+  children: [
+    {
+      key: "billing-dashboard",
+      label: "Billing Dashboard",
+      path: "/dashboard/billing",
+    },
+    {
+      key: "billing-status",
+      label: "Billing Status",
+      path: "/dashboard/billing/status",
+    },
+    {
+      key: "revenue",
+      label: "Revenue",
+      path: "/dashboard/billing/revenue",
+    },
+    {
+      key: "penalties",
+      label: "Penalties",
+      path: "/dashboard/billing/penalties",
+      children: [
+        {
+          key: "kpis-penalty",
+          label: "KPIs Penalty",
+          path: "/dashboard/billing/penalties/kpis",
+        },
+        {
+          key: "general-penalties",
+          label: "General Penalties",
+          path: "/dashboard/billing/penalties/general",
+        },
+      ],
+    },
+  ],
+},
           {
             key: "manpower",
             label: "Manpower",
@@ -206,7 +227,7 @@ function Sidebar({ closeSidebar, collapsed, onCollapseToggle, onExpandRequest })
     });
 
   return (
-    <aside className="flex h-full flex-col overflow-hidden border-r border-border-color bg-surface/95 backdrop-blur-xl">
+    <aside className="flex w-64 h-full flex-col overflow-hidden border-r border-border-color bg-surface/95 backdrop-blur-xl">
       <div className="flex items-center justify-between gap-3 border-b border-border-color px-4 py-3">
         
         <div className="flex items-center justify-center w-full">

@@ -1,23 +1,8 @@
-
 import PremiumDatePicker from "../components/PremiumDatePicker"
-
 import axios from "axios"; 
 import React, { useEffect, useMemo, useState } from "react";
-import {
-  ArrowDownToLine,
-  Building2,
-  CalendarDays,
-  Clock3,
-  FileSpreadsheet,
-  Search,
-  Sparkles,
-  Trash2,
-  UploadCloud,
-  UserCheck,
-  UserX,
-  Users,
-  X,
-} from "lucide-react";
+import { ArrowDownToLine, Building2, CalendarDays, Clock3, FileSpreadsheet,
+  Search, Sparkles, Trash2, UploadCloud, UserCheck, UserX, Users, X, } from "lucide-react";
 import { buildApiUrl } from "../lib/api";
 
 function formatDate(value) {
@@ -312,19 +297,19 @@ const latestUploads = uploads.filter(
 
   return (
     <div className="min-h-screen text-slate-900">
-     <div className="w-full px-4 space-y-6">  
-<section className="relative overflow-hidden rounded-[32px] border border-slate-200 bg-white p-4 md:p-8">          <div className="relative grid gap-6 xl:grid-cols-1">
+     <div className="w-full space-y-3">  
+<section className="relative overflow-hidden rounded-[32px] border border-slate-200 bg-white p-2 md:p-5">          <div className="relative grid gap-6 xl:grid-cols-1">
             <div className="space-y-3 relative">
                <button
-  onClick={() => {
-    setShowModal(true);
-    setUploadDate(new Date().toISOString().slice(0, 10));
-  }}
+                onClick={() => {
+                  setShowModal(true);
+                  setUploadDate(new Date().toISOString().slice(0, 10));
+                   }}
   className="absolute right-0 top-0 inline-flex items-center gap-2 rounded-2xl bg-cyan-600 px-4 py-2 text-sm font-medium text-white shadow hover:bg-cyan-700"
 >
-  <UploadCloud size={16} />
-  Upload Excel
-</button>
+              <UploadCloud size={16} />
+               Upload Excel
+              </button>
              <div className="inline-flex items-center gap-2 rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-1 text-xs font-medium uppercase tracking-[0.28em] text-cyan-700">
                 <Sparkles size={14} />
                 Scrum Control Center
@@ -339,7 +324,7 @@ const latestUploads = uploads.filter(
                 </p>
               </div>
           
-              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                 {[
                   {
                     label: "Total",
@@ -458,7 +443,7 @@ const latestUploads = uploads.filter(
                 <p className="text-xs uppercase tracking-[0.24em] text-slate-400">
                   Upload Register
                 </p>
-                <h2 className="mt-1 text-2xl font-semibold text-slate-900">
+                <h2 className="mt-1 text-xl font-semibold text-slate-900">
                   Upload history
                 </h2>
                 <p className="mt-1 text-sm text-slate-500">
