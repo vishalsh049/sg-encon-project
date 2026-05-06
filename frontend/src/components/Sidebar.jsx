@@ -227,21 +227,14 @@ function Sidebar({ closeSidebar, collapsed, onCollapseToggle, onExpandRequest })
     });
 
   return (
-    <aside className="flex w-64 h-full flex-col overflow-hidden border-r border-border-color bg-surface/95 backdrop-blur-xl">
+    <aside className="flex w-62 h-full flex-col overflow-hidden border-r border-border-color bg-surface/95 backdrop-blur-xl">
       <div className="flex items-center justify-between gap-3 border-b border-border-color px-4 py-3">
         
         <div className="flex items-center justify-center w-full">
-           <img src={logo} alt="logo" className="h-12 w-auto object-contain" />
+           <img src={logo} alt="logo" className="h-10 w-auto object-contain" />
         </div>
 
-        <button
-          type="button"
-          onClick={onCollapseToggle}
-          className="app-button-ghost hidden h-10 w-10 px-0 md:inline-flex"
-          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-        >
-          <ChevronLeft className={`transition-transform ${collapsed ? "rotate-180" : ""}`} size={18} />
-        </button>
+        
       </div>
 
       <div className="hide-scrollbar flex-1 overflow-y-auto px-3 py-4">

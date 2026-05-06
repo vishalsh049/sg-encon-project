@@ -450,18 +450,18 @@ function NsoReports() {
                 key={stat.label}
                 className="rounded-[24px] border border-slate-200 bg-white px-4 py-2 shadow-[0_12px_36px_rgba(15,23,42,0.05)]"
               >
-                <div className="mb-2 flex items-center justify-between">
+                <div className=" flex items-center justify-between">
                   <div className="text-sm font-medium text-slate-500">
                     {stat.label}
                   </div>
-                  <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-100 text-slate-700">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-2xl bg-slate-100 text-slate-700">
                     <Icon size={16} />
                   </div>
                 </div>
-                <div className="text-2xl font-semibold tracking-[-0.03em] text-slate-900">
+                <div className="text-lg font-semibold tracking-[-0.03em] text-slate-900">
                   {stat.value}
                 </div>
-                <div className="mt-2 text-xs uppercase tracking-[0.2em] text-slate-400">
+                <div className=" text-xs uppercase tracking-[0.2em] text-slate-400">
                   {stat.helper}
                 </div>
               </div>
@@ -469,12 +469,9 @@ function NsoReports() {
           })}
         </section>
 
-        <section className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-[0_20px_50px_rgba(15,23,42,0.05)] md:p-6">
+        <section className="rounded-[28px] border border-slate-200 bg-white p-4 shadow-[0_20px_50px_rgba(15,23,42,0.05)] md:p-4">
           <div className="mb-4 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
-              <div className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">
-                Control Panel
-              </div>
               <h2 className="mt-1 text-lg font-semibold tracking-[-0.02em] text-slate-700">
                 Search, filter, and act on NSO uploads
               </h2>
@@ -484,17 +481,17 @@ function NsoReports() {
               <button
                 onClick={handleBulkDownload}
                 disabled={!selectedIds.length}
-                className="inline-flex items-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-medium text-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+                className="inline-flex items-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                <Download size={16} />
+                <Download size={14} />
                 Download ({selectedIds.length})
               </button>
               <button
                 onClick={handleBulkDelete}
                 disabled={!selectedIds.length}
-                className="inline-flex items-center gap-2 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-2.5 text-sm font-medium text-rose-700 disabled:cursor-not-allowed disabled:opacity-50"
+                className="inline-flex items-center gap-2 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-medium text-rose-700 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                <Trash2 size={16} />
+                <Trash2 size={14} />
                 Delete ({selectedIds.length})
               </button>
             </div>
@@ -502,12 +499,9 @@ function NsoReports() {
 
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1.4fr_repeat(4,minmax(0,1fr))]">
             <label className="relative block">
-              <span className="mb-2 block text-xs font-medium uppercase tracking-[0.2em] text-slate-400">
-                Search
-              </span>
               <Search
                 size={16}
-                className="pointer-events-none absolute left-4 top-[36px] text-slate-400"
+                className="pointer-events-none absolute left-4 top-[14px] text-slate-400"
               />
               <input
                 type="text"
@@ -520,9 +514,7 @@ function NsoReports() {
             </label>
 
             <div>
-              <span className="mb-2 block text-xs font-medium uppercase tracking-[0.2em] text-slate-400">
-                Date
-              </span>
+
               <PremiumDatePicker
                 value={filterDate}
                 onChange={setFilterDate}
@@ -531,9 +523,6 @@ function NsoReports() {
             </div>
 
             <label className="block">
-              <span className="mb-2 block text-xs font-medium uppercase tracking-[0.2em] text-slate-400">
-                Site Type
-              </span>
               <select
                 value={filterSiteType}
                 onChange={(event) => setFilterSiteType(event.target.value)}
@@ -550,9 +539,6 @@ function NsoReports() {
             </label>
 
             <label className="block">
-              <span className="mb-2 block text-xs font-medium uppercase tracking-[0.2em] text-slate-400">
-                Report Type
-              </span>
               <select
                 value={filterReportType}
                 onChange={(event) => setFilterReportType(event.target.value)}
@@ -573,9 +559,6 @@ function NsoReports() {
 
             <div className="flex items-end gap-3">
               <label className="block flex-1">
-                <span className="mb-2 block text-xs font-medium uppercase tracking-[0.2em] text-slate-400">
-                  Upload Type
-                </span>
                 <select
                   value={filterUploadType}
                   onChange={(event) => setFilterUploadType(event.target.value)}
@@ -622,7 +605,7 @@ function NsoReports() {
               <select
                 value={pageSize}
                 onChange={(event) => setPageSize(Number(event.target.value))}
-                className="h-10 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-700"
+                className="h-8 rounded-xl border border-slate-200 bg-slate-50 px-2 text-sm text-slate-700"
               >
                 {[10, 20, 50, 100].map((size) => (
                   <option key={size} value={size}>

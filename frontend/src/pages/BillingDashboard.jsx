@@ -8,7 +8,13 @@ import {
   Tooltip,
   ResponsiveContainer,
   CartesianGrid,
+  LineChart,
+  Line,
+  Area,
+  AreaChart,
+  YAxis,
 } from "recharts";
+
 import {
   CheckCircle,
   Clock,
@@ -203,6 +209,15 @@ export default function BillingDashboard() {
     return `${circleLabel}${billingLabel}revenue is ₹${revenue.toLocaleString()} for ${timeLabel}, with a net loss of ₹${Math.abs(net).toLocaleString()} after penalties.`;
   }, [revenueKpi.totalRevenue, summary?.penalties, circleFilter, timeFilter, billingFilter]);
 
+const revenueMonthlyTrend = [
+  { month: "Jan", revenue: 420000 },
+  { month: "Feb", revenue: 580000 },
+  { month: "Mar", revenue: 760000 },
+  { month: "Apr", revenue: 620000 },
+  { month: "May", revenue: 910000 },
+  { month: "Jun", revenue: 1100000 },
+];
+
   const revenueTrendData = useMemo(
     () => [
       { name: "Revenue", value: revenueKpi.totalRevenue },
@@ -337,13 +352,13 @@ export default function BillingDashboard() {
           </div>
         </div>
 
-        <div className="rounded-[26px] bg-gray-100 border border-border-color/60 bg-white/40 backdrop-blur-xl shadow-panel p-5 overflow-hidden">
+        <div className="rounded-[26px] bg-gray-100 border border-border-color/60 bg-white/40 backdrop-blur-xl shadow-panel p-4 overflow-hidden">
           <div className="flex flex-col lg:flex-row gap-4">
 
             {/* Left Panel: Month performance + AI + chart */}
 
             <div className="flex-1 lg:pr-2 relative overflow-hidden py-2">
-              <div className="flex items-center justify-between gap-3 mb-3">
+              <div className="flex items-center justify-between gap-3 mb-3 px-3">
                 <h3 className="text-[11px] font-semibold tracking-[0.26em] text-indigo-600 uppercase">
                   Billing Insights
                 </h3>
@@ -351,31 +366,31 @@ export default function BillingDashboard() {
               </div>
 
               {/* KPI row (premium completion summary) */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
-                <div className="rounded-2xl border border-border-color/60 bg-white/60 backdrop-blur p-4 transition hover:-translate-y-[2px] hover:shadow-panel">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-3">
+                <div className="rounded-2xl border border-border-color/60 bg-white/60 backdrop-blur p-3 transition hover:-translate-y-[2px]">
                   <div className="flex items-center justify-between">
-                    <div className="text-[11px] font-semibold tracking-[0.18em] text-text-secondary uppercase">
+                    <div className="text-[10px] font-semibold tracking-[0.36em] text-text-secondary uppercase">
                       Avg Completion
                     </div>
-                    <div className="rounded-xl bg-emerald-500/10 border border-emerald-500/20 p-2 text-emerald-700">
-                      <Percent size={16} />
+                    <div className="rounded-xl bg-emerald-500/10 border border-emerald-500/20 p-1 text-emerald-700">
+                      <Percent size={14} />
                     </div>
                   </div>
-                  <div className="mt-2 text-[22px] font-extrabold tracking-[-0.03em] text-emerald-800">
+                  <div className="mt-2 text-[18px] font-bold tracking-[-0.03em] text-emerald-800">
                     {avgCompletion}%
                   </div>
                 </div>
 
-                <div className="rounded-2xl border border-border-color/60 bg-white/60 backdrop-blur p-4 transition hover:-translate-y-[2px] hover:shadow-panel">
+                <div className="rounded-2xl border border-border-color/60 bg-white/60 backdrop-blur p-3 transition hover:-translate-y-[2px]">
                   <div className="flex items-center justify-between">
-                    <div className="text-[11px] font-semibold tracking-[0.18em] text-text-secondary uppercase">
+                    <div className="text-[10px] font-semibold tracking-[0.18em] text-text-secondary uppercase">
                       Best Month
                     </div>
-                    <div className="rounded-xl bg-emerald-500/10 border border-emerald-500/20 p-2 text-emerald-700">
-                      <TrendingUp size={16} />
+                    <div className="rounded-xl bg-emerald-500/10 border border-emerald-500/20 p-1 text-emerald-700">
+                      <TrendingUp size={14} />
                     </div>
                   </div>
-                  <div className="mt-2 text-[16px] font-bold text-text-primary">
+                  <div className=" text-[14px] font-bold text-text-primary">
                     {bestMonth?.month || "-"}
                   </div>
                   <div className="mt-1 text-xs font-semibold text-emerald-700">
@@ -383,16 +398,16 @@ export default function BillingDashboard() {
                   </div>
                 </div>
 
-                <div className="rounded-2xl border border-border-color/60 bg-white/60 backdrop-blur p-4 transition hover:-translate-y-[2px] hover:shadow-panel">
+                <div className="rounded-2xl border border-border-color/60 bg-white/60 backdrop-blur p-3 transition hover:-translate-y-[2px]">
                   <div className="flex items-center justify-between">
-                    <div className="text-[11px] font-semibold tracking-[0.18em] text-text-secondary uppercase">
+                    <div className="text-[10px] font-semibold tracking-[0.18em] text-text-secondary uppercase">
                       Needs Attention
                     </div>
-                    <div className="rounded-xl bg-rose-500/10 border border-rose-500/20 p-2 text-rose-700">
-                      <TrendingDown size={16} />
+                    <div className="rounded-xl bg-rose-500/10 border border-rose-500/20 p-1 text-rose-700">
+                      <TrendingDown size={14} />
                     </div>
                   </div>
-                  <div className="mt-2 text-[16px] font-bold text-text-primary">
+                  <div className=" text-[14px] font-bold text-text-primary">
                     {worstMonth?.month || "-"}
                   </div>
                   <div className="mt-1 text-xs font-semibold text-rose-600">
@@ -402,7 +417,7 @@ export default function BillingDashboard() {
               </div>
 
               {/* AI Insight card */}
-              <div className="mb-3 rounded-3xl border border-indigo-100 bg-gradient-to-r from-indigo-50/90 via-white/70 to-blue-50/90 backdrop-blur px-4 py-2 transition hover:shadow-panel">
+              <div className="mb-3 rounded-3xl border border-indigo-100 bg-gradient-to-r from-indigo-50/90 via-white/70 to-blue-50/90 backdrop-blur px-4 py-2 transition">
                 <div className="flex items-center gap-2 mb-2">
                   <div className="rounded-2xl bg-indigo-500/10 border border-indigo-500/20 p-2 text-indigo-700">
                     <Sparkles size={10} />
@@ -426,7 +441,7 @@ export default function BillingDashboard() {
               <div className="rounded-3xl border border-border-color/60 bg-white/55 backdrop-blur p-4 mb-5">
                 <div className="flex items-center justify-between mb-3">
                   <div>
-                    <div className="text-[11px] font-semibold tracking-[0.26em] text-text-secondary uppercase">
+                    <div className="text-[11px] font-semibold tracking-[0.22em] text-text-secondary uppercase">
                       Done vs Pending
                     </div>
                     <div className="text-xs text-text-muted mt-1">Smooth completion overview by month</div>
@@ -434,7 +449,7 @@ export default function BillingDashboard() {
                   <div className="h-2 w-2 rounded-full bg-emerald-500/70" />
                 </div>
 
-                <div className="h-40">
+                <div className="h-60">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={chartData}>
                       <defs>
@@ -463,85 +478,385 @@ export default function BillingDashboard() {
                 </div>
               </div>
 
-              {/* Left Panel: Month Performance Widgets */}
-              <div className="rounded-3xl border border-border-color/60 bg-white/40 backdrop-blur p-4">
-                <div className="flex items-center justify-between mb-3">
-                  <div>
-                    <div className="text-[11px] font-semibold tracking-[0.26em] text-text-secondary uppercase">
-                      Month Performance
-                    </div>
-                    <div className="text-xs text-text-muted mt-1">Premium progress cards with completion rate</div>
-                  </div>
-                  <div className="h-8 w-8 rounded-2xl bg-amber-300/10 border border-amber-300/20 flex items-center justify-center">
-                    <Hash size={14} />
-                  </div>
-                </div>
+              {/* Monthly Progress */}
+<div className=" rounded-2xl border border-border-color/60 bg-white/55 backdrop-blur p-4 overflow-hidden">
 
-                <div className="space-y-2">
-                  {trendData.slice(0, visibleCount).map((item) => (
-                    <div
-                      key={item.month}
-                      className="group rounded-2xl bg-white/60 border border-border-color/60 px-4 py-3 shadow-sm transition-all duration-200 hover:-translate-y-[2px] hover:shadow-panel"
-                    >
-                      <div className="flex justify-between items-center mb-2">
-                        <span className="font-semibold text-text-primary">{item.month}</span>
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-extrabold text-emerald-800">{item.percent}%</span>
-                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-700 border border-emerald-400/20">
-                            Done Rate
-                          </span>
-                        </div>
-                      </div>
+  {/* Header */}
+  <div className="flex items-center justify-between mb-4">
+    <div>
+      <div className="text-[11px] font-semibold tracking-[0.26em] text-cyan-700 uppercase">
+        Monthly Progress
+      </div>
 
-                      <div className="mt-1 h-2.5 bg-slate-100 rounded-full overflow-hidden border border-slate-200/70">
-                        <div
-                          className="h-full bg-gradient-to-r from-emerald-500 via-emerald-400 to-indigo-400 transition-all duration-700 ease-out"
-                          style={{ width: `${item.percent}%` }}
-                        />
-                      </div>
+      <div className="text-xs text-text-muted mt-1">
+        Real month-wise billing completion overview
+      </div>
+    </div>
 
-                      <div className="flex items-center justify-between mt-3">
-                        <div className="flex items-center gap-2 text-emerald-700 text-xs font-semibold">
-                          <span className="rounded-lg bg-emerald-500/10 border border-emerald-500/20 p-1 flex items-center justify-center">
-                            <CheckCircle size={14} />
-                          </span>
-                          <span>{item.done}</span>
-                        </div>
+    <div className="h-2 w-2 rounded-full bg-cyan-500/70" />
+  </div>
 
-                        <div className="flex items-center gap-2 text-amber-600 text-xs font-semibold">
-                          <span className="rounded-lg bg-amber-500/10 border border-amber-500/20 p-1 flex items-center justify-center">
-                            <Clock size={14} />
-                          </span>
-                          <span>{item.pending}</span>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+  {/* Dynamic Progress */}
+  <div className="space-y-4">
 
-                {trendData.length > 3 && (
-                  <div className="flex justify-center mt-4">
-                    <button
-                      onClick={() => setVisibleCount(visibleCount === 3 ? trendData.length : 3)}
-                      className="text-xs px-4 py-2 rounded-full border border-border-color/70 bg-white/60 backdrop-blur shadow-sm hover:bg-indigo-50 transition-all duration-200 hover:shadow-panel text-indigo-700 font-semibold"
-                    >
-                      {visibleCount === 3 ? "Show More" : "Show Less"}
-                    </button>
-                  </div>
-                )}
-              </div>
+    {chartData.map((item, index) => {
+
+      const progressColor =
+        item.percent >= 80
+          ? "bg-emerald-500"
+          : item.percent >= 60
+          ? "bg-indigo-500"
+          : item.percent >= 40
+          ? "bg-amber-500"
+          : "bg-rose-500";
+
+      const progressBg =
+        item.percent >= 80
+          ? "bg-emerald-100"
+          : item.percent >= 60
+          ? "bg-indigo-100"
+          : item.percent >= 40
+          ? "bg-amber-100"
+          : "bg-rose-100";
+
+      const textColor =
+        item.percent >= 80
+          ? "text-emerald-700"
+          : item.percent >= 60
+          ? "text-indigo-700"
+          : item.percent >= 40
+          ? "text-amber-700"
+          : "text-rose-700";
+
+      return (
+       <div
+  key={index}
+  className="rounded-2xl border border-border-color/50 bg-white/70 p-3"
+>
+  <div className="flex items-center justify-between mb-2">
+
+    <div>
+      <div className="text-sm font-semibold text-text-primary">
+        {item.month}
+      </div>
+
+      <div className="text-xs text-text-muted mt-1">
+        {item.done} Done • {item.pending} Pending
+      </div>
+    </div>
+
+    <div className={`text-sm font-bold ${textColor}`}>
+      {item.percent}%
+    </div>
+  </div>
+
+  <div className={`h-2 rounded-full overflow-hidden ${progressBg}`}>
+    <div
+      className={`h-full rounded-full ${progressColor}`}
+      style={{ width: `${item.percent}%` }}
+    />
+  </div>
+</div>
+      );
+    })}
+
+  </div>
+</div>
+
+     {/* PM LOSS SECTION */}
+<div className="mb-3 pt-5 border-t border-border-color/40">
+
+  {/* Heading */}
+  <div className="flex items-center justify-between mb-3">
+    <div>
+      <div className="text-[11px] font-semibold tracking-[0.26em] text-amber-700 uppercase">
+        PM Loss
+      </div>
+
+      <div className="text-xs text-text-muted mt-1">
+        Profit margin and operational impact overview
+      </div>
+    </div>
+
+    <div className="h-2 w-2 rounded-full bg-amber-500/70" />
+  </div>
+
+  {/* Cards */}
+  <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+
+    {/* PM LOSS */}
+    <div className="rounded-3xl border border-amber-200/60 bg-amber-50/50 backdrop-blur p-4 transition-all 
+    duration-200 hover:-translate-y-[2px] flex items-center justify-between gap-4">
+
+      <div className="flex items-center gap-3">
+        <div className="rounded-2xl bg-amber-500/10 border border-amber-500/20 p-2 text-amber-700">
+          <TrendingDown size={20} />
+        </div>
+
+        <div>
+          <div className="text-[11px] font-semibold tracking-[0.26em] text-amber-700 uppercase">
+            PM Loss
+          </div>
+
+          <div className="text-sm text-text-secondary mt-1">
+            Profit margin reduction
+          </div>
+        </div>
+      </div>
+
+      <div className="text-right">
+        <div className="text-[13px] font-semibold text-amber-700/80">
+          Monthly
+        </div>
+
+        <div className="text-[22px] font-bold tracking-[-0.04em] text-amber-700">
+          ₹5200
+        </div>
+      </div>
+    </div>
+
+    {/* REVENUE DROP */}
+    <div className="rounded-3xl border border-red-200/60 bg-red-50/50 backdrop-blur p-4 transition-all
+     duration-200 hover:-translate-y-[2px] flex items-center justify-between gap-4">
+
+      <div className="flex items-center gap-3">
+        <div className="rounded-2xl bg-red-500/10 border border-red-500/20 p-2 text-red-700">
+          <TrendingDown size={18} />
+        </div>
+
+        <div>
+          <div className="text-[11px] font-semibold tracking-[0.26em] text-red-700 uppercase">
+            Revenue Drop
+          </div>
+
+          <div className="text-sm text-text-secondary mt-1">
+            Monthly revenue decrease
+          </div>
+        </div>
+      </div>
+
+      <div className="text-right">
+        <div className="text-[13px] font-semibold text-red-700/80">
+          Revenue
+        </div>
+
+        <div className="text-[22px] font-bold tracking-[-0.04em] text-red-700">
+          ₹3100
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  {/* Circle Performance Leaderboard */}
+<div className="mt-4 rounded-3xl border border-border-color/60 bg-white/55 backdrop-blur p-4">
+
+  {/* Header */}
+  <div className="flex items-center justify-between mb-4">
+    <div>
+      <div className="text-[11px] font-semibold tracking-[0.26em] text-indigo-700 uppercase">
+        Circle Performance
+      </div>
+
+      <div className="text-xs text-text-muted mt-1">
+        Revenue and completion ranking overview
+      </div>
+    </div>
+
+    <div className="h-2 w-2 rounded-full bg-indigo-500/70" />
+  </div>
+
+  {/* Table */}
+  <div className="space-y-3">
+
+    {/* ROW */}
+    <div className="flex items-center justify-between rounded-2xl border border-border-color/50 bg-white/70 px-4 py-3">
+
+      <div>
+        <div className="text-sm font-semibold text-text-primary">
+          Punjab
+        </div>
+
+        <div className="text-xs text-text-muted mt-1">
+          <span className="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] 
+          font-medium text-emerald-700">
+           Excellent
+             </span>
+        </div>
+      </div>
+
+      <div className="text-right">
+        <div className="text-sm font-bold text-emerald-700">
+          ₹4.2Cr
+        </div>
+
+        <div className="text-xs text-emerald-600 mt-1">
+          92% Complete
+        </div>
+      </div>
+    </div>
+
+    {/* ROW */}
+    <div className="flex items-center justify-between rounded-2xl border border-border-color/50 bg-white/70 px-4 py-3">
+
+      <div>
+        <div className="text-sm font-semibold text-text-primary">
+          Haryana
+        </div>
+
+        <div className="text-xs text-text-muted mt-1">
+          <span className="inline-flex items-center rounded-full bg-indigo-100 px-2 py-0.5 text-[11px] font-medium text-indigo-700">
+             Stable Growth
+          </span>
+        </div>
+      </div>
+
+      <div className="text-right">
+        <div className="text-sm font-bold text-indigo-700">
+          ₹3.8Cr
+        </div>
+
+        <div className="text-xs text-indigo-600 mt-1">
+          74% Complete
+        </div>
+      </div>
+    </div>
+
+    {/* ROW */}
+    <div className="flex items-center justify-between rounded-2xl border border-border-color/50 bg-white/70 px-4 py-3">
+
+      <div>
+        <div className="text-sm font-semibold text-text-primary">
+          Delhi
+        </div>
+
+        <div className="text-xs text-text-muted mt-1">
+          <span className="inline-flex items-center rounded-full bg-rose-100 px-2 py-0.5 text-[11px] font-medium text-rose-700">
+             Needs Attention
+          </span>
+        </div>
+      </div>
+
+      <div className="text-right">
+        <div className="text-sm font-bold text-rose-700">
+          ₹2.9Cr
+        </div>
+
+        <div className="text-xs text-rose-600 mt-1">
+          61% Complete
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+{/* PM LOSS ANALYSIS */}
+<div className="mt-4 rounded-3xl border border-border-color/60 bg-white/55 backdrop-blur p-4 overflow-hidden">
+
+  {/* Header */}
+  <div className="flex items-center justify-between mb-4">
+    <div>
+      <div className="text-[11px] font-semibold tracking-[0.26em] text-amber-700 uppercase">
+        PM Loss Analysis
+      </div>
+
+      <div className="text-xs text-text-muted mt-1">
+        Operational and billing impact overview
+      </div>
+    </div>
+
+    <div className="h-2 w-2 rounded-full bg-amber-500/70" />
+  </div>
+
+  {/* Progress Items */}
+  <div className="space-y-4">
+
+    {/* KPI Delay */}
+    <div>
+      <div className="flex items-center justify-between mb-2">
+        <div className="text-sm font-medium text-text-primary">
+          KPI Delay
+        </div>
+
+        <div className="text-sm font-semibold text-amber-700">
+          72%
+        </div>
+      </div>
+
+      <div className="h-2 rounded-full bg-amber-100 overflow-hidden">
+        <div className="h-full w-[72%] rounded-full bg-amber-500" />
+      </div>
+    </div>
+
+    {/* Revenue Impact */}
+    <div>
+      <div className="flex items-center justify-between mb-2">
+        <div className="text-sm font-medium text-text-primary">
+          Revenue Impact
+        </div>
+
+        <div className="text-sm font-semibold text-rose-700">
+          48%
+        </div>
+      </div>
+
+      <div className="h-2 rounded-full bg-rose-100 overflow-hidden">
+        <div className="h-full w-[48%] rounded-full bg-rose-500" />
+      </div>
+    </div>
+
+    {/* Billing Delay */}
+    <div>
+      <div className="flex items-center justify-between mb-2">
+        <div className="text-sm font-medium text-text-primary">
+          Billing Delay
+        </div>
+
+        <div className="text-sm font-semibold text-indigo-700">
+          36%
+        </div>
+      </div>
+
+      <div className="h-2 rounded-full bg-indigo-100 overflow-hidden">
+        <div className="h-full w-[36%] rounded-full bg-indigo-500" />
+      </div>
+    </div>
+
+    {/* Operational Loss */}
+    <div>
+      <div className="flex items-center justify-between mb-2">
+        <div className="text-sm font-medium text-text-primary">
+          Operational Loss
+        </div>
+
+        <div className="text-sm font-semibold text-emerald-700">
+          21%
+        </div>
+      </div>
+
+      <div className="h-2 rounded-full bg-emerald-100 overflow-hidden">
+        <div className="h-full w-[21%] rounded-full bg-emerald-500" />
+      </div>
+    </div>
+
+  </div>
+</div>
+
+</div>
+              
             </div>
 
             {/* Right Panel: Premium KPI cards, revenue insight, penalties */}
-            <div className="flex-1 lg:border-l lg:border-r border-border-color/60 px-0 lg:px-4 flex flex-col">
+            <div className="flex-1 lg:border-l border-border-color/60 px-0 lg:px-4 flex flex-col">
               {/* KPI CARDS (Premium glass cards) */}
               <div className="py-2">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
-                  <div className="rounded-3xl border border-border-color/60 bg-white/55 backdrop-blur p-5 transition-all duration-200 hover:-translate-y-[2px] hover:shadow-panel relative overflow-hidden">
+                  <div className="rounded-3xl border border-border-color/60 bg-white/55 backdrop-blur p-5 transition-all duration-200 hover:-translate-y-[2px] relative overflow-hidden">
                     <div className="absolute -right-10 -top-10 h-24 w-24 rounded-full bg-emerald-500/10 blur-2xl" />
                     <div className="flex items-start justify-between gap-3 relative">
                       <div>
-                        <div className="text-[11px] font-semibold tracking-[0.26em] text-text-secondary uppercase">
+                        <div className="text-[11px] font-semibold tracking-[0.22em] text-text-secondary uppercase">
                           Total Revenue
                         </div>
                         <div className="mt-2 text-[22px] font-bold tracking-[-0.04em] text-emerald-800">
@@ -555,7 +870,7 @@ export default function BillingDashboard() {
                     <div className="mt-3 text-xs text-text-muted">Synced from revenue KPI API</div>
                   </div>
 
-                  <div className="rounded-3xl border border-border-color/60 bg-white/55 backdrop-blur p-5 transition-all duration-200 hover:-translate-y-[2px] hover:shadow-panel relative overflow-hidden">
+                  <div className="rounded-3xl border border-border-color/60 bg-white/55 backdrop-blur p-5 transition-all duration-200 hover:-translate-y-[2px] relative overflow-hidden">
                     <div className="absolute -right-10 -top-10 h-24 w-24 rounded-full bg-amber-300/10 blur-2xl" />
                     <div className="flex items-start justify-between gap-3 relative">
                       <div>
@@ -575,7 +890,7 @@ export default function BillingDashboard() {
                     </div>
                   </div>
 
-                  <div className="rounded-3xl border border-border-color/60 bg-white/55 backdrop-blur p-5 transition-all duration-200 hover:-translate-y-[2px] hover:shadow-panel">
+                  <div className="rounded-3xl border border-border-color/60 bg-white/55 backdrop-blur p-5 transition-all duration-200 hover:-translate-y-[2px]">
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <div className="text-[11px] font-semibold tracking-[0.26em] text-text-secondary uppercase">
@@ -591,7 +906,7 @@ export default function BillingDashboard() {
                     </div>
                   </div>
 
-                  <div className="rounded-3xl border border-border-color/60 bg-white/55 backdrop-blur p-5 transition-all duration-200 hover:-translate-y-[2px] hover:shadow-panel">
+                  <div className="rounded-3xl border border-border-color/60 bg-white/55 backdrop-blur p-5 transition-all duration-200 hover:-translate-y-[2px]">
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <div className="text-[11px] font-semibold tracking-[0.26em] text-text-secondary uppercase">
@@ -627,6 +942,88 @@ export default function BillingDashboard() {
                     {revenueInsight}
                   </p>
                 </div>
+
+                {/* Revenue Trend */}
+<div className="rounded-3xl border border-border-color/60 bg-white/55 backdrop-blur p-4 mb-4 overflow-hidden">
+
+  <div className="flex items-center justify-between mb-4">
+    <div>
+      <div className="text-[11px] font-semibold tracking-[0.26em] text-emerald-700 uppercase">
+        Revenue Trend
+      </div>
+
+      <div className="text-xs text-text-muted mt-1">
+        Monthly revenue performance overview
+      </div>
+    </div>
+
+    <div className="flex items-center gap-2">
+      <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+
+      <span className="text-xs text-emerald-700 font-medium">
+        Live Growth
+      </span>
+    </div>
+  </div>
+
+  <div className="h-56">
+    <ResponsiveContainer width="100%" height="100%">
+      <AreaChart data={revenueMonthlyTrend}>
+
+        <defs>
+          <linearGradient id="revenueArea" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#22c55e" stopOpacity={0.35} />
+            <stop offset="100%" stopColor="#22c55e" stopOpacity={0.02} />
+          </linearGradient>
+        </defs>
+
+        <CartesianGrid
+          vertical={false}
+          stroke="rgba(15,23,42,0.05)"
+        />
+
+        <XAxis
+          dataKey="month"
+          tick={{ fontSize: 11, fill: "#64748b" }}
+          axisLine={false}
+          tickLine={false}
+        />
+
+        <YAxis
+          tick={{ fontSize: 11, fill: "#64748b" }}
+          axisLine={false}
+          tickLine={false}
+        />
+
+        <Tooltip
+          formatter={(value) => `₹ ${Number(value).toLocaleString()}`}
+          contentStyle={{
+            borderRadius: "16px",
+            border: "1px solid rgba(226,232,240,0.7)",
+            backdropFilter: "blur(12px)",
+          }}
+        />
+
+        <Area
+          type="monotone"
+          dataKey="revenue"
+          stroke="#22c55e"
+          strokeWidth={3}
+          fill="url(#revenueArea)"
+        />
+
+        <Line
+          type="monotone"
+          dataKey="revenue"
+          stroke="#16a34a"
+          strokeWidth={3}
+          dot={{ r: 4 }}
+          activeDot={{ r: 6 }}
+        />
+      </AreaChart>
+    </ResponsiveContainer>
+  </div>
+</div>
 
                 {/* Revenue vs Penalties chart */}
                 <div className="rounded-3xl border border-border-color/60 bg-white/55 backdrop-blur p-4 mb-4">
@@ -673,27 +1070,136 @@ export default function BillingDashboard() {
                   </div>
                 </div>
 
-                {/* Penalties (Premium red card) */}
-                <div className="rounded-3xl border border-rose-200/60 bg-rose-50/50 backdrop-blur p-4
-                 shadow-soft transition-all duration-200 hover:-translate-y-[2px] hover:shadow-panel flex items-center justify-between gap-4">
-                  <div className="flex items-center gap-3">
-                    <div className="rounded-2xl bg-rose-500/10 border border-rose-500/20 p-2 text-rose-700">
-                      <AlertTriangle size={20} />
-                    </div>
-                    <div>
-                      <div className="text-[11px] font-semibold tracking-[0.26em] text-rose-700 uppercase">
-                        Penalties
-                      </div>
-                      <div className="text-sm text-text-secondary mt-1">Total deductions applied</div>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-[13px] font-semibold text-rose-700/80">Highlighted</div>
-                    <div className="text-[22px] font-bold tracking-[-0.04em] text-rose-700">
-                      ₹{summary.penalties}
-                    </div>
-                  </div>
-                </div>
+              {/* penalty divider */}
+
+                <div className="mb-3 pt-4 border-t border-border-color/40">
+
+    {/* Penalties Section */}
+<div className="mb-3">
+
+  {/* Heading */}
+  <div className="flex items-center justify-between mb-3">
+    <div>
+      <div className="text-[12px] font-semibold tracking-[0.26em] text-rose-700 uppercase">
+        Penalties
+      </div>
+
+      <div className="text-xs text-text-muted mt-1">
+        KPI and general deduction overview
+      </div>
+    </div>
+
+    <div className="h-2 w-2 rounded-full bg-rose-500/70" />
+  </div>
+
+  {/* Cards */}
+  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+    {/* KPI PENALTY */}
+    <div
+      className="rounded-3xl border border-rose-200/60 bg-rose-50/50 backdrop-blur p-4 transition-all
+       duration-200 hover:-translate-y-[2px] flex items-center justify-between gap-4"
+    >
+
+      <div className="flex items-center gap-3">
+        <div className="rounded-2xl bg-rose-500/10 border border-rose-500/20 p-2 text-rose-700">
+          <AlertTriangle size={18} />
+        </div>
+
+        <div>
+          <div className="text-[11px] font-semibold tracking-[0.18em] text-rose-700 uppercase">
+            KPI Penalty
+          </div>
+
+          <div className="text-sm text-text-secondary mt-1">
+            KPI related deductions
+          </div>
+        </div>
+      </div>
+
+      <div className="text-right">
+
+        <div className="text-[18px] font-bold tracking-[-0.04em] text-rose-700">
+          ₹2500
+        </div>
+      </div>
+    </div>
+
+    {/* GENERAL PENALTY */}
+    <div
+      className="rounded-3xl border border-orange-200/60 bg-orange-50/50 backdrop-blur p-4 transition-all
+       duration-200 hover:-translate-y-[2px] flex items-center justify-between gap-4"
+    >
+
+      <div className="flex items-center gap-3">
+        <div className="rounded-2xl bg-orange-500/10 border border-orange-500/20 p-2 text-orange-700">
+          <AlertTriangle size={18} />
+        </div>
+
+        <div>
+          <div className="text-[11px] font-semibold tracking-[0.18em] text-orange-700 uppercase">
+            General Penalty
+          </div>
+
+          <div className="text-sm text-text-secondary mt-1">
+            Other deduction charges
+          </div>
+        </div>
+      </div>
+
+      <div className="text-right">
+
+        <div className="text-[18px] font-bold tracking-[-0.04em] text-orange-700">
+          ₹2700
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+{/* Revenue Forecast */}
+<div className="mt-4 rounded-3xl border border-emerald-200/60 bg-emerald-50/40 backdrop-blur p-5 overflow-hidden relative">
+
+  {/* Glow */}
+  <div className="absolute -right-10 -top-10 h-24 w-24 rounded-full bg-emerald-500/10 blur-3xl" />
+
+  {/* Header */}
+  <div className="flex items-center justify-between mb-4 relative">
+    <div>
+      <div className="text-[11px] font-semibold tracking-[0.26em] text-emerald-700 uppercase">
+        Revenue Forecast
+      </div>
+
+      <div className="text-xs text-text-muted mt-1">
+        AI projected business growth
+      </div>
+    </div>
+
+    <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+  </div>
+
+  {/* Content */}
+  <div className="relative">
+
+    <div className="text-[22px] font-bold tracking-[-0.04em] text-emerald-700">
+      ₹13.4Cr
+    </div>
+
+    <div className="mt-2 inline-flex items-center rounded-full bg-emerald-100 px-3 py-1 text-sm font-medium text-emerald-700">
+      +12% Expected Growth
+    </div>
+
+    <p className="mt-4 text-sm leading-relaxed text-text-secondary">
+      Based on current billing trends and operational performance,
+      projected revenue is expected to increase next month with
+      improved KPI completion rates.
+    </p>
+  </div>
+</div>
+
+</div>
+
               </div>
             </div>
           </div>

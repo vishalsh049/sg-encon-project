@@ -315,7 +315,7 @@ const latestUploads = uploads.filter(
                 Scrum Control Center
               </div>
 
-              <div className="max-w-3xl">
+              <div className="max-w-2xl">
                <h1 className="text-xl font-semibold tracking-tight text-slate-900 md:text-2xl leading-tight">
                   Complete visibility into scrum manpower operations
                 </h1>
@@ -338,22 +338,23 @@ const latestUploads = uploads.filter(
                     value: stats.active,
                     note: "Active workforce",
                     icon: UserCheck,
-                    chip: "text-emerald-100 bg-emerald-400/15",
+                    chip: "text-emerald-700 bg-emerald-100",
                   },
                   {
                     label: "Inactive",
                     value: stats.inactive,
                     note: "Inactive workforce",
                     icon: UserX,
-                    chip: "text-amber-100 bg-amber-400/15",
+                    chip: "text-amber-700 bg-amber-100",
                   },
                   {
                     label: "Vendor",
                     value: stats.vendors,
                     note: "Total vendors",
                     icon: Building2,
-                    chip: "text-violet-100 bg-violet-400/15",
+                    chip: "text-violet-700 bg-violet-100",
                   },
+                  
                 ].map(({ label, value, note, icon: Icon, chip }) => (
                   <div
                     key={label}
@@ -361,7 +362,7 @@ const latestUploads = uploads.filter(
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div>
-                        <p className="text-xs uppercase tracking-[0.22em] text-slate-400">
+                        <p className="text-xs uppercase tracking-[0.18em] text-slate-400">
                           {label}
                         </p>
                         <p className="mt-3 text-3xl font-semibold text-slate-900">
@@ -369,9 +370,9 @@ const latestUploads = uploads.filter(
                         </p>
                       </div>
                       <div
-                        className={`flex h-11 w-11 items-center justify-center rounded-2xl ${chip}`}
+                        className={`flex h-10 w-10 items-center justify-center rounded-2xl ${chip}`}
                       >
-                        <Icon size={20} />
+                        <Icon size={18} />
                       </div>
                     </div>
                     <p className="mt-3 text-sm text-slate-400">{note}</p>
@@ -380,7 +381,7 @@ const latestUploads = uploads.filter(
               </div>
 
 <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
-  <h3 className="text-md font-semibold mb-3">Job Roles</h3>
+  <h3 className="text-md font-semibold mb-2">Job Roles</h3>
 
   <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 max-h-[130px] overflow-y-auto hide-scrollbar">
     {roleSummary.map((item) => (
@@ -413,7 +414,7 @@ const latestUploads = uploads.filter(
                   <p className="text-xs uppercase tracking-[0.24em] text-slate-400">
                     Explore Workforce
                   </p>
-                  <h2 className="mt-1 text-2xl font-semibold text-slate-900">
+                  <h2 className=" text-xl font-semibold text-slate-900">
                     Refine workforce view
                   </h2>
                 </div>
@@ -428,7 +429,7 @@ const latestUploads = uploads.filter(
                     placeholder="Search by name, role, or ID"
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
-                    className="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 pl-11 pr-4 text-sm text-slate-900 outline-none transition focus:border-cyan-400 focus:bg-white focus:ring-4 focus:ring-cyan-100"
+                    className="h-10 w-full rounded-2xl border border-slate-200 bg-slate-50 pl-11 pr-4 text-sm text-slate-900 outline-none transition focus:border-cyan-400 focus:bg-white focus:ring-4 focus:ring-cyan-100"
                   />
                 </div>
               </div>
@@ -437,16 +438,14 @@ const latestUploads = uploads.filter(
           </div>
         </section>
 
-<section className="overflow-hidden rounded-[30px] border border-slate-200/10 bg-white pb-24">          <div className="border-b border-slate-200 bg-[linear-gradient(180deg,_#ffffff_0%,_#f8fbff_100%)] px-6 py-5">
+      <section className="overflow-hidden rounded-[30px] border border-slate-200/10 bg-white pb-24"> 
+         <div className="border-b border-slate-200 bg-[linear-gradient(180deg,_#ffffff_0%,_#f8fbff_100%)] px-6 py-2">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
               <div>
-                <p className="text-xs uppercase tracking-[0.24em] text-slate-400">
-                  Upload Register
-                </p>
-                <h2 className="mt-1 text-xl font-semibold text-slate-900">
+                <h2 className="mt-1 text-lg font-semibold text-slate-900">
                   Upload history
                 </h2>
-                <p className="mt-1 text-sm text-slate-500">
+                <p className="text-sm text-slate-500">
                   Track and audit all scrum file submissions.
                 </p>
               </div>

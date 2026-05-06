@@ -245,20 +245,17 @@ export default function BillingStatus() {
     return [];
   };
 
-  useEffect(() => {
-    if (showForm) {
-      document.body.style.overflow = "hidden";
-      document.body.style.paddingRight = "8px";
-    } else {
-      document.body.style.overflow = "auto";
-      document.body.style.paddingRight = "0px";
-    }
+ useEffect(() => {
+  if (showForm) {
+    document.documentElement.style.overflow = "hidden";
+  } else {
+    document.documentElement.style.overflow = "auto";
+  }
 
-    return () => {
-      document.body.style.overflow = "auto";
-      document.body.style.paddingRight = "0px";
-    };
-  }, [showForm]);
+  return () => {
+    document.documentElement.style.overflow = "auto";
+  };
+}, [showForm]);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -788,7 +785,8 @@ const pendingTasks = totalTasks - completedTasks;
                     </div>
 
                     {openMonth && (
-                      <div className="absolute left-0 top-full z-[9999] mt-2 max-h-60 w-full overflow-y-auto rounded-2xl border border-white/80 bg-white shadow-xl">
+                      <div className="absolute left-0 top-full z-[9999] mt-2 max-h-60 w-full overflow-y-auto rounded-2xl border
+                         border-white/80 bg-white shadow-xl">
                         {months.map((m) => (
                           <div
                             key={m}
