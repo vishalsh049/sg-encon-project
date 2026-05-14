@@ -561,9 +561,9 @@ const pendingTasks = totalTasks - completedTasks;
   {/* The main return statement rendering the dashboard UI */ }
 
   return (
-    <div className="min-h-screen -mt-4">
+    <div className="min-h-screen -mt-2">
       <div className="pointer-events-none fixed inset-0 opacity-[0.18] [background-image:radial-gradient(rgba(148,163,184,0.15)_0.7px,transparent_0.7px)] [background-size:16px_16px]" />
-      <div className="relative z-[50] space-y-4">
+      <div className="relative z-0 space-y-4">
       
         <div className="relative overflow-hidden rounded-[28px] border border-white/85 bg-gradient-to-b from-white/90 via-indigo-50/25 to-fuchsia-50/20
           p-6 shadow-[0_42px_140px_rgba(59,130,246,0.16)] backdrop-blur-2xl">
@@ -573,7 +573,7 @@ const pendingTasks = totalTasks - completedTasks;
               <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.34em] text-indigo-600">
                 BILLING DASHBOARD
               </p>
-              <h1 className="max-w-xl text-2xl font-bold tracking-tight text-slate-800 sm:text-2xl">
+              <h1 className="max-w-xl text-xl font-bold tracking-tight text-slate-800 sm:text-2xl">
                 Billing status with real-time insights
               </h1>
               <p className="mt-2 max-w-xl text-sm leading-7 text-slate-600 sm:text-base">
@@ -583,8 +583,8 @@ const pendingTasks = totalTasks - completedTasks;
 
             <button
               onClick={() => setShowForm(true)}
-              className="inline-flex items-center justify-center gap-2 self-start rounded-full
-               bg-gradient-to-r from-blue-600 via-indigo-500 to-violet-500 px-5 py-3 text-sm font-semibold
+              className="inline-flex items-center justify-center gap-1 self-start rounded-full
+               bg-gradient-to-r from-blue-600 via-indigo-500 to-violet-500 px-4 py-2 text-sm font-semibold
                 text-white shadow-[0_20px_40px_rgba(79,70,229,0.30)] transition duration-300 hover:scale-[1.02]
                  hover:from-blue-500 hover:to-violet-500 hover:shadow-[0_24px_60px_rgba(99,102,241,0.38)] 
                  lg:self-center">

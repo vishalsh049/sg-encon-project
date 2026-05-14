@@ -217,7 +217,7 @@ useEffect(() => {
         <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
           
             <div className="space-y-2">
-              <h1 className="text-3xl font-semibold tracking-[-0.05em] text-slate-900 md:text-[1.6rem]">
+              <h1 className="text-2xl font-semibold tracking-[-0.05em] text-slate-900 sm:text-3xl md:text-[1.6rem]">
                 Fiber Inventory
               </h1>
               <p className="max-w-3xl text-sm text-slate-500 md:text-[15px]">
@@ -232,7 +232,7 @@ useEffect(() => {
             setSaveError("");
               setShowUploadModal(true);
             }}
-          className="inline-flex h-12 items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-blue-600 to-cyan-500 px-6 text-sm font-semibold text-white shadow-[0_10px_30px_rgba(59,130,246,0.35)] transition hover:-translate-y-1 hover:shadow-[0_20px_40px_rgba(59,130,246,0.45)]"
+          className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-blue-600 to-cyan-500 px-6 text-sm font-semibold text-white shadow-[0_10px_30px_rgba(59,130,246,0.35)] transition hover:-translate-y-1 hover:shadow-[0_20px_40px_rgba(59,130,246,0.45)] sm:w-auto"
           >
             <Plus size={16} />
             Add Upload
@@ -252,8 +252,8 @@ useEffect(() => {
         </div>
 
 
-  <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[28px] border border-slate-200/60 bg-white/80 backdrop-blur-xl shadow-[0_20px_50px_rgba(0,0,0,0.06)]">
-   <div className="flex items-center justify-between border-b border-slate-200/80 px-6 py-5">
+  <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[24px] border border-slate-200/60 bg-white/80 backdrop-blur-xl shadow-[0_20px_50px_rgba(0,0,0,0.06)] sm:rounded-[28px]">
+   <div className="flex flex-col gap-4 border-b border-slate-200/80 px-4 py-4 sm:px-6 sm:py-5 lg:flex-row lg:items-center lg:justify-between">
 
     <div>
      <h2 className="text-lg font-semibold tracking-[-0.03em] text-slate-900">
@@ -265,7 +265,7 @@ useEffect(() => {
       </p>
      </div>
 
-     <div className="flex gap-2">
+     <div className="flex flex-col gap-2 sm:flex-row">
   <button
     onClick={async () => {
       if (!selectedIds.length) return alert("Select items first");
@@ -281,7 +281,7 @@ useEffect(() => {
       fetchSummary();
       fetchUploads(); 
     }}
-    className="px-3 py-2 text-xs bg-red-100 text-red-700 rounded-lg"
+    className="w-full rounded-lg bg-red-100 px-3 py-2 text-xs text-red-700 sm:w-auto"
   >
     Delete Selected
   </button>
@@ -310,7 +310,7 @@ useEffect(() => {
     alert("Download failed");
   }
 }}
-    className="px-3 py-2 text-xs bg-blue-100 text-blue-700 rounded-lg"
+    className="w-full rounded-lg bg-blue-100 px-3 py-2 text-xs text-blue-700 sm:w-auto"
   >
     Download Selected
   </button>
@@ -323,12 +323,13 @@ useEffect(() => {
         </div>
       ) : null}
 
-      <div className="min-h-0 w-full max-w-full flex-1 overflow-y-auto overflow-x-hidden">
-       <table className="w-full border-separate border-spacing-0 text-sm text-slate-600">
+      <div className="min-h-0 w-full max-w-full flex-1 overflow-y-auto overflow-x-auto">
+       <div className="px-4 pt-3 text-xs text-slate-400 sm:hidden">Swipe sideways to view the full table.</div>
+       <table className="min-w-[920px] w-full border-separate border-spacing-0 text-sm text-slate-600">
         <thead className="sticky top-0 z-10 bg-white/95 backdrop-blur-xl">
   <tr>
     {/* SELECT ALL CHECKBOX */}
-    <th className="px-6 py-4">
+    <th className="px-4 py-4 sm:px-6">
       <input
         type="checkbox"
         className="h-4 w-4 rounded-md border-slate-300 text-blue-600"
@@ -347,19 +348,19 @@ useEffect(() => {
     </th>
 
     {/* HEADERS */}
-    <th className="px-6 py-4 text-[11px] font-semibold uppercase text-slate-400">Date</th>
-    <th className="px-6 py-4 text-[11px] font-semibold uppercase text-slate-400">Uploaded By</th>
-    <th className="px-6 py-4 text-[11px] font-semibold uppercase text-slate-400">Scope</th>
-    <th className="px-6 py-4 text-[11px] font-semibold uppercase text-slate-400">Uploaded At</th>
-    <th className="px-6 py-4 text-[11px] font-semibold uppercase text-slate-400">File Name</th>
-    <th className="px-6 py-4 text-[11px] font-semibold uppercase text-slate-400">Actions</th>
+    <th className="px-4 py-4 text-[11px] font-semibold uppercase text-slate-400 sm:px-6">Date</th>
+    <th className="px-4 py-4 text-[11px] font-semibold uppercase text-slate-400 sm:px-6">Uploaded By</th>
+    <th className="px-4 py-4 text-[11px] font-semibold uppercase text-slate-400 sm:px-6">Scope</th>
+    <th className="px-4 py-4 text-[11px] font-semibold uppercase text-slate-400 sm:px-6">Uploaded At</th>
+    <th className="px-4 py-4 text-[11px] font-semibold uppercase text-slate-400 sm:px-6">File Name</th>
+    <th className="px-4 py-4 text-[11px] font-semibold uppercase text-slate-400 sm:px-6">Actions</th>
   </tr>
 </thead>
       <tbody>
     {!uploadsLoading && allUploads.length === 0 ? (      <tr>
        <td
         colSpan={7}
-      className="px-6 py-16 text-center text-sm text-slate-500"
+      className="px-4 py-16 text-center text-sm text-slate-500 sm:px-6"
         >
         No fiber uploads found. Add an Excel or CSV file to start the
         latest-date dashboard.
@@ -369,7 +370,7 @@ useEffect(() => {
 
       {allUploads.map((item) => (
        <tr key={item.id} className="group transition hover:bg-slate-50/70">
-       <td className="px-6 py-4">
+       <td className="px-4 py-4 sm:px-6">
   <input
   type="checkbox"
   className="h-4 w-4 rounded-md border-slate-300 text-blue-600"
@@ -385,27 +386,27 @@ useEffect(() => {
   }}
 />
 </td>
-     <td className="border-b border-slate-100 px-6 py-4 font-medium text-slate-800 transition duration-150 group-hover:bg-slate-50/90">
+     <td className="border-b border-slate-100 px-4 py-4 font-medium text-slate-800 transition duration-150 group-hover:bg-slate-50/90 sm:px-6">
      {formatDate(item.date)}
        </td>
-        <td className="border-b border-slate-100 px-6 py-4 transition duration-150 group-hover:bg-slate-50/90">
+        <td className="border-b border-slate-100 px-4 py-4 transition duration-150 group-hover:bg-slate-50/90 sm:px-6">
         {item.uploaded_by}
           </td>
-        <td className="border-b border-slate-100 px-6 py-4 transition duration-150 group-hover:bg-slate-50/90">
+        <td className="border-b border-slate-100 px-4 py-4 transition duration-150 group-hover:bg-slate-50/90 sm:px-6">
         <span className="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">
           {item.upload_scope || "Unknown"}
         </span>
           </td>
-        <td className="border-b border-slate-100 px-6 py-4 transition duration-150 group-hover:bg-slate-50/90">
+        <td className="border-b border-slate-100 px-4 py-4 transition duration-150 group-hover:bg-slate-50/90 sm:px-6">
           {formatDateTime(item.uploaded_at)}
         </td>
-           <td className="border-b border-slate-100 px-6 py-4 transition duration-150 group-hover:bg-slate-50/90">
+           <td className="border-b border-slate-100 px-4 py-4 transition duration-150 group-hover:bg-slate-50/90 sm:px-6">
           <div className="flex items-center gap-2">
            <FileSpreadsheet size={16} className="text-slate-400" />
           <span className="max-w-[260px] truncate font-medium text-slate-700">{item.file_name}</span>
          </div>
         </td>
-        <td className="border-b border-slate-100 px-6 py-4 transition duration-150 group-hover:bg-slate-50/90">
+        <td className="border-b border-slate-100 px-4 py-4 transition duration-150 group-hover:bg-slate-50/90 sm:px-6">
      <div className="flex flex-wrap gap-2">
       <a href={buildApiUrl(`/api/fiber/uploads/${item.id}/download`)}
        className="p-2 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 transition"
@@ -447,7 +448,7 @@ useEffect(() => {
                         {Array.from({ length: 7 }).map((__, cellIndex) => (
                           <td
                             key={`cell-${cellIndex}`}
-                            className="border-b border-slate-100 px-6 py-4"
+                            className="border-b border-slate-100 px-4 py-4 sm:px-6"
                           >
                             <div className="h-4 animate-pulse rounded-full bg-slate-100" />
                           </td>
@@ -476,11 +477,11 @@ useEffect(() => {
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.96, y: 12 }}
               transition={{ duration: 0.2, ease: "easeOut" }}
-              className="fixed inset-0 z-[10000] flex items-center justify-center p-4"
+              className="fixed inset-0 z-[10000] flex items-center justify-center p-3 sm:p-4"
               onClick={closeUploadModal}
             >
               <div
-                className="w-full max-w-xl rounded-3xl bg-white/95 p-8 shadow-2xl backdrop-blur-xl"
+                className="max-h-[90vh] w-full max-w-xl overflow-hidden rounded-[28px] bg-white/95 p-5 shadow-2xl backdrop-blur-xl sm:rounded-3xl sm:p-8"
                 onClick={(event) => event.stopPropagation()}
               >
                 <div className="flex items-start justify-between gap-4">
@@ -506,7 +507,7 @@ useEffect(() => {
                   </div>
                 ) : null}
 
-                <form onSubmit={handleUpload} className="mt-8 space-y-6">
+                <form onSubmit={handleUpload} className="mt-6 max-h-[calc(90vh-120px)] space-y-6 overflow-y-auto pr-1 sm:mt-8">
                   <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
                     <div>
                       <label className="mb-2 block text-sm font-medium text-slate-700">
@@ -545,7 +546,7 @@ useEffect(() => {
                     <label className="mb-2 block text-sm font-medium text-slate-700">
                       Upload File
                     </label>
-                    <label className="flex cursor-pointer items-center justify-between rounded-2xl border border-dashed border-slate-300 bg-slate-50/80 px-4 py-4 transition hover:border-blue-300 hover:bg-blue-50/60">
+                    <label className="flex cursor-pointer flex-col items-start gap-4 rounded-2xl border border-dashed border-slate-300 bg-slate-50/80 px-4 py-4 transition hover:border-blue-300 hover:bg-blue-50/60 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
                       <div className="flex items-center gap-3">
                         <Upload size={18} className="text-blue-500" />
                         <div>
@@ -586,7 +587,7 @@ useEffect(() => {
                     />
                   </div>
 
-                  <div className="flex gap-3">
+                  <div className="flex flex-col-reverse gap-3 sm:flex-row">
                     <button
                       type="button"
                       onClick={closeUploadModal}
@@ -625,11 +626,11 @@ useEffect(() => {
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.96, y: 12 }}
               transition={{ duration: 0.2, ease: "easeOut" }}
-              className="fixed inset-0 z-50 flex items-center justify-center p-4"
+              className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4"
               onClick={closeEditModal}
             >
               <div
-                className="w-full max-w-lg rounded-3xl bg-white/95 p-8 shadow-2xl backdrop-blur-xl"
+                className="max-h-[90vh] w-full max-w-lg overflow-hidden rounded-[28px] bg-white/95 p-5 shadow-2xl backdrop-blur-xl sm:rounded-3xl sm:p-8"
                 onClick={(event) => event.stopPropagation()}
               >
                 <div className="flex items-start justify-between gap-4">
@@ -654,7 +655,7 @@ useEffect(() => {
                   </div>
                 ) : null}
 
-                <form onSubmit={handleEdit} className="mt-8 space-y-6">
+                <form onSubmit={handleEdit} className="mt-6 max-h-[calc(90vh-120px)] space-y-6 overflow-y-auto pr-1 sm:mt-8">
                   <div>
                     <label className="mb-2 block text-sm font-medium text-slate-700">
                       Date
@@ -686,7 +687,7 @@ useEffect(() => {
                     />
                   </div>
 
-                  <div className="flex gap-3">
+                  <div className="flex flex-col-reverse gap-3 sm:flex-row">
                     <button
                       type="button"
                       onClick={closeEditModal}

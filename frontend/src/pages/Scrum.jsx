@@ -298,14 +298,14 @@ const latestUploads = uploads.filter(
   return (
     <div className="min-h-screen text-slate-900">
      <div className="w-full space-y-3">  
-<section className="relative overflow-hidden rounded-[32px] border border-slate-200 bg-white p-2 md:p-5">          <div className="relative grid gap-6 xl:grid-cols-1">
+<section className="relative overflow-hidden rounded-[28px] border border-slate-200 bg-white p-3 sm:p-4 md:rounded-[32px] md:p-5">          <div className="relative grid gap-6 xl:grid-cols-1">
             <div className="space-y-3 relative">
                <button
                 onClick={() => {
                   setShowModal(true);
                   setUploadDate(new Date().toISOString().slice(0, 10));
                    }}
-  className="absolute right-0 top-0 inline-flex items-center gap-2 rounded-2xl bg-cyan-600 px-4 py-2 text-sm font-medium text-white shadow hover:bg-cyan-700"
+  className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-cyan-600 px-4 py-2 text-sm font-medium text-white shadow hover:bg-cyan-700 sm:absolute sm:right-0 sm:top-0 sm:w-auto"
 >
               <UploadCloud size={16} />
                Upload Excel
@@ -358,7 +358,7 @@ const latestUploads = uploads.filter(
                 ].map(({ label, value, note, icon: Icon, chip }) => (
                   <div
                     key={label}
-                    className="rounded-[24px] border bg-white border border-slate-200 p-4"
+                    className="rounded-[24px] bg-white border border-slate-200 p-4"
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div>
@@ -383,7 +383,7 @@ const latestUploads = uploads.filter(
 <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
   <h3 className="text-md font-semibold mb-2">Job Roles</h3>
 
-  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 max-h-[130px] overflow-y-auto hide-scrollbar">
+  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 max-h-[180px] overflow-y-auto hide-scrollbar">
     {roleSummary.map((item) => (
       <div
         key={item.category}
@@ -438,8 +438,8 @@ const latestUploads = uploads.filter(
           </div>
         </section>
 
-      <section className="overflow-hidden rounded-[30px] border border-slate-200/10 bg-white pb-24"> 
-         <div className="border-b border-slate-200 bg-[linear-gradient(180deg,_#ffffff_0%,_#f8fbff_100%)] px-6 py-2">
+      <section className="overflow-hidden rounded-[28px] border border-slate-200/10 bg-white pb-28 md:rounded-[30px] md:pb-24"> 
+         <div className="border-b border-slate-200 bg-[linear-gradient(180deg,_#ffffff_0%,_#f8fbff_100%)] px-4 py-3 sm:px-6 sm:py-2">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
               <div>
                 <h2 className="mt-1 text-lg font-semibold text-slate-900">
@@ -457,7 +457,7 @@ const latestUploads = uploads.filter(
           </div>
           
 {selected.length > 0 && (
-  <div className="flex justify-between items-center mb-3 bg-slate-100 px-4 py-3 rounded-xl border border-slate-200">
+  <div className="mb-3 flex flex-col gap-3 rounded-xl border border-slate-200 bg-slate-100 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
 
     {/* LEFT SIDE TEXT */}
     <span className="text-sm font-medium text-slate-700">
@@ -465,12 +465,12 @@ const latestUploads = uploads.filter(
     </span>
 
     {/* RIGHT SIDE ACTIONS */}
-    <div className="flex gap-2">
+    <div className="flex flex-col gap-2 sm:flex-row">
 
       {/* DOWNLOAD BUTTON */}
       <button
         onClick={handleBulkDownload}
-        className="px-4 py-2 rounded-xl bg-blue-500 text-white"
+        className="w-full rounded-xl bg-blue-500 px-4 py-2 text-white sm:w-auto"
       >
         Download
       </button>
@@ -478,7 +478,7 @@ const latestUploads = uploads.filter(
       {/* DELETE BUTTON */}
       <button
         onClick={handleBulkDelete}
-        className="px-4 py-2 rounded-xl bg-red-500 text-white"
+        className="w-full rounded-xl bg-red-500 px-4 py-2 text-white sm:w-auto"
       >
         Delete Selected
       </button>
@@ -490,12 +490,13 @@ const latestUploads = uploads.filter(
 
           {uploads.length > 0 ? (
             
-            <div className="overflow-x-auto">
-              <table className="min-w-full">
+            <div className="overflow-x-auto pb-2">
+              <div className="mb-3 text-xs text-slate-400 sm:hidden">Swipe sideways to view the full table.</div>
+              <table className="min-w-[860px] w-full">
                <thead>
   <tr className="border-b border-slate-200 bg-slate-50/80 text-left text-xs uppercase tracking-[0.22em] text-slate-500">
     
-    <th className="px-6 py-4">
+    <th className="px-4 py-4 sm:px-6">
      <input
   type="checkbox"
   checked={
@@ -512,11 +513,11 @@ const latestUploads = uploads.filter(
 />
     </th>
 
-    <th className="px-6 py-4 font-medium">Date</th>
-    <th className="px-6 py-4 font-medium">Uploaded By</th>
-    <th className="px-6 py-4 font-medium">File</th>
-    <th className="px-6 py-4 font-medium">Uploaded At</th>
-    <th className="px-6 py-4 text-right font-medium">Actions</th>
+    <th className="px-4 py-4 font-medium sm:px-6">Date</th>
+    <th className="px-4 py-4 font-medium sm:px-6">Uploaded By</th>
+    <th className="px-4 py-4 font-medium sm:px-6">File</th>
+    <th className="px-4 py-4 font-medium sm:px-6">Uploaded At</th>
+    <th className="px-4 py-4 text-right font-medium sm:px-6">Actions</th>
 
   </tr>
 </thead>
@@ -526,7 +527,7 @@ const latestUploads = uploads.filter(
                       key={`${item.file_name}-${index}`}
                       className="border-b border-slate-100 text-sm text-slate-700 transition hover:bg-cyan-50/40"
                     >
-                      <td className="px-6 py-5">
+                      <td className="px-4 py-5 sm:px-6">
   <input
   type="checkbox"
   checked={selected.includes(item.upload_batch_id)}
@@ -543,7 +544,7 @@ setSelected(prev => [...new Set([...prev, id])]);
   }}
 />
 </td>
-                      <td className="px-6 py-5">
+                      <td className="px-4 py-5 sm:px-6">
                         <div className="inline-flex items-center gap-3">
                           <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-100 text-slate-700">
                             <CalendarDays size={16} />
@@ -558,12 +559,12 @@ setSelected(prev => [...new Set([...prev, id])]);
                           </div>
                         </div>
                       </td>
-                      <td className="px-6 py-5">
+                      <td className="px-4 py-5 sm:px-6">
                         <div className="inline-flex rounded-full bg-slate-100 px-3 py-2 text-sm font-medium text-slate-700">
                           {item.uploaded_by || "--"}
                         </div>
                       </td>
-                      <td className="px-6 py-5">
+                      <td className="px-4 py-5 sm:px-6">
                         <div className="flex max-w-[320px] items-center gap-3">
                           <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-cyan-100 text-cyan-700">
                             <FileSpreadsheet size={18} />
@@ -578,10 +579,10 @@ setSelected(prev => [...new Set([...prev, id])]);
                           </div>
                         </div>
                       </td>
-                      <td className="px-6 py-5 text-slate-500">
+                      <td className="px-4 py-5 text-slate-500 sm:px-6">
                         {formatDate(item.uploaded_at)} {formatTime(item.uploaded_at)}
                       </td>
-                      <td className="px-6 py-5">
+                      <td className="px-4 py-5 sm:px-6">
                        <div className="flex justify-end gap-2">
 
   {/* DOWNLOAD */}
@@ -627,17 +628,12 @@ setSelected(prev => [...new Set([...prev, id])]);
             </div>
           )}
 
-          <div className="fixed bottom-0 z-50 flex flex-col gap-3 border-t border-slate-200 bg-white px-4 py-2 text-sm text-slate-500 md:flex-row md:items-center md:justify-between"
-          style={{
-          left: "var(--sidebar-width, 280px)",
-          right: "0"
-          }}
-          >
+          <div className="fixed bottom-0 left-0 right-0 z-50 flex flex-col gap-3 border-t border-slate-200 bg-white px-4 py-3 text-sm text-slate-500 md:flex-row md:items-center md:justify-between md:px-6 md:py-2 md:[left:var(--sidebar-width,280px)]">
   <div>
     Showing {latestUploads.length} of {latestUploads.length} records
   </div>
 
-  <div className="flex items-center gap-2">
+  <div className="flex items-center justify-between gap-2 sm:justify-end">
     <button className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-slate-400">
       Prev
     </button>
@@ -655,9 +651,9 @@ setSelected(prev => [...new Set([...prev, id])]);
       </div>
 
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 px-4 backdrop-blur-md">
-          <div className="relative w-full max-w-2xl overflow-hidden rounded-[32px] border border-white/10 bg-[linear-gradient(180deg,_#f8fbff_0%,_#ffffff_100%)] ">
-            <div className="bg-white text-slate-900 border-b border-slate-200 px-6 py-6">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 px-3 sm:px-4 backdrop-blur-md">
+          <div className="relative max-h-[90vh] w-full max-w-2xl overflow-hidden rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,_#f8fbff_0%,_#ffffff_100%)] md:rounded-[32px]">
+            <div className="bg-white text-slate-900 border-b border-slate-200 px-4 py-5 sm:px-6 sm:py-6">
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <p className="text-xs uppercase tracking-[0.26em] text-slate-400">
@@ -666,21 +662,21 @@ setSelected(prev => [...new Set([...prev, id])]);
                   <h3 className="mt-2 text-2xl font-semibold">
                     Upload scrum source file
                   </h3>
-                  <p className="mt-2 max-w-xl text-sm text-slate-300">
+                  <p className="mt-2 max-w-xl text-sm text-slate-500">
                     This upload becomes the latest active dataset used for the
                     scrum manpower register.
                   </p>
                 </div>
                 <button
                   onClick={() => setShowModal(false)}
-                  className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-slate-300 transition hover:bg-white/10 hover:text-white"
+                  className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50 hover:text-slate-900"
                 >
                   <X size={18} />
                 </button>
               </div>
             </div>
 
-            <div className="space-y-5 px-6 py-6">
+            <div className="max-h-[calc(90vh-110px)] space-y-5 overflow-y-auto px-4 py-5 sm:px-6 sm:py-6">
               <div className="grid gap-5 md:grid-cols-2">
                 <div>
                   <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">

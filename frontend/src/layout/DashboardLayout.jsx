@@ -66,12 +66,12 @@ function DashboardLayout() {
 
       <div className="min-h-screen transition-[margin] duration-300 md:ml-[var(--sidebar-width)]">
         <header className="app-header sticky top-0 z-30">
-          <div className="flex h-16 items-center justify-between px-4 md:px-6">
-            <div className="flex items-center gap-3">
+         <div className="flex h-14 md:h-16 items-center justify-between px-3 md:px-6">
+            <div className="flex items-center gap-2 md:gap-3 min-w-0">
               <button
                 type="button"
                 onClick={() => setMobileOpen(true)}
-                className="app-button-ghost h-10 w-10 px-0 md:hidden"
+                className="app-button-ghost h-9 w-9 px-0 md:hidden shrink-0"
               >
                 <Menu size={18} />
               </button>
@@ -85,29 +85,30 @@ function DashboardLayout() {
               </button>
 
               <div>
-                <div className="text-[11px] font-semibold uppercase tracking-[0.28em] text-text-muted">
+                <div className="text-[10px] md:text-[11px] font-semibold uppercase tracking-[0.22em] md:tracking-[0.28em] text-text-muted truncate">
                   Control Center
                 </div>
-                <h1 className="text-sm font-semibold text-text-primary md:text-base">
+                <h1 className="text-[11px] leading-tight md:text-base font-semibold text-text-primary truncate max-w-[160px] sm:max-w-none">
                   Telecom Performance Overview
                 </h1>
               </div>
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 md:gap-3 min-w-0">
               <button
                 type="button"
                 onClick={() =>
                   setTheme((prev) => (prev === "dark" ? "light" : "dark"))
                 }
-                className="app-button-ghost h-10 w-10 px-0"
+                className="app-button-ghost h-8 w-8 md:h-10 md:w-10 px-0"
                 aria-label="Toggle theme"
               >
-                {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
+                {theme === "dark" ? <Sun size={18} /> : <Moon size={16} />}
               </button>
 
-              <div className="app-surface-soft flex items-center gap-3 px-3 py-2 shadow-none">
-                <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-primary text-sm font-semibold text-white">
+              <div className="app-surface-soft flex items-center gap-2 px-1 md:px-3 py-1 md:py-2 shadow-none">
+                <div className="flex h-6 w-6 md:h-10 md:w-10 items-center justify-center rounded-xl
+                 md:rounded-2xl bg-primary text-xs md:text-sm font-semibold text-white">
                   U
                 </div>
                 <div className="hidden md:block">

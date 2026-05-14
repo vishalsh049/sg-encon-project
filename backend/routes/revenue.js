@@ -1,11 +1,11 @@
 const express = require("express");
-const router = express.Router();
 const fs = require("fs");
 const XLSX = require("xlsx");
-const { db } = require("../config/db");
 const multer = require("multer");
 const archiver = require("archiver");
+const { db } = require("../config/db");
 
+const router = express.Router();
 const upload = multer({ dest: "uploads/" });
 
 const mapRevenueRowToExcel = (row) => ({
@@ -20,27 +20,97 @@ const mapRevenueRowToExcel = (row) => ({
   "Item Code PM": row.item_code_pm,
   "Service Description": row.service_description,
   UOM: row.uom,
-  "Old CM Rate": row.old_cm_rate,
-  "Old PM Rate": row.old_pm_rate,
-  "New CM rate": row.new_cm_rate,
-  "New PM rate": row.new_pm_rate,
-  Rate: row.rate,
-  Qty: row.qty,
+  "CM Rate": row.cm_rate,
+  "PM Rate": row.pm_rate,
+  "CM Qty": row.cm_qty,
+  "PM Qty": row.pm_qty,
+  "CM Amount": row.cm_amount,
+  "PM Amount": row.pm_amount,
+  "Ideal PM Amount": row.ideal_pm_amount,
+  "PM Loss": row.pm_loss,
+  Domain: row.domain,
 });
 
-// 🔥 Upload Excel → Save into DB
+const cleanNumber = (value) => {
+  if (value === null || value === undefined || value === "" || value === "-") {
+    return 0;
+  }
+
+  const num = Number(value.toString().replace(/,/g, ""));
+  return Number.isNaN(num) ? 0 : num;
+};
+
+const normalizeHeader = (value) =>
+  value?.toString()?.trim()?.toLowerCase()?.replace(/\s+/g, " ") || "";
+
+const normalizeIds = (ids) =>
+  Array.isArray(ids)
+    ? ids.map((id) => Number(id)).filter((id) => Number.isInteger(id) && id > 0)
+    : [];
+
+const hasMeaningfulRevenueData = (row) => {
+  const textFields = [
+    row.circle,
+    row.location,
+    row.co_type,
+    row.co_type_sub_catg,
+    row.jio_rcom,
+    row.sub_category,
+    row.description,
+    row.item_code_cm,
+    row.item_code_pm,
+    row.service_description,
+    row.uom,
+  ];
+
+  const numericFields = [
+    row.cm_rate,
+    row.pm_rate,
+    row.cm_qty,
+    row.pm_qty,
+    row.cm_amount,
+    row.pm_amount,
+    row.ideal_pm_amount,
+    row.pm_loss,
+  ];
+
+  const hasText = textFields.some((value) => {
+    if (value === null || value === undefined) {
+      return false;
+    }
+
+    return String(value).trim() !== "";
+  });
+
+  const hasNumeric = numericFields.some((value) => cleanNumber(value) !== 0);
+
+  return hasText || hasNumeric;
+};
+
+const chunkArray = (items, chunkSize) => {
+  const chunks = [];
+
+  for (let index = 0; index < items.length; index += chunkSize) {
+    chunks.push(items.slice(index, index + chunkSize));
+  }
+
+  return chunks;
+};
+
 router.post("/upload", upload.single("file"), async (req, res) => {
+  let filePath;
+
   try {
-    const filePath = req.file.path;
-    const { uploadedBy, uploadTime, uploadDate } = req.body;
+    if (!req.file) {
+      return res.status(400).json({ message: "No file uploaded" });
+    }
+
+    filePath = req.file.path;
+    const { uploadedBy, uploadTime, billingMonth } = req.body;
     const fileName = req.file.originalname;
 
-    // 1. Read Excel
     const workbook = XLSX.readFile(filePath);
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
-
-    const normalizeHeader = (value) =>
-      value?.toString()?.trim()?.toLowerCase()?.replace(/\s+/g, " ") || "";
 
     const headerMap = {
       circle: ["circle"],
@@ -52,99 +122,114 @@ router.post("/upload", upload.single("file"), async (req, res) => {
         "co type sub catg.",
         "co type sub catg ",
         "co type s",
-        "co type sub"
+        "co type sub",
       ],
       jio_rcom: ["jio/rcom", "jio rcom", "jio", "rcom"],
       sub_category: ["sub category", "subcategory"],
       description: ["description", "desc"],
       item_code_cm: ["item code cm", "item_code_cm", "item code (cm)"],
       item_code_pm: ["item code pm", "item_code_pm", "item code (pm)"],
-      service_description: ["service description", "service desc", "service"],
+      service_description: [
+        "service description",
+        "service desription",
+        "service desc",
+        "service",
+      ],
       uom: ["uom"],
-      old_cm_rate: ["old cm rate", "old_cm_rate", "old cm rate "],
-      old_pm_rate: ["old pm rate", "old_pm_rate", "old pm rate "],
-      new_cm_rate: ["new cm rate", "new_cm_rate", "new cm rate "],
-      new_pm_rate: ["new pm rate", "new_pm_rate", "new pm rate "],
-      rate: ["rate", "unit rate", "unitprice"],
-      qty: ["qty", "quantity", "qty."]
+      cm_rate: ["cm rate", "cm_rate"],
+      pm_rate: ["pm rate", "pm_rate"],
+      cm_qty: ["cm qty", "cm_qty"],
+      pm_qty: ["pm qty", "pm_qty"],
+      cm_amount: ["cm amount", "cm_amount"],
+      pm_amount: ["pm amount", "pm_amount"],
+      ideal_pm_amount: ["ideal pm amount", "ideal_pm_amount"],
+      pm_loss: ["pm loss", "pm_loss"],
+      domain: ["domain"],
     };
 
-    const normalizedHeaderMap = Object.entries(headerMap).reduce((acc, [key, aliases]) => {
-      aliases.forEach((alias) => {
-        acc[alias.trim().toLowerCase()] = key;
-      });
-      return acc;
-    }, {});
+    const normalizedHeaderMap = Object.entries(headerMap).reduce(
+      (acc, [key, aliases]) => {
+        aliases.forEach((alias) => {
+          acc[alias.trim().toLowerCase()] = key;
+        });
+        return acc;
+      },
+      {}
+    );
 
-    const rows = XLSX.utils.sheet_to_json(sheet, { defval: "", header: 1 });
+   const rows = XLSX.utils.sheet_to_json(sheet, {
+  defval: "",
+  header: 1,
+  blankrows: false,
+});
 
-    const headerRowIndex = rows.findIndex((row) =>
-      row.some((cell) => normalizeHeader(cell) === "circle") &&
-      row.some((cell) => normalizeHeader(cell) === "location") &&
-      row.some((cell) => normalizeHeader(cell).includes("co type"))
+    const headerRowIndex = rows.findIndex(
+      (row) =>
+        row.some((cell) => normalizeHeader(cell) === "circle") &&
+        row.some((cell) => normalizeHeader(cell) === "location") &&
+        row.some((cell) => normalizeHeader(cell).includes("co type"))
     );
 
     const headerRow = headerRowIndex >= 0 ? rows[headerRowIndex] : rows[0] || [];
-    const dataRows = rows.slice((headerRowIndex >= 0 ? headerRowIndex : 0) + 1);
+    const dataRows = rows.slice(
+  (headerRowIndex >= 0 ? headerRowIndex : 0) + 1
+);
+   const filteredRows = dataRows.filter(
+  (row) =>
+    Array.isArray(row) &&
+    row.some(
+      (cell) =>
+        cell !== null &&
+        cell !== undefined &&
+        cell.toString().trim() !== ""
+    )
+);
 
-    const data = dataRows
+    const data = filteredRows
       .map((row) => {
         const item = {};
+
         row.forEach((cell, index) => {
           const rawHeader = normalizeHeader(headerRow[index]);
           const mappedKey = normalizedHeaderMap[rawHeader];
+
           if (mappedKey) {
             item[mappedKey] = cell;
           }
         });
+
         return item;
       })
-      .filter((row) => Object.values(row).some((value) => value !== "" && value !== null));
+      .filter(hasMeaningfulRevenueData);
 
-   console.log("Parsed rows:", data.length);
-   console.log("Headers:", Object.keys(data[0] || {}));
+    console.log("Parsed rows:", data.length);
+    console.log("Headers:", Object.keys(data[0] || {}));
 
-   const cleanNumber = (val) => {
-  if (!val) return 0;
-  return Number(val.toString().replace(/,/g, ""));
-};
-
-const values = data.map((row) => {
-  return [
-    row.circle || null,
-    row.location || null,
-    row.co_type || null,
-    row.co_type_sub_catg || null,
-    row.jio_rcom || null,
-    row.sub_category || null,
-    row.description || null,
-
-    row.item_code_cm || null,
-    row.item_code_pm || null,
-
-    row.service_description || null,
-    row.uom || null,
-
-    cleanNumber(row.old_cm_rate),
-    cleanNumber(row.old_pm_rate),
-    cleanNumber(row.new_cm_rate),
-    cleanNumber(row.new_pm_rate),
-
-    cleanNumber(row.rate),
-    cleanNumber(row.qty),
-
-    null,
-  ];
-});
+    const values = data.map((row) => [
+      row.circle || null,
+      row.location || null,
+      row.co_type || null,
+      row.co_type_sub_catg || null,
+      row.jio_rcom || null,
+      row.sub_category || null,
+      row.description || null,
+      row.item_code_cm || null,
+      row.item_code_pm || null,
+      row.service_description || null,
+      row.uom || null,
+      cleanNumber(row.cm_rate),
+      cleanNumber(row.pm_rate),
+      cleanNumber(row.cm_qty),
+      cleanNumber(row.pm_qty),
+      cleanNumber(row.cm_amount),
+      cleanNumber(row.pm_amount),
+      cleanNumber(row.ideal_pm_amount),
+      cleanNumber(row.pm_loss),
+      row.domain || null,
+      null,
+    ]);
 
     if (values.length === 0) {
-      console.log("No valid rows found in uploaded Excel file.");
-      try {
-        await fs.promises.unlink(filePath);
-      } catch (unlinkError) {
-        console.warn("Could not delete uploaded file after invalid upload:", unlinkError);
-      }
-
       return res.status(400).json({
         message: "No valid rows found in uploaded Excel file",
         total_rows: 0,
@@ -152,62 +237,66 @@ const values = data.map((row) => {
     }
 
     const [uploadResult] = await db.promise().query(
-      `INSERT INTO revenue_upload 
-       (file_name, file_path, uploaded_by, upload_time, upload_date)
+      `INSERT INTO revenue_upload
+       (file_name, file_path, uploaded_by, upload_time, billing_month)
        VALUES (?, ?, ?, ?, ?)`,
-      [fileName, filePath, uploadedBy, uploadTime, uploadDate]
+      [fileName, filePath, uploadedBy, uploadTime, billingMonth]
     );
 
     const fileId = uploadResult.insertId;
+
     await db.promise().query(
-      `UPDATE revenue_upload SET file_id = ? WHERE id = ?`,
+      "UPDATE revenue_upload SET file_id = ? WHERE id = ?",
       [fileId, fileId]
     );
 
-    const preparedValues = values.map((rowValues) => {
-      return [...rowValues.slice(0, -1), fileId];
-    });
+    const preparedValues = values.map((rowValues) => [
+      ...rowValues.slice(0, -1),
+      fileId,
+    ]);
 
-    // 4. Insert into DB
-    const query = `
-INSERT INTO revenue (
-  circle,
-  location,
-  co_type,
-  co_type_sub_catg,
-  jio_rcom,
-  sub_category,
-  description,
+    const insertRevenueQuery = `
+      INSERT INTO revenue (
+        circle,
+        location,
+        co_type,
+        co_type_sub_catg,
+        jio_rcom,
+        sub_category,
+        description,
+        item_code_cm,
+        item_code_pm,
+        service_description,
+        uom,
+        cm_rate,
+        pm_rate,
+        cm_qty,
+        pm_qty,
+        cm_amount,
+        pm_amount,
+        ideal_pm_amount,
+        pm_loss,
+        domain,
+        file_id
+      ) VALUES ?
+    `;
 
-  item_code_cm,
-  item_code_pm,
+    const valueChunks = chunkArray(preparedValues, 1000);
 
-  service_description,
-  uom,
-
-  old_cm_rate,
-  old_pm_rate,
-  new_cm_rate,
-  new_pm_rate,
-
-  rate,
-  qty,
-  file_id
-) VALUES ?
-`;
-
-    await db.promise().query(query, [preparedValues]);
+    for (const chunk of valueChunks) {
+      await db.promise().query(insertRevenueQuery, [chunk]);
+    }
 
     console.log("Sending response:", {
-  file_id: fileId,
-  total_rows: preparedValues.length
-});
+      file_id: fileId,
+      total_rows: preparedValues.length,
+    });
+
     res.json({
       message: "Excel data inserted successfully",
       file_id: fileId,
       total_rows: values.length,
     });
-
   } catch (err) {
     console.error("ERROR:", err);
     res.status(500).json({ error: err.message });
@@ -216,35 +305,43 @@ INSERT INTO revenue (
 
 router.post("/delete-bulk", async (req, res) => {
   try {
-    let { ids } = req.body;
+    const ids = normalizeIds(req.body.ids);
 
     console.log("DELETE IDS:", ids);
 
-    // ✅ FIX 1: Ensure ids is array of numbers
-    if (!Array.isArray(ids) || ids.length === 0) {
+    if (ids.length === 0) {
       return res.status(400).json({ message: "No IDs provided" });
     }
 
-    ids = ids.map(id => Number(id));
-
     const placeholders = ids.map(() => "?").join(",");
 
-    // ✅ DELETE FROM revenue TABLE
+    const [files] = await db.promise().query(
+      `SELECT file_path FROM revenue_upload WHERE file_id IN (${placeholders})`,
+      ids
+    );
+
     await db.promise().query(
       `DELETE FROM revenue WHERE file_id IN (${placeholders})`,
       ids
     );
 
-    // ✅ DELETE FROM revenue_upload TABLE
     await db.promise().query(
       `DELETE FROM revenue_upload WHERE file_id IN (${placeholders})`,
       ids
     );
 
+    for (const file of files) {
+      if (file?.file_path && fs.existsSync(file.file_path)) {
+        try {
+          await fs.promises.unlink(file.file_path);
+        } catch (unlinkError) {
+          console.warn("Could not delete revenue upload file:", unlinkError);
+        }
+      }
+    }
+
     console.log("DELETE SUCCESS");
-
     res.json({ message: "Deleted successfully" });
-
   } catch (err) {
     console.error("DELETE ERROR:", err);
     res.status(500).json({ error: err.message });
@@ -264,9 +361,9 @@ router.get("/upload-history", async (req, res) => {
 
 router.post("/download-bulk", async (req, res) => {
   try {
-    const { ids } = req.body;
+    const ids = normalizeIds(req.body.ids);
 
-    if (!ids || ids.length === 0) {
+    if (ids.length === 0) {
       return res.status(400).send("No file ids provided");
     }
 
@@ -281,7 +378,6 @@ router.post("/download-bulk", async (req, res) => {
       return res.status(404).send("No uploads found");
     }
 
-    // 🔥 ZIP setup
     res.setHeader("Content-Type", "application/zip");
     res.setHeader(
       "Content-Disposition",
@@ -305,9 +401,11 @@ router.post("/download-bulk", async (req, res) => {
         [fileId]
       );
 
-      if (!rows.length) continue;
+      if (!rows.length) {
+        continue;
+      }
 
-      const uploadMeta = uploads.find((item) => item.id === fileId);
+      const uploadMeta = uploads.find((item) => Number(item.id) === Number(fileId));
       const filename = uploadMeta?.file_name
         ? `${uploadMeta.file_name.replace(/\.[^.]+$/, "") || `revenue_${fileId}`}.xlsx`
         : `revenue_${fileId}.xlsx`;
@@ -326,14 +424,18 @@ router.post("/download-bulk", async (req, res) => {
           "Item Code PM",
           "Service Description",
           "UOM",
-          "Old CM Rate",
-          "Old PM Rate",
-          "New CM rate",
-          "New PM rate",
-          "Rate",
-          "Qty",
+          "CM Rate",
+          "PM Rate",
+          "CM Qty",
+          "PM Qty",
+          "CM Amount",
+          "PM Amount",
+          "Ideal PM Amount",
+          "PM Loss",
+          "Domain",
         ],
       });
+
       const workbook = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(workbook, worksheet, "Revenue");
 
@@ -354,9 +456,18 @@ router.post("/download-bulk", async (req, res) => {
 
 router.get("/data", async (req, res) => {
   try {
-    const [rows] = await db.promise().query(
-      "SELECT rate, qty FROM revenue"
-    );
+    const [rows] = await db.promise().query(`
+      SELECT
+        cm_rate,
+        pm_rate,
+        cm_qty,
+        pm_qty,
+        cm_amount,
+        pm_amount,
+        ideal_pm_amount,
+        pm_loss
+      FROM revenue
+    `);
 
     res.json(rows);
   } catch (err) {
@@ -391,36 +502,64 @@ router.get("/download/:fileId", async (req, res) => {
   }
 });
 
-// 🔥 KPI DATA API (WITH FILTER)
 router.get("/kpi-data", async (req, res) => {
   try {
     const { circle } = req.query;
 
-    let query = `
-      SELECT
-        AVG(old_cm_rate) AS oldCM,
-        AVG(old_pm_rate) AS oldPM,
-        AVG(new_cm_rate) AS newCM,
-        AVG(new_pm_rate) AS newPM,
-        SUM(qty) AS totalQty,
-        SUM(rate * qty) AS totalRevenue,
-        COUNT(*) AS rateQty,
-        CASE WHEN SUM(qty) = 0 THEN 0 ELSE SUM(rate * qty) / SUM(qty) END AS avgRate
-      FROM revenue
-    `;
+  let query = `
+  SELECT
 
-    console.log('KPI query:', query);
-    console.log('KPI params:', { circle });
+    SUM(r.cm_amount + r.pm_amount) AS totalRevenue,
+
+    SUM(r.cm_amount) AS totalCMAmount,
+
+    SUM(r.pm_amount) AS totalPMAmount,
+
+    SUM(
+      CASE
+        WHEN r.domain = 'FTTx'
+        THEN (r.cm_amount + r.pm_amount)
+        ELSE 0
+      END
+    ) AS totalFTTx,
+
+    SUM(
+      CASE
+        WHEN r.domain = 'Fiber'
+        THEN (r.cm_amount + r.pm_amount)
+        ELSE 0
+      END
+    ) AS totalFiber,
+
+    SUM(
+      CASE
+        WHEN r.domain = 'Tower'
+        THEN (r.cm_amount + r.pm_amount)
+        ELSE 0
+      END
+    ) AS totalTower
+
+  FROM revenue r
+  INNER JOIN revenue_upload ru
+    ON r.file_id = ru.file_id
+
+  WHERE ru.billing_month = (
+    SELECT MAX(billing_month)
+    FROM revenue_upload
+  )
+`;
 
     const params = [];
 
-    if (circle) {
-      query += " WHERE circle = ?";
-      params.push(circle);
-    }
+  if (circle) {
+  query += " AND r.circle = ?";
+  params.push(circle);
+}
+
+    console.log("KPI query:", query);
+    console.log("KPI params:", { circle });
 
     const [rows] = await db.promise().query(query, params);
-
     res.json(rows[0]);
   } catch (err) {
     console.error(err);

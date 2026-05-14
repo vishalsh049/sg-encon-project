@@ -528,7 +528,7 @@ const kpiCards = useMemo(() => {
 
     return (
       <div className="min-h-screen w-full pb-28 text-slate-900 -mt-4">
-        <div className="sticky top-0 z-30 mb-4 overflow-hidden rounded-[22px] px-5 py-4 
+        <div className=" top-0 z-30 mb-4 overflow-hidden rounded-[22px] px-5 py-4 
         bg-[linear-gradient(135deg,rgba(219,234,254,0.82),rgba(255,255,255,0.9),rgba(237,233,254,0.9))] 
         shadow-[0_24px_80px_rgba(15,23,42,0.08)] backdrop-blur-xl">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between ">
@@ -586,7 +586,7 @@ const kpiCards = useMemo(() => {
 
         <div className="space-y-5">
           <div className="grid gap-4 xl:grid-cols-[1.85fr_1fr]">
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-2 xl:grid-cols-3">
               {kpiCards.map((item) => {
                 const Icon = item.icon;
                 return (

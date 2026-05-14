@@ -269,6 +269,9 @@ useEffect(() => {
   const [stats, setStats] = useState(initialStats);
   const [uptimeTrend, setUptimeTrend] = useState([]);
   const [trendFilter, setTrendFilter] = useState("last7");
+  const [isTrendMobile, setIsTrendMobile] = useState(() =>
+    typeof window !== "undefined" ? window.innerWidth < 640 : false
+  );
   const [selectedDate, setSelectedDate] = useState("");
   const [filters, setFilters] = useState({
     circle: [],
@@ -294,6 +297,23 @@ useEffect(() => {
 useEffect(() => {
   fetchUptimeTrend(trendFilter);
 }, [trendFilter, filters.circle, filters.cmp]);
+
+useEffect(() => {
+  if (typeof window === "undefined") {
+    return undefined;
+  }
+
+  const handleResize = () => {
+    setIsTrendMobile(window.innerWidth < 640);
+  };
+
+  handleResize();
+  window.addEventListener("resize", handleResize);
+
+  return () => {
+    window.removeEventListener("resize", handleResize);
+  };
+}, []);
 
 const [apiStatus, setApiStatus] = useState("checking");
 const [lastUpdated, setLastUpdated] = useState(null);
@@ -535,7 +555,7 @@ const summary =
       borderColor: state.isFocused ? "rgb(var(--color-primary))" : "rgb(var(--color-border))",
       boxShadow: state.isFocused ? "0 0 0 3px rgba(99,102,241,0.15)" : "none",
       padding: "4px 10px",
-      minHeight: 44,
+      minHeight: 38,
       height: 44,
       backgroundColor: "rgb(var(--color-surface))",
       color: "rgb(var(--color-text-primary))",
@@ -883,17 +903,17 @@ const trendColor = getTrendColor(uptimeTrend);
     <div className="space-y-3 text-text-primary">
 
       {/* Filters */}
-      <div className="relative -mt-5">
+      <div className="relative -mt-3">
       <div className="app-surface relative overflow-visible px-4 py-2">
 <div className="absolute inset-x-0 top-0 h-[1px] bg-gradient-to-r from-transparent via-border-color to-transparent" />
         
             <div className="relative flex flex-col gap-1">
 
   {/* 🔥 FILTER ROW */}
-  <div className="flex items-center w-full">
+  <div className="flex flex-col gap-3 lg:flex-row lg:items-center w-full">
      
-              <div className="flex items-center gap-3 flex-1">
-               <div className="w-[220px] shrink-0">
+              <div className="grid grid-cols-1 gap-2 flex-1 w-full lg:flex">
+               <div className="min-w-0">
                   <Select
                     isMulti
                     placeholder="Select Circle"
@@ -917,7 +937,7 @@ const trendColor = getTrendColor(uptimeTrend);
                   />
                 </div>
 
-                <div className="w-[220px] shrink-0">
+                <div className="min-w-0">
                   <Select
                     isMulti
                     isDisabled={!filters.circle.length}
@@ -947,7 +967,7 @@ const trendColor = getTrendColor(uptimeTrend);
                   />
                 </div>
 
-                <div className="w-[220px] shrink-0">
+                <div className="min-w-0">
                   <Select
                     isMulti
                     placeholder="Select Domain"
@@ -975,7 +995,7 @@ const trendColor = getTrendColor(uptimeTrend);
 
 
   {/* RIGHT SIDE (NOW CORRECT) */}
-  <div className="ml-auto flex items-center gap-3">
+  <div className="flex flex-wrap items-center gap-3 lg:ml-auto w-full lg:w-auto">
 
     <button
       onClick={resetFilters}
@@ -1054,7 +1074,7 @@ const trendColor = getTrendColor(uptimeTrend);
   </div>
 
   <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-100 text-indigo-600">
-  <Cable size={20} />
+  <Cable size={18} />
    </div>
 </div>
 
@@ -1069,7 +1089,7 @@ const trendColor = getTrendColor(uptimeTrend);
           </div>
 
          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-purple-100 text-purple-600">
-         <Users size={20} />
+         <Users size={18} />
          </div>
         </div>
 
@@ -1086,7 +1106,7 @@ const trendColor = getTrendColor(uptimeTrend);
           </div>
 
          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-green-100 text-green-600">
-          <Activity size={20} />
+          <Activity size={18} />
           </div>
         </div>
       </div>
@@ -1242,13 +1262,13 @@ const trendColor = getTrendColor(uptimeTrend);
         <div className="flex h-full flex-col rounded-2xl bg-white/70 backdrop-blur-md 
          border border-white/40 shadow-[0_10px_40px_rgba(0,0,0,0.08)]  p-5 md:col-span-2">
         
-        <div className="mb-4 flex items-center justify-between">
+       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
          <h4 className="flex items-center gap-2 text-md font-semibold text-slate-800">
             <TrendingUp size={18} />
               Uptime Trend
               </h4>
 
- <div className="flex items-center bg-gray-100 p-1 rounded-xl shadow-inner">
+ <div className="grid w-full grid-cols-3 gap-1 rounded-xl bg-gray-100 p-1 shadow-inner sm:w-auto sm:flex sm:items-center sm:gap-0">
 
   {[
     { key: "last7", label: "Last 7 Days" },
@@ -1258,7 +1278,7 @@ const trendColor = getTrendColor(uptimeTrend);
     <button
       key={item.key}
       onClick={() => setTrendFilter(item.key)}
-      className={`px-4 py-1.5 text-xs font-semibold rounded-lg transition-all duration-300 ${
+      className={`min-w-0 px-3 py-2 text-[11px] font-semibold rounded-lg transition-all duration-300 sm:px-4 sm:py-1.5 sm:text-xs ${
         trendFilter === item.key
           ? "bg-white text-blue-600 shadow-md scale-105"
           : "text-gray-500 hover:text-gray-700"
@@ -1271,10 +1291,16 @@ const trendColor = getTrendColor(uptimeTrend);
 </div>
 </div>
 
-  <ResponsiveContainer width="100%" height={365}>
+  <div className="overflow-x-auto overflow-y-hidden pb-2 sm:overflow-visible sm:pb-0">
+  <div className="h-[260px] w-[640px] min-w-full sm:h-[365px] sm:w-full">
+  <ResponsiveContainer width="100%" height="100%">
            <AreaChart
              data={uptimeTrend}
-             margin={{ top: 30, right: 25, left: -10, bottom: 0 }}  
+             margin={
+               isTrendMobile
+                 ? { top: 20, right: 8, left: 8, bottom: 0 }
+                 : { top: 30, right: 25, left: -10, bottom: 0 }
+             }
              >
 
   <defs>
@@ -1291,10 +1317,10 @@ const trendColor = getTrendColor(uptimeTrend);
   dataKey="label"
   type="category"
   interval={0}
-  tick={{ fontSize: 12, fill: "#6b7280" }}
+  tick={{ fontSize: isTrendMobile ? 10 : 12, fill: "#6b7280" }}
   axisLine={false}
   tickLine={false}
-  padding={{ left: 30, right: 20 }} 
+  padding={isTrendMobile ? { left: 8, right: 8 } : { left: 30, right: 20 }}
 />
 
   <YAxis
@@ -1302,9 +1328,10 @@ const trendColor = getTrendColor(uptimeTrend);
   ticks={[
      97, 97.5, 98, 98.5, 99, 99.5, 100
   ]}
-  tick={{ fontSize: 12, fill: "#6b7280" }}
+  tick={{ fontSize: isTrendMobile ? 10 : 12, fill: "#6b7280" }}
   axisLine={false}
   tickLine={false}
+  width={isTrendMobile ? 42 : 40}
 />
 
   {/* 🔥 Benchmark Line */}
@@ -1340,7 +1367,7 @@ const trendColor = getTrendColor(uptimeTrend);
         <circle
           cx={cx}
           cy={cy}
-          r={6}
+          r={isTrendMobile ? 5 : 6}
           fill={trendColor}
           stroke="#fff"
           strokeWidth={2}
@@ -1348,10 +1375,10 @@ const trendColor = getTrendColor(uptimeTrend);
       );
     }
 
-    return <circle cx={cx} cy={cy} r={3} fill={trendColor} />;
+    return <circle cx={cx} cy={cy} r={isTrendMobile ? 2.5 : 3} fill={trendColor} />;
   }}
   activeDot={{
-    r: 7,
+    r: isTrendMobile ? 6 : 7,
     stroke: trendColor,
     strokeWidth: 2,
     fill: "#fff",
@@ -1362,10 +1389,10 @@ const trendColor = getTrendColor(uptimeTrend);
  <LabelList
   dataKey="uptime"
   position="top"
-  offset={10}   // slight adjust
+  offset={isTrendMobile ? 6 : 10}
   formatter={(value) => `${truncateTo2(value)}%`}
   style={{
-    fontSize: "11px",
+    fontSize: isTrendMobile ? "10px" : "11px",
     fill: "#2563eb",
     fontWeight: 600,
   }}
@@ -1374,6 +1401,8 @@ const trendColor = getTrendColor(uptimeTrend);
 </Area>
  </AreaChart>
           </ResponsiveContainer>
+          </div>
+          </div>
         </div>
          
       {/* SCRUM MANPOWER CARD */}

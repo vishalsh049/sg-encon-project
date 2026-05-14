@@ -19,32 +19,45 @@ import {
   CheckCircle,
   Clock,
   Sparkles,
-  DollarSign,
+  IndianRupee,
   TrendingUp,
   TrendingDown,
   Hash,
   Percent,
   AlertTriangle,
   Info,
-} from "lucide-react";
+  PieChart,
+  ChartColumn,
+  LayoutDashboard,
+  CalendarDays,
+  RefreshCcw,
+  ChevronDown,
+   } from "lucide-react";
 
 export default function BillingDashboard() {
   const [summary, setSummary] = useState(null);
   const [statusData, setStatusData] = useState([]);
   const [revenueKpi, setRevenueKpi] = useState({
-    totalRevenue: 0,
-    totalQty: 0,
-    avgRate: 0,
-  });
+  totalRevenue: 0,
+
+  totalFTTx: 0,
+  totalFiber: 0,
+  totalTower: 0,
+  totalCMAmount: 0,
+  totalPMAmount: 0,
+
+  totalQty: 0,
+  avgRate: 0,
+});
   const [revenueLoading, setRevenueLoading] = useState(false);
   const [timeFilter, setTimeFilter] = useState("3");
   const [circleFilter, setCircleFilter] = useState("");
   const [billingFilter, setBillingFilter] = useState("");
   const [visibleCount, setVisibleCount] = useState(3);
 
-  useEffect(() => {
-    fetchData();
-  }, []);
+useEffect(() => {
+  fetchData();
+}, [circleFilter, billingFilter, timeFilter]);
 
   useEffect(() => {
     const fetchRevenueKpi = async () => {
@@ -54,8 +67,10 @@ export default function BillingDashboard() {
           Authorization: `Bearer ${localStorage.getItem("token")}`,
         };
 
-        const params = {
-          circle: circleFilter || undefined,
+      const params = {
+      circle: circleFilter || undefined,
+      billing_type: billingFilter || undefined,
+      months: timeFilter || undefined,
         };
 
         const { data } = await axios.get(buildApiUrl("/api/revenue/kpi-data"), {
@@ -63,11 +78,18 @@ export default function BillingDashboard() {
           params,
         });
 
-        setRevenueKpi({
-          totalRevenue: Number(data?.totalRevenue || 0),
-          totalQty: Number(data?.totalQty || 0),
-          avgRate: Number(data?.avgRate || 0),
-        });
+       setRevenueKpi({
+  totalRevenue: Number(data?.totalRevenue || 0),
+
+  totalFTTx: Number(data?.totalFTTx || 0),
+  totalFiber: Number(data?.totalFiber || 0),
+  totalTower: Number(data?.totalTower || 0),
+  totalCMAmount: Number(data?.totalCMAmount || 0),
+  totalPMAmount: Number(data?.totalPMAmount || 0),
+
+  totalQty: Number(data?.totalQty || 0),
+  avgRate: Number(data?.avgRate || 0),
+});
       } catch (err) {
         console.error(err);
       } finally {
@@ -78,23 +100,37 @@ export default function BillingDashboard() {
     fetchRevenueKpi();
   }, [circleFilter, timeFilter, billingFilter]);
 
-  const fetchData = async () => {
-    try {
-      const authHeaders = {
-        Authorization: `Bearer ${localStorage.getItem("token")}`,
-      };
+const fetchData = async () => {
+  try {
+    const authHeaders = {
+      Authorization: `Bearer ${localStorage.getItem("token")}`,
+    };
 
-      const [summaryRes, statusRes] = await Promise.all([
-        axios.get(buildApiUrl("/api/billing/summary"), { headers: authHeaders }),
-        axios.get(buildApiUrl("/api/billing/status"), { headers: authHeaders }),
-      ]);
+    const params = {
+      circle: circleFilter || undefined,
+      billing_type: billingFilter || undefined,
+      months: timeFilter || undefined,
+    };
 
-      setSummary(summaryRes.data);
-      setStatusData(statusRes.data);
-    } catch (err) {
-      console.error(err);
-    }
-  };
+    const [summaryRes, statusRes] = await Promise.all([
+      axios.get(buildApiUrl("/api/billing/summary"), {
+        headers: authHeaders,
+        params,
+      }),
+
+      axios.get(buildApiUrl("/api/billing/status"), {
+        headers: authHeaders,
+        params,
+      }),
+    ]);
+
+    setSummary(summaryRes.data);
+    setStatusData(statusRes.data);
+
+  } catch (err) {
+    console.error(err);
+  }
+};
 
   const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
@@ -209,14 +245,54 @@ export default function BillingDashboard() {
     return `${circleLabel}${billingLabel}revenue is ₹${revenue.toLocaleString()} for ${timeLabel}, with a net loss of ₹${Math.abs(net).toLocaleString()} after penalties.`;
   }, [revenueKpi.totalRevenue, summary?.penalties, circleFilter, timeFilter, billingFilter]);
 
-const revenueMonthlyTrend = [
-  { month: "Jan", revenue: 420000 },
-  { month: "Feb", revenue: 580000 },
-  { month: "Mar", revenue: 760000 },
-  { month: "Apr", revenue: 620000 },
-  { month: "May", revenue: 910000 },
-  { month: "Jun", revenue: 1100000 },
-];
+ const currentMonth = months[new Date().getMonth()];
+
+const revenueMonthlyTrend = filteredMonths.map((month) => {
+
+  // ✅ Only current uploaded month gets value
+  const revenue =
+    month === currentMonth
+      ? Number(revenueKpi.totalRevenue || 0)
+      : 0;
+
+  const pmLoss =
+    month === currentMonth
+      ? Number(summary?.pm_loss || 0)
+      : 0;
+
+ const fakePenaltyData = {
+  Jan: 0.40,
+  Feb: 0.55,
+  Mar: 0.72,
+  Apr: 0.30,
+  May: 0.65,
+  Jun: 0.45,
+  Jul: 0.80,
+  Aug: 0.52,
+  Sep: 0.61,
+  Oct: 0.48,
+  Nov: 0.74,
+  Dec: 0.58,
+};
+
+const penalty = fakePenaltyData[month] || 0;
+
+  return {
+    month,
+
+    revenue: Number(
+      (revenue / 10000000).toFixed(2)
+    ),
+
+    pmLoss: Number(
+      (pmLoss / 10000000).toFixed(2)
+    ),
+
+   penalty: Number(
+  penalty.toFixed(2)
+),
+  };
+});
 
   const revenueTrendData = useMemo(
     () => [
@@ -225,6 +301,46 @@ const revenueMonthlyTrend = [
     ],
     [revenueKpi.totalRevenue, summary?.penalties]
   );
+
+  // ✅ Dynamic shared Y-axis for all charts
+
+const maxChartValue = Math.max(
+  ...revenueMonthlyTrend.map((item) =>
+    Math.max(
+      item.revenue || 0,
+      item.pmLoss || 0,
+      item.penalty || 0
+    )
+  )
+);
+
+// Round max value nicely
+const roundedMax =
+  maxChartValue <= 2
+    ? 2
+    : maxChartValue <= 4
+    ? 4
+    : maxChartValue <= 6
+    ? 6
+    : maxChartValue <= 8
+    ? 8
+    : Math.ceil(maxChartValue);
+
+const yAxisTicks = [
+  0,
+  roundedMax * 0.25,
+  roundedMax * 0.5,
+  roundedMax * 0.75,
+  roundedMax,
+];
+
+// ✅ Dynamic bar width based on filter
+const dynamicBarSize =
+  filteredMonths.length >= 12
+    ? 14
+    : filteredMonths.length >= 6
+    ? 20
+    : 28;
 
   // Sort for insights
   const sorted = [...chartData].sort((a, b) => b.percent - a.percent);
@@ -285,923 +401,748 @@ const revenueMonthlyTrend = [
       {/* Background blur shapes */}
 
       <div className="relative mx-auto max-w-[1400px]">
-        {/* Top Section */}
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between mb-4">
-          <div>
-            <h1 className="text-xl sm:text-[24px] font-bold tracking-[-0.03em] text-text-primary">
-              Billing Dashboard
-            </h1>
-            <div className="mt-2 text-sm text-text-secondary">
-              Luxury-grade billing insights across circles and billing types.
-            </div>
-          </div>
+{/* PREMIUM TOP HEADER */}
+<div className="mb-6">
 
-          {/* Premium filter row */}
-          <div className="rounded-3xl border border-border-color/60 bg-white/55 backdrop-blur-xl shadow-soft px-3 py-2">
-            <div className="flex flex-wrap items-center gap-2">
-              {/* Time Dropdown */}
-              <select
-                value={timeFilter}
-                onChange={(e) => setTimeFilter(e.target.value)}
-                className="h-9 px-3 text-xs rounded-full border border-border-color/70 bg-white/70 backdrop-blur text-text-primary outline-none transition focus:border-primary shadow-[0_10px_30px_rgba(15,23,42,0.06)]"
-              >
-                <option value="3">Last 3 Months</option>
-                <option value="6">Last 6 Months</option>
-                <option value="12">Last 1 Year</option>
-              </select>
+  <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
 
-              {/* Circle Filter */}
-              <select
-                value={circleFilter}
-                onChange={(e) => setCircleFilter(e.target.value)}
-                className="h-9 px-3 text-xs rounded-full border border-border-color/70 bg-white/70 backdrop-blur text-text-primary outline-none transition focus:border-primary"
-              >
-                <option value="">All Circles</option>
-                {circleOptions.map((c) => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
-                ))}
-              </select>
+    {/* LEFT SECTION */}
+    <div className="flex items-start gap-4">
 
-              {/* Billing Type */}
-              <select
-                value={billingFilter}
-                onChange={(e) => setBillingFilter(e.target.value)}
-                className="h-9 px-3 text-xs rounded-full border border-border-color/70 bg-white/70 backdrop-blur text-text-primary outline-none transition focus:border-primary"
-              >
-                <option value="">All Types</option>
-                {billingOptions.map((b) => (
-                  <option key={b} value={b}>
-                    {b}
-                  </option>
-                ))}
-              </select>
+      {/* ICON */}
+      <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-indigo-500 via-violet-500 to-purple-500 flex items-center justify-center">
 
-              <button
-                onClick={() => {
-                  setTimeFilter("3");
-                  setCircleFilter("");
-                  setBillingFilter("");
-                }}
-                className="h-9 px-4 text-xs rounded-full border border-border-color/70 bg-white/70 backdrop-blur text-text-primary transition hover:bg-red-50 hover:shadow-soft"
-              >
-                Reset
-              </button>
-            </div>
-          </div>
+        <LayoutDashboard
+          size={26}
+          className="text-white"
+        />
+
+      </div>
+
+      {/* TITLE */}
+      <div>
+
+        <h1 className="text-[24px] font-semibold tracking-[-0.05em] text-slate-900">
+          Billing Analytics
+        </h1>
+
+        <div className="mt-1 text-sm text-slate-500 tracking-[0.01em]">
+          Real-time operational insights for revenue, PM loss, and penalty performance.
         </div>
 
-        <div className="rounded-[26px] bg-gray-100 border border-border-color/60 bg-white/40 backdrop-blur-xl shadow-panel p-4 overflow-hidden">
-          <div className="flex flex-col lg:flex-row gap-4">
+      </div>
 
-            {/* Left Panel: Month performance + AI + chart */}
+    </div>
 
-            <div className="flex-1 lg:pr-2 relative overflow-hidden py-2">
-              <div className="flex items-center justify-between gap-3 mb-3 px-3">
-                <h3 className="text-[11px] font-semibold tracking-[0.26em] text-indigo-600 uppercase">
-                  Billing Insights
-                </h3>
-                <div className="h-1 w-24 rounded-full bg-gradient-to-r from-emerald-500/40 via-indigo-500/40 to-amber-400/30" />
-              </div>
+    {/* FILTER SECTION */}
+    <div className="p-2">
 
-              {/* KPI row (premium completion summary) */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-3">
-                <div className="rounded-2xl border border-border-color/60 bg-white/60 backdrop-blur p-3 transition hover:-translate-y-[2px]">
-                  <div className="flex items-center justify-between">
-                    <div className="text-[10px] font-semibold tracking-[0.36em] text-text-secondary uppercase">
-                      Avg Completion
-                    </div>
-                    <div className="rounded-xl bg-emerald-500/10 border border-emerald-500/20 p-1 text-emerald-700">
-                      <Percent size={14} />
-                    </div>
-                  </div>
-                  <div className="mt-2 text-[18px] font-bold tracking-[-0.03em] text-emerald-800">
-                    {avgCompletion}%
-                  </div>
-                </div>
+      <div className="flex flex-wrap items-center gap-2">
 
-                <div className="rounded-2xl border border-border-color/60 bg-white/60 backdrop-blur p-3 transition hover:-translate-y-[2px]">
-                  <div className="flex items-center justify-between">
-                    <div className="text-[10px] font-semibold tracking-[0.18em] text-text-secondary uppercase">
-                      Best Month
-                    </div>
-                    <div className="rounded-xl bg-emerald-500/10 border border-emerald-500/20 p-1 text-emerald-700">
-                      <TrendingUp size={14} />
-                    </div>
-                  </div>
-                  <div className=" text-[14px] font-bold text-text-primary">
-                    {bestMonth?.month || "-"}
-                  </div>
-                  <div className="mt-1 text-xs font-semibold text-emerald-700">
-                    {bestMonth ? `${bestMonth.percent}% done` : ""}
-                  </div>
-                </div>
+        {/* TIME FILTER */}
+        <div className="relative">
 
-                <div className="rounded-2xl border border-border-color/60 bg-white/60 backdrop-blur p-3 transition hover:-translate-y-[2px]">
-                  <div className="flex items-center justify-between">
-                    <div className="text-[10px] font-semibold tracking-[0.18em] text-text-secondary uppercase">
-                      Needs Attention
-                    </div>
-                    <div className="rounded-xl bg-rose-500/10 border border-rose-500/20 p-1 text-rose-700">
-                      <TrendingDown size={14} />
-                    </div>
-                  </div>
-                  <div className=" text-[14px] font-bold text-text-primary">
-                    {worstMonth?.month || "-"}
-                  </div>
-                  <div className="mt-1 text-xs font-semibold text-rose-600">
-                    {worstMonth ? `${worstMonth.percent}% done` : ""}
-                  </div>
-                </div>
-              </div>
+          <CalendarDays
+            size={14}
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+          />
 
-              {/* AI Insight card */}
-              <div className="mb-3 rounded-3xl border border-indigo-100 bg-gradient-to-r from-indigo-50/90 via-white/70 to-blue-50/90 backdrop-blur px-4 py-2 transition">
-                <div className="flex items-center gap-2 mb-2">
-                  <div className="rounded-2xl bg-indigo-500/10 border border-indigo-500/20 p-2 text-indigo-700">
-                    <Sparkles size={10} />
-                  </div>
-                  <div className="text-[11px] font-semibold tracking-[0.26em] text-indigo-600 uppercase">
-                    AI Insight
-                  </div>
-                  <div className="ml-auto flex items-center gap-2">
-                    <span className="text-[10px] px-2 py-0.5 bg-indigo-100/80 text-indigo-700 rounded-full border border-indigo-200">
-                      Smart
-                    </span>
-                  </div>
-                </div>
+          <select
+            value={timeFilter}
+            onChange={(e) => setTimeFilter(e.target.value)}
+            className="h-11 pl-9 pr-4 text-sm rounded-xl border border-slate-200 bg-white text-slate-700 outline-none transition focus:border-indigo-400 shadow-sm"
+          >
+            <option value="3">Last 3 Months</option>
+            <option value="6">Last 6 Months</option>
+            <option value="12">Last 1 Year</option>
+          </select>
 
-                <p className="text-sm text-text-secondary leading-relaxed">
-                  {aiSummary}
-                </p>
-              </div>
+          
 
-              {/* Charts */}
-              <div className="rounded-3xl border border-border-color/60 bg-white/55 backdrop-blur p-4 mb-5">
-                <div className="flex items-center justify-between mb-3">
-                  <div>
-                    <div className="text-[11px] font-semibold tracking-[0.22em] text-text-secondary uppercase">
-                      Done vs Pending
-                    </div>
-                    <div className="text-xs text-text-muted mt-1">Smooth completion overview by month</div>
-                  </div>
-                  <div className="h-2 w-2 rounded-full bg-emerald-500/70" />
-                </div>
+          
 
-                <div className="h-60">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={chartData}>
-                      <defs>
-                        <linearGradient id="doneGrad" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor="#10b981" stopOpacity="0.95" />
-                          <stop offset="100%" stopColor="#22c55e" stopOpacity="0.75" />
-                        </linearGradient>
-                        <linearGradient id="pendingGrad" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor="#f59e0b" stopOpacity="0.95" />
-                          <stop offset="100%" stopColor="#fbbf24" stopOpacity="0.7" />
-                        </linearGradient>
-                      </defs>
+        </div>
 
-                      <CartesianGrid vertical={false} stroke="rgba(15, 23, 42, 0.06)" />
-                      <XAxis
-                        dataKey="month"
-                        tick={{ fontSize: 11, fill: "#64748b" }}
-                        axisLine={false}
-                        tickLine={false}
-                      />
-                      <Tooltip formatter={(value) => Number(value).toLocaleString()} />
-                      <Bar dataKey="done" fill="url(#doneGrad)" radius={[10, 10, 0, 0]} />
-                      <Bar dataKey="pending" fill="url(#pendingGrad)" radius={[10, 10, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
+        {/* CIRCLE FILTER */}
+    <select
+      value={circleFilter}
+      onChange={(e) => setCircleFilter(e.target.value)}
+      className="h-11 pl-4 pr-10 text-sm rounded-xl border border-slate-200 bg-white
+     text-slate-700 outline-none transition focus:border-indigo-400 shadow-sm appearance-none"
+    >
+          <option value="">All Circles</option>
 
-              {/* Monthly Progress */}
-<div className=" rounded-2xl border border-border-color/60 bg-white/55 backdrop-blur p-4 overflow-hidden">
+          {circleOptions.map((c) => (
+            <option key={c} value={c}>
+              {c}
+            </option>
+          ))}
+        </select>
+
+        {/* BILLING FILTER */}
+        <select
+          value={billingFilter}
+          onChange={(e) => setBillingFilter(e.target.value)}
+          className="h-11 px-4 text-sm rounded-xl border border-slate-200 bg-white text-slate-700 outline-none transition focus:border-indigo-400 shadow-sm"
+        >
+          <option value="">All Types</option>
+
+          {billingOptions.map((b) => (
+            <option key={b} value={b}>
+              {b}
+            </option>
+          ))}
+        </select>
+
+        {/* RESET BUTTON */}
+        <button
+          onClick={() => {
+            setTimeFilter("3");
+            setCircleFilter("");
+            setBillingFilter("");
+          }}
+          className="h-11 px-5 rounded-xl border border-indigo-100 bg-indigo-50 text-indigo-700 text-sm font-medium transition hover:bg-indigo-100 flex items-center gap-2"
+        >
+          <RefreshCcw size={14} />
+          Reset
+        </button>
+
+      </div>
+
+    </div>
+
+  </div>
+
+</div>
+        <div className="rounded-[18px] bg-gray-100 border border-border-color/60 bg-white/40 
+        backdrop-blur-xl shadow-panel p-4 overflow-hidden">
+         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+
+               {/* Right Panel: Premium KPI cards, revenue insight, penalties */}
+  
+              {/* REVENUE CARD */}
+<div className="p-2">
 
   {/* Header */}
-  <div className="flex items-center justify-between mb-4">
+  <div className="flex items-start justify-between">
     <div>
-      <div className="text-[11px] font-semibold tracking-[0.26em] text-cyan-700 uppercase">
-        Monthly Progress
+      <div className="text-[11px] tracking-[0.35em] font-bold text-emerald-700 uppercase">
+        Revenue
       </div>
 
-      <div className="text-xs text-text-muted mt-1">
-        Real month-wise billing completion overview
+      <div className="mt-2 text-sm tracking-[0.14em] text-slate-500">
+        Total Revenue
+      </div>
+
+      <div className="mt-1 text-[22px] font-semibold tracking-[-0.05em] text-emerald-700">
+        ₹ {(Number(revenueKpi.totalRevenue || 0) / 10000000).toFixed(2)} Cr
+      </div>
+
+      <div className="mt-2 text-emerald-600 text-xs">
+        Synced from revenue KPI API
       </div>
     </div>
 
-    <div className="h-2 w-2 rounded-full bg-cyan-500/70" />
-  </div>
-
-  {/* Dynamic Progress */}
-  <div className="space-y-4">
-
-    {chartData.map((item, index) => {
-
-      const progressColor =
-        item.percent >= 80
-          ? "bg-emerald-500"
-          : item.percent >= 60
-          ? "bg-indigo-500"
-          : item.percent >= 40
-          ? "bg-amber-500"
-          : "bg-rose-500";
-
-      const progressBg =
-        item.percent >= 80
-          ? "bg-emerald-100"
-          : item.percent >= 60
-          ? "bg-indigo-100"
-          : item.percent >= 40
-          ? "bg-amber-100"
-          : "bg-rose-100";
-
-      const textColor =
-        item.percent >= 80
-          ? "text-emerald-700"
-          : item.percent >= 60
-          ? "text-indigo-700"
-          : item.percent >= 40
-          ? "text-amber-700"
-          : "text-rose-700";
-
-      return (
-       <div
-  key={index}
-  className="rounded-2xl border border-border-color/50 bg-white/70 p-3"
->
-  <div className="flex items-center justify-between mb-2">
-
-    <div>
-      <div className="text-sm font-semibold text-text-primary">
-        {item.month}
-      </div>
-
-      <div className="text-xs text-text-muted mt-1">
-        {item.done} Done • {item.pending} Pending
-      </div>
-    </div>
-
-    <div className={`text-sm font-bold ${textColor}`}>
-      {item.percent}%
+    <div className="h-8 w-8 rounded-full border border-emerald-200 bg-emerald-50 flex items-center justify-center text-emerald-700">
+      <IndianRupee size={14} />
     </div>
   </div>
 
-  <div className={`h-2 rounded-full overflow-hidden ${progressBg}`}>
-    <div
-      className={`h-full rounded-full ${progressColor}`}
-      style={{ width: `${item.percent}%` }}
-    />
-  </div>
-</div>
-      );
-    })}
-
-  </div>
-</div>
-
-     {/* PM LOSS SECTION */}
-<div className="mb-3 pt-5 border-t border-border-color/40">
-
-  {/* Heading */}
-  <div className="flex items-center justify-between mb-3">
-    <div>
-      <div className="text-[11px] font-semibold tracking-[0.26em] text-amber-700 uppercase">
-        PM Loss
-      </div>
-
-      <div className="text-xs text-text-muted mt-1">
-        Profit margin and operational impact overview
-      </div>
-    </div>
-
-    <div className="h-2 w-2 rounded-full bg-amber-500/70" />
-  </div>
-
-  {/* Cards */}
-  <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-
-    {/* PM LOSS */}
-    <div className="rounded-3xl border border-amber-200/60 bg-amber-50/50 backdrop-blur p-4 transition-all 
-    duration-200 hover:-translate-y-[2px] flex items-center justify-between gap-4">
-
-      <div className="flex items-center gap-3">
-        <div className="rounded-2xl bg-amber-500/10 border border-amber-500/20 p-2 text-amber-700">
-          <TrendingDown size={20} />
-        </div>
-
-        <div>
-          <div className="text-[11px] font-semibold tracking-[0.26em] text-amber-700 uppercase">
-            PM Loss
-          </div>
-
-          <div className="text-sm text-text-secondary mt-1">
-            Profit margin reduction
-          </div>
-        </div>
-      </div>
-
-      <div className="text-right">
-        <div className="text-[13px] font-semibold text-amber-700/80">
-          Monthly
-        </div>
-
-        <div className="text-[22px] font-bold tracking-[-0.04em] text-amber-700">
-          ₹5200
-        </div>
-      </div>
-    </div>
-
-    {/* REVENUE DROP */}
-    <div className="rounded-3xl border border-red-200/60 bg-red-50/50 backdrop-blur p-4 transition-all
-     duration-200 hover:-translate-y-[2px] flex items-center justify-between gap-4">
-
-      <div className="flex items-center gap-3">
-        <div className="rounded-2xl bg-red-500/10 border border-red-500/20 p-2 text-red-700">
-          <TrendingDown size={18} />
-        </div>
-
-        <div>
-          <div className="text-[11px] font-semibold tracking-[0.26em] text-red-700 uppercase">
-            Revenue Drop
-          </div>
-
-          <div className="text-sm text-text-secondary mt-1">
-            Monthly revenue decrease
-          </div>
-        </div>
-      </div>
-
-      <div className="text-right">
-        <div className="text-[13px] font-semibold text-red-700/80">
-          Revenue
-        </div>
-
-        <div className="text-[22px] font-bold tracking-[-0.04em] text-red-700">
-          ₹3100
-        </div>
-      </div>
-    </div>
-
-  </div>
-
-  {/* Circle Performance Leaderboard */}
-<div className="mt-4 rounded-3xl border border-border-color/60 bg-white/55 backdrop-blur p-4">
-
-  {/* Header */}
-  <div className="flex items-center justify-between mb-4">
-    <div>
-      <div className="text-[11px] font-semibold tracking-[0.26em] text-indigo-700 uppercase">
-        Circle Performance
-      </div>
-
-      <div className="text-xs text-text-muted mt-1">
-        Revenue and completion ranking overview
-      </div>
-    </div>
-
-    <div className="h-2 w-2 rounded-full bg-indigo-500/70" />
-  </div>
-
-  {/* Table */}
-  <div className="space-y-3">
-
-    {/* ROW */}
-    <div className="flex items-center justify-between rounded-2xl border border-border-color/50 bg-white/70 px-4 py-3">
-
-      <div>
-        <div className="text-sm font-semibold text-text-primary">
-          Punjab
-        </div>
-
-        <div className="text-xs text-text-muted mt-1">
-          <span className="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] 
-          font-medium text-emerald-700">
-           Excellent
-             </span>
-        </div>
-      </div>
-
-      <div className="text-right">
-        <div className="text-sm font-bold text-emerald-700">
-          ₹4.2Cr
-        </div>
-
-        <div className="text-xs text-emerald-600 mt-1">
-          92% Complete
-        </div>
-      </div>
-    </div>
-
-    {/* ROW */}
-    <div className="flex items-center justify-between rounded-2xl border border-border-color/50 bg-white/70 px-4 py-3">
-
-      <div>
-        <div className="text-sm font-semibold text-text-primary">
-          Haryana
-        </div>
-
-        <div className="text-xs text-text-muted mt-1">
-          <span className="inline-flex items-center rounded-full bg-indigo-100 px-2 py-0.5 text-[11px] font-medium text-indigo-700">
-             Stable Growth
-          </span>
-        </div>
-      </div>
-
-      <div className="text-right">
-        <div className="text-sm font-bold text-indigo-700">
-          ₹3.8Cr
-        </div>
-
-        <div className="text-xs text-indigo-600 mt-1">
-          74% Complete
-        </div>
-      </div>
-    </div>
-
-    {/* ROW */}
-    <div className="flex items-center justify-between rounded-2xl border border-border-color/50 bg-white/70 px-4 py-3">
-
-      <div>
-        <div className="text-sm font-semibold text-text-primary">
-          Delhi
-        </div>
-
-        <div className="text-xs text-text-muted mt-1">
-          <span className="inline-flex items-center rounded-full bg-rose-100 px-2 py-0.5 text-[11px] font-medium text-rose-700">
-             Needs Attention
-          </span>
-        </div>
-      </div>
-
-      <div className="text-right">
-        <div className="text-sm font-bold text-rose-700">
-          ₹2.9Cr
-        </div>
-
-        <div className="text-xs text-rose-600 mt-1">
-          61% Complete
-        </div>
-      </div>
-    </div>
-
-  </div>
-</div>
-
-{/* PM LOSS ANALYSIS */}
-<div className="mt-4 rounded-3xl border border-border-color/60 bg-white/55 backdrop-blur p-4 overflow-hidden">
-
-  {/* Header */}
-  <div className="flex items-center justify-between mb-4">
-    <div>
-      <div className="text-[11px] font-semibold tracking-[0.26em] text-amber-700 uppercase">
-        PM Loss Analysis
-      </div>
-
-      <div className="text-xs text-text-muted mt-1">
-        Operational and billing impact overview
-      </div>
-    </div>
-
-    <div className="h-2 w-2 rounded-full bg-amber-500/70" />
-  </div>
-
-  {/* Progress Items */}
-  <div className="space-y-4">
-
-    {/* KPI Delay */}
-    <div>
-      <div className="flex items-center justify-between mb-2">
-        <div className="text-sm font-medium text-text-primary">
-          KPI Delay
-        </div>
-
-        <div className="text-sm font-semibold text-amber-700">
-          72%
-        </div>
-      </div>
-
-      <div className="h-2 rounded-full bg-amber-100 overflow-hidden">
-        <div className="h-full w-[72%] rounded-full bg-amber-500" />
-      </div>
-    </div>
-
-    {/* Revenue Impact */}
-    <div>
-      <div className="flex items-center justify-between mb-2">
-        <div className="text-sm font-medium text-text-primary">
-          Revenue Impact
-        </div>
-
-        <div className="text-sm font-semibold text-rose-700">
-          48%
-        </div>
-      </div>
-
-      <div className="h-2 rounded-full bg-rose-100 overflow-hidden">
-        <div className="h-full w-[48%] rounded-full bg-rose-500" />
-      </div>
-    </div>
-
-    {/* Billing Delay */}
-    <div>
-      <div className="flex items-center justify-between mb-2">
-        <div className="text-sm font-medium text-text-primary">
-          Billing Delay
-        </div>
-
-        <div className="text-sm font-semibold text-indigo-700">
-          36%
-        </div>
-      </div>
-
-      <div className="h-2 rounded-full bg-indigo-100 overflow-hidden">
-        <div className="h-full w-[36%] rounded-full bg-indigo-500" />
-      </div>
-    </div>
-
-    {/* Operational Loss */}
-    <div>
-      <div className="flex items-center justify-between mb-2">
-        <div className="text-sm font-medium text-text-primary">
-          Operational Loss
-        </div>
-
-        <div className="text-sm font-semibold text-emerald-700">
-          21%
-        </div>
-      </div>
-
-      <div className="h-2 rounded-full bg-emerald-100 overflow-hidden">
-        <div className="h-full w-[21%] rounded-full bg-emerald-500" />
-      </div>
-    </div>
-
-  </div>
-</div>
-
-</div>
-              
-            </div>
-
-            {/* Right Panel: Premium KPI cards, revenue insight, penalties */}
-            <div className="flex-1 lg:border-l border-border-color/60 px-0 lg:px-4 flex flex-col">
-              {/* KPI CARDS (Premium glass cards) */}
-              <div className="py-2">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
-                  <div className="rounded-3xl border border-border-color/60 bg-white/55 backdrop-blur p-5 transition-all duration-200 hover:-translate-y-[2px] relative overflow-hidden">
-                    <div className="absolute -right-10 -top-10 h-24 w-24 rounded-full bg-emerald-500/10 blur-2xl" />
-                    <div className="flex items-start justify-between gap-3 relative">
-                      <div>
-                        <div className="text-[11px] font-semibold tracking-[0.22em] text-text-secondary uppercase">
-                          Total Revenue
-                        </div>
-                        <div className="mt-2 text-[22px] font-bold tracking-[-0.04em] text-emerald-800">
-                          {revenueLoading ? "Loading..." : `₹ ${Number(revenueKpi.totalRevenue || 0).toLocaleString()}`}
-                        </div>
-                      </div>
-                      <div className="rounded-2xl bg-emerald-500/10 border border-emerald-500/20 p-2 text-emerald-700">
-                        <DollarSign size={16} />
-                      </div>
-                    </div>
-                    <div className="mt-3 text-xs text-text-muted">Synced from revenue KPI API</div>
-                  </div>
-
-                  <div className="rounded-3xl border border-border-color/60 bg-white/55 backdrop-blur p-5 transition-all duration-200 hover:-translate-y-[2px] relative overflow-hidden">
-                    <div className="absolute -right-10 -top-10 h-24 w-24 rounded-full bg-amber-300/10 blur-2xl" />
-                    <div className="flex items-start justify-between gap-3 relative">
-                      <div>
-                        <div className="text-[11px] font-semibold tracking-[0.26em] text-text-secondary uppercase">
-                          Net Revenue
-                        </div>
-                        <div className={`mt-2 text-[22px] font-bold tracking-[-0.04em] ${netRevenue >= 0 ? "text-emerald-800" : "text-rose-700"}`}>
-                          {revenueLoading ? "Loading..." : `₹ ${netRevenue.toLocaleString()}`}
-                        </div>
-                      </div>
-                      <div className={`rounded-2xl p-2 border ${netRevenue >= 0 ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-700" : "bg-rose-500/10 border-rose-500/20 text-rose-700"}`}>
-                        {netRevenue >= 0 ? <TrendingUp size={16} /> : <TrendingDown size={16} />}
-                      </div>
-                    </div>
-                    <div className={`mt-3 text-xs ${netRevenue >= 0 ? "text-emerald-700" : "text-rose-700"} font-semibold`}>
-                      {netRevenue >= 0 ? "Profit after penalties" : "Loss after penalties"}
-                    </div>
-                  </div>
-
-                  <div className="rounded-3xl border border-border-color/60 bg-white/55 backdrop-blur p-5 transition-all duration-200 hover:-translate-y-[2px]">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <div className="text-[11px] font-semibold tracking-[0.26em] text-text-secondary uppercase">
-                          Total Quantity
-                        </div>
-                        <div className="mt-2 text-[22px] font-bold tracking-[-0.02em] text-text-primary">
-                          {revenueLoading ? "..." : Number(revenueKpi.totalQty || 0).toLocaleString()}
-                        </div>
-                      </div>
-                      <div className="rounded-2xl bg-indigo-500/10 border border-indigo-500/20 p-2 text-indigo-700">
-                        <Hash size={16} />
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="rounded-3xl border border-border-color/60 bg-white/55 backdrop-blur p-5 transition-all duration-200 hover:-translate-y-[2px]">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <div className="text-[11px] font-semibold tracking-[0.26em] text-text-secondary uppercase">
-                          Average Rate
-                        </div>
-                        <div className="mt-2 text-[22px] font-bold tracking-[-0.02em] text-text-primary">
-                          {revenueLoading ? "..." : `₹ ${Number(revenueKpi.avgRate || 0).toFixed(2)}`}
-                        </div>
-                      </div>
-                      <div className="rounded-2xl bg-amber-300/10 border border-amber-300/20 p-2 text-amber-700">
-                        <Percent size={16} />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Revenue Insight Box (Premium info card) */}
-                <div className="mb-4 rounded-3xl border border-border-color/60 bg-white/50 backdrop-blur p-4">
-                  <div className="flex items-center justify-between gap-3 mb-2">
-                    <div className="flex items-center gap-2">
-                      <div className="rounded-2xl bg-indigo-500/10 border border-indigo-500/20 p-1 text-indigo-700">
-                        <Info size={12} />
-                      </div>
-                      <div className="text-[11px] font-semibold tracking-[0.26em] text-text-secondary uppercase">
-                        Revenue Insight
-                      </div>
-                    </div>
-                    <div className="text-xs text-text-muted">
-                      {timeFilter === "3" ? "Last 3 months" : timeFilter === "6" ? "Last 6 months" : "Last year"}
-                    </div>
-                  </div>
-                  <p className="text-sm text-text-secondary leading-relaxed">
-                    {revenueInsight}
-                  </p>
-                </div>
-
-                {/* Revenue Trend */}
-<div className="rounded-3xl border border-border-color/60 bg-white/55 backdrop-blur p-4 mb-4 overflow-hidden">
-
-  <div className="flex items-center justify-between mb-4">
-    <div>
-      <div className="text-[11px] font-semibold tracking-[0.26em] text-emerald-700 uppercase">
+  {/* Trend */}
+  <div className="mt-4 rounded-2xl border border-slate-100 backdrop-blur-xl p-4">
+    <div className="flex items-center justify-between mb-4">
+      <div className="text-[10px] tracking-[0.28em] font-semibold uppercase text-emerald-700">
         Revenue Trend
       </div>
 
-      <div className="text-xs text-text-muted mt-1">
-        Monthly revenue performance overview
+    </div>
+
+    <div className="h-56">
+      <ResponsiveContainer width="100%" height="100%">
+      
+<BarChart
+data={revenueMonthlyTrend}
+>
+
+  <defs>
+    <linearGradient id="greenBar" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stopColor="#10b981" />
+      <stop offset="100%" stopColor="#6ee7b7" />
+    </linearGradient>
+  </defs>
+
+ <XAxis
+  dataKey="month"
+  interval={0}
+  textAnchor="end"
+  axisLine={false}
+  tickLine={false}
+  tick={{
+    fontSize: 11,
+    fill: "#64748b",
+  }}
+/>
+
+<YAxis
+  width={28}
+  domain={[0, roundedMax + (roundedMax * 0.15)]}
+  ticks={yAxisTicks}
+  axisLine={false}
+  tickLine={false}
+  tickFormatter={(value) => value.toFixed(1)}
+  tick={{
+    fontSize: 11,
+    fill: "#94a3b8",
+  }}
+/>
+
+  <Tooltip
+    cursor={{
+      fill: "rgba(15,23,42,0.04)",
+    }}
+    contentStyle={{
+      borderRadius: "18px",
+      border: "1px solid #e2e8f0",
+      background: "rgba(255,255,255,0.96)",
+      backdropFilter: "blur(12px)",
+    }}
+  />
+
+ <Bar
+  dataKey="revenue"
+  fill="url(#greenBar)"
+  radius={[10, 10, 0, 0]}
+  barSize={dynamicBarSize}
+  label={{
+  position: "top",
+  offset: 8,
+  fill: "#e11d48",
+  fontSize: 11,
+  formatter: (value) => value.toFixed(2),
+}}
+/>
+
+</BarChart>
+
+      </ResponsiveContainer>
+    </div>
+  </div>
+
+ {/*  REVENUE Breakdown*/}
+<div className="mt-4 rounded-2xl border border-emerald-100 bg-emerald-50/20 backdrop-blur-xl p-4">
+
+  {/* Header */}
+  <div className="flex items-center justify-between mb-4">
+   <div className="flex items-start gap-3">
+  
+  <div className="h-9 w-9 rounded-xl bg-emerald-100 flex items-center justify-center text-emerald-700">
+    <IndianRupee size={14} />
+  </div>
+
+  <div>
+    <div className="text-[12px] font-semibold tracking-[0.26em] uppercase text-emerald-700">
+      Revenue Breakdown
+    </div>
+
+    <div className="text-[12px] tracking-[0.10em] text-slate-400 mt-1">
+      Domain-wise revenue distribution
+    </div>
+  </div>
+
+</div>
+
+    <div className="text-[10px] px-2 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100">
+      LIVE
+    </div>
+  </div>
+
+ {/* PREMIUM GRID */}
+<div className="overflow-hidden rounded-lg border border-slate-100">
+
+  {/* HEADER */}
+  <div className="grid grid-cols-3 bg-slate-50 border-b border-slate-100">
+
+    <div className="px-3 py-2 text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500">
+      Domain
+    </div>
+
+    <div className="px-3 py-2 text-[11px] font-bold uppercase tracking-[0.14em] text-emerald-700 border-l border-slate-100">
+      CM Revenue
+    </div>
+
+    <div className="px-3 py-2 text-[11px] font-bold uppercase tracking-[0.14em] text-violet-700 border-l border-slate-100">
+      PM Revenue
+    </div>
+
+  </div>
+
+  {/* FTTX */}
+  <div className="grid grid-cols-3 border-b border-slate-100">
+
+    <div className="p-3 text-xs font-semibold text-slate-700">
+      FTTx
+    </div>
+
+    <div className="p-3 text-xs font-semibold text-emerald-700 border-l border-slate-100">
+      ₹ {(Number(summary?.fttx_cm || 0) / 10000000).toFixed(2)} Cr
+    </div>
+
+    <div className="p-3 text-xs font-semibold text-violet-700 border-l border-slate-100">
+      ₹ {(Number(summary?.fttx_pm || 0) / 10000000).toFixed(2)} Cr
+    </div>
+
+  </div>
+
+  {/* FIBER */}
+  <div className="grid grid-cols-3 border-b border-slate-100">
+
+    <div className="p-3 text-xs font-semibold text-slate-700">
+      Fiber
+    </div>
+
+    <div className="p-3 text-xs font-semibold text-emerald-700 border-l border-slate-100">
+      ₹ {(Number(summary?.fiber_cm || 0) / 10000000).toFixed(2)} Cr
+    </div>
+
+    <div className="p-3 text-xs font-semibold text-violet-700 border-l border-slate-100">
+      ₹ {(Number(summary?.fiber_pm || 0) / 10000000).toFixed(2)} Cr
+    </div>
+
+  </div>
+
+  {/* TOWER */}
+  <div className="grid grid-cols-3">
+
+    <div className="p-3 text-xs font-semibold text-slate-700">
+      Tower
+    </div>
+
+    <div className="p-3 text-xs font-semibold text-emerald-700 border-l border-slate-100">
+      ₹ {(Number(summary?.tower_cm || 0) / 10000000).toFixed(2)} Cr
+    </div>
+
+    <div className="p-3 text-xs font-semibold text-violet-700 border-l border-slate-100">
+      ₹ {(Number(summary?.tower_pm || 0) / 10000000).toFixed(2)} Cr
+    </div>
+
+  </div>
+
+</div>
+
+</div>
+</div>
+
+  <div className="relative overflow-hidden py-2 border-l border-border-color/60 pl-4">
+
+   {/* PM LOSS CARD */}
+<div className=" p-1">
+
+  {/* Header */}
+  <div className="flex items-start justify-between">
+    <div>
+      <div className="text-[11px] tracking-[0.35em] font-bold text-indigo-700 uppercase">
+        PM Loss
+      </div>
+
+      <div className="mt-2 text-sm tracking-[0.14em] text-slate-500">
+        Total PM Loss
+      </div>
+
+      <div className="mt-1 text-[22px] font-semibold tracking-[-0.05em] text-indigo-700">
+        ₹ {(Number(summary?.pm_loss || 0) / 10000000).toFixed(2)} Cr
+      </div>
+
+      <div className="mt-1 text-indigo-600 text-xs">
+        Loss due to PM deductions
       </div>
     </div>
 
-    <div className="flex items-center gap-2">
-      <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-
-      <span className="text-xs text-emerald-700 font-medium">
-        Live Growth
-      </span>
+    <div className="h-8 w-8 rounded-full border border-indigo-200 bg-indigo-50 flex items-center justify-center text-indigo-700">
+      <TrendingDown size={14} />
     </div>
   </div>
 
-  <div className="h-56">
-    <ResponsiveContainer width="100%" height="100%">
-      <AreaChart data={revenueMonthlyTrend}>
+  {/* Trend */}
+  <div className="mt-4 rounded-2xl border border-slate-100 p-4">
+    <div className="flex items-center justify-between mb-4">
+      <div className="text-[11px] tracking-[0.28em] font-semibold uppercase text-indigo-700">
+        PM Loss Trend
+      </div>
 
-        <defs>
-          <linearGradient id="revenueArea" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#22c55e" stopOpacity={0.35} />
-            <stop offset="100%" stopColor="#22c55e" stopOpacity={0.02} />
-          </linearGradient>
-        </defs>
+    </div>
 
-        <CartesianGrid
-          vertical={false}
-          stroke="rgba(15,23,42,0.05)"
-        />
+    <div className="h-56">
+      <ResponsiveContainer width="100%" height="100%">
+      <BarChart
+  data={revenueMonthlyTrend}
+>
 
-        <XAxis
-          dataKey="month"
-          tick={{ fontSize: 11, fill: "#64748b" }}
-          axisLine={false}
-          tickLine={false}
-        />
+  <defs>
+    <linearGradient id="pmBar" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stopColor="#4f46e5" />
+      <stop offset="100%" stopColor="#a5b4fc" />
+    </linearGradient>
+  </defs>
 
-        <YAxis
-          tick={{ fontSize: 11, fill: "#64748b" }}
-          axisLine={false}
-          tickLine={false}
-        />
+<XAxis
+  dataKey="month"
+  interval={0}
+  textAnchor="end"
+  axisLine={false}
+  tickLine={false}
+  tick={{
+    fontSize: 11,
+    fill: "#64748b",
+  }}
+/>
 
-        <Tooltip
-          formatter={(value) => `₹ ${Number(value).toLocaleString()}`}
-          contentStyle={{
-            borderRadius: "16px",
-            border: "1px solid rgba(226,232,240,0.7)",
-            backdropFilter: "blur(12px)",
-          }}
-        />
+<YAxis
+  width={28}
+  domain={[0, roundedMax + (roundedMax * 0.15)]}
+  ticks={yAxisTicks}
+  axisLine={false}
+  tickLine={false}
+  tickFormatter={(value) => value.toFixed(1)}
+  tick={{
+    fontSize: 11,
+    fill: "#94a3b8",
+  }}
+/>
 
-        <Area
-          type="monotone"
-          dataKey="revenue"
-          stroke="#22c55e"
-          strokeWidth={3}
-          fill="url(#revenueArea)"
-        />
+  <Tooltip
+    cursor={{
+      fill: "rgba(15,23,42,0.04)",
+    }}
+    contentStyle={{
+      borderRadius: "18px",
+      border: "1px solid #e2e8f0",
+      background: "rgba(255,255,255,0.96)",
+    }}
+  />
 
-        <Line
-          type="monotone"
-          dataKey="revenue"
-          stroke="#16a34a"
-          strokeWidth={3}
-          dot={{ r: 4 }}
-          activeDot={{ r: 6 }}
-        />
-      </AreaChart>
-    </ResponsiveContainer>
+ <Bar
+  dataKey="pmLoss"
+  fill="url(#pmBar)"
+  radius={[10, 10, 0, 0]}
+  barSize={dynamicBarSize}
+  label={{
+  position: "top",
+  offset: 8,
+  fill: "#e11d48",
+  fontSize: 11,
+  formatter: (value) => value.toFixed(2),
+}}
+/>
+
+</BarChart>
+      </ResponsiveContainer>
+    </div>
   </div>
+
+  {/* PM LOSS BREAKDOWN */}
+<div className="mt-4 rounded-2xl border border-indigo-100 bg-indigo-50/20 backdrop-blur-xl p-4">
+
+  {/* Header */}
+  <div className="flex items-center justify-between mb-4">
+    <div className="flex items-start gap-3">
+
+  <div className="h-9 w-9 rounded-xl bg-indigo-100 flex items-center justify-center text-indigo-700">
+    <ChartColumn size={14} />
+  </div>
+
+  <div>
+    <div className="text-[12px] font-semibold tracking-[0.26em] uppercase text-indigo-700">
+      PM Loss Breakdown
+    </div>
+
+    <div className="text-[12px] tracking-[0.10em]  text-slate-400 mt-1">
+      Domain-wise PM loss analysis
+    </div>
+  </div>
+
 </div>
 
-                {/* Revenue vs Penalties chart */}
-                <div className="rounded-3xl border border-border-color/60 bg-white/55 backdrop-blur p-4 mb-4">
-                  <div className="flex items-center justify-between mb-3 gap-3">
-                    <div>
-                      <div className="text-[11px] font-semibold tracking-[0.26em] text-text-secondary uppercase">
-                        Revenue vs Penalties
-                      </div>
-                      <div className="text-xs text-text-muted mt-1">Clear comparison with minimal grid</div>
-                    </div>
-                    <div className="h-2 w-2 rounded-full bg-emerald-500/70" />
-                  </div>
+    <div className="text-[10px] px-2 py-1 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-100">
+      LIVE
+    </div>
+  </div>
 
-                  <div className="h-32">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={revenueTrendData}>
-                        <defs>
-                          <linearGradient id="revVsGrad" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="0%" stopColor="#22c55e" stopOpacity="0.95" />
-                            <stop offset="100%" stopColor="#10b981" stopOpacity="0.72" />
-                          </linearGradient>
-                          <linearGradient id="penVsGrad" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="0%" stopColor="#f59e0b" stopOpacity="0.95" />
-                            <stop offset="100%" stopColor="#fbbf24" stopOpacity="0.68" />
-                          </linearGradient>
-                        </defs>
+  <div className="overflow-hidden rounded-lg border border-slate-100">
 
-                        <CartesianGrid vertical={false} stroke="rgba(15, 23, 42, 0.06)" />
-                        <XAxis
-                          dataKey="name"
-                          axisLine={false}
-                          tickLine={false}
-                          tick={{ fontSize: 11, fill: "#64748b" }}
-                        />
-                        <Tooltip formatter={(value) => `₹ ${Number(value).toLocaleString()}`} />
-                        <Bar
-                          dataKey="value"
-                          radius={[10, 10, 0, 0]}
-                          fill="url(#revVsGrad)"
-                          // We keep a single series to avoid data-shape changes.
-                        />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                </div>
+    {/* HEADER */}
+    <div className="grid grid-cols-2 bg-slate-50 border-b border-slate-100">
 
-              {/* penalty divider */}
+      <div className="px-3 py-2 text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500">
+        Domain
+      </div>
 
-                <div className="mb-3 pt-4 border-t border-border-color/40">
+      <div className="px-3 py-2 text-[11px] font-bold uppercase tracking-[0.14em] text-indigo-700 border-l border-slate-100">
+        PM Loss
+      </div>
 
-    {/* Penalties Section */}
-<div className="mb-3">
+    </div>
 
-  {/* Heading */}
-  <div className="flex items-center justify-between mb-3">
+    {/* FTTX */}
+    <div className="grid grid-cols-2 border-b border-slate-100">
+
+      <div className="p-3 text-xs font-semibold text-slate-700">
+        FTTx
+      </div>
+
+      <div className="p-3 text-xs font-semibold text-indigo-700 border-l border-slate-100">
+        ₹ {(Number(summary?.fttx_loss || 0) / 10000000).toFixed(2)} Cr
+      </div>
+
+    </div>
+
+    {/* FIBER */}
+    <div className="grid grid-cols-2 border-b border-slate-100">
+
+      <div className="p-3 text-xs font-semibold text-slate-700">
+        Fiber
+      </div>
+
+      <div className="p-3 text-xs font-semibold text-indigo-700 border-l border-slate-100">
+        ₹ {(Number(summary?.fiber_loss || 0) / 10000000).toFixed(2)} Cr
+      </div>
+
+    </div>
+
+    {/* TOWER */}
+    <div className="grid grid-cols-2">
+
+      <div className="p-3 text-xs font-semibold text-slate-700">
+        Tower
+      </div>
+
+      <div className="p-3 text-xs font-semibold text-indigo-700 border-l border-slate-100">
+        ₹ {(Number(summary?.tower_loss || 0) / 10000000).toFixed(2)} Cr
+      </div>
+
+    </div>
+
+  </div>
+</div>
+</div>
+
+    </div>
+
+{/* THIRD COLUMN START */}
+<div className="relative overflow-hidden py-2 border-l border-border-color/60 pl-4">
+
+   {/* PENALTIES CARD */}
+<div className=" p-1">
+
+  {/* Header */}
+  <div className="flex items-start justify-between">
     <div>
-      <div className="text-[12px] font-semibold tracking-[0.26em] text-rose-700 uppercase">
+      <div className="text-[11px] tracking-[0.35em] font-bold text-rose-700 uppercase">
         Penalties
       </div>
 
-      <div className="text-xs text-text-muted mt-1">
-        KPI and general deduction overview
-      </div>
-    </div>
-
-    <div className="h-2 w-2 rounded-full bg-rose-500/70" />
-  </div>
-
-  {/* Cards */}
-  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-
-    {/* KPI PENALTY */}
-    <div
-      className="rounded-3xl border border-rose-200/60 bg-rose-50/50 backdrop-blur p-4 transition-all
-       duration-200 hover:-translate-y-[2px] flex items-center justify-between gap-4"
-    >
-
-      <div className="flex items-center gap-3">
-        <div className="rounded-2xl bg-rose-500/10 border border-rose-500/20 p-2 text-rose-700">
-          <AlertTriangle size={18} />
-        </div>
-
-        <div>
-          <div className="text-[11px] font-semibold tracking-[0.18em] text-rose-700 uppercase">
-            KPI Penalty
-          </div>
-
-          <div className="text-sm text-text-secondary mt-1">
-            KPI related deductions
-          </div>
-        </div>
+      <div className="mt-2 text-sm tracking-[0.14em] text-slate-500">
+        Total Penalties
       </div>
 
-      <div className="text-right">
-
-        <div className="text-[18px] font-bold tracking-[-0.04em] text-rose-700">
-          ₹2500
-        </div>
-      </div>
-    </div>
-
-    {/* GENERAL PENALTY */}
-    <div
-      className="rounded-3xl border border-orange-200/60 bg-orange-50/50 backdrop-blur p-4 transition-all
-       duration-200 hover:-translate-y-[2px] flex items-center justify-between gap-4"
-    >
-
-      <div className="flex items-center gap-3">
-        <div className="rounded-2xl bg-orange-500/10 border border-orange-500/20 p-2 text-orange-700">
-          <AlertTriangle size={18} />
-        </div>
-
-        <div>
-          <div className="text-[11px] font-semibold tracking-[0.18em] text-orange-700 uppercase">
-            General Penalty
-          </div>
-
-          <div className="text-sm text-text-secondary mt-1">
-            Other deduction charges
-          </div>
-        </div>
-      </div>
-
-      <div className="text-right">
-
-        <div className="text-[18px] font-bold tracking-[-0.04em] text-orange-700">
-          ₹2700
-        </div>
-      </div>
-    </div>
-
-  </div>
+     <div className="mt-1 text-[22px] font-semibold tracking-[-0.05em] text-rose-700">
+  ₹ 1.85 Cr
 </div>
 
-{/* Revenue Forecast */}
-<div className="mt-4 rounded-3xl border border-emerald-200/60 bg-emerald-50/40 backdrop-blur p-5 overflow-hidden relative">
+      <div className="mt-1 text-rose-600 text-xs">
+        Total penalties deducted
+      </div>
+    </div>
 
-  {/* Glow */}
-  <div className="absolute -right-10 -top-10 h-24 w-24 rounded-full bg-emerald-500/10 blur-3xl" />
+    <div className="h-8 w-8 rounded-full border border-rose-200 bg-rose-50 flex items-center justify-center text-rose-700">
+      <AlertTriangle size={14} />
+    </div>
+  </div>
+
+  {/* Trend */}
+  <div className="mt-4 rounded-2xl border border-slate-100 p-4">
+    <div className="flex items-center justify-between mb-4">
+      <div className="text-[11px] tracking-[0.28em] font-semibold uppercase text-rose-700">
+        Penalties Trend
+      </div>
+
+    </div>
+
+    <div className="h-56">
+      <ResponsiveContainer width="100%" height="100%">
+       <BarChart
+ data={revenueMonthlyTrend}
+>
+
+  <defs>
+    <linearGradient id="penaltyBar" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stopColor="#ef4444" />
+      <stop offset="100%" stopColor="#fca5a5" />
+    </linearGradient>
+  </defs>
+
+<XAxis
+  dataKey="month"
+  interval={0}
+  textAnchor="end"
+  axisLine={false}
+  tickLine={false}
+  tick={{
+    fontSize: 11,
+    fill: "#64748b",
+  }}
+/>
+
+ <YAxis
+  width={28}
+  domain={[0, roundedMax + (roundedMax * 0.15)]}
+  ticks={yAxisTicks}
+  axisLine={false}
+  tickLine={false}
+  tickFormatter={(value) => value.toFixed(1)}
+  tick={{
+    fontSize: 11,
+    fill: "#94a3b8",
+  }}
+/>
+
+  <Tooltip
+    cursor={{
+      fill: "rgba(15,23,42,0.04)",
+    }}
+    contentStyle={{
+      borderRadius: "18px",
+      border: "1px solid #e2e8f0",
+      background: "rgba(255,255,255,0.96)",
+    }}
+  />
+
+ <Bar
+  dataKey="penalty"
+  fill="url(#penaltyBar)"
+  radius={[10, 10, 0, 0]}
+  barSize={dynamicBarSize}
+  label={{
+  position: "top",
+  offset: 8,
+  fill: "#e11d48",
+  fontSize: 11,
+  formatter: (value) => value.toFixed(2),
+}}
+/>
+
+</BarChart>
+      </ResponsiveContainer>
+    </div>
+  </div>
+
+{/* PENALTY BREAKDOWN */}
+<div className="mt-4 rounded-2xl border border-rose-100 bg-rose-50/10 backdrop-blur-xl p-4">
 
   {/* Header */}
-  <div className="flex items-center justify-between mb-4 relative">
-    <div>
-      <div className="text-[11px] font-semibold tracking-[0.26em] text-emerald-700 uppercase">
-        Revenue Forecast
-      </div>
+  <div className="flex items-center justify-between mb-4">
+   <div className="flex items-start gap-3">
 
-      <div className="text-xs text-text-muted mt-1">
-        AI projected business growth
-      </div>
-    </div>
-
-    <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+  <div className="h-9 w-9 rounded-xl bg-rose-100 flex items-center justify-center text-rose-700">
+    <PieChart size={14} />
   </div>
 
-  {/* Content */}
-  <div className="relative">
-
-    <div className="text-[22px] font-bold tracking-[-0.04em] text-emerald-700">
-      ₹13.4Cr
+  <div>
+    <div className="text-[12px] font-semibold tracking-[0.26em] uppercase text-rose-700">
+      Penalty Breakdown
     </div>
 
-    <div className="mt-2 inline-flex items-center rounded-full bg-emerald-100 px-3 py-1 text-sm font-medium text-emerald-700">
-      +12% Expected Growth
+    <div className="text-[12px] tracking-[0.10em]  text-slate-400 mt-1 ">
+      Domain-wise penalty distribution
+    </div>
+  </div>
+
+</div>
+
+    <div className="text-[10px] px-2 py-1 rounded-full bg-rose-50 text-rose-700 border border-rose-100">
+      LIVE
+    </div>
+  </div>
+
+  {/* PREMIUM GRID */}
+  <div className="overflow-hidden rounded-lg border border-slate-100">
+
+    {/* HEADER */}
+    <div className="grid grid-cols-3 bg-slate-50 border-b border-slate-100">
+
+      <div className="px-3 py-2 text-[11px] font-bold uppercase tracking-[0.10em] text-slate-500">
+        Domain
+      </div>
+
+      <div className="px-3 py-2 text-[11px] font-bold uppercase tracking-[0.10em] text-rose-700 border-l border-slate-100">
+        KPI Penalty
+      </div>
+
+      <div className="px-2 py-2 text-[11px] font-bold uppercase tracking-[0.10em] text-orange-600 border-l border-slate-100">
+        GEN Penalty
+      </div>
+
     </div>
 
-    <p className="mt-4 text-sm leading-relaxed text-text-secondary">
-      Based on current billing trends and operational performance,
-      projected revenue is expected to increase next month with
-      improved KPI completion rates.
-    </p>
+    {/* FTTX */}
+    <div className="grid grid-cols-3 border-b border-slate-100">
+
+      <div className="p-3 text-xs font-semibold text-slate-700">
+        FTTx
+      </div>
+
+      <div className="p-3 text-xs font-semibold text-rose-700 border-l border-slate-100">
+        ₹ 0.35 Cr
+      </div>
+
+      <div className="p-3 text-xs font-semibold text-orange-600 border-l border-slate-100">
+        ₹ 0.30 Cr
+      </div>
+
+    </div>
+
+    {/* FIBER */}
+    <div className="grid grid-cols-3 border-b border-slate-100">
+
+      <div className="p-3 text-xs font-semibold text-slate-700">
+        Fiber
+      </div>
+
+      <div className="p-3 text-xs font-semibold text-rose-700 border-l border-slate-100">
+        ₹ 0.25 Cr
+      </div>
+
+      <div className="p-3 text-xs font-semibold text-orange-600 border-l border-slate-100">
+        ₹ 0.30 Cr
+      </div>
+
+    </div>
+
+    {/* TOWER */}
+    <div className="grid grid-cols-3">
+
+      <div className="p-3 text-xs font-semibold text-slate-700">
+        Tower
+      </div>
+
+      <div className="p-3 text-xs font-semibold text-rose-700 border-l border-slate-100">
+        ₹ 0.40 Cr
+      </div>
+
+      <div className="p-3 text-xs font-semibold text-orange-600 border-l border-slate-100">
+        ₹ 0.25 Cr
+      </div>
+
+    </div>
+
   </div>
 </div>
 
 </div>
+</div>
 
-              </div>
-            </div>
+{/* FULL SECTION SEPARATOR */}
+<div className="col-span-1 lg:col-span-3 border-b border-slate-200/90"></div>
+         
           </div>
         </div>
 
