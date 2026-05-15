@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { buildApiUrl } from "../lib/api";
 import {
   AlertTriangle,
@@ -248,12 +249,15 @@ export default function BillingStatus() {
  useEffect(() => {
   if (showForm) {
     document.documentElement.style.overflow = "hidden";
+    document.body.style.overflow = "hidden";
   } else {
     document.documentElement.style.overflow = "auto";
+    document.body.style.overflow = "auto";
   }
 
   return () => {
     document.documentElement.style.overflow = "auto";
+    document.body.style.overflow = "auto";
   };
 }, [showForm]);
 
@@ -617,7 +621,7 @@ const pendingTasks = totalTasks - completedTasks;
             iconTone="bg-amber-100 text-amber-700 ring-amber-200"
           />
 
-  <div className="relative z-[999] flex h-full flex-col justify-center gap-2 rounded-[24px] border border-white/85 bg-white/70 p-3
+  <div className="relative flex h-full flex-col justify-center gap-2 rounded-[24px] border border-white/85 bg-white/70 p-3
     shadow-[0_30px_100px_rgba(15,23,42,0.10)] backdrop-blur-xl overflow-visible">
   {/* Row 1 */}
 <div className="flex items-center justify-between gap-2">
@@ -750,8 +754,20 @@ const pendingTasks = totalTasks - completedTasks;
           );
         })}
 
-        {showForm && (
-   <div className="fixed top-0 left-0 w-screen h-screen z-[99999] bg-black/40 backdrop-blur-md flex items-center justify-center">
+  {showForm && typeof document !== "undefined" && createPortal((
+  <div
+    className="fixed inset-0 z-[9999999]"
+    style={{
+      width: "100vw",
+      height: "100vh",
+      backdropFilter: "blur(2px)",
+      WebkitBackdropFilter: "blur(10px)",
+      background: "rgba(2,6,23,0.55)",
+    }}
+  >
+
+    {/* CENTER MODAL */}
+    <div className="flex min-h-screen items-center justify-center p-4">
             <div className="mx-auto w-full max-w-2xl rounded-[32px] border border-white/70 bg-[linear-gradient(135deg,rgba(255,255,255,0.96),rgba(248,250,252,0.92),rgba(243,232,255,0.92))] p-10 shadow-[0_30px_90px_rgba(15,23,42,0.24)] backdrop-blur-2xl">
               <h2 className="mb-2 text-2xl font-semibold tracking-tight text-slate-900">
                 Add Billing Data
@@ -962,7 +978,9 @@ const pendingTasks = totalTasks - completedTasks;
                 </button>
               </div>
             </div>
-          </div>
+            </div>
+          </div>),
+          document.body
         )}
       </div>
     </div>

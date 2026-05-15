@@ -439,60 +439,84 @@ const dynamicBarSize =
 
       <div className="flex flex-wrap items-center gap-2">
 
-        {/* TIME FILTER */}
-        <div className="relative">
+       {/* TIME FILTER */}
+<div className="relative">
 
-          <CalendarDays
-            size={14}
-            className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
-          />
+  <CalendarDays
+    size={14}
+    className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+  />
 
-          <select
-            value={timeFilter}
-            onChange={(e) => setTimeFilter(e.target.value)}
-            className="h-11 pl-9 pr-4 text-sm rounded-xl border border-slate-200 bg-white text-slate-700 outline-none transition focus:border-indigo-400 shadow-sm"
-          >
-            <option value="3">Last 3 Months</option>
-            <option value="6">Last 6 Months</option>
-            <option value="12">Last 1 Year</option>
-          </select>
+  <select
+    value={timeFilter}
+    onChange={(e) => setTimeFilter(e.target.value)}
+    className="h-10 pl-9 pr-10 text-sm rounded-xl border border-slate-200 bg-white
+    text-slate-700 outline-none transition focus:border-indigo-400
+    shadow-sm appearance-none"
+  >
+    <option value="3">Last 3 Months</option>
+    <option value="6">Last 6 Months</option>
+    <option value="12">Last 1 Year</option>
+  </select>
 
-          
+  {/* CUSTOM DROPDOWN ICON */}
+  <ChevronDown
+    size={16}
+    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
+  />
 
-          
+</div>
 
-        </div>
+     {/* CIRCLE FILTER */}
+<div className="relative">
 
-        {/* CIRCLE FILTER */}
-    <select
-      value={circleFilter}
-      onChange={(e) => setCircleFilter(e.target.value)}
-      className="h-11 pl-4 pr-10 text-sm rounded-xl border border-slate-200 bg-white
-     text-slate-700 outline-none transition focus:border-indigo-400 shadow-sm appearance-none"
-    >
-          <option value="">All Circles</option>
+  <select
+    value={circleFilter}
+    onChange={(e) => setCircleFilter(e.target.value)}
+    className="h-10 pl-4 pr-10 text-sm rounded-xl border border-slate-200 bg-white
+    text-slate-700 outline-none transition focus:border-indigo-400 shadow-sm appearance-none"
+  >
+    <option value="">All Circles</option>
 
-          {circleOptions.map((c) => (
-            <option key={c} value={c}>
-              {c}
-            </option>
-          ))}
-        </select>
+    {circleOptions.map((c) => (
+      <option key={c} value={c}>
+        {c}
+      </option>
+    ))}
+  </select>
 
-        {/* BILLING FILTER */}
-        <select
-          value={billingFilter}
-          onChange={(e) => setBillingFilter(e.target.value)}
-          className="h-11 px-4 text-sm rounded-xl border border-slate-200 bg-white text-slate-700 outline-none transition focus:border-indigo-400 shadow-sm"
-        >
-          <option value="">All Types</option>
+  {/* CUSTOM DROPDOWN ICON */}
+  <ChevronDown
+    size={16}
+    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
+  />
 
-          {billingOptions.map((b) => (
-            <option key={b} value={b}>
-              {b}
-            </option>
-          ))}
-        </select>
+</div>
+
+     {/* BILLING FILTER */}
+<div className="relative">
+
+  <select
+    value={billingFilter}
+    onChange={(e) => setBillingFilter(e.target.value)}
+    className="h-10 pl-4 pr-4 text-sm rounded-xl border border-slate-200 bg-white
+    text-slate-700 outline-none transition focus:border-indigo-400 shadow-sm appearance-none"
+  >
+    <option value="">All Types</option>
+
+    {billingOptions.map((b) => (
+      <option key={b} value={b}>
+        {b}
+      </option>
+    ))}
+  </select>
+
+  <ChevronDown
+    size={16}
+    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
+  />
+
+</div>
 
         {/* RESET BUTTON */}
         <button
@@ -501,7 +525,7 @@ const dynamicBarSize =
             setCircleFilter("");
             setBillingFilter("");
           }}
-          className="h-11 px-5 rounded-xl border border-indigo-100 bg-indigo-50 text-indigo-700 text-sm font-medium transition hover:bg-indigo-100 flex items-center gap-2"
+          className="h-10 px-4 rounded-xl border border-indigo-100 bg-indigo-50 text-indigo-700 text-sm font-medium transition hover:bg-indigo-100 flex items-center gap-2"
         >
           <RefreshCcw size={14} />
           Reset
