@@ -26,20 +26,9 @@ const [pageSize, setPageSize] = useState(10);
   const loadPhysicalData = async () => {
     try {
       setTableLoading(true);
-      const controller = new AbortController();
-
-const timeout = setTimeout(() => {
-  controller.abort();
-}, 10000);
-
-const response = await fetch(
-  buildApiUrl("/api/physical/reports"),
-  {
-    signal: controller.signal,
-  }
+     const response = await fetch(
+  buildApiUrl("/api/physical/reports")
 );
-
-clearTimeout(timeout);
 
          const result = await response.json();
 

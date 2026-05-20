@@ -308,11 +308,15 @@ router.get("/", async (_req, res) => {
 
     const rows = await query(
       `
-       SELECT *
+       SELECT
+  id,
+  employee_name,
+  employee_code,
+  circle,
+  job_role,
+  employment_status,
+  report_id
 FROM physical
-WHERE report_id = (
-  SELECT id
-  FROM physical_reports
   ORDER BY report_date DESC, id DESC
   LIMIT 1
 )
