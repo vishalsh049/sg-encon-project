@@ -1,22 +1,29 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { buildApiUrl } from "../lib/api";
 
 export default function Physical() {
   const [showModal, setShowModal] = useState(false);
   const [uploadedBy, setUploadedBy] = useState("");
 const [showUploadModal, setShowUploadModal] = useState(false);
+ const [uploading, setUploading] = useState(false);
 
   const [data, setData] = useState([]);
+  const [tableLoading, setTableLoading] = useState(false);
   const [jobRoles, setJobRoles] = useState([]);
+  const [jobRoleAverage, setJobRoleAverage] = useState([]);
   const [circles, setCircles] = useState([]);
   const [employmentStatus, setEmploymentStatus] = useState([]);
   const [selectedRows, setSelectedRows] = useState([]);
   const [reportFile, setReportFile] = useState(null);
+ 
 
 const [reportDate, setReportDate] = useState("");
+const [currentPage, setCurrentPage] = useState(1);
+const [pageSize, setPageSize] = useState(10);
 
   const loadPhysicalData = async () => {
     try {
+      setTableLoading(true);
        const response = await fetch(
        buildApiUrl("/api/physical/reports")
        );
@@ -35,6 +42,11 @@ const [reportDate, setReportDate] = useState("");
     } catch (error) {
       console.error(error);
     }
+    finally {
+
+  setTableLoading(false);
+
+}
   };
 
   const loadJobRoles = async () => {
@@ -52,6 +64,30 @@ const [reportDate, setReportDate] = useState("");
     }
 
     setJobRoles(result.data || []);
+
+  } catch (error) {
+
+    console.log(error);
+
+  }
+
+};
+
+  const loadJobRoleAverage = async () => {
+
+  try {
+
+    const response = await fetch(
+      buildApiUrl("/api/physical/job-role-document-average")
+    );
+
+    const result = await response.json();
+
+    if (!response.ok || !result.success) {
+      throw new Error("Failed to load average");
+    }
+
+    setJobRoleAverage(result.data || []);
 
   } catch (error) {
 
@@ -114,6 +150,8 @@ useEffect(() => {
   loadPhysicalData();
 
   loadJobRoles();
+
+  loadJobRoleAverage();
 
   loadCircles();
 
@@ -185,6 +223,7 @@ formData.append(
 );
 
   try {
+    setUploading(true);
 
     const response = await fetch(
       buildApiUrl("/api/physical/upload-report"),
@@ -218,13 +257,31 @@ formData.append(
     setUploadedBy("");
 setShowUploadModal(false);
 
-  } catch (error) {
+ } catch (error) {
 
     console.log(error);
 
     alert("Upload Failed");
   }
+  finally {
+
+  setUploading(false);
+
+}
 };
+
+// PAGINATION
+
+const totalPages = useMemo(() => {
+  return Math.ceil(data.length / pageSize);
+}, [data, pageSize]);
+
+const paginatedData = useMemo(() => {
+  return data.slice(
+    (currentPage - 1) * pageSize,
+    currentPage * pageSize
+  );
+}, [data, currentPage, pageSize]);
 
   return (
     <div className="min-h-screen">
@@ -358,6 +415,98 @@ setShowUploadModal(false);
 </div>
 
 
+{/* Job Role Document Average */}
+
+{/* Job Role Document Average 
+<div className="mx-auto mt-3 w-full max-w-7xl">
+
+  <div className="rounded-[22px] border border-white/70 bg-white/100 px-4 py-3 backdrop-blur-xl">
+
+    <div className="mb-2 flex items-center justify-between">
+
+      <h2 className="text-md font-semibold text-slate-900">
+        Job Role Document Average
+      </h2>
+
+      <div className="text-xs text-slate-500">
+        Aadhaar + UAN + ESIC Average
+      </div>
+
+    </div>
+
+    <div className="h-[220px] overflow-y-scroll pr-2 custom-scrollbar">
+
+      <div className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3">
+
+        {jobRoleAverage.map((item, index) => (
+
+          <div
+            key={index}
+            className="rounded-2xl bg-slate-50 px-4 py-3"
+          >
+
+            <div className="flex items-center justify-between">
+
+              <span className="text-sm font-semibold text-slate-800">
+                {item.role_group}
+              </span>
+
+              <span className="text-sm font-bold text-emerald-600">
+                {item.document_average}%
+              </span>
+
+            </div>
+
+            <div className="mt-2 grid grid-cols-3 gap-2 text-center">
+
+              <div className="rounded-xl bg-white py-2">
+                <div className="text-xs text-slate-500">
+                  Aadhaar
+                </div>
+
+                <div className="text-sm font-semibold text-blue-600">
+                  {item.aadhaar_count}
+                </div>
+              </div>
+
+              <div className="rounded-xl bg-white py-2">
+                <div className="text-xs text-slate-500">
+                  UAN
+                </div>
+
+                <div className="text-sm font-semibold text-purple-600">
+                  {item.uan_count}
+                </div>
+              </div>
+
+              <div className="rounded-xl bg-white py-2">
+                <div className="text-xs text-slate-500">
+                  ESIC
+                </div>
+
+                <div className="text-sm font-semibold text-orange-600">
+                  {item.esic_count}
+                </div>
+              </div>
+
+            </div>
+
+          </div>
+
+        ))}
+
+      </div>
+
+    </div>
+
+  </div>
+
+</div>
+
+*/}
+
+
+
 {/* Job Roles Section */}
 
 <div className="mx-auto mt-3 w-full max-w-7xl">
@@ -459,7 +608,18 @@ setShowUploadModal(false);
 </thead>
 
      <tbody>
-  {data.length === 0 ? (
+  {tableLoading ? (
+
+  <tr>
+    <td
+      colSpan="6"
+      className="py-14 text-center text-sm font-medium text-slate-400"
+    >
+      Loading Reports...
+    </td>
+  </tr>
+
+) : data.length === 0 ? (
     <tr>
       <td
         colSpan="6"
@@ -469,7 +629,7 @@ setShowUploadModal(false);
       </td>
     </tr>
   ) : (
-    data.map((item, index) => (
+    paginatedData.map((item, index) => (
       <tr
         key={index}
         className="border-b border-slate-200/60 hover:bg-slate-50"
@@ -537,6 +697,68 @@ setShowUploadModal(false);
                 </div>
               </div>
             </div>
+<div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+
+  <div className="text-sm text-slate-600">
+    Total Files:
+    <span className="ml-1 font-semibold text-slate-900">
+      {data.length}
+    </span>
+  </div>
+
+  <div className="flex items-center gap-2">
+
+    <span className="text-sm text-slate-500">
+      Show
+    </span>
+
+    <select
+      value={pageSize}
+      onChange={(e) => {
+        setPageSize(Number(e.target.value));
+        setCurrentPage(1);
+      }}
+      className="rounded-lg border border-slate-200 px-2 py-1 text-sm"
+    >
+      {[10, 20, 50, 100].map((size) => (
+        <option key={size} value={size}>
+          {size}
+        </option>
+      ))}
+    </select>
+
+    <button
+      onClick={() =>
+        setCurrentPage((prev) =>
+          Math.max(prev - 1, 1)
+        )
+      }
+      disabled={currentPage === 1}
+      className="rounded-lg border border-slate-200 px-3 py-1 text-sm disabled:opacity-40"
+    >
+      Prev
+    </button>
+
+    <span className="text-sm text-slate-600">
+      {currentPage} / {totalPages || 1}
+    </span>
+
+    <button
+      onClick={() =>
+        setCurrentPage((prev) =>
+          Math.min(prev + 1, totalPages)
+        )
+      }
+      disabled={currentPage === totalPages}
+      className="rounded-lg border border-slate-200 px-3 py-1 text-sm disabled:opacity-40"
+    >
+      Next
+    </button>
+
+  </div>
+
+</div>
+
           </div>
 
           {/* Popup Modal */}
@@ -601,13 +823,25 @@ setShowUploadModal(false);
         </div>
 
         <div>
-          <label className="mb-2 block text-sm font-semibold text-slate-700">
-            Upload Excel File
-          </label>
+         <div className="mb-2 flex items-center justify-between">
+
+  <label className="block text-sm font-semibold text-slate-700">
+    Upload Excel File
+  </label>
+
+  <a
+    href="/formats/physical_format.xlsx"
+    download
+    className="rounded-xl bg-blue-600 px-3 py-1 text-xs font-semibold text-white hover:bg-blue-700"
+  >
+    Download Format
+  </a>
+
+</div>
 
           <input
             type="file"
-            accept=".xlsx,.xls"
+             accept=".xlsx,.xls,.csv"
             onChange={(e) =>
               setReportFile(e.target.files[0])
             }
@@ -625,11 +859,12 @@ setShowUploadModal(false);
           </button>
 
           <button
-            onClick={handleReportUpload}
-            className="rounded-2xl bg-green-600 px-5 py-2 text-sm font-semibold text-white shadow-lg hover:bg-green-700"
-          >
-            Upload Report
-          </button>
+  onClick={handleReportUpload}
+  disabled={uploading}
+  className="rounded-2xl bg-green-600 px-5 py-2 text-sm font-semibold text-white shadow-lg hover:bg-green-700 disabled:opacity-60 disabled:cursor-not-allowed"
+>
+  {uploading ? "Uploading..." : "Upload Report"}
+</button>
 
         </div>
 

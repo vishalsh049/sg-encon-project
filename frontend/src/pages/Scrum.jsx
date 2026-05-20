@@ -324,7 +324,7 @@ const latestUploads = uploads.filter(
                 </p>
               </div>
           
-              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <div className="grid gap-2 sm:grid-cols-2 min-[1024px]:grid-cols-4">
                 {[
                   {
                     label: "Total",
@@ -358,32 +358,41 @@ const latestUploads = uploads.filter(
                 ].map(({ label, value, note, icon: Icon, chip }) => (
                   <div
                     key={label}
-                    className="rounded-[24px] bg-white border border-slate-200 p-4"
+                    className="rounded-[22px] bg-white border border-slate-200 p-4"
                   >
-                    <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-start justify-between gap-2">
                       <div>
                         <p className="text-xs uppercase tracking-[0.18em] text-slate-400">
                           {label}
                         </p>
-                        <p className="mt-3 text-3xl font-semibold text-slate-900">
+                        <p className="mt-1 text-xl font-semibold text-slate-900">
                           {value}
                         </p>
                       </div>
                       <div
-                        className={`flex h-10 w-10 items-center justify-center rounded-2xl ${chip}`}
+                        className={`flex h-9 w-9 items-center justify-center rounded-2xl ${chip}`}
                       >
-                        <Icon size={18} />
+                        <Icon size={16} />
                       </div>
                     </div>
-                    <p className="mt-3 text-sm text-slate-400">{note}</p>
+                    <p className="mt-1 text-sm text-slate-400">{note}</p>
                   </div>
                 ))}
               </div>
 
 <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
-  <h3 className="text-md font-semibold mb-2">Job Roles</h3>
+  <div className="flex items-center justify-between mb-2">
+  <h3 className="text-md font-semibold">
+    Job Roles
+  </h3>
 
-  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 max-h-[180px] overflow-y-auto hide-scrollbar">
+  <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-700">
+    Total: {roleSummary.reduce((sum, item) => sum + item.total, 0)}
+  </span>
+</div>
+
+  <div className="grid grid-cols-1 gap-2 min-[1024px]:grid-cols-4 max-h-[180px]
+   overflow-y-auto hide-scrollbar">
     {roleSummary.map((item) => (
       <div
         key={item.category}
@@ -409,7 +418,8 @@ const latestUploads = uploads.filter(
 <section className="w-full rounded-2xl border border-slate-200 bg-white p-4">
         <div className="grid gap-5 xl:grid-cols-1">
             <div className="space-y-4">
-              <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+              <div className="flex flex-col gap-4 min-[1024px]:flex-row min-[1024px]:items-center
+               min-[1024px]:justify-between">
                 <div>
                   <p className="text-xs uppercase tracking-[0.24em] text-slate-400">
                     Explore Workforce
@@ -419,7 +429,7 @@ const latestUploads = uploads.filter(
                   </h2>
                 </div>
 
-                <div className="relative w-full xl:max-w-sm">
+                <div className="relative w-full min-[1024px]:max-w-sm">
                   <Search
                     size={16}
                     className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
@@ -440,7 +450,7 @@ const latestUploads = uploads.filter(
 
       <section className="overflow-hidden rounded-[28px] border border-slate-200/10 bg-white pb-28 md:rounded-[30px] md:pb-24"> 
          <div className="border-b border-slate-200 bg-[linear-gradient(180deg,_#ffffff_0%,_#f8fbff_100%)] px-4 py-3 sm:px-6 sm:py-2">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex flex-col gap-4 min-[1024px]:flex-row min-[1024px]:items-center min-[1024px]:justify-between">
               <div>
                 <h2 className="mt-1 text-lg font-semibold text-slate-900">
                   Upload history
@@ -652,17 +662,15 @@ setSelected(prev => [...new Set([...prev, id])]);
 
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 px-3 sm:px-4 backdrop-blur-md">
-          <div className="relative max-h-[90vh] w-full max-w-2xl overflow-hidden rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,_#f8fbff_0%,_#ffffff_100%)] md:rounded-[32px]">
+         <div className="relative flex max-h-[82vh] w-full max-w-2xl flex-col overflow-hidden rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,_#f8fbff_0%,_#ffffff_100%)] md:rounded-[32px]">
             <div className="bg-white text-slate-900 border-b border-slate-200 px-4 py-5 sm:px-6 sm:py-6">
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <p className="text-xs uppercase tracking-[0.26em] text-slate-400">
-                    Upload Workspace
-                  </p>
-                  <h3 className="mt-2 text-2xl font-semibold">
+                  
+                  <h3 className=" text-xl font-semibold">
                     Upload scrum source file
                   </h3>
-                  <p className="mt-2 max-w-xl text-sm text-slate-500">
+                  <p className="mt-1 max-w-xl text-sm text-slate-500">
                     This upload becomes the latest active dataset used for the
                     scrum manpower register.
                   </p>
@@ -676,7 +684,7 @@ setSelected(prev => [...new Set([...prev, id])]);
               </div>
             </div>
 
-            <div className="max-h-[calc(90vh-110px)] space-y-5 overflow-y-auto px-4 py-5 sm:px-6 sm:py-6">
+            <div className="flex-1 space-y-4 overflow-y-auto px-4 py-4 sm:px-5 sm:py-4">
               <div className="grid gap-5 md:grid-cols-2">
                 <div>
                   <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
@@ -698,18 +706,33 @@ setSelected(prev => [...new Set([...prev, id])]);
                     value={uploadedBy}
                     onChange={(e) => setUploadedBy(e.target.value)}
                     placeholder="Enter person name"
-                    className="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm text-slate-900 outline-none transition focus:border-cyan-400 focus:bg-white focus:ring-4 focus:ring-cyan-100"
+                    className="h-10 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm text-slate-900 outline-none transition focus:border-cyan-400 focus:bg-white focus:ring-4 focus:ring-cyan-100"
                   />
                 </div>
               </div>
 
-              <div className="rounded-[28px] border border-dashed border-cyan-200 bg-[linear-gradient(180deg,_#f8fdff_0%,_#f0f9ff_100%)] p-5">
+  <div className="rounded-[22px] border border-dashed border-cyan-200 bg-[linear-gradient(180deg,_#f8fdff_0%,_#f0f9ff_100%)] p-4">
+   <div className="mb-2 flex items-center justify-between">
+
+  <h4 className="text-sm font-semibold text-slate-700">
+    Upload File
+  </h4>
+
+  <a
+    href="/formats/scrum_format.xlsx"
+    download
+    className="rounded-xl bg-blue-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-blue-700"
+  >
+    Download Format
+  </a>
+
+</div>
                 <label className="block cursor-pointer">
-                  <div className="flex flex-col items-center justify-center rounded-[24px] border border-white bg-white/80 px-6 py-10 text-center shadow-sm">
-                    <div className="flex h-16 w-16 items-center justify-center rounded-[22px] bg-slate-100 text-slate-700">
-                      <UploadCloud size={26} />
+                  <div className="flex flex-col items-center justify-center rounded-[18px] border border-white bg-white/80 px-6 py-6 text-center shadow-sm">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-[22px] bg-slate-100 text-slate-700">
+                      <UploadCloud size={20} />
                     </div>
-                    <p className="mt-4 text-lg font-semibold text-slate-900">
+                    <p className="mt-2 text-md font-semibold text-slate-900">
                       Drop your file or browse
                     </p>
                     <p className="mt-2 text-sm text-slate-500">
@@ -722,10 +745,11 @@ setSelected(prev => [...new Set([...prev, id])]);
                     ) : null}
                   </div>
                   <input
-                    type="file"
-                    onChange={(e) => setFile(e.target.files[0])}
-                    className="hidden"
-                  />
+                 type="file"
+                   accept=".xlsx,.xls,.csv"
+                  onChange={(e) => setFile(e.target.files[0])}
+                   className="hidden"
+                   />
                 </label>
               </div>
 
@@ -737,14 +761,14 @@ setSelected(prev => [...new Set([...prev, id])]);
                   type="text"
                   value={new Date().toLocaleString()}
                   readOnly
-                  className="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm text-slate-500 outline-none"
+                  className="h-10 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm text-slate-500 outline-none"
                 />
               </div>
 
-              <div className="flex flex-col-reverse gap-3 border-t border-slate-200 pt-5 sm:flex-row sm:justify-end">
+              <div className="sticky bottom-0 flex flex-col-reverse gap-3 border-t border-slate-200 bg-white pt-3 sm:flex-row sm:justify-end">
                 <button
                   onClick={() => setShowModal(false)}
-                  className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-medium text-slate-600 transition hover:bg-slate-50"
+                  className="rounded-2xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-50"
                 >
                   Cancel
                 </button>

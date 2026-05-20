@@ -308,9 +308,15 @@ router.get("/", async (_req, res) => {
 
     const rows = await query(
       `
-        SELECT *
-        FROM physical
-        ORDER BY id DESC
+       SELECT *
+FROM physical
+WHERE report_id = (
+  SELECT id
+  FROM physical_reports
+  ORDER BY report_date DESC, id DESC
+  LIMIT 1
+)
+ORDER BY id DESC
       `
     );
 
@@ -339,6 +345,26 @@ router.post("/upload-report", upload.single("file"), async (req, res) => {
         message: "No file uploaded",
       });
     }
+
+    const allowedExtensions = [
+  ".xlsx",
+  ".xls",
+  ".csv",
+];
+
+const fileExtension = path.extname(
+  req.file.originalname
+).toLowerCase();
+
+if (!allowedExtensions.includes(fileExtension)) {
+
+  return res.status(400).json({
+    success: false,
+    message:
+      "Only XLSX, XLS and CSV files are allowed",
+  });
+
+}
 
     const reportDate = normalizeDate(req.body.report_date);
     const uploadedBy = toText(req.body.uploaded_by) || "Admin";
@@ -433,6 +459,7 @@ router.get("/reports", async (_req, res) => {
         created_at
       FROM physical_reports
       ORDER BY uploaded_at DESC, id DESC
+      LIMIT 200
     `);
 
     res.status(200).json({
@@ -453,25 +480,32 @@ router.get("/job-role-count", async (_req, res) => {
   try {
 
    const rows = await query(`
-  SELECT 
-    TRIM(
-      SUBSTRING_INDEX(
-        REPLACE(job_role, '-', ' '),
-        ' ',
-        1
-      )
-    ) as role_group,
+ SELECT 
+  TRIM(
+    SUBSTRING_INDEX(
+      REPLACE(job_role, '-', ' '),
+      ' ',
+      1
+    )
+  ) as role_group,
 
-    COUNT(*) as total
+  COUNT(*) as total
 
-  FROM physical
+FROM physical
 
-  WHERE job_role IS NOT NULL
-    AND job_role != ''
+WHERE report_id = (
+  SELECT id
+  FROM physical_reports
+  ORDER BY report_date DESC, id DESC
+  LIMIT 1
+)
 
-  GROUP BY role_group
+AND job_role IS NOT NULL
+AND job_role != ''
 
-  ORDER BY total DESC
+GROUP BY role_group
+
+ORDER BY total DESC
 `);
 
     res.status(200).json({
@@ -497,14 +531,23 @@ router.get("/circle-count", async (_req, res) => {
   try {
 
     const rows = await query(`
-      SELECT
-        circle,
-        COUNT(*) as total
-      FROM physical
-      WHERE circle IS NOT NULL
-        AND circle != ''
-      GROUP BY circle
-      ORDER BY total DESC
+ SELECT
+  circle,
+  COUNT(*) as total
+FROM physical
+
+WHERE report_id = (
+  SELECT id
+  FROM physical_reports
+  ORDER BY report_date DESC, id DESC
+  LIMIT 1
+)
+
+AND circle IS NOT NULL
+AND circle != ''
+
+GROUP BY circle
+ORDER BY total DESC
     `);
 
     res.status(200).json({
@@ -531,13 +574,22 @@ router.get("/employment-status-count", async (_req, res) => {
 
     const rows = await query(`
       SELECT
-        employment_status,
-        COUNT(*) as total
-      FROM physical
-      WHERE employment_status IS NOT NULL
-        AND employment_status != ''
-      GROUP BY employment_status
-      ORDER BY total DESC
+  employment_status,
+  COUNT(*) as total
+FROM physical
+
+WHERE report_id = (
+  SELECT id
+  FROM physical_reports
+  ORDER BY report_date DESC, id DESC
+  LIMIT 1
+)
+
+AND employment_status IS NOT NULL
+AND employment_status != ''
+
+GROUP BY employment_status
+ORDER BY total DESC
     `);
 
     res.status(200).json({
@@ -548,6 +600,112 @@ router.get("/employment-status-count", async (_req, res) => {
   } catch (error) {
 
     console.error("Employment status count error:", error);
+
+    res.status(500).json({
+      success: false,
+      message: "Server Error",
+    });
+
+  }
+
+});
+
+router.get("/job-role-document-average", async (_req, res) => {
+
+  try {
+
+    const rows = await query(`
+      SELECT
+
+        TRIM(
+          SUBSTRING_INDEX(
+            REPLACE(job_role, '-', ' '),
+            ' ',
+            1
+          )
+        ) AS role_group,
+
+        COUNT(*) AS total_employees,
+
+        SUM(
+          CASE
+            WHEN aadhaar_no IS NOT NULL
+             AND aadhaar_no != ''
+            THEN 1
+            ELSE 0
+          END
+        ) AS aadhaar_count,
+
+        SUM(
+          CASE
+            WHEN uan_no IS NOT NULL
+             AND uan_no != ''
+            THEN 1
+            ELSE 0
+          END
+        ) AS uan_count,
+
+        SUM(
+          CASE
+            WHEN esic_ip_no IS NOT NULL
+             AND esic_ip_no != ''
+            THEN 1
+            ELSE 0
+          END
+        ) AS esic_count,
+
+        ROUND(
+          (
+            (
+              SUM(
+                CASE
+                  WHEN aadhaar_no IS NOT NULL
+                   AND aadhaar_no != ''
+                  THEN 1
+                  ELSE 0
+                END
+              )
+              +
+              SUM(
+                CASE
+                  WHEN uan_no IS NOT NULL
+                   AND uan_no != ''
+                  THEN 1
+                  ELSE 0
+                END
+              )
+              +
+              SUM(
+                CASE
+                  WHEN esic_ip_no IS NOT NULL
+                   AND esic_ip_no != ''
+                  THEN 1
+                  ELSE 0
+                END
+              )
+            ) / (COUNT(*) * 3)
+          ) * 100,
+          2
+        ) AS document_average
+
+      FROM physical
+
+      WHERE job_role IS NOT NULL
+        AND job_role != ''
+
+      GROUP BY role_group
+
+      ORDER BY document_average DESC
+    `);
+
+    res.status(200).json({
+      success: true,
+      data: rows,
+    });
+
+  } catch (error) {
+
+    console.error("Job role average error:", error);
 
     res.status(500).json({
       success: false,

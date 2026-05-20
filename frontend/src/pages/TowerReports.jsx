@@ -585,8 +585,8 @@ const kpiCards = useMemo(() => {
         </div>
 
         <div className="space-y-5">
-          <div className="grid gap-4 xl:grid-cols-[1.85fr_1fr]">
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-2 xl:grid-cols-3">
+          <div className="grid gap-4 lg:grid-cols-[1.85fr_1fr]">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-2 lg:grid-cols-3">
               {kpiCards.map((item) => {
                 const Icon = item.icon;
                 return (
@@ -938,7 +938,7 @@ const kpiCards = useMemo(() => {
         {modalOpen ? (
           <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto px-4 py-6">
             <div className="absolute inset-0 bg-slate-950/30 backdrop-blur-xl" />
-            <div className="relative z-10 mx-auto w-full max-w-[750px] max-h-[90vh] overflow-hidden rounded-[20px] border border-slate-200/80 bg-white shadow-[0_30px_90px_rgba(15,23,42,0.12)] animate-modal-enter">
+            <div className="relative z-10 mx-auto flex w-full max-w-[750px] max-h-[90vh] flex-col rounded-[20px] border border-slate-200/80 bg-white shadow-[0_30px_90px_rgba(15,23,42,0.12)] animate-modal-enter overflow-hidden">
               <div className="flex items-center justify-between gap-4 border-b border-slate-200/70 px-6 py-5">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">
@@ -957,7 +957,7 @@ const kpiCards = useMemo(() => {
                 </button>
               </div>
 
-              <div className="space-y-3 px-4 py-4 overflow-visible">
+              <div className="flex-1 overflow-y-auto space-y-3 px-4 py-4">
                 {modalMessage ? (
                   <div
                     className={`rounded-3xl border px-4 py-3 text-sm shadow-sm ${
@@ -1188,9 +1188,8 @@ const kpiCards = useMemo(() => {
 
 </div>
                 </section> 
-<div className="flex flex-col gap-3 border-t border-slate-200/70 pt-4 sm:flex-row sm:items-center sm:justify-end">
+<div className="sticky bottom-0 flex flex-col gap-3 border-t border-slate-200/70 bg-white px-4 py-4 sm:flex-row sm:items-center sm:justify-end">
 
-  {/* Hide Cancel while uploading */}
   {!uploading && (
     <button
       onClick={() => setModalOpen(false)}
@@ -1217,6 +1216,7 @@ const kpiCards = useMemo(() => {
       </>
     )}
   </button>
+
 </div>
 
               </div>

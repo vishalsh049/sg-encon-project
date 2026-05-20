@@ -16,7 +16,37 @@
     },
   });
 
-  const upload = multer({ storage });
+  const upload = multer({
+
+  storage,
+
+  fileFilter: (req, file, cb) => {
+
+    const allowedExtensions = [
+      ".xlsx",
+      ".xls",
+      ".csv",
+    ];
+
+    const ext = path.extname(
+      file.originalname
+    ).toLowerCase();
+
+    if (!allowedExtensions.includes(ext)) {
+
+      return cb(
+        new Error(
+          "Only XLSX, XLS and CSV files are allowed"
+        )
+      );
+
+    }
+
+    cb(null, true);
+
+  },
+
+});
 
   const normalizeHeaderKey = (value = "") =>
     value
@@ -227,8 +257,11 @@
   SUM(CASE WHEN status!='Active' THEN 1 ELSE 0 END) as inactive
 FROM scrum_manpower 
 ${whereClause}
-AND manual_date = (
-  SELECT MAX(manual_date) FROM scrum_manpower
+AND upload_batch_id = (
+  SELECT upload_batch_id
+  FROM scrum_manpower
+  ORDER BY uploaded_at DESC
+  LIMIT 1
 )
   `;
 
@@ -711,9 +744,12 @@ END AS category,
       COUNT(*) AS total
     FROM scrum_manpower
     ${whereClause}
-      AND manual_date = (
-        SELECT MAX(manual_date) FROM scrum_manpower
-      )
+      AND upload_batch_id = (
+  SELECT upload_batch_id
+  FROM scrum_manpower
+  ORDER BY uploaded_at DESC
+  LIMIT 1
+)
     GROUP BY category
     HAVING category IS NOT NULL
     ORDER BY total DESC
