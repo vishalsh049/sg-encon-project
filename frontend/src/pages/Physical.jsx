@@ -8,13 +8,15 @@ const [showUploadModal, setShowUploadModal] = useState(false);
  const [uploading, setUploading] = useState(false);
 
   const [data, setData] = useState([]);
-  const [tableLoading, setTableLoading] = useState(false);
+  const [tableLoading, setTableLoading] = useState(true);
   const [jobRoles, setJobRoles] = useState([]);
   const [jobRoleAverage, setJobRoleAverage] = useState([]);
   const [circles, setCircles] = useState([]);
   const [employmentStatus, setEmploymentStatus] = useState([]);
   const [selectedRows, setSelectedRows] = useState([]);
   const [reportFile, setReportFile] = useState(null);
+  const [deletingId, setDeletingId] = useState(null);
+  const [downloadingId, setDownloadingId] = useState(null);
  
 
 const [reportDate, setReportDate] = useState("");
@@ -24,21 +26,33 @@ const [pageSize, setPageSize] = useState(10);
   const loadPhysicalData = async () => {
     try {
       setTableLoading(true);
-       const response = await fetch(
-       buildApiUrl("/api/physical/reports")
-       );
+      const controller = new AbortController();
+
+const timeout = setTimeout(() => {
+  controller.abort();
+}, 10000);
+
+const response = await fetch(
+  buildApiUrl("/api/physical/reports"),
+  {
+    signal: controller.signal,
+  }
+);
+
+clearTimeout(timeout);
+
          const result = await response.json();
 
       if (!response.ok || !result.success) {
         throw new Error(result.message || "Failed to load physical data");
       }
 
-      setData(
-        (result.data || []).map((item, index) => ({
-          ...item,
-          srNo: index + 1,
-        }))
-      );
+    const formattedData = (result.data || []).map((item, index) => ({
+  ...item,
+  srNo: index + 1,
+}));
+
+setData(formattedData);
     } catch (error) {
       console.error(error);
     }
@@ -147,15 +161,16 @@ const loadEmploymentStatus = async () => {
 
 useEffect(() => {
 
+  // FAST TABLE LOAD
   loadPhysicalData();
 
-  loadJobRoles();
-
-  loadJobRoleAverage();
-
-  loadCircles();
-
-  loadEmploymentStatus();
+  // LOAD OTHER DATA IN BACKGROUND
+  setTimeout(() => {
+    loadJobRoles();
+    loadJobRoleAverage();
+    loadCircles();
+    loadEmploymentStatus();
+  }, 100);
 
 }, []);
 
@@ -282,6 +297,69 @@ const paginatedData = useMemo(() => {
     currentPage * pageSize
   );
 }, [data, currentPage, pageSize]);
+
+const handleDelete = async (id) => {
+  const confirmDelete = window.confirm(
+    "Warning: This report will be permanently deleted. Do you want to continue?"
+  );
+
+  if (!confirmDelete) return;
+
+  setDeletingId(id);
+
+  try {
+    const response = await fetch(
+      buildApiUrl(`/api/physical/delete-report/${id}`),
+      {
+        method: "DELETE",
+      }
+    );
+
+    const result = await response.json();
+
+    if (!response.ok || !result.success) {
+      alert(result.message || "Delete failed");
+      return;
+    }
+
+    alert("File deleted successfully");
+    loadPhysicalData();
+  } catch (error) {
+    console.log(error);
+    alert("Delete failed");
+  } finally {
+    setDeletingId(null);
+  }
+};
+
+const handleDownload = async (item) => {
+  setDownloadingId(item.id);
+
+  try {
+    const response = await fetch(
+      buildApiUrl(`/api/physical/download/${item.id}`)
+    );
+
+    if (!response.ok) {
+      throw new Error("Download failed");
+    }
+
+    const blob = await response.blob();
+    const downloadUrl = window.URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = downloadUrl;
+    anchor.download = item.original_name || `physical_report_${item.id}.xlsx`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    document.body.removeChild(anchor);
+    window.URL.revokeObjectURL(downloadUrl);
+  } catch (error) {
+    console.error(error);
+    alert("Download failed. Please try again.");
+  } finally {
+    setDownloadingId(null);
+  }
+};
 
   return (
     <div className="min-h-screen">
@@ -664,29 +742,35 @@ const paginatedData = useMemo(() => {
             : "-"}
         </td>
 
-        <td className="px-3 py-4">
-        <div className="flex items-center gap-2">
+       <td className="px-3 py-4">
+  <div className="flex items-center gap-2">
 
-  <button
-    className="rounded-xl bg-amber-500 px-3 py-1 text-xs font-semibold text-white hover:bg-amber-600"
-  >
-    Edit
-  </button>
+    <button
+      disabled={deletingId === item.id}
+      onClick={() => handleDelete(item.id)}
+      className={`rounded-xl px-3 py-1 text-xs font-semibold text-white transition ${
+        deletingId === item.id
+          ? "bg-red-300 cursor-not-allowed"
+          : "bg-red-500 hover:bg-red-600"
+      }`}
+    >
+      {deletingId === item.id ? "Deleting..." : "Delete"}
+    </button>
 
-  <button
-    className="rounded-xl bg-red-500 px-3 py-1 text-xs font-semibold text-white hover:bg-red-600"
-  >
-    Delete
-  </button>
+    <button
+      disabled={downloadingId === item.id}
+      onClick={() => handleDownload(item)}
+      className={`rounded-xl px-3 py-1 text-xs font-semibold text-white transition ${
+        downloadingId === item.id
+          ? "bg-emerald-300 cursor-not-allowed"
+          : "bg-emerald-600 hover:bg-emerald-700"
+      }`}
+    >
+      {downloadingId === item.id ? "Downloading..." : "Download"}
+    </button>
 
-  <button
-    className="rounded-xl bg-emerald-600 px-3 py-1 text-xs font-semibold text-white hover:bg-emerald-700"
-  >
-    Download
-  </button>
-
-</div>
-        </td>
+  </div>
+</td>
       </tr>
     ))
   )}
