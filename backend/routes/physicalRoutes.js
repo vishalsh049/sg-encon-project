@@ -475,6 +475,110 @@ router.get("/reports", async (_req, res) => {
   }
 });
 
+router.delete("/delete-report/:id", async (req, res) => {
+  const reportId = Number(req.params.id);
+
+  if (!Number.isInteger(reportId) || reportId <= 0) {
+    return res.status(400).json({
+      success: false,
+      message: "Invalid report ID",
+    });
+  }
+
+  try {
+    await ensurePhysicalTables();
+
+    const [report] = await query(
+      `SELECT id, file_path FROM physical_reports WHERE id = ? LIMIT 1`,
+      [reportId]
+    );
+
+    if (!report) {
+      return res.status(404).json({
+        success: false,
+        message: "Report not found",
+      });
+    }
+
+    await query(`DELETE FROM physical WHERE report_id = ?`, [reportId]);
+    await query(`DELETE FROM physical_reports WHERE id = ?`, [reportId]);
+
+    if (report.file_path && fs.existsSync(report.file_path)) {
+      try {
+        fs.unlinkSync(report.file_path);
+      } catch (unlinkError) {
+        console.error("Failed to delete physical report file:", unlinkError);
+      }
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Report deleted successfully",
+    });
+  } catch (error) {
+    console.error("Physical report delete error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server Error",
+    });
+  }
+});
+
+router.get("/download/:id", async (req, res) => {
+  const reportId = Number(req.params.id);
+
+  if (!Number.isInteger(reportId) || reportId <= 0) {
+    return res.status(400).json({
+      success: false,
+      message: "Invalid report ID",
+    });
+  }
+
+  try {
+    await ensurePhysicalTables();
+
+    const [report] = await query(
+      `SELECT id, file_path, original_name FROM physical_reports WHERE id = ? LIMIT 1`,
+      [reportId]
+    );
+
+    if (!report || !report.file_path) {
+      return res.status(404).json({
+        success: false,
+        message: "Report not found",
+      });
+    }
+
+    if (!fs.existsSync(report.file_path)) {
+      return res.status(404).json({
+        success: false,
+        message: "File not found on server",
+      });
+    }
+
+    const downloadName = report.original_name || path.basename(report.file_path);
+    return res.download(report.file_path, downloadName, (err) => {
+      if (err) {
+        console.error("Physical report download error:", err);
+        if (!res.headersSent) {
+          res.status(500).json({
+            success: false,
+            message: "Unable to download file",
+          });
+        }
+      }
+    });
+  } catch (error) {
+    console.error("Physical report download error:", error);
+    if (!res.headersSent) {
+      res.status(500).json({
+        success: false,
+        message: "Server Error",
+      });
+    }
+  }
+});
+
 router.get("/job-role-count", async (_req, res) => {
 
   try {
