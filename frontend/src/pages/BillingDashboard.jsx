@@ -32,10 +32,14 @@ import {
   CalendarDays,
   RefreshCcw,
   ChevronDown,
+  Trophy,
+  Medal,
+  ArrowUpRight,
    } from "lucide-react";
 
 export default function BillingDashboard() {
   const [summary, setSummary] = useState(null);
+  const [circleRankingData, setCircleRankingData] = useState([]);
   const [statusData, setStatusData] = useState([]);
   const [revenueKpi, setRevenueKpi] = useState({
   totalRevenue: 0,
@@ -112,7 +116,7 @@ const fetchData = async () => {
       months: timeFilter || undefined,
     };
 
-    const [summaryRes, statusRes] = await Promise.all([
+    const [summaryRes, statusRes, rankingRes] = await Promise.all([
       axios.get(buildApiUrl("/api/billing/summary"), {
         headers: authHeaders,
         params,
@@ -122,10 +126,17 @@ const fetchData = async () => {
         headers: authHeaders,
         params,
       }),
+
+      axios.get(buildApiUrl("/api/billing/circle-ranking"), {
+  headers: authHeaders,
+  params,
+}),
+
     ]);
 
     setSummary(summaryRes.data);
     setStatusData(statusRes.data);
+    setCircleRankingData(rankingRes.data);
 
   } catch (err) {
     console.error(err);
@@ -197,6 +208,7 @@ const fetchData = async () => {
 
   const circleOptions = [...new Set(statusData.map((r) => r.circle).filter(Boolean))];
   const billingOptions = [...new Set(statusData.map((r) => r.billing_type).filter(Boolean))];
+ 
 
   // Convert monthStats → chart data
   const chartData = filteredMonths
@@ -1166,6 +1178,575 @@ data={revenueMonthlyTrend}
 
 {/* FULL SECTION SEPARATOR */}
 <div className="col-span-1 lg:col-span-3 border-b border-slate-200/90"></div>
+
+<div className="col-span-1 lg:col-span-3">
+{/* Billing Insight */}
+
+<div className="mt-2">
+
+  {/* HEADER */}
+  <div className="flex items-center justify-between gap-3 mb-4 px-2">
+
+    <h3 className="text-[12px] font-semibold tracking-[0.30em] text-indigo-600 uppercase">
+      Billing Insights
+    </h3>
+
+    <div className="h-1 w-28 rounded-full bg-gradient-to-r from-emerald-500/40 via-indigo-500/40 to-amber-400/30" />
+
+  </div>
+
+  {/* SINGLE LINE GRID */}
+  <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 items-start">
+
+    {/* LEFT KPI SECTION */}
+    <div className="xl:col-span-3 space-y-2">
+
+      {/* AVG */}
+      <div className="rounded-2xl border border-border-color/60 bg-white/70 backdrop-blur p-3">
+
+        <div className="flex items-center justify-between">
+
+          <div className="text-[10px] font-semibold tracking-[0.30em] uppercase text-slate-500">
+            Avg Completion
+          </div>
+
+          <div className="rounded-xl bg-emerald-500/10 border border-emerald-500/20 p-1 text-emerald-700">
+            <Percent size={12} />
+          </div>
+
+        </div>
+
+        <div className="text-[18px] font-bold text-emerald-700">
+          {avgCompletion}%
+        </div>
+
+      </div>
+
+      {/* BEST */}
+      <div className="rounded-2xl border border-border-color/60 bg-white/70 backdrop-blur p-3">
+
+        <div className="flex items-center justify-between">
+
+          <div className="text-[10px] font-semibold tracking-[0.24em] uppercase text-slate-500">
+            Best Month
+          </div>
+
+          <div className="rounded-xl bg-emerald-500/10 border border-emerald-500/20 p-1 text-emerald-700">
+            <TrendingUp size={12} />
+          </div>
+
+        </div>
+
+        <div className="text-[15px] font-semibold text-slate-800">
+          {bestMonth?.month || "-"}
+        </div>
+
+        <div className="mt-1 text-xs font-semibold text-emerald-700">
+          {bestMonth ? `${bestMonth.percent}% done` : ""}
+        </div>
+
+      </div>
+
+      {/* WORST */}
+      <div className="rounded-2xl border border-border-color/60 bg-white/70 backdrop-blur p-3">
+
+        <div className="flex items-center justify-between">
+
+          <div className="text-[10px] font-semibold tracking-[0.24em] uppercase text-slate-500">
+            Needs Attention
+          </div>
+
+          <div className="rounded-xl bg-rose-500/10 border border-rose-500/20 p-1 text-rose-700">
+            <TrendingDown size={12} />
+          </div>
+
+        </div>
+
+        <div className="text-[15px] font-semibold text-slate-800">
+          {worstMonth?.month || "-"}
+        </div>
+
+        <div className="mt-1 text-xs font-semibold text-rose-600">
+          {worstMonth ? `${worstMonth.percent}% done` : ""}
+        </div>
+
+      </div>
+
+    </div>
+
+{/* DONE VS PENDING TABLE */}
+
+<div className="xl:col-span-5 rounded-2xl border border-slate-200/80
+ bg-gradient-to-br from-white to-slate-50/70 backdrop-blur-xl shadow-sm overflow-hidden">
+
+  {/* HEADER */}
+  <div className="flex items-center justify-between px-4 pt-4 pb-2 border-b border-slate-100">
+
+    <div>
+
+      <div className="text-[11px] font-semibold tracking-[0.18em] uppercase text-slate-600">
+        Done vs Pending
+      </div>
+
+      <div className="text-xs text-slate-400">
+        Circle-wise billing completion analytics
+      </div>
+
+    </div>
+
+    <div className="flex items-center gap-2">
+
+      <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+
+      <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-700">
+        Live
+      </div>
+
+    </div>
+
+  </div>
+
+  {/* TABLE */}
+  <div className="p-2">
+
+    <div className="overflow-hidden rounded-2xl border border-slate-100 bg-white/70">
+
+      {/* TABLE HEADER */}
+      <div className="grid grid-cols-4 bg-slate-50 border-b border-slate-100">
+
+        <div className="px-4 py-2 text-[11px] font-bold uppercase tracking-[0.20em] text-slate-500">
+          Circle
+        </div>
+
+        <div className="px-4 py-2 border-l border-slate-100 text-[11px] font-bold uppercase tracking-[0.20em] text-emerald-700">
+          Done
+        </div>
+
+        <div className="px-4 py-2 border-l border-slate-100 text-[11px] font-bold uppercase tracking-[0.20em] text-rose-600">
+          Pending
+        </div>
+
+        <div className="px-4 py-2 border-l border-slate-100 text-[11px] font-bold uppercase tracking-[0.20em] text-indigo-700">
+          Total
+        </div>
+
+      </div>
+
+      {/* ROWS */}
+      {circleOptions.map((circle, index) => {
+
+        const rows = statusData.filter(
+          (r) => r.circle === circle
+        );
+
+        let done = 0;
+        let pending = 0;
+
+        rows.forEach((row) => {
+
+          ["sixty", "forty", "kpi"].forEach((key) => {
+
+            if (row[key] === "Done") {
+              done++;
+            } else {
+              pending++;
+            }
+
+          });
+
+        });
+
+        const total = done + pending;
+
+        return (
+
+          <div
+            key={index}
+            className="grid grid-cols-4 border-b border-slate-100 last:border-b-0 hover:bg-slate-50/70 transition-all duration-200"
+          >
+
+            {/* CIRCLE */}
+            <div className="px-4 py-2 flex items-center">
+
+              <div className="text-sm font-semibold text-slate-700">
+                {circle}
+              </div>
+
+            </div>
+
+            {/* DONE */}
+            <div className="px-4 py-2 border-l border-slate-100 flex items-center">
+
+              <div className="inline-flex items-center text-sm font-semibold text-emerald-700">
+                {done}
+              </div>
+
+            </div>
+
+            {/* PENDING */}
+            <div className="px-4 py-2 border-l border-slate-100 flex items-center">
+
+              <div className="inline-flex items-center text-sm font-semibold text-rose-600">
+                {pending}
+              </div>
+
+            </div>
+
+            {/* TOTAL */}
+            <div className="px-4 py-2 border-l border-slate-100 flex items-center">
+
+              <div className="inline-flex items-center  text-sm font-semibold text-indigo-700">
+                {total}
+              </div>
+
+            </div>
+
+          </div>
+
+        );
+
+      })}
+
+      {/* TOTAL ROW */}
+      <div className="grid grid-cols-4 bg-slate-50 border-t border-slate-200">
+
+        {/* LABEL */}
+        <div className="px-4 py-1 text-sm font-semibold uppercase tracking-[0.10em] text-slate-700">
+          Total
+        </div>
+
+        {/* DONE TOTAL */}
+        <div className="px-4 py-1 border-l border-slate-200">
+
+          <div className="inline-flex items-center text-sm font-semibold text-emerald-700">
+
+            {
+              circleOptions.reduce((acc, circle) => {
+
+                const rows = statusData.filter(
+                  (r) => r.circle === circle
+                );
+
+                let done = 0;
+
+                rows.forEach((row) => {
+
+                  ["sixty", "forty", "kpi"].forEach((key) => {
+
+                    if (row[key] === "Done") {
+                      done++;
+                    }
+
+                  });
+
+                });
+
+                return acc + done;
+
+              }, 0)
+            }
+
+          </div>
+
+        </div>
+
+        {/* PENDING TOTAL */}
+        <div className="px-4 py-1 border-l border-slate-200">
+
+          <div className="inline-flex items-center text-sm font-semibold text-rose-600">
+
+            {
+              circleOptions.reduce((acc, circle) => {
+
+                const rows = statusData.filter(
+                  (r) => r.circle === circle
+                );
+
+                let pending = 0;
+
+                rows.forEach((row) => {
+
+                  ["sixty", "forty", "kpi"].forEach((key) => {
+
+                    if (row[key] !== "Done") {
+                      pending++;
+                    }
+
+                  });
+
+                });
+
+                return acc + pending;
+
+              }, 0)
+            }
+
+          </div>
+
+        </div>
+
+        {/* GRAND TOTAL */}
+        <div className="px-4 py-1 border-l border-slate-200">
+
+          <div className="inline-flex items-center text-sm font-semibold text-indigo-700">
+
+            {
+              circleOptions.reduce((acc, circle) => {
+
+                const rows = statusData.filter(
+                  (r) => r.circle === circle
+                );
+
+                let total = 0;
+
+                rows.forEach((row) => {
+
+                  ["sixty", "forty", "kpi"].forEach(() => {
+                    total++;
+                  });
+
+                });
+
+                return acc + total;
+
+              }, 0)
+            }
+
+          </div>
+
+        </div>
+
+      </div>
+
+    </div>
+
+  </div>
+
+</div>
+
+    {/* MONTHLY PROGRESS */}
+   <div className="xl:col-span-4 h-[290px] rounded-2xl border border-border-color/60 bg-white/60 backdrop-blur p-4 overflow-hidden">
+
+      {/* HEADER */}
+      <div className="flex items-center justify-between mb-2">
+
+        <div>
+
+          <div className="text-[11px] font-semibold tracking-[0.24em] uppercase text-cyan-700">
+            Monthly Progress
+          </div>
+
+          <div className="text-xs text-slate-400">
+            Completion overview
+          </div>
+
+        </div>
+
+        <div className="h-2 w-2 rounded-full bg-cyan-500/70" />
+
+      </div>
+
+      {/* PROGRESS */}
+      <div className="space-y-1 h-[220px] overflow-y-auto pr-1 custom-scrollbar">
+
+        {chartData.map((item, index) => {
+
+          const progressColor =
+            item.percent >= 80
+              ? "bg-emerald-500"
+              : item.percent >= 60
+              ? "bg-indigo-500"
+              : item.percent >= 40
+              ? "bg-amber-500"
+              : "bg-rose-500";
+
+          const progressBg =
+            item.percent >= 80
+              ? "bg-emerald-100"
+              : item.percent >= 60
+              ? "bg-indigo-100"
+              : item.percent >= 40
+              ? "bg-amber-100"
+              : "bg-rose-100";
+
+          const textColor =
+            item.percent >= 80
+              ? "text-emerald-700"
+              : item.percent >= 60
+              ? "text-indigo-700"
+              : item.percent >= 40
+              ? "text-amber-700"
+              : "text-rose-700";
+
+          return (
+
+            <div
+              key={index}
+              className="rounded-2xl border border-border-color/50 bg-white/70 px-3 py-2"
+            >
+
+              <div className="flex items-center justify-between mb-2">
+
+                <div>
+
+                  <div className="text-sm font-semibold text-slate-700">
+                    {item.month}
+                  </div>
+
+                  <div className="text-xs text-slate-400 mt-1">
+                    {item.done} Done • {item.pending} Pending
+                  </div>
+
+                </div>
+
+                <div className={`text-sm font-bold ${textColor}`}>
+                  {item.percent}%
+                </div>
+
+              </div>
+
+              <div className={`h-1 rounded-full overflow-hidden ${progressBg}`}>
+
+                <div
+                  className={`h-full rounded-full ${progressColor}`}
+                  style={{
+                    width: `${item.percent}%`,
+                  }}
+                />
+
+              </div>
+
+            </div>
+
+          );
+
+        })}
+
+      </div>
+
+    </div>
+
+  </div>
+
+</div>
+</div>
+
+{/* FULL SECTION SEPARATOR */}
+<div className="col-span-1 lg:col-span-3 border-b border-slate-200/90"></div>
+
+{/* CIRCLE PERFORMANCE RANKING */}
+<div className="col-span-1 lg:col-span-3 mt-4">
+
+  <div className="rounded-[24px] border border-amber-100 bg-gradient-to-br from-white to-amber-50/40 backdrop-blur-xl shadow-sm overflow-hidden">
+
+    {/* HEADER */}
+    <div className="flex items-center justify-between p-6 border-b border-amber-100">
+
+      <div className="flex items-start gap-4">
+
+        <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center text-white shadow-lg">
+          <Trophy size={22} />
+        </div>
+
+        <div>
+          <div className="text-[13px] tracking-[0.28em] font-bold uppercase text-amber-700">
+            Circle Performance Ranking
+          </div>
+
+          <div className="mt-1 text-sm text-slate-500">
+            Revenue & operational efficiency leaderboard
+          </div>
+        </div>
+
+      </div>
+
+      <div className="px-3 py-1 rounded-full border border-emerald-200 bg-emerald-50 text-emerald-700 text-xs font-semibold">
+        LIVE PERFORMANCE
+      </div>
+
+    </div>
+
+    {/* TABLE */}
+    <div className="p-4">
+
+      <div className="overflow-hidden rounded-2xl border border-slate-100">
+
+        {/* HEADER */}
+        <div className="grid grid-cols-3 bg-slate-50 border-b border-slate-100">
+
+          <div className="px-4 py-3 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">
+            Rank
+          </div>
+
+          <div className="px-4 py-3 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500 border-l border-slate-100">
+            Circle
+          </div>
+
+          <div className="px-4 py-3 text-[11px] font-bold uppercase tracking-[0.18em] text-emerald-700 border-l border-slate-100">
+            Revenue
+          </div>
+
+        </div>
+
+        {/* ROWS */}
+        {circleRankingData.map((item) => (
+
+          <div
+            key={item.rank}
+            className="grid grid-cols-3 border-b border-slate-100 last:border-b-0 hover:bg-slate-50/70 transition"
+          >
+
+            {/* RANK */}
+            <div className="px-4 py-4 flex items-center gap-3">
+
+              <div className={`
+                h-9 w-9 rounded-xl flex items-center justify-center text-white text-sm font-bold
+                ${item.rank === 1
+                  ? "bg-gradient-to-br from-amber-400 to-orange-500"
+                  : item.rank === 2
+                  ? "bg-gradient-to-br from-slate-400 to-slate-500"
+                  : "bg-gradient-to-br from-orange-400 to-amber-600"}
+              `}>
+                {item.rank}
+              </div>
+
+              {item.rank === 1 && (
+                <div className="px-2 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-100 text-[10px] font-bold uppercase">
+                  Top
+                </div>
+              )}
+
+            </div>
+
+            {/* CIRCLE */}
+            <div className="px-4 py-4 border-l border-slate-100 flex items-center">
+
+              <div className="font-semibold text-slate-700">
+                {item.circle}
+              </div>
+
+            </div>
+
+            {/* REVENUE */}
+            <div className="px-4 py-4 border-l border-slate-100 flex items-center">
+
+              <div className="font-semibold text-emerald-700">
+                ₹ {item.revenue} Cr
+              </div>
+
+            </div>
+
+          </div>
+
+        ))}
+
+      </div>
+
+    </div>
+
+  </div>
+
+</div>
          
           </div>
         </div>

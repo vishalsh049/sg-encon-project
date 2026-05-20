@@ -325,7 +325,7 @@ function TowerReports() {
 
     const handleUpload = async () => {
       setModalMessage("");
-      setModalLoadingText("Uploading...");
+      setModalLoadingText("");
       if (uploadType === "single") {
         if (!date || !siteType || !reportType || !uploadType) {
           setModalMessageType("error");
@@ -1067,6 +1067,8 @@ const kpiCards = useMemo(() => {
 </Listbox>
   </div>
 
+
+
   {/* REPORT TYPE */}
   <div className="relative">
     <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
@@ -1108,7 +1110,31 @@ const kpiCards = useMemo(() => {
 </Listbox>
   </div>
 
- 
+ {/* DOWNLOAD FORMAT */}
+{siteType && (
+  <div className="md:col-span-2">
+    <button
+      type="button"
+      onClick={() => {
+        const link = document.createElement("a");
+
+        // 🔥 format file path
+        link.href = `/formats/${siteType.toLowerCase()}_format.xlsx`;
+
+        // 🔥 download filename
+        link.download = `${siteType}_Format.xlsx`;
+
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      }}
+      className="mt-1 inline-flex items-center gap-2 rounded-xl border border-violet-200 bg-violet-50 px-4 py-2 text-sm font-medium text-violet-700 hover:bg-violet-100 transition"
+    >
+      <Download size={16} />
+      Download {siteType} Format
+    </button>
+  </div>
+)}
 
 </div>
 
@@ -1162,23 +1188,37 @@ const kpiCards = useMemo(() => {
 
 </div>
                 </section> 
+<div className="flex flex-col gap-3 border-t border-slate-200/70 pt-4 sm:flex-row sm:items-center sm:justify-end">
 
-                <div className="flex flex-col gap-3 border-t border-slate-200/70 pt-4 sm:flex-row sm:items-center sm:justify-end">
-                  <button
-                    onClick={() => setModalOpen(false)}
-                    className={secondaryButtonClass}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleUpload}
-                    disabled={uploading}
-                    className={`${primaryButtonClass} bg-gradient-to-r from-violet-500 via-indigo-500 to-sky-500 shadow-[0_20px_60px_rgba(76,78,255,0.24)]`}
-                  >
-                    <Upload size={16} />
-                    {uploading ? "Uploading..." : "Upload"}
-                  </button>
-                </div>
+  {/* Hide Cancel while uploading */}
+  {!uploading && (
+    <button
+      onClick={() => setModalOpen(false)}
+      className={secondaryButtonClass}
+    >
+      Cancel
+    </button>
+  )}
+
+  <button
+    onClick={handleUpload}
+    disabled={uploading}
+    className={`${primaryButtonClass} min-w-[140px] bg-gradient-to-r from-violet-500 via-indigo-500 to-sky-500 shadow-[0_20px_60px_rgba(76,78,255,0.24)]`}
+  >
+    {uploading ? (
+      <>
+        <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+        Uploading...
+      </>
+    ) : (
+      <>
+        <Upload size={16} />
+        Upload
+      </>
+    )}
+  </button>
+</div>
+
               </div>
             </div>
           </div>

@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 
+const bcrypt = require("bcrypt");
 const { db, isConnected } = require("../config/db");
 const jwt = require("jsonwebtoken");
 const {
@@ -65,10 +66,13 @@ router.post("/login", (req, res) => {
       }
 
       let passwordMatches = false;
-// ✅ DIRECT PASSWORD CHECK
-if (password === user.password) {
-  passwordMatches = true;
-}
+      const storedPassword = String(user.password || "");
+
+      if (storedPassword.startsWith("$2a$") || storedPassword.startsWith("$2b$") || storedPassword.startsWith("$2y$")) {
+        passwordMatches = await bcrypt.compare(password, storedPassword);
+      } else {
+        passwordMatches = password === storedPassword;
+      }
 
       if (!passwordMatches) {
         console.log("PASSWORD MISMATCH");
@@ -135,6 +139,12 @@ if (password === user.password) {
           roleId: user.role_id || 1,
           roleName: user.role_name || "Admin",
           permissions,
+          pagePermissions: user.page_permissions
+            ? JSON.parse(user.page_permissions)
+            : [],
+          pageAccess: user.page_permissions
+            ? JSON.parse(user.page_permissions).map((item) => item.page)
+            : [],
         },
       });
     } catch (err) {

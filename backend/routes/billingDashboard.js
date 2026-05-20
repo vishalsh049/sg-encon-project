@@ -97,4 +97,109 @@ SUM(CASE WHEN LOWER(r.domain) = 'tower' THEN r.pm_loss ELSE 0 END) AS tower_loss
   }
 });
 
+router.get("/circle-ranking", async (req, res) => {
+  try {
+
+    const { billing_type } = req.query;
+
+    let query = `
+      SELECT
+        revenue_data.circle,
+        revenue_data.revenue,
+
+        COALESCE(status_data.done_count, 0) AS done_count,
+
+        COALESCE(status_data.total_count, 0) AS total_count
+
+      FROM (
+
+        SELECT
+          r.circle,
+
+          SUM(r.cm_amount + r.pm_amount) AS revenue
+
+        FROM revenue r
+
+        INNER JOIN revenue_upload ru
+          ON r.file_id = ru.file_id
+
+        WHERE ru.billing_month = (
+          SELECT MAX(billing_month)
+          FROM revenue_upload
+        )
+
+        ${billing_type ? "AND r.co_type = ?" : ""}
+
+        GROUP BY r.circle
+
+      ) AS revenue_data
+
+      LEFT JOIN (
+
+        SELECT
+          bs.circle,
+
+          SUM(
+            CASE WHEN bs.sixty = 'Done' THEN 1 ELSE 0 END +
+            CASE WHEN bs.forty = 'Done' THEN 1 ELSE 0 END +
+            CASE WHEN bs.kpi = 'Done' THEN 1 ELSE 0 END
+          ) AS done_count,
+
+          COUNT(*) * 3 AS total_count
+
+        FROM billing_status bs
+
+        GROUP BY bs.circle
+
+      ) AS status_data
+
+      ON LOWER(revenue_data.circle) = LOWER(status_data.circle)
+
+      ORDER BY revenue_data.revenue DESC
+    `;
+
+    const params = [];
+
+    if (billing_type) {
+      params.push(billing_type);
+    }
+
+    const [rows] = await db.promise().query(query, params);
+
+    const result = rows.map((row, index) => {
+
+      const efficiency = row.total_count
+        ? Math.round(
+            (row.done_count / row.total_count) * 100
+          )
+        : 0;
+
+      return {
+        rank: index + 1,
+
+        circle: row.circle,
+
+        revenue: Number(
+          (row.revenue / 10000000).toFixed(2)
+        ),
+
+        efficiency,
+      };
+
+    });
+
+    res.status(200).json(result);
+
+  } catch (error) {
+
+    console.error("Circle ranking error:", error);
+
+    res.status(500).json({
+      message: "Circle ranking error",
+      error: error.message,
+    });
+
+  }
+});
+
 module.exports = router;

@@ -28,11 +28,11 @@
           const allowedExtensions = new Set(["xlsx", "xls", "xlsb", "csv"]);
           const upload = multer({
             storage,
-            limits: { fileSize: 25 * 1024 * 1024 },
+            limits: { fileSize: 150 * 1024 * 1024 },
           });
           const uploadMany = multer({
             storage,
-            limits: { fileSize: 25 * 1024 * 1024 },
+            limits: { fileSize: 150 * 1024 * 1024 },
           });
 
           const query = (sql, params = []) =>
@@ -298,34 +298,26 @@
 
           console.log("Availability Value:", cleanRow["overall cell availability"]);
 
-      let availability = cleanRow["overall cell availability"];
+let availability = cleanRow["overall cell availability"];
 
-  if (availability === undefined) {
-    console.log("❌ Column not found: overall cell availability");
-    return;
-  }
+// ✅ FIX
+if (
+  availability === undefined ||
+  availability === null ||
+  availability === ""
+) {
+  availability = 0;
+}
 
-  availability = Number(availability);
+availability = Number(availability);
 
-  if (availability <= 1) {
-    availability = availability * 100;
-  }
+if (isNaN(availability)) {
+  availability = 0;
+}
 
-  if (isNaN(availability)) {
-    return;
-  }
-
-  if (availability !== null) {
-    availability = Number(availability);
-
-    if (availability <= 1) {
-      availability = availability * 100;
-    }
-
-  if (availability === null || isNaN(availability)) {
-    return;
-  }
-  }
+if (availability <= 1) {
+  availability = availability * 100;
+}
 
               insertRows.push([
                 fileId,
@@ -342,7 +334,7 @@
                 cleanRow["city"],
                 cleanRow["site type"],
                 cleanRow["device type"],
-                cleanRow["overall cnum count"],
+                cleanRow["overall cnum count"] || cleanRow["overall cNum count"],
                 cleanRow["overall cell outage (sec)"],
                 availability,
                 cleanRow["cells up"]

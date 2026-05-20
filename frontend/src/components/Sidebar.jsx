@@ -1,9 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
-import { hasAccess } from "../utils/access"
+import { useMemo } from "react";
+import { hasAccess } from "../utils/access";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
   BriefcaseBusiness,
-  ChevronLeft,
   FileText,
   LayoutDashboard,
   LogOut,
@@ -12,9 +11,9 @@ import {
   Database,
 } from "lucide-react";
 import logo from "../assets/logo.png";
-import { clearStoredSession, hasPermission } from "../lib/session";
+import { clearStoredSession, getStoredSession, hasPermission } from "../lib/session";
 import MenuItem from "./MenuItem";
-import SubMenu from "./SubMenu";
+
 
 function isPathActive(pathname, path, exact = false) {
   if (!path) return false;
@@ -24,18 +23,7 @@ function isPathActive(pathname, path, exact = false) {
   return pathname === path || pathname.startsWith(`${path}/`);
 }
 
-function getActiveTrail(items, pathname, trail = []) {
-  for (const item of items) {
-    if (isPathActive(pathname, item.path, item.exact)) return trail;
-    if (item.children?.length) {
-      const childTrail = getActiveTrail(item.children, pathname, [...trail, item.key]);
-      if (childTrail) return childTrail;
-    }
-  }
-  return null;
-}
-
-function filterMenuByRole(items, role) {
+function filterMenuByRole(items, role, sessionUser) {
   const normalizedRole = String(role || "").trim().toLowerCase();
   return items.reduce((acc, item) => {
     if (
@@ -44,21 +32,28 @@ function filterMenuByRole(items, role) {
     ) {
       return acc;
     }
+
     if (item.permission && !hasPermission(item.permission)) return acc;
-    const nextItem = item.children?.length
-      ? { ...item, children: filterMenuByRole(item.children, role) }
-      : item;
-    if (nextItem.children && nextItem.children.length === 0 && !nextItem.path) return acc;
-    acc.push(nextItem);
+
+    if (item.accessPage && !hasAccess(item.accessPage, sessionUser)) return acc;
+
+    if (
+      item.accessPages &&
+      !item.accessPages.some((page) => hasAccess(page, sessionUser))
+    ) {
+      return acc;
+    }
+
+    acc.push(item);
     return acc;
   }, []);
 }
 
-function Sidebar({ closeSidebar, collapsed, onCollapseToggle, onExpandRequest }) {
+function Sidebar({ closeSidebar, collapsed, onExpandRequest }) {
   const location = useLocation();
   const navigate = useNavigate();
-  const [openLevels, setOpenLevels] = useState({});
   const role = localStorage.getItem("role") || "admin";
+  const sessionUser = useMemo(() => getStoredSession(), []);
 
   const menu = useMemo(
     () =>
@@ -71,160 +66,119 @@ function Sidebar({ closeSidebar, collapsed, onCollapseToggle, onExpandRequest })
             exact: true,
             icon: LayoutDashboard,
             description: "Overview",
+            accessPage: "Dashboard",
           },
-         {
-  key: "billing",
-  label: "Billing",
-  icon: ReceiptText,
-  description: "Finance flow",
-  children: [
-    {
-      key: "billing-dashboard",
-      label: "Billing Dashboard",
-      path: "/dashboard/billing",
-    },
-    {
-      key: "billing-status",
-      label: "Billing Status",
-      path: "/dashboard/billing/status",
-    },
-    {
-      key: "revenue",
-      label: "Revenue",
-      path: "/dashboard/billing/revenue",
-    },
-    {
-      key: "penalties",
-      label: "Penalties",
-      path: "/dashboard/billing/penalties",
-      children: [
-        {
-          key: "kpis-penalty",
-          label: "KPIs Penalty",
-          path: "/dashboard/billing/penalties/kpis",
-        },
-        {
-          key: "general-penalties",
-          label: "General Penalties",
-          path: "/dashboard/billing/penalties/general",
-        },
-      ],
-    },
-  ],
-},
           {
-            key: "manpower",
-            label: "Manpower",
+            key: "billing-dashboard",
+            label: "Billing Dashboard",
+            path: "/dashboard/billing",
+            icon: ReceiptText,
+            accessPage: "Billing Dashboard",
+          },
+          {
+            key: "billing-status",
+            label: "Billing Status",
+            path: "/dashboard/billing/status",
+            icon: ReceiptText,
+            accessPage: "Billing Status",
+          },
+          {
+            key: "revenue",
+            label: "Revenue",
+            path: "/dashboard/billing/revenue",
+            icon: ReceiptText,
+            accessPage: "Revenue",
+          },
+          {
+            key: "kpis-penalty",
+            label: "KPIs Penalty",
+            path: "/dashboard/billing/penalties/kpis",
+            icon: ReceiptText,
+            accessPage: "KPIs Penalty",
+          },
+          {
+            key: "general-penalties",
+            label: "General Penalties",
+            path: "/dashboard/billing/penalties/general",
+            icon: ReceiptText,
+            accessPage: "General Penalties",
+          },
+          {
+            key: "physical",
+            label: "Physical",
+            path: "/dashboard/manpower/physical",
             icon: BriefcaseBusiness,
-            description: "Teams & staffing",
-            children: [
-              { key: "physical", label: "Physical", path: "/dashboard/manpower/physical" },
-              { key: "scrum", label: "SCRUM", path: "/dashboard/manpower/scrum" },
-            ],
+            accessPage: "Physical",
           },
           {
-  key: "reports",
-  label: "Reports",
-  icon: FileText,
-  description: "Uploads & files",
-  children: [
-    {
-      key: "tower-reports",
-      label: "Tower Reports",
-      path: "/dashboard/reports/tower",
-    },
-    {
-      key: "fiber-reports",
-      label: "Fiber Reports",
-      children: [
-        {
-          key: "nso-reports",
-          label: "NSO Reports",
-          path: "/dashboard/reports/fiber/nso",
-          icon: Database,
-        },
-        {
-          key: "fiber-inventory",
-          label: "Fiber Inventory",
-          path: "/dashboard/reports/fiber/inventory",
-          icon: Database,
-        },
-      ],
-    },
-  ],
-},
-         {
-  key: "users-access",
-  label: "Users & Access",
-  path: "/dashboard/users-access",
-  icon: ShieldCheck,
-  description: "Roles & permissions",
-  roles: ["admin"], 
-},
+            key: "scrum",
+            label: "SCRUM",
+            path: "/dashboard/manpower/scrum",
+            icon: BriefcaseBusiness,
+            accessPage: "Scrum",
+          },
+          {
+            key: "tower-reports",
+            label: "Tower Reports",
+            path: "/dashboard/reports/tower",
+            icon: FileText,
+            accessPage: "Tower Reports",
+          },
+          {
+            key: "nso-reports",
+            label: "NSO Reports",
+            path: "/dashboard/reports/fiber/nso",
+            icon: Database,
+            accessPage: "NSO Reports",
+          },
+          {
+            key: "fiber-inventory",
+            label: "Fiber Inventory",
+            path: "/dashboard/reports/fiber/inventory",
+            icon: Database,
+            accessPage: "Fiber Reports",
+          },
+          {
+            key: "users-access",
+            label: "Users & Access",
+            path: "/dashboard/users-access",
+            icon: ShieldCheck,
+            description: "Roles & permissions",
+            accessPages: ["Users", "Roles & Permissions"],
+          },
         ],
-        role
+        role,
+        sessionUser
       ),
-    [role]
+    [role, sessionUser]
   );
 
-  useEffect(() => {
-    const trail = getActiveTrail(menu, location.pathname) || [];
-    setOpenLevels((prev) => {
-      const next = {};
-      trail.forEach((key, depth) => {
-        next[depth] = key;
-      });
-      const same =
-        Object.keys(prev).length === Object.keys(next).length &&
-        Object.entries(next).every(([depth, key]) => prev[depth] === key);
-      return same ? prev : next;
-    });
-  }, [location.pathname, menu]);
+  const renderItems = (items) =>
+    items.map((item) => {
+      const isActive = isPathActive(location.pathname, item.path, item.exact);
 
-  const toggleAtLevel = (depth, key) => {
-    setOpenLevels((prev) => {
-      const next = {};
-      Object.entries(prev).forEach(([level, value]) => {
-        if (Number(level) < depth) next[level] = value;
-      });
-      if (prev[depth] !== key) next[depth] = key;
-      return next;
+      return (
+        <div key={item.key}>
+          <MenuItem
+            item={item}
+            depth={0}
+            collapsed={collapsed}
+            isActive={isActive}
+            onNavigate={(path) => {
+              if (path) navigate(path);
+              closeSidebar?.();
+            }}
+            onExpandRequest={onExpandRequest}
+          />
+        </div>
+      );
     });
-  };
 
   const handleLogout = () => {
     localStorage.removeItem("token");
     clearStoredSession();
     navigate("/login");
   };
-
-  const renderItems = (items, depth = 0) =>
-    items.map((item) => {
-      const isOpen = openLevels[depth] === item.key;
-      const isActive =
-        isPathActive(location.pathname, item.path, item.exact) ||
-        (item.children?.length ? Boolean(getActiveTrail(item.children, location.pathname, [])) : false);
-
-      return (
-        <div key={item.key}>
-          <MenuItem
-            item={item}
-            depth={depth}
-            collapsed={collapsed}
-            isOpen={isOpen}
-            isActive={isActive}
-            onToggle={() => toggleAtLevel(depth, item.key)}
-            onNavigate={closeSidebar}
-            onExpandRequest={onExpandRequest}
-          />
-          {item.children?.length ? (
-            <SubMenu open={isOpen} collapsed={collapsed && depth === 0}>
-              {renderItems(item.children, depth + 1)}
-            </SubMenu>
-          ) : null}
-        </div>
-      );
-    });
 
   return (
     <aside className="flex w-62 h-full flex-col overflow-hidden border-r border-border-color bg-surface/95 backdrop-blur-xl">

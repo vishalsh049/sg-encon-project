@@ -43,36 +43,65 @@ const query = (sql, params = []) =>
   });
 
 async function ensureNsoTable() {
+
   await query(`
-    CREATE TABLE IF NOT EXISTS nso_reports (
+    CREATE TABLE IF NOT EXISTS nso_report_files (
+
       id INT AUTO_INCREMENT PRIMARY KEY,
-      report_date DATE NULL,
-      site_type VARCHAR(100) NULL,
-      report_type VARCHAR(100) NULL,
-      upload_type VARCHAR(30) NULL,
-      uploaded_by VARCHAR(100) NULL,
-      file_name VARCHAR(255) NULL,
-      original_file_name VARCHAR(255) NULL,
+
+      file_name VARCHAR(255) NOT NULL,
+
+      original_name VARCHAR(255) NOT NULL,
+
+      uploaded_by VARCHAR(255),
+
       total_records INT DEFAULT 0,
+
       uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+
     )
   `);
 
   const columns = [
     ["report_date", "DATE NULL"],
-    ["original_file_name", "VARCHAR(255) NULL"],
     ["total_records", "INT DEFAULT 0"],
   ];
 
   for (const [column, definition] of columns) {
     try {
-      await query(`ALTER TABLE nso_reports ADD COLUMN ${column} ${definition}`);
+      await query(`ALTER TABLE nso_report_files ADD COLUMN ${column} ${definition}`);
     } catch (error) {
       if (error?.code !== "ER_DUP_FIELDNAME") {
         throw error;
       }
     }
   }
+
+  try {
+    await query(`ALTER TABLE nso_reports ADD COLUMN report_date DATE NULL`);
+  } catch (error) {
+    if (error?.code !== "ER_DUP_FIELDNAME") {
+      throw error;
+    }
+  }
+
+  // Keep legacy and current filename columns aligned for older records and mixed code paths.
+  await query(`
+    UPDATE nso_report_files
+    SET original_file_name = original_name
+    WHERE (original_file_name IS NULL OR original_file_name = '')
+      AND original_name IS NOT NULL
+      AND original_name <> ''
+  `);
+
+  await query(`
+    UPDATE nso_reports nr
+    INNER JOIN nso_report_files nrf
+      ON nrf.id = nr.file_id
+    SET nr.report_date = nrf.report_date
+    WHERE nr.report_date IS NULL
+      AND nrf.report_date IS NOT NULL
+  `);
 }
 
 function normalizeHeader(value) {
@@ -165,25 +194,45 @@ function csvEscape(value) {
   return text;
 }
 
+function getCurrentIstSqlDateTime() {
+  return "DATE_FORMAT(CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+05:30'), '%Y-%m-%d %H:%i:%s')";
+}
+
 async function getRowsByIds(ids) {
+
   return query(
-    `SELECT id, report_date, site_type, report_type, upload_type, uploaded_by,
-            file_name, original_file_name, total_records, uploaded_at
-     FROM nso_reports
+    `SELECT
+        id,
+        uploaded_by,
+        report_date,
+        file_name,
+        original_name,
+        original_file_name,
+        total_records,
+        uploaded_at
+     FROM nso_report_files
      WHERE id IN (?)`,
     [ids]
   );
+
 }
 
 router.get("/", async (req, res) => {
   try {
     await ensureNsoTable();
     const rows = await query(
-      `SELECT id, report_date, site_type, report_type, upload_type, uploaded_by,
-              file_name, original_file_name, total_records, uploaded_at
-       FROM nso_reports
-       ORDER BY uploaded_at DESC, id DESC`
-    );
+  `SELECT
+      id,
+      uploaded_by,
+      report_date,
+      file_name,
+      original_name,
+      original_file_name,
+      total_records,
+      uploaded_at
+   FROM nso_report_files
+   ORDER BY report_date DESC, uploaded_at DESC, id DESC`
+);
     res.json({ rows });
   } catch (error) {
     console.error("NSO list error:", error);
@@ -194,14 +243,26 @@ router.get("/", async (req, res) => {
 router.get("/summary", async (_req, res) => {
   try {
     await ensureNsoTable();
+
     const rows = await query(
       `SELECT
-         COUNT(*) AS totalReports,
-         COALESCE(SUM(total_records), 0) AS totalRecords,
-         COUNT(DISTINCT site_type) AS totalSiteTypes,
-         MAX(uploaded_at) AS latestUploadAt
-       FROM nso_reports`
+          COUNT(*) AS totalReports,
+
+          COALESCE(
+            (
+              SELECT total_records
+              FROM nso_report_files
+              ORDER BY report_date DESC, uploaded_at DESC
+              LIMIT 1
+            ),
+            0
+          ) AS totalRecords,
+
+          MAX(report_date) AS latestUploadAt
+
+       FROM nso_report_files`
     );
+
     res.json(rows[0] || {});
   } catch (error) {
     console.error("NSO summary error:", error);
@@ -209,37 +270,66 @@ router.get("/summary", async (_req, res) => {
   }
 });
 
+router.get("/circle-count", async (_req, res) => {
+
+  try {
+    await ensureNsoTable();
+
+    const rows = await query(`
+      SELECT
+        TRIM(circle) AS circle,
+        COUNT(*) AS total
+      FROM nso_reports
+      WHERE circle IS NOT NULL
+        AND TRIM(circle) <> ''
+        AND report_date >= DATE_FORMAT(CURDATE(), '%Y-%m-01')
+        AND report_date <= CURDATE()
+
+      GROUP BY TRIM(circle)
+      ORDER BY total DESC
+    `);
+
+    res.json(rows);
+
+  } catch (error) {
+
+    console.error("Circle count error:", error);
+
+    res.status(500).json({
+      message: "Failed to fetch circle counts",
+    });
+
+  }
+
+});
+
 router.get("/export", async (_req, res) => {
   try {
     await ensureNsoTable();
-    const rows = await query(
-      `SELECT report_date, site_type, report_type, upload_type, uploaded_by,
-              original_file_name, total_records, uploaded_at
-       FROM nso_reports
-       ORDER BY uploaded_at DESC, id DESC`
-    );
+   const rows = await query(
+  `SELECT
+      report_date,
+      uploaded_by,
+      original_name,
+      total_records,
+      uploaded_at
+   FROM nso_report_files
+   ORDER BY report_date DESC, uploaded_at DESC, id DESC`
+);
 
-    const header = [
-      "Report Date",
-      "Site Type",
-      "Report Type",
-      "Upload Type",
-      "Uploaded By",
-      "File Name",
-      "Total Records",
-      "Uploaded At",
-    ];
+   const header = [
+  "Uploaded By",
+  "File Name",
+  "Total Records",
+  "Uploaded At",
+];
 
     const body = rows.map((row) =>
       [
-        row.report_date,
-        row.site_type,
-        row.report_type,
-        row.upload_type,
-        row.uploaded_by,
-        row.original_file_name || row.file_name,
-        row.total_records,
-        row.uploaded_at,
+      row.uploaded_by,
+      row.original_name || row.file_name,
+      row.total_records,
+      row.uploaded_at,
       ]
         .map(csvEscape)
         .join(",")
@@ -294,7 +384,7 @@ router.post("/bulk-download", async (req, res) => {
       const target = path.join(uploadsDir, row.file_name);
       if (fs.existsSync(target)) {
         archive.file(target, {
-          name: row.original_file_name || row.file_name,
+          name: row.original_file_name || row.original_name || row.file_name,
         });
       }
     });
@@ -334,26 +424,201 @@ router.post("/upload", (req, res) => {
 
       const defaults = parseWorkbookDefaults(workbookRows, {
         reportDate: req.body.date,
-        siteType: req.body.site_type,
-        reportType: req.body.report_type,
         uploadedBy: req.body.uploadedBy,
       });
+      const resolvedReportDate = defaults.reportDate || req.body.date || null;
 
-      await query(
-        `INSERT INTO nso_reports
-          (report_date, site_type, report_type, upload_type, uploaded_by, file_name, original_file_name, total_records)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-        [
-          defaults.reportDate,
-          defaults.siteType,
-          defaults.reportType,
-          (req.body.upload_type || "single").toLowerCase(),
-          defaults.uploadedBy || "Admin",
-          file.filename,
-          file.originalname,
-          workbookRows.length,
-        ]
-      );
+const fileResult = await query(
+  `INSERT INTO nso_report_files
+(
+  report_date,
+  file_name,
+  original_name,
+  original_file_name,
+  uploaded_by,
+  total_records,
+  uploaded_at
+)
+VALUES (?, ?, ?, ?, ?, ?, ${getCurrentIstSqlDateTime()})`,
+[
+  resolvedReportDate,
+  file.filename,
+  file.originalname,
+  file.originalname,
+  defaults.uploadedBy || "Admin",
+  workbookRows.length,
+]
+);
+
+const fileId = fileResult.insertId;
+
+for (const row of workbookRows) {
+
+ await query(
+  `INSERT INTO nso_reports (
+
+    file_id,
+    uid,
+    year,
+    week,
+    ticket_no,
+    parent_ticket,
+    circle,
+    cmp,
+    cmm_name,
+    link_name,
+    span_name,
+    vendor_tt,
+    fibre_owner,
+    construction_type,
+    impact,
+    affected_service,
+    reason,
+    event_date,
+    reported_to_fibre_noc,
+    informed_date,
+    etr,
+    cleared_date,
+    status,
+    resolution,
+    fault_description,
+    mttr,
+    mttn,
+    delay_reason,
+    inter_intra_bin,
+    zone,
+    bucket,
+    transport_ip_bin,
+    restoration_status,
+    span_id,
+    workorder,
+    sp_name,
+    rca_cause_code,
+    reason_high_mttr,
+    day,
+    month,
+    week_name,
+    ttr_percentage,
+    report_date,
+    created_at
+
+  )
+  VALUES (
+
+    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+    ?, ?, ?, NOW()
+
+  )`,
+  [
+
+    fileId,
+
+    row["UID"],
+
+    row["Year"],
+
+    row["Week"],
+
+    row["Ticket No"],
+
+    row["Parent Ticket"],
+
+Object.keys(row).find(
+  (key) => key.trim().toLowerCase() === "circle"
+)
+  ? row[
+      Object.keys(row).find(
+        (key) => key.trim().toLowerCase() === "circle"
+      )
+    ]
+  : "",
+
+    row["CMP"],
+
+    row["CMM Name"],
+
+    row["Link Name"],
+
+    row["Span Name"],
+
+    row["VendorTT"],
+
+    Object.keys(row).find(
+    (key) =>
+    key.trim().toLowerCase() === "fibre owner"
+   )
+    ? row[
+      Object.keys(row).find(
+        (key) =>
+          key.trim().toLowerCase() === "fibre owner"
+      )
+    ]
+  : "",
+
+    row["Construction Type"],
+
+    row["Impact"],
+
+    row["Affected Service"],
+
+    row["Reason"],
+
+    row["Event Date"],
+
+    row["Reported To Fibre NOC"],
+
+    row["Informed Date"],
+
+    row["ETR"],
+
+    row["Cleared Date"],
+
+    row["Status"],
+
+    row["Resolution"],
+
+    row["Fault Description"],
+
+    row["MTTR"],
+
+    row["MTTN (min)"],
+
+    row["Delay Reason"],
+
+    row["Inter/Intra Bin"],
+
+    row["Zone"],
+
+    row["Bucket"],
+
+    row["Transport IP BIN"],
+
+    row["Restoration Status"],
+
+    row["SpanId"],
+
+    row["Workorder"],
+
+    row["SP Name"],
+
+    row["RCA Cause Code"],
+
+    row["Reason for High MTTR(> 4hrs)"],
+
+    row["Day"],
+
+    row["Month"],
+
+    row["Week"],
+
+    row["TTR%AGE"],
+
+    resolvedReportDate
+
+  ]
+);
+}
 
       res.status(201).json({
         message: "NSO report uploaded successfully",
@@ -370,14 +635,21 @@ router.put("/:id", async (req, res) => {
   try {
     await ensureNsoTable();
     const id = req.params.id;
-    const { report_date, site_type, report_type, upload_type, uploaded_by } = req.body;
+    const { report_date, uploaded_by } = req.body;
 
-    await query(
-      `UPDATE nso_reports
-       SET report_date = ?, site_type = ?, report_type = ?, upload_type = ?, uploaded_by = ?
-       WHERE id = ?`,
-      [report_date || null, site_type || null, report_type || null, upload_type || null, uploaded_by || null, id]
-    );
+await query(
+  `UPDATE nso_report_files
+   SET report_date = ?, uploaded_by = ?
+   WHERE id = ?`,
+  [report_date || null, uploaded_by || null, id]
+);
+
+await query(
+  `UPDATE nso_reports
+   SET report_date = ?
+   WHERE file_id = ?`,
+  [report_date || null, id]
+);
 
     res.json({ message: "NSO report updated successfully" });
   } catch (error) {
@@ -401,7 +673,8 @@ router.delete("/:id", async (req, res) => {
       fs.unlinkSync(filePath);
     }
 
-    await query("DELETE FROM nso_reports WHERE id = ?", [req.params.id]);
+    await query("DELETE FROM nso_reports WHERE file_id = ?", [req.params.id]);
+    await query("DELETE FROM nso_report_files WHERE id = ?", [req.params.id]);
     res.json({ message: "NSO report deleted successfully" });
   } catch (error) {
     console.error("NSO delete error:", error);
@@ -425,7 +698,8 @@ router.post("/bulk-delete", async (req, res) => {
       }
     });
 
-    await query("DELETE FROM nso_reports WHERE id IN (?)", [ids]);
+    await query("DELETE FROM nso_reports WHERE file_id IN (?)", [ids]);
+    await query("DELETE FROM nso_report_files WHERE id IN (?)", [ids]);
     res.json({ message: "Selected NSO reports deleted successfully" });
   } catch (error) {
     console.error("NSO bulk delete error:", error);

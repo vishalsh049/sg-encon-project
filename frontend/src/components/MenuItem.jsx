@@ -92,6 +92,17 @@ function MenuItem({
             onExpandRequest?.();
             return;
           }
+          // If this menu item has its own path, navigate to it.
+          if (item.path) {
+            onNavigate?.(item.path);
+            return;
+          }
+          // Otherwise try navigating to the first child's path (useful for parent headings like "Billing").
+          const firstPath = item.children?.[0]?.path;
+          if (firstPath) {
+            onNavigate?.(firstPath);
+            return;
+          }
           onToggle?.();
         }}
         className={sharedClasses}
@@ -102,7 +113,7 @@ function MenuItem({
   }
 
   return (
-    <NavLink to={item.path} onClick={onNavigate} className={sharedClasses}>
+    <NavLink to={item.path} onClick={() => onNavigate?.(item.path)} className={sharedClasses}>
       {content}
     </NavLink>
   );

@@ -3,6 +3,22 @@ import axios from "axios";
 import { buildApiUrl } from "../lib/api";
 import { setStoredSession } from "../lib/session";
 
+const pageRouteMap = {
+  Dashboard: "/dashboard",
+  "Billing Dashboard": "/dashboard/billing",
+  "Billing Status": "/dashboard/billing/status",
+  Revenue: "/dashboard/billing/revenue",
+  "KPIs Penalty": "/dashboard/billing/penalties/kpis",
+  "General Penalties": "/dashboard/billing/penalties/general",
+  Physical: "/dashboard/manpower/physical",
+  Scrum: "/dashboard/manpower/scrum",
+  "Tower Reports": "/dashboard/reports/tower",
+  "NSO Reports": "/dashboard/reports/fiber/nso",
+  "Fiber Reports": "/dashboard/reports/fiber/inventory",
+  Users: "/dashboard/users-access",
+  "Roles & Permissions": "/dashboard/users-access",
+};
+
 function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -27,14 +43,20 @@ const handleLogin = async (e) => {
 
    if (res.data?.token) {
      localStorage.setItem("token", res.data.token);
- setStoredSession({
-  token: res.data.token,
-  roleName: res.data.roleName || "admin",
-  permissions: res.data.permissions || ["view_dashboard"]
-});
- window.location.href = "/dashboard";
- return;
-} 
+     setStoredSession({
+       ...(res.data.user || {}),
+       token: res.data.token,
+       roleName: res.data.user?.roleName || "Admin",
+       permissions: res.data.user?.permissions || ["dashboard.view"],
+     });
+     const firstAllowedPage = Array.isArray(res.data.user?.pageAccess)
+       ? res.data.user.pageAccess.find((page) => pageRouteMap[page])
+       : null;
+     window.location.href = firstAllowedPage
+       ? pageRouteMap[firstAllowedPage]
+       : "/dashboard";
+     return;
+   } 
 
     // No token but success
     setErrorMessage(res.data?.message || "Login failed - no token received");

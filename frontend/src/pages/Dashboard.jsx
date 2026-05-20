@@ -252,7 +252,7 @@ const renderOutsideLabel = ({ cx, cy, midAngle, outerRadius, payload }) => {
 function Dashboard() {
   const session = JSON.parse(localStorage.getItem("sessionUser"));
   const canViewDashboard =
-  session && session.token && hasPermission("view_dashboard");
+  session && session.token && hasPermission("dashboard.view");
  
 useEffect(() => {
   const session = JSON.parse(localStorage.getItem("sessionUser"));
@@ -999,7 +999,7 @@ const trendColor = getTrendColor(uptimeTrend);
 
     <button
       onClick={resetFilters}
-      className="app-button-ghost px-3 py-1.5 text-[12px]"
+      className="app-button-ghost px-3 py-1 gap-1 text-[12px]"
     >
       <RefreshCcw size={14} />
       Reset

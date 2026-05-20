@@ -1,8 +1,12 @@
-- [x] Review current Revenue.jsx UI structure
-- [ ] Redesign Header (live badge + premium upload button)
-- [ ] Redesign KPI cards: 24px glass cards, circular icons, growth %, inline sparkline, hover glow
-- [ ] Redesign filter toolbar: premium glass controls + same wiring
-- [ ] Redesign revenue table container: glass card, header styling, upload illustration top-right, green download + red delete buttons
-- [ ] Redesign pagination: rounded premium buttons with active gradient glow
-- [ ] Keep all existing functionality intact (API calls, filtering, upload/download/delete, pagination)
-- [ ] Manual test checklist: load page, apply filters/search/date/circle, upload modal, download/delete single + bulk, pagination
+# TODO - UI/UX Redesign (Physical page only)
+
+- [x] Gather understanding of current `frontend/src/pages/Physical.jsx` structure and existing UI patterns.
+- [ ] Redesign page shell (background, spacing, header typography, premium Add button).
+- [ ] Redesign main table card (glassmorphism, shadows, borders, premium layout).
+- [ ] Upgrade table styling (sticky header, hover effects, typography, empty state).
+- [ ] Add modern scrollbar styling to the table container (visual only).
+- [ ] Polish modal UI (glass modal container, close button, form spacing/typography, CTA buttons).
+- [ ] Ensure responsiveness on small screens while keeping current table behavior.
+- [ ] Sanity-check: no functionality changes (handlers, API calls, routes, field names unchanged).
+
+

@@ -7,6 +7,7 @@ import Login from "./pages/Login";
 import PlaceholderPage from "./pages/PlaceholderPage";
 import TowerReports from "./pages/TowerReports";
 import UsersAccessPage from "./pages/UsersAccessPage";
+import ProtectedRoute from "./components/ProtectedRoute";
 import { UserProvider } from "./context/UserContext";
 import NSOReports from "./pages/NsoReports";
 import FiberInventory from "./pages/FiberInventory";
@@ -28,37 +29,119 @@ function App() {
         <Route path="/login" element={<Login />} />
 
         <Route path="/dashboard" element={<DashboardLayout />}>
-  <Route index element={<Dashboard />} />
+  <Route index element={
+    <ProtectedRoute page={"Dashboard"}>
+      <Dashboard />
+    </ProtectedRoute>
+  } />
 
-  <Route path="add-data" element={<AddData />} />
+  <Route path="add-data" element={
+    <ProtectedRoute page={"Add Data"}>
+      <AddData />
+    </ProtectedRoute>
+  } />
 
   {/* Billing */}
-  <Route path="billing" element={<BillingDashboard />} />
-  <Route path="billing/status" element={<BillingStatus />} />
-  <Route path="billing/revenue" element={<Revenue />} />
-  <Route path="billing/penalties" element={<PlaceholderPage />} />
+  <Route path="billing" element={
+    <ProtectedRoute page={"Billing Dashboard"}>
+      <BillingDashboard />
+    </ProtectedRoute>
+  } />
+
+  <Route path="billing/status" element={
+    <ProtectedRoute page={"Billing Status"}>
+      <BillingStatus />
+    </ProtectedRoute>
+  } />
+
+  <Route path="billing/revenue" element={
+    <ProtectedRoute page={"Revenue"}>
+      <Revenue />
+    </ProtectedRoute>
+  } />
+
+  <Route path="billing/penalties" element={
+    <ProtectedRoute page={"KPIs Penalty"}>
+      <PlaceholderPage />
+    </ProtectedRoute>
+  } />
 
   {/* Manpower */}
-  <Route path="manpower/physical" element={<Physical />} />
-  <Route path="manpower/scrum" element={<Scrum />} />
+  <Route path="manpower/physical" element={
+    <ProtectedRoute page={"Physical"}>
+      <Physical />
+    </ProtectedRoute>
+  } />
+
+  <Route path="manpower/scrum" element={
+    <ProtectedRoute page={"Scrum"}>
+      <Scrum />
+    </ProtectedRoute>
+  } />
 
   {/* Users */}
-  <Route path="users-access" element={<UsersAccessPage />} />
+  <Route path="users-access" element={
+    <ProtectedRoute page={"Users"}>
+      <UsersAccessPage />
+    </ProtectedRoute>
+  } />
 
   {/* Uptime */}
-  <Route path="uptime/tower" element={<div>Tower Page</div>} />
-  <Route path="uptime/fiber" element={<div>Fiber Page</div>} />
-  <Route path="uptime/fttx" element={<div>FTTx Page</div>} />
+  <Route path="uptime/tower" element={
+    <ProtectedRoute page={"Uptime Tower"}>
+      <div>Tower Page</div>
+    </ProtectedRoute>
+  } />
+
+  <Route path="uptime/fiber" element={
+    <ProtectedRoute page={"Uptime Fiber"}>
+      <div>Fiber Page</div>
+    </ProtectedRoute>
+  } />
+
+  <Route path="uptime/fttx" element={
+    <ProtectedRoute page={"Uptime FTTx"}>
+      <div>FTTx Page</div>
+    </ProtectedRoute>
+  } />
 
   {/* KPI */}
-  <Route path="kpi/tower" element={<div>Tower KPI Page</div>} />
-  <Route path="kpi/fiber" element={<div>Fiber KPI Page</div>} />
+  <Route path="kpi/tower" element={
+    <ProtectedRoute page={"Tower KPI"}>
+      <div>Tower KPI Page</div>
+    </ProtectedRoute>
+  } />
+
+  <Route path="kpi/fiber" element={
+    <ProtectedRoute page={"Fiber KPI"}>
+      <div>Fiber KPI Page</div>
+    </ProtectedRoute>
+  } />
 
   {/* Reports */}
-  <Route path="reports/:siteCategory" element={<TowerReports />} />
-  <Route path="reports/view" element={<div>View Reports Page</div>} />
-  <Route path="reports/fiber/nso" element={<NSOReports />} />
-  <Route path="reports/fiber/inventory" element={<FiberInventory />} />
+  <Route path="reports/:siteCategory" element={
+    <ProtectedRoute page={"Tower Reports"}>
+      <TowerReports />
+    </ProtectedRoute>
+  } />
+
+  <Route path="reports/view" element={
+    <ProtectedRoute page={"View Reports"}>
+      <div>View Reports Page</div>
+    </ProtectedRoute>
+  } />
+
+  <Route path="reports/fiber/nso" element={
+    <ProtectedRoute page={"NSO Reports"}>
+      <NSOReports />
+    </ProtectedRoute>
+  } />
+
+  <Route path="reports/fiber/inventory" element={
+    <ProtectedRoute page={"Fiber Reports"}>
+      <FiberInventory />
+    </ProtectedRoute>
+  } />
   
 </Route>
         

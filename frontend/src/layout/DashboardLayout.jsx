@@ -23,7 +23,12 @@ function DashboardLayout() {
   useEffect(() => {
     const loadUser = async () => {
       try {
-        const res = await axios.get("/api/me");
+        const token = localStorage.getItem("token");
+        const res = await axios.get("/api/me", {
+          headers: {
+            Authorization: token ? `Bearer ${token}` : "",
+          },
+        });
         setUser(res.data);
       } catch (error) {
         console.error("Failed to load user", error);
@@ -31,7 +36,7 @@ function DashboardLayout() {
     };
 
     loadUser();
-  }, []);
+  }, [setUser]);
 
   // ✅ THEME (SEPARATE)
   useEffect(() => {

@@ -1,0 +1,65 @@
+/**
+ * Page ID to Display Name Mapping
+ * Maps the page IDs stored in database to the display names used in ProtectedRoute
+ */
+export const PAGE_ID_MAP = {
+  // Dashboard
+  "dashboard": "Dashboard",
+
+  // Billing
+  "billing-dashboard": "Billing Dashboard",
+  "billing-status": "Billing Status",
+  "revenue": "Revenue",
+
+  // Penalties
+  "kpis-penalty": "KPIs Penalty",
+  "general-penalties": "General Penalties",
+
+  // Manpower
+  "physical": "Physical",
+  "scrum": "Scrum",
+
+  // Reports
+  "tower-reports": "Tower Reports",
+  "nso-reports": "NSO Reports",
+  "fiber-reports": "Fiber Reports",
+
+  // Users & Access
+  "users": "Users",
+
+  // Other
+  "add-data": "Add Data",
+  "uptime-tower": "Uptime Tower",
+  "uptime-fiber": "Uptime Fiber",
+  "uptime-fttx": "Uptime FTTx",
+  "tower-kpi": "Tower KPI",
+  "fiber-kpi": "Fiber KPI",
+  "view-reports": "View Reports",
+};
+
+/**
+ * Convert page ID (from database) to display name (for ProtectedRoute)
+ * @param {string} pageId - The page ID from database (e.g., "tower-reports")
+ * @returns {string} - The display name (e.g., "Tower Reports")
+ */
+export const getPageDisplayName = (pageId) => {
+  const normalized = String(pageId || "").trim().toLowerCase();
+  return PAGE_ID_MAP[normalized] || pageId;
+};
+
+/**
+ * Convert display name to page ID
+ * @param {string} displayName - The display name (e.g., "Tower Reports")
+ * @returns {string} - The page ID (e.g., "tower-reports")
+ */
+export const getPageId = (displayName) => {
+  const normalized = String(displayName || "").trim().toLowerCase();
+  // Find the key that maps to this display name
+  for (const [id, name] of Object.entries(PAGE_ID_MAP)) {
+    if (name.toLowerCase() === normalized) {
+      return id;
+    }
+  }
+  // Fallback: convert spaces to hyphens and lowercase
+  return displayName.toLowerCase().replace(/\s+/g, "-");
+};
