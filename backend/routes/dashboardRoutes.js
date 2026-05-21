@@ -707,89 +707,48 @@
       const buildManpowerWhere = () =>
         manpowerFilters.length ? `WHERE ${manpowerFilters.join(" AND ")}` : "";
 
-  const escCountSql = `
-    SELECT COUNT(*) AS count
-    FROM esc
-    WHERE file_id = (
-      SELECT file_id
-      FROM esc
-      ORDER BY date DESC, created_at DESC, file_id DESC
-      LIMIT 1
-    )
-    ${buildSiteAnd()}
-  `;
-
-  `SELECT COALESCE(MAX(latest.total_records), 0) AS count
-      FROM (
-        SELECT total_records
-        FROM report_uploads
-        WHERE UPPER(TRIM(site_type)) = 'ESC'
-        ORDER BY report_date DESC, uploaded_at DESC, id DESC
+      const buildLatestFileIdSubquery = (
+        tableName,
+        orderByClause = "date DESC, created_at DESC, file_id DESC"
+      ) => `
+        SELECT file_id
+        FROM ${tableName}
+        ORDER BY ${orderByClause}
         LIMIT 1
-      ) latest`;
+      `;
 
-    const iscCountSql = `
-    SELECT COUNT(*) AS count
-    FROM isc
-    WHERE file_id = (
-      SELECT file_id
-      FROM isc
-      ORDER BY date DESC, created_at DESC, file_id DESC
-      LIMIT 1
-    )
-    ${buildSiteAnd()}
-  `;
+      const buildLatestCountSql = (tableName, orderByClause) => `
+        SELECT COUNT(*) AS count
+        FROM ${tableName}
+        WHERE file_id = (
+          ${buildLatestFileIdSubquery(tableName, orderByClause)}
+        )
+        ${buildSiteAnd()}
+      `;
 
+      const buildLatestKpiSumSql = (
+        tableName,
+        orderByClause = "created_at DESC, file_id DESC"
+      ) => `
+        SELECT COALESCE(SUM(kpi_value), 0) AS count
+        FROM ${tableName}
+        WHERE file_id = (
+          ${buildLatestFileIdSubquery(tableName, orderByClause)}
+        )
+        ${buildSiteAnd()}
+      `;
 
-        `SELECT COALESCE(MAX(latest.total_records), 0) AS count
-      FROM (
-        SELECT total_records
-        FROM report_uploads
-        WHERE UPPER(TRIM(site_type)) = 'ISC'
-        ORDER BY report_date DESC, uploaded_at DESC, id DESC
-        LIMIT 1
-      ) latest`;
+      const escCountSql = buildLatestCountSql("esc");
+      const iscCountSql = buildLatestCountSql("isc");
+      const oscCountSql = buildLatestCountSql("osc");
+      const hpodscCountSql = buildLatestCountSql("hpodsc");
 
-      const oscCountSql = `
-    SELECT COUNT(*) AS count
-    FROM osc
-    WHERE file_id = (
-      SELECT file_id
-      FROM osc
-      ORDER BY date DESC, created_at DESC, file_id DESC
-      LIMIT 1
-    )
-    ${buildSiteAnd()}
-  `;
-
-        `SELECT COALESCE(MAX(latest.total_records), 0) AS count
-      FROM (
-        SELECT total_records
-        FROM report_uploads
-        WHERE UPPER(TRIM(site_type)) = 'OSC'
-        ORDER BY report_date DESC, uploaded_at DESC, id DESC
-        LIMIT 1
-      ) latest`;
-
-    const hpodscCountSql = `
-    SELECT COUNT(*) AS count
-    FROM hpodsc
-    WHERE file_id = (
-      SELECT file_id
-      FROM hpodsc
-      ORDER BY date DESC, created_at DESC, file_id DESC
-      LIMIT 1
-    )
-    ${buildSiteAnd()}
-  `;
-      `SELECT COALESCE(MAX(latest.total_records), 0) AS count
-      FROM (
-        SELECT total_records
-        FROM report_uploads
-        WHERE UPPER(TRIM(site_type)) = 'HPODSC'
-        ORDER BY report_date DESC, uploaded_at DESC, id DESC
-        LIMIT 1
-      ) latest`;
+      const ag1CountSql = buildLatestKpiSumSql("ag1");
+      const ag2CountSql = buildLatestKpiSumSql("ag2");
+      const ilaCountSql = buildLatestKpiSumSql("ila");
+      const gnbCountSql = buildLatestKpiSumSql("gnb");
+      const gscCountSql = buildLatestKpiSumSql("gsc");
+      const wifiCountSql = buildLatestKpiSumSql("wifi");
 
       const escSiteSql = siteFilters.length
         ? `SELECT 'ESC' AS type, COUNT(*) AS count, MAX(date) AS latestDate
@@ -830,42 +789,42 @@
     ) latest`;
 
       const oscSiteSql = siteFilters.length
-        ? `SELECT 'OSC' AS type, COUNT(*) AS count, MAX(date) AS latestDate
-    FROM osc
-    WHERE file_id = (
-      SELECT file_id FROM osc
-      WHERE date = (SELECT MAX(date) FROM osc)
-      ORDER BY created_at DESC, file_id DESC
-      LIMIT 1
-    )
-    ${buildSiteAnd()}`
-        : `SELECT 'OSC' AS type, COALESCE(latest.total_records, 0) AS count, latest.report_date AS latestDate
-    FROM (
-      SELECT total_records, report_date
-      FROM report_uploads
-      WHERE UPPER(TRIM(site_type)) = 'OSC'
-      ORDER BY report_date DESC, uploaded_at DESC, id DESC
-      LIMIT 1
-    ) latest`;
+  ? `SELECT 'OSC' AS type, COUNT(*) AS count, MAX(date) AS latestDate
+FROM osc
+WHERE file_id = (
+  SELECT file_id
+  FROM osc
+  ORDER BY date DESC, created_at DESC, file_id DESC
+  LIMIT 1
+)
+${buildSiteAnd()}`
+  : `SELECT 'OSC' AS type, COALESCE(latest.total_records, 0) AS count, latest.report_date AS latestDate
+FROM (
+  SELECT total_records, report_date
+  FROM report_uploads
+  WHERE UPPER(TRIM(site_type)) = 'OSC'
+  ORDER BY report_date DESC, uploaded_at DESC, id DESC
+  LIMIT 1
+) latest`;
 
-      const hpodscSiteSql = siteFilters.length
-        ? `SELECT 'HPODSC' AS type, COUNT(*) AS count, MAX(date) AS latestDate
-    FROM hpodsc
-    WHERE file_id = (
-      SELECT file_id FROM hpodsc
-      WHERE date = (SELECT MAX(date) FROM hpodsc)
-      ORDER BY created_at DESC, file_id DESC
-      LIMIT 1
-    )
-    ${buildSiteAnd()}`
-        : `SELECT 'HPODSC' AS type, COALESCE(latest.total_records, 0) AS count, latest.report_date AS latestDate
-    FROM (
-      SELECT total_records, report_date
-      FROM report_uploads
-      WHERE UPPER(TRIM(site_type)) = 'HPODSC'
-      ORDER BY report_date DESC, uploaded_at DESC, id DESC
-      LIMIT 1
-    ) latest`;
+     const hpodscSiteSql = siteFilters.length
+  ? `SELECT 'HPODSC' AS type, COUNT(*) AS count, MAX(date) AS latestDate
+FROM hpodsc
+WHERE file_id = (
+  SELECT file_id
+  FROM hpodsc
+  ORDER BY date DESC, created_at DESC, file_id DESC
+  LIMIT 1
+)
+${buildSiteAnd()}`
+  : `SELECT 'HPODSC' AS type, COALESCE(latest.total_records, 0) AS count, latest.report_date AS latestDate
+FROM (
+  SELECT total_records, report_date
+  FROM report_uploads
+  WHERE UPPER(TRIM(site_type)) = 'HPODSC'
+  ORDER BY report_date DESC, uploaded_at DESC, id DESC
+  LIMIT 1
+) latest`;
 
       // 🔥 MAIN STATS (Total Active Sites = ENB + ESC + ISC + OSC + HPODSC latest)
     const siteCountQuery = `
@@ -897,58 +856,22 @@
 
       -- 🔥 NEW TYPES
       UNION ALL
-      SELECT COALESCE(SUM(kpi_value), 0) FROM ag1
-      WHERE file_id = (
-        SELECT file_id FROM ag1
-        ORDER BY created_at DESC, file_id DESC
-        LIMIT 1
-      )
-      ${buildSiteAnd()}
+      ${ag1CountSql}
 
       UNION ALL
-      SELECT COALESCE(SUM(kpi_value), 0) FROM ag2
-      WHERE file_id = (
-        SELECT file_id FROM ag2
-        ORDER BY created_at DESC, file_id DESC
-        LIMIT 1
-      )
-    ${buildSiteAnd()}
+      ${ag2CountSql}
 
       UNION ALL
-      SELECT COALESCE(SUM(kpi_value), 0) FROM ila
-      WHERE file_id = (
-        SELECT file_id FROM ila
-        ORDER BY created_at DESC, file_id DESC
-        LIMIT 1
-      )
-      ${buildSiteAnd()}
+      ${ilaCountSql}
 
       UNION ALL
-      SELECT COALESCE(SUM(kpi_value), 0) FROM gnb
-      WHERE file_id = (
-        SELECT file_id FROM gnb
-        ORDER BY created_at DESC, file_id DESC
-        LIMIT 1
-      )
-    ${buildSiteAnd()}
+      ${gnbCountSql}
 
       UNION ALL
-      SELECT COALESCE(SUM(kpi_value), 0) FROM gsc
-      WHERE file_id = (
-        SELECT file_id FROM gsc
-        ORDER BY created_at DESC, file_id DESC
-        LIMIT 1
-      )
-      ${buildSiteAnd()}
+      ${gscCountSql}
 
       UNION ALL
-      SELECT COALESCE(SUM(kpi_value), 0) FROM wifi
-      WHERE file_id = (
-        SELECT file_id FROM wifi
-        ORDER BY created_at DESC, file_id DESC
-        LIMIT 1
-      )
-      ${buildSiteAnd()}
+      ${wifiCountSql}
 
     ) AS total
     `;
