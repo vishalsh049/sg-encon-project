@@ -233,7 +233,14 @@ router.get("/", async (req, res) => {
    FROM nso_report_files
    ORDER BY report_date DESC, uploaded_at DESC, id DESC`
 );
-    res.json({ rows });
+    const rowsWithStatus = rows.map((row) => {
+      const filePath = path.join(uploadsDir, row.file_name || "");
+      return {
+        ...row,
+        file_missing: !row.file_name || !fs.existsSync(filePath),
+      };
+    });
+    res.json({ rows: rowsWithStatus });
   } catch (error) {
     console.error("NSO list error:", error);
     res.status(500).json({ message: "Failed to fetch NSO reports" });

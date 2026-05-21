@@ -594,7 +594,7 @@ const handleDownload = async (item) => {
 
    <div className="h-[180px] overflow-y-scroll pr-2 custom-scrollbar">
 
-   <div className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-4">
+   <div className="grid grid-cols-2 gap-2 md:grid-cols-4 xl:grid-cols-4">
 
       {jobRoles.map((role, index) => (
 

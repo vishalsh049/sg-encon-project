@@ -15,7 +15,7 @@ function DashboardLayout() {
       ? "dark"
       : "light";
   });
-  const sidebarWidth = collapsed ? "4rem" : "16rem";
+  const sidebarWidth = collapsed ? "4rem" : "14rem";
 
   const { setUser } = useUser(); // ✅ HERE
 
@@ -125,7 +125,7 @@ function DashboardLayout() {
           </div>
         </header>
 
-        <main className="p-3 md:p-4 lg:p-5 max-w-[1400px] mx-auto">
+        <main className="p-3 md:p-4 lg:p-5 max-w-[1320px] mx-auto">
           <Outlet />
         </main>
       </div>

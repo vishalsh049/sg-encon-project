@@ -655,11 +655,15 @@ async function getLatestFiberUpload() {
 }
 
 async function getAllFiberUploads() {
-  return query(
+  const rows = await query(
     `SELECT id, date, uploaded_by, upload_scope, file_name, uploaded_at
      FROM fiber_uploads
      ORDER BY date DESC, uploaded_at DESC, id DESC`
   );
+  return rows.map((row) => ({
+    ...row,
+    file_missing: !row.file_name || !fs.existsSync(path.join(uploadsDir, row.file_name || "")),
+  }));
 }
 
 async function getFiberUploadById(id) {

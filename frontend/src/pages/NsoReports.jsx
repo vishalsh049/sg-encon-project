@@ -692,8 +692,13 @@ setSummary(
                         <div className="truncate" title={row.original_name || row.file_name}>
                           {row.original_name || row.file_name || "-"}
                         </div>
+                        {row.file_missing ? (
+                          <div className="mt-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-700">
+                            File missing
+                          </div>
+                        ) : null}
                       </td>
-        
+
                       <td className="px-5 py-4 text-slate-700">
                         {formatTimestamp(row.uploaded_at)}
                       </td>
@@ -702,6 +707,8 @@ setSummary(
                           <button
                             onClick={() => handleDownload(row.file_name)}
                             className="inline-flex items-center gap-1 text-sm font-medium text-cyan-700 hover:text-cyan-900"
+                            disabled={row.file_missing}
+                            title={row.file_missing ? "Download unavailable" : "Download"}
                           >
                             <Download size={15} />
                             Download

@@ -30,14 +30,14 @@ function MenuItem({
     <>
       <span
         className={[
-          "flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl transition-colors",
+          "flex h-7 w-6 shrink-0 items-center justify-center rounded-2xl transition-colors",
           isActive
             ? "bg-white/15"
             : "bg-surface-muted text-text-secondary group-hover:bg-surface-elevated",
         ].join(" ")}
       >
         {Icon ? (
-          <Icon size={16} strokeWidth={2.1} />
+          <Icon size={14} strokeWidth={2.1} />
         ) : (
           <span className="h-2 w-2 rounded-full bg-current" />
         )}

@@ -292,11 +292,10 @@ function TowerReports() {
     }
   };
 
-  const handleDownload = (fileName) => {
-    if (!fileName) return;
-    const encoded = encodeURIComponent(fileName);
-    const url = buildApiUrl(`/api/reports/download/${encoded}`);
+  const handleDownload = (id, fileName) => {
+    if (!id || !fileName) return;
 
+    const url = buildApiUrl(`/api/reports/download/${id}`);
     const link = document.createElement("a");
     link.href = url;
     link.download = fileName;
@@ -829,6 +828,11 @@ const kpiCards = useMemo(() => {
                         </td>
                         <td className="max-w-[260px] px-4 py-3 text-sm text-slate-700">
                           <span className="block truncate">{row.file_name || "-"}</span>
+                          {row.file_missing ? (
+                            <div className="mt-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-amber-700">
+                              File missing
+                            </div>
+                          ) : null}
                         </td>
                         <td className="whitespace-nowrap px-4 py-3 text-sm text-slate-700">
                           {formatTimestamp(row.uploaded_at)}
@@ -837,9 +841,10 @@ const kpiCards = useMemo(() => {
                           <div className="flex items-center justify-end gap-2">
                             {canDownloadFiles ? (
                               <button
-                                onClick={() => handleDownload(row.file_name)}
+                                onClick={() => handleDownload(row.id, row.file_name)}
                                 className={tableActionClass}
-                                title="Download"
+                                title={row.file_missing ? "Download unavailable" : "Download"}
+                                disabled={row.file_missing}
                               >
                                 <Download size={14} />
                               </button>

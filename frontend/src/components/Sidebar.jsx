@@ -59,120 +59,149 @@ function Sidebar({ closeSidebar, collapsed, onExpandRequest }) {
     () =>
       filterMenuByRole(
         [
-          {
-            key: "dashboard",
-            label: "Dashboard",
-            path: "/dashboard",
-            exact: true,
-            icon: LayoutDashboard,
-            description: "Overview",
-            accessPage: "Dashboard",
-          },
-          {
-            key: "billing-dashboard",
-            label: "Billing Dashboard",
-            path: "/dashboard/billing",
-            icon: ReceiptText,
-            accessPage: "Billing Dashboard",
-          },
-          {
-            key: "billing-status",
-            label: "Billing Status",
-            path: "/dashboard/billing/status",
-            icon: ReceiptText,
-            accessPage: "Billing Status",
-          },
-          {
-            key: "revenue",
-            label: "Revenue",
-            path: "/dashboard/billing/revenue",
-            icon: ReceiptText,
-            accessPage: "Revenue",
-          },
-          {
-            key: "kpis-penalty",
-            label: "KPIs Penalty",
-            path: "/dashboard/billing/penalties/kpis",
-            icon: ReceiptText,
-            accessPage: "KPIs Penalty",
-          },
-          {
-            key: "general-penalties",
-            label: "General Penalties",
-            path: "/dashboard/billing/penalties/general",
-            icon: ReceiptText,
-            accessPage: "General Penalties",
-          },
-          {
-            key: "physical",
-            label: "Physical",
-            path: "/dashboard/manpower/physical",
-            icon: BriefcaseBusiness,
-            accessPage: "Physical",
-          },
-          {
-            key: "scrum",
-            label: "SCRUM",
-            path: "/dashboard/manpower/scrum",
-            icon: BriefcaseBusiness,
-            accessPage: "Scrum",
-          },
-          {
-            key: "tower-reports",
-            label: "Tower Reports",
-            path: "/dashboard/reports/tower",
-            icon: FileText,
-            accessPage: "Tower Reports",
-          },
-          {
-            key: "nso-reports",
-            label: "NSO Reports",
-            path: "/dashboard/reports/fiber/nso",
-            icon: Database,
-            accessPage: "NSO Reports",
-          },
-          {
-            key: "fiber-inventory",
-            label: "Fiber Inventory",
-            path: "/dashboard/reports/fiber/inventory",
-            icon: Database,
-            accessPage: "Fiber Reports",
-          },
-          {
-            key: "users-access",
-            label: "Users & Access",
-            path: "/dashboard/users-access",
-            icon: ShieldCheck,
-            description: "Roles & permissions",
-            accessPages: ["Users", "Roles & Permissions"],
-          },
-        ],
+  // MAIN
+  {
+    key: "dashboard",
+    label: "Dashboard",
+    path: "/dashboard",
+    exact: true,
+    icon: LayoutDashboard,
+    description: "Overview",
+    accessPage: "Dashboard",
+    
+  },
+
+  // BILLING
+  {
+    key: "billing-dashboard",
+    label: "Billing Dashboard",
+    path: "/dashboard/billing",
+    icon: ReceiptText,
+    accessPage: "Billing Dashboard",
+    section: "BILLING",
+  },
+  {
+    key: "billing-status",
+    label: "Billing Status",
+    path: "/dashboard/billing/status",
+    icon: ReceiptText,
+    accessPage: "Billing Status",
+  },
+  {
+    key: "revenue",
+    label: "Revenue",
+    path: "/dashboard/billing/revenue",
+    icon: ReceiptText,
+    accessPage: "Revenue",
+  },
+  {
+    key: "kpis-penalty",
+    label: "KPIs Penalty",
+    path: "/dashboard/billing/penalties/kpis",
+    icon: ReceiptText,
+    accessPage: "KPIs Penalty",
+  },
+  {
+    key: "general-penalties",
+    label: "General Penalties",
+    path: "/dashboard/billing/penalties/general",
+    icon: ReceiptText,
+    accessPage: "General Penalties",
+  },
+
+  // MANPOWER
+  {
+    key: "physical",
+    label: "Physical",
+    path: "/dashboard/manpower/physical",
+    icon: BriefcaseBusiness,
+    accessPage: "Physical",
+    section: "MANPOWER",
+  },
+  {
+    key: "scrum",
+    label: "SCRUM",
+    path: "/dashboard/manpower/scrum",
+    icon: BriefcaseBusiness,
+    accessPage: "Scrum",
+  },
+
+  // REPORTS
+  {
+    key: "tower-reports",
+    label: "Tower Reports",
+    path: "/dashboard/reports/tower",
+    icon: FileText,
+    accessPage: "Tower Reports",
+    section: "REPORTS",
+  },
+  {
+    key: "nso-reports",
+    label: "NSO Reports",
+    path: "/dashboard/reports/fiber/nso",
+    icon: Database,
+    accessPage: "NSO Reports",
+  },
+  {
+    key: "fiber-inventory",
+    label: "Fiber Inventory",
+    path: "/dashboard/reports/fiber/inventory",
+    icon: Database,
+    accessPage: "Fiber Reports",
+  },
+
+  // SETTINGS
+  {
+    key: "users-access",
+    label: "Users & Access",
+    path: "/dashboard/users-access",
+    icon: ShieldCheck,
+    description: "Roles & permissions",
+    accessPages: ["Users", "Roles & Permissions"],
+    section: "SETTINGS",
+  },
+],
         role,
         sessionUser
       ),
     [role, sessionUser]
   );
 
-  const renderItems = (items) =>
-    items.map((item) => {
-      const isActive = isPathActive(location.pathname, item.path, item.exact);
+  const renderItems = (items) => {
+  let lastSection = "";
 
-      return (
-        <div key={item.key}>
-          <MenuItem
-            item={item}
-            depth={0}
-            collapsed={collapsed}
-            isActive={isActive}
-            onNavigate={(path) => {
-              if (path) navigate(path);
-              closeSidebar?.();
-            }}
-            onExpandRequest={onExpandRequest}
-          />
-        </div>
-      );
-    });
+  return items.map((item) => {
+    const isActive = isPathActive(location.pathname, item.path, item.exact);
+
+    const showSection = item.section && item.section !== lastSection;
+
+    if (item.section) {
+      lastSection = item.section;
+    }
+
+    return (
+      <div key={item.key}>
+        {showSection && !collapsed ? (
+          <div className="px-3  pb-1 text-[10px] font-semibold tracking-[0.18em] text-text-secondary/60">
+            {item.section}
+          </div>
+        ) : null}
+
+        <MenuItem
+          item={item}
+          depth={0}
+          collapsed={collapsed}
+          isActive={isActive}
+          onNavigate={(path) => {
+            if (path) navigate(path);
+            closeSidebar?.();
+          }}
+          onExpandRequest={onExpandRequest}
+        />
+      </div>
+    );
+  });
+};
 
   const handleLogout = () => {
     localStorage.removeItem("token");
@@ -181,7 +210,7 @@ function Sidebar({ closeSidebar, collapsed, onExpandRequest }) {
   };
 
   return (
-    <aside className="flex w-62 h-full flex-col overflow-hidden border-r border-border-color bg-surface/95 backdrop-blur-xl">
+    <aside className="flex w-56 h-full flex-col overflow-hidden border-r border-border-color bg-surface/95 backdrop-blur-xl">
       <div className="flex items-center justify-between gap-3 border-b border-border-color px-4 py-3">
         
         <div className="flex items-center justify-center w-full">

@@ -405,11 +405,18 @@ useEffect(() => {
            <FileSpreadsheet size={16} className="text-slate-400" />
           <span className="max-w-[260px] truncate font-medium text-slate-700">{item.file_name}</span>
          </div>
+         {item.file_missing ? (
+           <div className="mt-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-700">
+             File missing
+           </div>
+         ) : null}
         </td>
         <td className="border-b border-slate-100 px-4 py-4 transition duration-150 group-hover:bg-slate-50/90 sm:px-6">
      <div className="flex flex-wrap gap-2">
-      <a href={buildApiUrl(`/api/fiber/uploads/${item.id}/download`)}
-       className="p-2 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 transition"
+      <a
+        href={item.file_missing ? undefined : buildApiUrl(`/api/fiber/uploads/${item.id}/download`)}
+        className={`p-2 rounded-lg ${item.file_missing ? "bg-slate-200 text-slate-500 cursor-not-allowed" : "bg-blue-50 text-blue-600 hover:bg-blue-100"} transition`}
+        onClick={(event) => item.file_missing && event.preventDefault()}
       >
          <Download size={14} />
                </a>

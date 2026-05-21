@@ -779,7 +779,16 @@ if (availability <= 1) {
                 ORDER BY uploaded_at DESC`,
                 [siteCategory]
               );
-              res.json({ rows });
+
+              const rowsWithStatus = rows.map((row) => {
+                const filePath = path.join(uploadsDir, row.file_name || "");
+                return {
+                  ...row,
+                  file_missing: !row.file_name || !fs.existsSync(filePath),
+                };
+              });
+
+              res.json({ rows: rowsWithStatus });
             } catch (error) {
               console.error(error);
               res.status(500).json({ message: "Server error" });
@@ -1451,20 +1460,35 @@ if (availability <= 1) {
           });
 
           // ✅ SINGLE FILE DOWNLOAD
-router.get("/download/:filename", (req, res) => {
+router.get("/download/:id", async (req, res) => {
   try {
-    const fileName = req.params.filename;
+    const id = Number(req.params.id);
+    if (!id || isNaN(id)) {
+      return res.status(400).json({ message: "Invalid download ID" });
+    }
 
+    const rows = await query(
+      "SELECT file_name FROM report_uploads WHERE id = ?",
+      [id]
+    );
+
+    if (!rows.length) {
+      return res.status(404).json({ message: "Report not found" });
+    }
+
+    const fileName = rows[0].file_name;
     const filePath = path.join(__dirname, "..", "uploads", fileName);
 
+    console.log("Download path:", filePath);
+
     if (!fs.existsSync(filePath)) {
+      console.log("❌ File missing");
       return res.status(404).json({ message: "File not found" });
     }
 
     res.download(filePath, fileName);
-
   } catch (err) {
-    console.error(err);
+    console.error("Download error:", err);
     res.status(500).json({ message: "Download failed" });
   }
 });
