@@ -23,7 +23,7 @@ const storage = multer.diskStorage({
     cb(null, uploadDir);
   },
   filename: (_req, file, cb) => {
-    cb(null, `${Date.now()}${path.extname(file.originalname)}`);
+    cb(null, `${Date.now()}-${file.originalname}`);
   },
 });
 
@@ -350,10 +350,11 @@ router.post("/upload-report", upload.single("file"), async (req, res) => {
       });
     }
 
-    const allowedExtensions = [
+  const allowedExtensions = [
   ".xlsx",
   ".xls",
   ".csv",
+  ".xlsb",
 ];
 
 const fileExtension = path.extname(
@@ -553,6 +554,8 @@ router.get("/download/:id", async (req, res) => {
       });
     }
 
+    console.log("Download path:", report.file_path);
+    
     if (!fs.existsSync(report.file_path)) {
       return res.status(404).json({
         success: false,

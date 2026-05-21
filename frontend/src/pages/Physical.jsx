@@ -914,7 +914,7 @@ const handleDownload = async (item) => {
 
           <input
             type="file"
-             accept=".xlsx,.xls,.csv"
+             accept=".xlsx,.xls,.csv,.xlsb"
             onChange={(e) =>
               setReportFile(e.target.files[0])
             }

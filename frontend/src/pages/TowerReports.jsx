@@ -69,6 +69,20 @@ function TowerReports() {
       [allowedSiteTypes]
     );
 
+  const siteTypeMeta = {
+    AG2: { label: "AG2", bg: "from-sky-100 to-sky-50", icon: BarChart3 },
+    ILA: { label: "ILA", bg: "from-fuchsia-100 to-fuchsia-50", icon: Activity },
+    AG1: { label: "AG1", bg: "from-cyan-100 to-cyan-50", icon: ShieldCheck },
+    ENB: { label: "ENB", bg: "from-indigo-100 to-indigo-50", icon: Sparkles, highlight: true },
+    GNB: { label: "GNB", bg: "from-emerald-100 to-emerald-50", icon: TrendingUp },
+    ESC: { label: "ESC", bg: "from-amber-100 to-amber-50", icon: Layers },
+    HPODSC: { label: "HPODSC", bg: "from-rose-100 to-rose-50", icon: Activity },
+    OSC: { label: "OSC", bg: "from-lime-100 to-lime-50", icon: BarChart3 },
+    ISC: { label: "ISC", bg: "from-violet-100 to-violet-50", icon: ShieldCheck },
+    GSC: { label: "GSC", bg: "from-slate-100 to-slate-50", icon: Layers },
+    WIFI: { label: "WIFI", bg: "from-emerald-100 to-emerald-50", icon: Activity },
+  };
+
   const today = useMemo(() => {
     const d = new Date();
     d.setDate(d.getDate() - 1); // 🔥 yesterday only
@@ -473,44 +487,61 @@ if (uploadType === "single") {
       setSelectedIds((prev) => prev.filter((id) => !allFilteredIds.includes(id)));
     };
 
-const kpiCards = useMemo(() => {
-  const cardOrder = [
-    { type: "AG2", label: "AG2", bg: "from-sky-100 to-sky-50", icon: BarChart3 },
-    { type: "ILA", label: "ILA", bg: "from-fuchsia-100 to-fuchsia-50", icon: Activity },
-    { type: "AG1", label: "AG1", bg: "from-cyan-100 to-cyan-50", icon: ShieldCheck },
-    { type: "ENB", label: "ENB", bg: "from-indigo-100 to-indigo-50", icon: Sparkles, highlight: true },
-    { type: "GNB", label: "GNB", bg: "from-emerald-100 to-emerald-50", icon: TrendingUp },
-    { type: "ESC", label: "ESC", bg: "from-amber-100 to-amber-50", icon: Layers },
-    { type: "HPODSC", label: "HPODSC", bg: "from-rose-100 to-rose-50", icon: Activity },
-    { type: "OSC", label: "OSC", bg: "from-lime-100 to-lime-50", icon: BarChart3 },
-    { type: "ISC", label: "ISC", bg: "from-violet-100 to-violet-50", icon: ShieldCheck },
-  ];
+const latestReportDate = useMemo(() => {
+    const newest = rows.reduce((best, row) => {
+      const dateValue = toSafeDate(row.report_date, true);
+      if (!dateValue) return best;
+      return !best || dateValue > best ? dateValue : best;
+    }, null);
+    return newest;
+  }, [rows]);
 
-  const snapshot = rows.reduce((memo, row) => {
-    const type = row.site_type;
-    const dateValue = row.report_date;
-    if (!type || !dateValue || !cardOrder.some((card) => card.type === type)) return memo;
+  const kpiCards = useMemo(() => {
+    const snapshot = rows.reduce((memo, row) => {
+      const type = row.site_type;
+      const dateValue = row.report_date;
+      if (!type || !dateValue || !siteTypeMeta[type]) return memo;
 
-    const currentDate = new Date(dateValue);
-    const existing = memo[type];
-    if (!existing || currentDate > existing.dateRaw) {
-      memo[type] = {
-        count: Number(row.total_records || 0),
-        dateRaw: currentDate,
-      };
-    }
-    return memo;
-  }, {});
+      const currentDate = new Date(dateValue);
+      const existing = memo[type];
+      if (!existing || currentDate > existing.dateRaw) {
+        memo[type] = {
+          count: Number(row.total_records || 0),
+          dateRaw: currentDate,
+        };
+      }
+      return memo;
+    }, {});
 
-  return cardOrder.map((card) => {
-    const metric = snapshot[card.type];
-    return {
-      ...card,
-      count: metric?.count || 0,
-      date: metric?.dateRaw ? formatDateOnly(metric.dateRaw) : "-",
+    const overallCard = {
+      type: "LATEST",
+      label: "Latest Upload",
+      bg: "from-violet-100 to-violet-50",
+      icon: Calendar,
+      count: rows.length,
+      date: latestReportDate ? formatDateOnly(latestReportDate) : "-",
+      highlight: true,
     };
-  });
-}, [rows]);
+
+    return [
+      overallCard,
+      ...allowedSiteTypes.map((site) => {
+        const meta = siteTypeMeta[site.value] || {
+          label: site.label,
+          bg: "from-slate-100 to-slate-50",
+          icon: BarChart3,
+        };
+        const metric = snapshot[site.value];
+        return {
+          ...meta,
+          type: site.value,
+          count: metric?.count || 0,
+          date: metric?.dateRaw ? formatDateOnly(metric.dateRaw) : "-",
+          highlight: meta.highlight || false,
+        };
+      }),
+    ];
+  }, [rows, allowedSiteTypes, latestReportDate]);
 
   const primaryButtonClass =
     "inline-flex h-10 items-center justify-center gap-2 rounded-full border border-transparent px-5 text-sm font-semibold text-white shadow-[0_20px_60px_rgba(76,78,255,0.22)] transition duration-200 disabled:cursor-not-allowed disabled:opacity-50";
@@ -583,7 +614,7 @@ const kpiCards = useMemo(() => {
           </div>
         </div>
 
-        <div className="space-y-5">
+        <div className="space-y-4">
           <div className="grid gap-4 lg:grid-cols-[1.85fr_1fr]">
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-2 lg:grid-cols-3">
               {kpiCards.map((item) => {
@@ -594,11 +625,11 @@ const kpiCards = useMemo(() => {
                     className={`rounded-[20px] border border-white/85 bg-white/90 px-4 py-2 shadow-soft transition duration-200 
                     hover:-translate-y-0.5 hover:shadow-[0_20px_60px_rgba(15,23,42,0.09)] ${item.highlight ? "ring-1 ring-indigo-100" : ""}`}>
                     <div className="flex items-center justify-between gap-4">
-                      <div className="space-y-2">
+                      <div className="">
                         <p className="text-[11px] mt-1 font-semibold uppercase tracking-[0.2em] text-slate-500">
                           {item.label}
                         </p>
-                        <h2 className={`text-xl font-semibold tracking-[-0.03em] ${item.highlight ? "text-slate-950" : "text-slate-900"}`}>
+                        <h2 className={`text-lg font-semibold tracking-[-0.03em] ${item.highlight ? "text-slate-950" : "text-slate-900"}`}>
                           {item.count}
                         </h2>
                         <p className="text-xs text-slate-400">Date: {item.date}</p>
