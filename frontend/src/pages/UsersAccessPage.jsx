@@ -111,6 +111,50 @@ function UsersAccessPage() {
   const [userForm, setUserForm] =
     useState(initialUserForm);
 
+  const [showPassword, setShowPassword] =
+    useState(false);
+
+  const generatePassword = (length = 12) => {
+    const lower = "abcdefghijklmnopqrstuvwxyz";
+    const upper = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    const digits = "0123456789";
+    const symbols = "!@#$%^&*()-_=+[]{}<>?";
+    const all = lower + upper + digits + symbols;
+
+    let password = "";
+    password += lower.charAt(
+      Math.floor(Math.random() * lower.length)
+    );
+    password += upper.charAt(
+      Math.floor(Math.random() * upper.length)
+    );
+    password += digits.charAt(
+      Math.floor(Math.random() * digits.length)
+    );
+    password += symbols.charAt(
+      Math.floor(Math.random() * symbols.length)
+    );
+
+    for (let i = 4; i < length; i += 1) {
+      password += all.charAt(
+        Math.floor(Math.random() * all.length)
+      );
+    }
+
+    return password
+      .split("")
+      .sort(() => Math.random() - 0.5)
+      .join("");
+  };
+
+  const handleGeneratePassword = () => {
+    setUserForm((prev) => ({
+      ...prev,
+      password: generatePassword(12),
+    }));
+    setShowPassword(true);
+  };
+
   const headers = useMemo(
     () => ({
       Authorization: `Bearer ${localStorage.getItem(
@@ -215,12 +259,14 @@ function UsersAccessPage() {
     setEditingUser(null);
 
     setUserForm(initialUserForm);
+    setShowPassword(false);
 
     setUserModalOpen(true);
   };
 
   const openEditUser = (user) => {
     setEditingUser(user);
+    setShowPassword(false);
 
     setUserForm({
       name: user.name || "",
@@ -775,23 +821,51 @@ if (sessionUser?.id === editingUser.id) {
         className="app-input rounded-xl"
       />
 
-      <input
-        type="password"
-        placeholder={
-          editingUser
-            ? "Leave blank to keep password"
-            : "Password"
-        }
-        value={userForm.password}
-        onChange={(e) =>
-          setUserForm((prev) => ({
-            ...prev,
-            password:
-              e.target.value,
-          }))
-        }
-        className="app-input rounded-xl"
-      />
+      <div className="space-y-2">
+        <div className="flex items-center gap-2">
+          <input
+            type={showPassword ? "text" : "password"}
+            placeholder={
+              editingUser
+                ? "Leave blank to keep password"
+                : "Password"
+            }
+            value={userForm.password}
+            onChange={(e) =>
+              setUserForm((prev) => ({
+                ...prev,
+                password:
+                  e.target.value,
+              }))
+            }
+            className="app-input rounded-xl flex-1"
+          />
+
+          <button
+            type="button"
+            onClick={handleGeneratePassword}
+            className="app-button-ghost whitespace-nowrap"
+          >
+            Generate
+          </button>
+
+          <button
+            type="button"
+            onClick={() =>
+              setShowPassword((prev) => !prev)
+            }
+            className="app-button-ghost whitespace-nowrap"
+          >
+            {showPassword ? "Hide" : "Show"}
+          </button>
+        </div>
+
+        <p className="text-xs text-text-secondary">
+          {editingUser
+            ? "Leave blank to keep the current password."
+            : "Generate a strong password automatically when creating a user."}
+        </p>
+      </div>
 
       <select
         value={userForm.status}

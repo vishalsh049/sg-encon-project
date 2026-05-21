@@ -322,6 +322,13 @@ const latestUploads = uploads.filter(
                 <p className="mt-2 max-w-2xl text-sm leading-5 text-slate-600">
                   Track workforce activity, refine views instantly, and manage upload history from one unified workspace.
                 </p>
+                <div className="mt-4 rounded-2xl border border-orange-200 bg-orange-50 p-4 text-sm text-orange-900 shadow-sm">
+                  <p className="font-semibold">Warning:</p>
+                  <p className="mt-1">
+                    Uploaded files are stored on the server disk. If a file is removed manually after upload, it cannot be recovered even if its database record remains.
+                    Keep a backup copy and re-upload missing files if needed.
+                  </p>
+                </div>
               </div>
           
               <div className="grid gap-2 sm:grid-cols-2 min-[1024px]:grid-cols-4">
