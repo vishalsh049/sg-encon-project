@@ -1,29 +1,12 @@
           const express = require("express");
           const multer = require("multer");
-          const fs = require("fs");
-          const path = require("path");
           const xlsx = require("xlsx");
           const router = express.Router();
           const { db } = require("../config/db");
 
-          const uploadsDir = path.join(__dirname, "..", "uploads");
-          const ensureUploadsDir = () => {
-            if (!fs.existsSync(uploadsDir)) {
-            fs.mkdirSync(uploadsDir, { recursive: true });
-            }
-          };
-          ensureUploadsDir();
 
           // ✅ Storage config
-          const storage = multer.diskStorage({
-            destination: (req, file, cb) => {
-              ensureUploadsDir();
-              cb(null, uploadsDir);
-            },
-            filename: (req, file, cb) => {
-              cb(null, Date.now() + "-" + file.originalname);
-            },
-          });
+        const storage = multer.memoryStorage();
 
           const allowedExtensions = new Set(["xlsx", "xls", "xlsb", "csv"]);
           const upload = multer({
@@ -401,20 +384,30 @@ if (availability <= 1) {
             return { insertRows };
           }
 
-          const readWorksheetRows = (filePath) => {
-            const workbook = xlsx.readFile(filePath, { cellDates: true });
-            const sheetName = workbook.SheetNames[0];
-            const worksheet = workbook.Sheets[sheetName];
-            const rows = xlsx.utils.sheet_to_json(worksheet, { defval: "" });
+          const readWorksheetRows = (fileBuffer) => {
 
-            if (!rows.length) {
-              const error = new Error("No rows found in uploaded file");
-              error.statusCode = 400;
-              throw error;
-            }
+  const workbook = xlsx.read(fileBuffer, {
+    type: "buffer",
+    cellDates: true,
+  });
 
-            return rows;
-          };
+  const sheetName = workbook.SheetNames[0];
+
+  const worksheet = workbook.Sheets[sheetName];
+
+  const rows = xlsx.utils.sheet_to_json(
+    worksheet,
+    { defval: "" }
+  );
+
+  if (!rows.length) {
+    const error = new Error("No rows found in uploaded file");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  return rows;
+};
 
           const normalizeSiteTypeValue = (value = "") =>
             value.toString().trim().toLowerCase();
@@ -780,13 +773,10 @@ if (availability <= 1) {
                 [siteCategory]
               );
 
-              const rowsWithStatus = rows.map((row) => {
-                const filePath = path.join(uploadsDir, row.file_name || "");
-                return {
-                  ...row,
-                  file_missing: !row.file_name || !fs.existsSync(filePath),
-                };
-              });
+              const rowsWithStatus = rows.map((row) => ({
+  ...row,
+  file_missing: false,
+}));
 
               res.json({ rows: rowsWithStatus });
             } catch (error) {
@@ -874,8 +864,8 @@ if (availability <= 1) {
 
           // ✅ Upload API with multer error handling
           router.post("/upload", (req, res) => {
-            ensureUploadsDir();
-          upload.single("file")(req, res, async (err) => {
+           upload.single("file")
+           (req, res, async (err) => {
               if (err) {
                 return res.status(400).json({ message: err.message });
               }
@@ -899,13 +889,6 @@ if (availability <= 1) {
             return res.status(400).json({ message: "File required" });
           }
 
-          const filePath = file.path;
-
-          if (!fs.existsSync(filePath)) {
-            console.error("Upload file missing:", { filePath, file });
-            return res.status(400).json({ message: "Uploaded file not found" });
-          }
-
           const ext = file.originalname.split(".").pop().toLowerCase();
                 if (!allowedExtensions.has(ext)) {
                   return res.status(400).json({ message: "Invalid file type" });
@@ -913,7 +896,10 @@ if (availability <= 1) {
 
                 await ensureUploadsTable();
 
-                const workbook = xlsx.readFile(filePath, { cellDates: true });
+              const workbook = xlsx.read(file.buffer, {
+  type: "buffer",
+  cellDates: true,
+});
                 const sheetName = workbook.SheetNames[0];
                 const worksheet = workbook.Sheets[sheetName];
                 const rows = xlsx.utils.sheet_to_json(worksheet, { defval: "" });
@@ -1234,13 +1220,8 @@ if (availability <= 1) {
     ids   // 🔥 NOT [ids]
   );
 
-      // 🔥 DELETE FILES
-      rows.forEach((row) => {
-        const filePath = path.join(__dirname, "..", "uploads", row.file_name);
-        if (fs.existsSync(filePath)) {
-          fs.unlinkSync(filePath);
-        }
-      });
+      // 🔥 DELETE FILE
+
 
       // 🔥 DELETE FROM ALL TABLES BASED ON TYPE
       for (const row of rows) {
@@ -1336,13 +1317,7 @@ if (availability <= 1) {
 
               archive.pipe(res);
 
-              rows.forEach((row) => {
-                const filePath = path.join(__dirname, "..", "uploads", row.file_name);
-
-                if (fs.existsSync(filePath)) {
-                  archive.file(filePath, { name: row.file_name });
-                }
-              });
+              
 
               await archive.finalize();
 
@@ -1354,7 +1329,7 @@ if (availability <= 1) {
 
           // ✅ Manual bulk upload (multi-row form with multiple files)
           router.post("/upload-bulk", (req, res) => {
-            ensureUploadsDir();
+            
             uploadMany.array("files")(req, res, async (err) => {
               if (err) {
                 return res.status(400).json({ message: err.message });
@@ -1394,13 +1369,7 @@ if (availability <= 1) {
                     continue;
                   }
 
-                  const filePath = file.path;
-                  if (!fs.existsSync(filePath)) {
-                    errors.push(index + 1);
-                    continue;
-                  }
-
-                  const worksheetRows = readWorksheetRows(filePath);
+                  const worksheetRows = readWorksheetRows(file.buffer);
                   const fileId = Date.now() + index;
 
                   const totalRecords = await processSiteUploadRows({
@@ -1461,36 +1430,83 @@ if (availability <= 1) {
 
           // ✅ SINGLE FILE DOWNLOAD
 router.get("/download/:id", async (req, res) => {
-  try {
-    const id = Number(req.params.id);
-    if (!id || isNaN(id)) {
-      return res.status(400).json({ message: "Invalid download ID" });
-    }
 
-    const rows = await query(
-      "SELECT file_name FROM report_uploads WHERE id = ?",
+  try {
+
+    const id = Number(req.params.id);
+
+    const uploadRows = await query(
+      `
+      SELECT site_type, file_id
+      FROM report_uploads
+      WHERE id = ?
+      `,
       [id]
     );
 
+    if (!uploadRows.length) {
+      return res.status(404).json({
+        message: "Report not found",
+      });
+    }
+
+    const siteType = uploadRows[0].site_type.toLowerCase();
+
+    const fileId = uploadRows[0].file_id;
+
+    const rows = await query(
+      `
+      SELECT *
+      FROM ${siteType}
+      WHERE file_id = ?
+      `,
+      [fileId]
+    );
+
     if (!rows.length) {
-      return res.status(404).json({ message: "Report not found" });
+      return res.status(404).json({
+        message: "No data found",
+      });
     }
 
-    const fileName = rows[0].file_name;
-    const filePath = path.join(__dirname, "..", "uploads", fileName);
+    const workbook = xlsx.utils.book_new();
 
-    console.log("Download path:", filePath);
+    const worksheet =
+      xlsx.utils.json_to_sheet(rows);
 
-    if (!fs.existsSync(filePath)) {
-      console.log("❌ File missing");
-      return res.status(404).json({ message: "File not found" });
-    }
+    xlsx.utils.book_append_sheet(
+      workbook,
+      worksheet,
+      `${siteType.toUpperCase()} Report`
+    );
 
-    res.download(filePath, fileName);
+    const buffer = xlsx.write(workbook, {
+      type: "buffer",
+      bookType: "xlsx",
+    });
+
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename=${siteType}_report.xlsx`
+    );
+
+    res.setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    );
+
+    res.send(buffer);
+
   } catch (err) {
-    console.error("Download error:", err);
-    res.status(500).json({ message: "Download failed" });
+
+    console.error("DOWNLOAD ERROR:", err);
+
+    res.status(500).json({
+      message: "Download failed",
+    });
+
   }
+
 });
 
   router.delete("/:id", async (req, res) => {
@@ -1509,15 +1525,7 @@ router.get("/download/:id", async (req, res) => {
     const { file_name, report_date, site_type } = rows[0];
     const file_id = Number(rows[0].file_id);
 
-      // delete file
-      const filePath = path.join(__dirname, "..", "uploads", file_name);
-      if (fs.existsSync(filePath)) {
-        fs.unlinkSync(filePath);
-      }
-
-      // delete DB data
-
-      {/* ENB */}
+     {/* ENB */}
 
     if (site_type.toLowerCase() === "enb") {
     await query("DELETE FROM enb WHERE file_id = ?", [file_id]);
