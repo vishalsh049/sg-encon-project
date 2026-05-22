@@ -1,23 +1,11 @@
 const express = require("express");
 const multer = require("multer");
 const XLSX = require("xlsx");
-const path = require("path");
-const fs = require("fs");
 
 const { db } = require("../config/db");
 
 const router = express.Router();
-const uploadDir = path.join(__dirname, "../uploads");
-
-function ensureUploadsDir() {
-  if (!fs.existsSync(uploadDir)) {
-    fs.mkdirSync(uploadDir, { recursive: true });
-  }
-}
-
-ensureUploadsDir();
-
-
+const storage = multer.memoryStorage();
 
 const upload = multer({
   storage,
@@ -349,9 +337,12 @@ router.post("/upload-report", upload.single("file"), async (req, res) => {
   ".xlsb",
 ];
 
-const fileExtension = path.extname(
+const fileExtension =
+  "." +
   req.file.originalname
-).toLowerCase();
+    .split(".")
+    .pop()
+    .toLowerCase();
 
 if (!allowedExtensions.includes(fileExtension)) {
 
@@ -503,14 +494,6 @@ router.delete("/delete-report/:id", async (req, res) => {
     await query(`DELETE FROM physical WHERE report_id = ?`, [reportId]);
     await query(`DELETE FROM physical_reports WHERE id = ?`, [reportId]);
 
-    if (report.file_path && fs.existsSync(report.file_path)) {
-      try {
-        fs.unlinkSync(report.file_path);
-      } catch (unlinkError) {
-        console.error("Failed to delete physical report file:", unlinkError);
-      }
-    }
-
     res.status(200).json({
       success: true,
       message: "Report deleted successfully",
@@ -531,13 +514,44 @@ router.get("/download/:id", async (req, res) => {
   try {
 
     const rows = await query(
-      `
-      SELECT *
-      FROM physical
-      WHERE report_id = ?
-      `,
-      [reportId]
-    );
+  `
+  SELECT
+    pprj_status,
+    pprj_code,
+    employee_code,
+    employee_name,
+    father_name,
+    function_name,
+    job_role_actual_cmp_verify,
+    job_role,
+    manpower_signoff_scope,
+    scrum_job_role,
+    circle,
+    cluster,
+    mobile_number,
+    dob,
+    age,
+    date_of_joining,
+    employment_status,
+    resigned_date,
+    last_working_date,
+    rm_code,
+    reporting_manager,
+    company_email_id,
+    laptop_status,
+    ifsc_code,
+    bank_account_no,
+    pan_no,
+    aadhaar_no,
+    uan_no,
+    esic_ip_no,
+    esic_cmp,
+    remarks
+  FROM physical
+  WHERE report_id = ?
+  `,
+  [reportId]
+);
 
     if (!rows.length) {
       return res.status(404).json({
@@ -575,7 +589,7 @@ router.get("/download/:id", async (req, res) => {
 
   } catch (error) {
 
-    console.log(error);
+    console.error("DOWNLOAD ERROR:", error);
 
     res.status(500).json({
       success: false,
