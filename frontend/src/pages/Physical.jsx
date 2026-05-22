@@ -360,13 +360,7 @@ const handleDownload = async (item) => {
             <div>
               <h1 className="text-xl font-bold tracking-tight text-slate-900">Manpower - Physical</h1>
               <div className="mt-1 text-sm text-slate-500">Enterprise employee registry with secure, premium UI.</div>
-              <div className="mt-4 rounded-2xl border border-orange-200 bg-orange-50 p-4 text-sm text-orange-900 shadow-sm">
-                <p className="font-semibold">Warning:</p>
-                <p className="mt-1">
-                  Uploaded files are stored on the server disk. If a file is removed manually after upload, it cannot be recovered even if its database record remains.
-                  Keep a backup copy and re-upload missing files if needed.
-                </p>
-              </div>
+         
             </div>
 
 <div className="flex items-center gap-3">

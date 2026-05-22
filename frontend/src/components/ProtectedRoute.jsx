@@ -23,7 +23,7 @@ export default function ProtectedRoute({ page, children }) {
   }
 
   // Check if user has access to this specific page
-  const allowed = hasAccess(user, page);
+  const allowed = hasAccess(page, user);
 
   if (allowed) return <>{children}</>;
 

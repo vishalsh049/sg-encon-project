@@ -17,15 +17,7 @@ function ensureUploadsDir() {
 
 ensureUploadsDir();
 
-const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => {
-    ensureUploadsDir();
-    cb(null, uploadDir);
-  },
-  filename: (_req, file, cb) => {
-    cb(null, `${Date.now()}-${file.originalname}`);
-  },
-});
+
 
 const upload = multer({
   storage,
@@ -374,7 +366,10 @@ if (!allowedExtensions.includes(fileExtension)) {
     const reportDate = normalizeDate(req.body.report_date);
     const uploadedBy = toText(req.body.uploaded_by) || "Admin";
 
-    const workbook = XLSX.readFile(req.file.path, { cellDates: true });
+    const workbook = XLSX.read(req.file.buffer, {
+     type: "buffer",
+     cellDates: true,
+      });
     const sheetName = workbook.SheetNames[0];
     const worksheet = workbook.Sheets[sheetName];
     const rows = XLSX.utils.sheet_to_json(worksheet, { defval: null });
@@ -403,11 +398,11 @@ if (!allowedExtensions.includes(fileExtension)) {
         )
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       `,
-      [
-        req.file.filename,
-        req.file.originalname,
-        req.file.path,
-        req.file.size,
+     [
+  `physical_${Date.now()}.xlsx`,
+  req.file.originalname,
+  null,
+  req.file.size,
         rows.length,
         reportDate,
         uploadedBy,
@@ -530,60 +525,65 @@ router.delete("/delete-report/:id", async (req, res) => {
 });
 
 router.get("/download/:id", async (req, res) => {
+
   const reportId = Number(req.params.id);
 
-  if (!Number.isInteger(reportId) || reportId <= 0) {
-    return res.status(400).json({
-      success: false,
-      message: "Invalid report ID",
-    });
-  }
-
   try {
-    await ensurePhysicalTables();
 
-    const [report] = await query(
-      `SELECT id, file_path, original_name FROM physical_reports WHERE id = ? LIMIT 1`,
+    const rows = await query(
+      `
+      SELECT *
+      FROM physical
+      WHERE report_id = ?
+      `,
       [reportId]
     );
 
-    if (!report || !report.file_path) {
+    if (!rows.length) {
       return res.status(404).json({
         success: false,
-        message: "Report not found",
+        message: "No data found",
       });
     }
 
-    console.log("Download path:", report.file_path);
-    
-    if (!fs.existsSync(report.file_path)) {
-      return res.status(404).json({
-        success: false,
-        message: "File not found on server",
-      });
-    }
+    const workbook = XLSX.utils.book_new();
 
-    const downloadName = report.original_name || path.basename(report.file_path);
-    return res.download(report.file_path, downloadName, (err) => {
-      if (err) {
-        console.error("Physical report download error:", err);
-        if (!res.headersSent) {
-          res.status(500).json({
-            success: false,
-            message: "Unable to download file",
-          });
-        }
-      }
+    const worksheet = XLSX.utils.json_to_sheet(rows);
+
+    XLSX.utils.book_append_sheet(
+      workbook,
+      worksheet,
+      "Physical Report"
+    );
+
+    const buffer = XLSX.write(workbook, {
+      type: "buffer",
+      bookType: "xlsx",
     });
+
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename=physical_report_${reportId}.xlsx`
+    );
+
+    res.setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    );
+
+    res.send(buffer);
+
   } catch (error) {
-    console.error("Physical report download error:", error);
-    if (!res.headersSent) {
-      res.status(500).json({
-        success: false,
-        message: "Server Error",
-      });
-    }
+
+    console.log(error);
+
+    res.status(500).json({
+      success: false,
+      message: "Download failed",
+    });
+
   }
+
 });
 
 router.get("/job-role-count", async (_req, res) => {

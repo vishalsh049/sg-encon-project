@@ -110,23 +110,41 @@ function Sidebar({ closeSidebar, collapsed, onExpandRequest }) {
   },
 
   // MANPOWER
-  {
-    key: "physical",
-    label: "Physical",
-    path: "/dashboard/manpower/physical",
-    icon: BriefcaseBusiness,
-    accessPage: "Physical",
-    section: "MANPOWER",
-  },
-  {
-    key: "scrum",
-    label: "SCRUM",
-    path: "/dashboard/manpower/scrum",
-    icon: BriefcaseBusiness,
-    accessPage: "Scrum",
-  },
+{
+  key: "hr-dashboard",
+  label: "HR Dashboard",
+  path: "/dashboard/hr-dashboard",
+  icon: BriefcaseBusiness,
+  accessPage: "HR Dashboard",
+  section: "MANPOWER",
+},
 
+{
+  key: "physical",
+  label: "Physical",
+  path: "/dashboard/manpower/physical",
+  icon: BriefcaseBusiness,
+  accessPage: "Physical",
+},
+
+{
+  key: "scrum",
+  label: "SCRUM",
+  path: "/dashboard/manpower/scrum",
+  icon: BriefcaseBusiness,
+  accessPage: "Scrum",
+},
   // REPORTS
+
+  {
+  key: "kpi-dashboard",
+  label: "KPI Dashboard",
+  path: "/dashboard/reports",
+  icon: FileText,
+  accessPage: "KPI Dashboard",
+  section: "REPORTS",
+},
+
   {
     key: "tower-reports",
     label: "Tower Reports",

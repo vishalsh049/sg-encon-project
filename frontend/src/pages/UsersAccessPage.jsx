@@ -60,14 +60,18 @@ const pageAccessList = [
     ],
   },
 
-  {
-    title: "Manpower",
-    pages: ["physical", "scrum"],
-  },
+{
+  title: "Manpower",
+  pages: [
+    "HR Dashboard",
+    "Physical",
+    "Scrum",
+  ],
+},
 
   {
     title: "Reports",
-    pages: ["tower-reports"],
+    pages: ["tower-reports", "reports-dashboard", "kpi-dashboard"],
   },
 
   {

@@ -9,6 +9,7 @@ import TowerReports from "./pages/TowerReports";
 import UsersAccessPage from "./pages/UsersAccessPage";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { UserProvider } from "./context/UserContext";
+import KpiDashboard from "./pages/KpiDashboard";
 import NSOReports from "./pages/NsoReports";
 import FiberInventory from "./pages/FiberInventory";
 import Physical from "./pages/Physical";
@@ -16,6 +17,7 @@ import Scrum from "./pages/Scrum";
 import BillingStatus from "./pages/BillingStatus";
 import BillingDashboard from "./pages/BillingDashboard";
 import Revenue from "./pages/Revenue";
+import HrDashboard from "./pages/HrDashboard";
 
 function App() {
   return (
@@ -79,6 +81,12 @@ function App() {
     </ProtectedRoute>
   } />
 
+  <Route path="hr-dashboard" element={
+  <ProtectedRoute page={"HR Dashboard"}>
+    <HrDashboard />
+  </ProtectedRoute>
+} />
+
   {/* Users */}
   <Route path="users-access" element={
     <ProtectedRoute page={"Users"}>
@@ -119,29 +127,38 @@ function App() {
   } />
 
   {/* Reports */}
-  <Route path="reports/:siteCategory" element={
-    <ProtectedRoute page={"Tower Reports"}>
-      <TowerReports />
-    </ProtectedRoute>
-  } />
 
-  <Route path="reports/view" element={
-    <ProtectedRoute page={"View Reports"}>
-      <div>View Reports Page</div>
-    </ProtectedRoute>
-  } />
+{/* Reports */}
 
-  <Route path="reports/fiber/nso" element={
-    <ProtectedRoute page={"NSO Reports"}>
-      <NSOReports />
-    </ProtectedRoute>
-  } />
+<Route path="reports" element={
+  <ProtectedRoute page={"KPI Dashboard"}>
+    <KpiDashboard />
+  </ProtectedRoute>
+} />
 
-  <Route path="reports/fiber/inventory" element={
-    <ProtectedRoute page={"Fiber Reports"}>
-      <FiberInventory />
-    </ProtectedRoute>
-  } />
+<Route path="reports/fiber/nso" element={
+  <ProtectedRoute page={"NSO Reports"}>
+    <NSOReports />
+  </ProtectedRoute>
+} />
+
+<Route path="reports/fiber/inventory" element={
+  <ProtectedRoute page={"Fiber Reports"}>
+    <FiberInventory />
+  </ProtectedRoute>
+} />
+
+<Route path="reports/view" element={
+  <ProtectedRoute page={"View Reports"}>
+    <div>View Reports Page</div>
+  </ProtectedRoute>
+} />
+
+<Route path="reports/:siteCategory" element={
+  <ProtectedRoute page={"Tower Reports"}>
+    <TowerReports />
+  </ProtectedRoute>
+} />
   
 </Route>
         

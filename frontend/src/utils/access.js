@@ -29,6 +29,12 @@ export const hasAccess = (page, user) => {
 
   return pageAccessIds.some((pageId) => {
     const pageDisplayName = getPageDisplayName(pageId);
-    return pageDisplayName.toLowerCase() === normalizedPage;
+    const normalizedAccessPage = String(pageDisplayName || pageId || "").trim().toLowerCase();
+    const normalizedRawPage = String(pageId || "").trim().toLowerCase();
+
+    return (
+      normalizedAccessPage === normalizedPage ||
+      normalizedRawPage === normalizedPage
+    );
   });
 };

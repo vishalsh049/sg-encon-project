@@ -13,6 +13,8 @@ const pageRouteMap = {
   Physical: "/dashboard/manpower/physical",
   Scrum: "/dashboard/manpower/scrum",
   "Tower Reports": "/dashboard/reports/tower",
+  "Reports Dashboard": "/dashboard/reports",
+  "KPI Dashboard": "/dashboard/reports",
   "NSO Reports": "/dashboard/reports/fiber/nso",
   "Fiber Reports": "/dashboard/reports/fiber/inventory",
   Users: "/dashboard/users-access",

@@ -6,6 +6,7 @@
     const { db, isConnected } = require("../config/db");
     const util = require("util");
     const { getLatestFiberSummary } = require("../services/fiberInventoryService");
+    const dashboardController = require("../controllers/dashboardController");
 
     const query = util.promisify(db.query).bind(db);
 
@@ -1234,5 +1235,11 @@ FROM (
       res.status(500).json({ error: "Server error" });
     }
   });
+
+  router.get("/reports-summary", dashboardController.getReportsSummary);
+  router.get("/tower-recent", dashboardController.getTowerRecent);
+  router.get("/nso-recent", dashboardController.getNsoRecent);
+  router.get("/fiber-recent", dashboardController.getFiberRecent);
+  router.get("/monthly-stats", dashboardController.getMonthlyStats);
   
     module.exports = router;  
