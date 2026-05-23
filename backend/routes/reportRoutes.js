@@ -765,13 +765,15 @@ if (availability <= 1) {
             try {
               const siteCategory = req.query.siteCategory || "tower";
               await ensureUploadsTable();
-              const rows = await query(
-                `SELECT id, site_category, report_date, site_type, report_type, upload_type, uploaded_by, file_name, total_records, uploaded_at
-                FROM report_uploads
-                WHERE site_category = ?
-                ORDER BY uploaded_at DESC`,
-                [siteCategory]
-              );
+           const rows = await query(
+  `SELECT id, site_category, report_date, site_type,
+  report_type, upload_type, uploaded_by,
+  file_name, total_records, file_id, uploaded_at
+  FROM report_uploads
+  WHERE site_category = ?
+  ORDER BY uploaded_at DESC`,
+  [siteCategory]
+);
 
               const rowsWithStatus = rows.map((row) => ({
   ...row,

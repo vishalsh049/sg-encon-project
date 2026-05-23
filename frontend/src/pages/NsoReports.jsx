@@ -356,16 +356,51 @@ setSummary(
     }
   };
 
-  const handleDownload = (fileName) => {
-    if (!fileName) return;
-    const encoded = encodeURIComponent(fileName);
-    const link = document.createElement("a");
-    link.href = buildApiUrl(`/api/nso/download/${encoded}`);
-    link.download = fileName;
+const handleDownload = async (row) => {
+
+  try {
+
+    const response = await fetch(
+      buildApiUrl(`/api/nso/download/${row.id}`)
+    );
+
+    if (!response.ok) {
+      throw new Error("Download failed");
+    }
+
+    const blob = await response.blob();
+
+    const url =
+      window.URL.createObjectURL(blob);
+
+    const link =
+      document.createElement("a");
+
+    link.href = url;
+
+    const sanitizedName = row.original_name
+      ? `${row.original_name.replace(/\.[^/.]+$/, "")}.xlsx`
+      : `nso_report_${id}.xlsx`;
+
+    link.download = sanitizedName;
+
     document.body.appendChild(link);
+
     link.click();
+
     link.remove();
-  };
+
+    window.URL.revokeObjectURL(url);
+
+  } catch (error) {
+
+    console.log(error);
+
+    alert("Download failed");
+
+  }
+
+};
 
   const handleBulkDownload = async () => {
     if (!selectedIds.length) return;
@@ -692,11 +727,7 @@ setSummary(
                         <div className="truncate" title={row.original_name || row.file_name}>
                           {row.original_name || row.file_name || "-"}
                         </div>
-                        {row.file_missing ? (
-                          <div className="mt-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-700">
-                            File missing
-                          </div>
-                        ) : null}
+                       
                       </td>
 
                       <td className="px-5 py-4 text-slate-700">
@@ -705,10 +736,10 @@ setSummary(
                       <td className="px-5 py-4">
                         <div className="ml-auto flex flex-wrap gap-3">
                           <button
-                            onClick={() => handleDownload(row.file_name)}
+                            onClick={() => handleDownload(row)}
                             className="inline-flex items-center gap-1 text-sm font-medium text-cyan-700 hover:text-cyan-900"
-                            disabled={row.file_missing}
-                            title={row.file_missing ? "Download unavailable" : "Download"}
+                           
+                            title="Download"
                           >
                             <Download size={15} />
                             Download

@@ -78,9 +78,8 @@ function TowerReports() {
     ESC: { label: "ESC", bg: "from-amber-100 to-amber-50", icon: Layers },
     HPODSC: { label: "HPODSC", bg: "from-rose-100 to-rose-50", icon: Activity },
     OSC: { label: "OSC", bg: "from-lime-100 to-lime-50", icon: BarChart3 },
-    ISC: { label: "ISC", bg: "from-violet-100 to-violet-50", icon: ShieldCheck },
-    GSC: { label: "GSC", bg: "from-slate-100 to-slate-50", icon: Layers },
-    WIFI: { label: "WIFI", bg: "from-emerald-100 to-emerald-50", icon: Activity },
+     GSC: { label: "GSC", bg: "from-slate-100 to-slate-50", icon: Layers },
+    
   };
 
   const today = useMemo(() => {
@@ -96,8 +95,10 @@ function TowerReports() {
 
     const [rows, setRows] = useState([]);
     const [filterDate, setFilterDate] = useState("");
-  const [filterSiteType, setFilterSiteType] = useState("");
-  const [filterReportType, setFilterReportType] = useState("");
+    const [filterSiteType, setFilterSiteType] = useState("");
+    const [filterReportType, setFilterReportType] = useState("");
+    const [filterCircle, setFilterCircle] = useState("");
+    const [filterUploadedBy, setFilterUploadedBy] = useState("");
     const [searchTerm, setSearchTerm] = useState("");
     const [selectedIds, setSelectedIds] = useState([]);
     const [tableLoading, setTableLoading] = useState(false);
@@ -421,7 +422,17 @@ if (uploadType === "single") {
 
     const filteredRows = useMemo(() => rows.filter((row) => {
     const normalizedSearch = searchTerm.trim().toLowerCase();
-    if (!allowedSiteTypeValues.includes(row.site_type)) return false;
+    const normalizedAllowed = allowedSiteTypeValues.map(v =>
+  String(v).toLowerCase()
+);
+
+if (
+  !normalizedAllowed.includes(
+    String(row.site_type || "").toLowerCase()
+  )
+) {
+  return false;
+}
 
     const rowDate = (() => {
       const d = toSafeDate(row.report_date, true);
@@ -446,9 +457,20 @@ if (uploadType === "single") {
           .some((value) => String(value).toLowerCase().includes(normalizedSearch))) &&
       (!filterDate || rowDate === filterDate) &&
       (!filterSiteType || row.site_type === filterSiteType) &&
-      (!filterReportType || row.report_type === filterReportType)
+     (!filterReportType || row.report_type === filterReportType) &&
+      (!filterCircle || row.circle === filterCircle) &&
+     (!filterUploadedBy || row.uploaded_by === filterUploadedBy)
     );
-  }), [rows, filterDate, filterSiteType, filterReportType, searchTerm, allowedSiteTypeValues]);
+  }), [
+  rows,
+  filterDate,
+  filterSiteType,
+  filterReportType,
+  filterCircle,
+  filterUploadedBy,
+  searchTerm,
+  allowedSiteTypeValues
+]);
 
   // 👉 PAGINATION LOGIC
     const totalFiles = filteredRows.length;
@@ -497,7 +519,8 @@ const latestReportDate = useMemo(() => {
   }, [rows]);
 
   const kpiCards = useMemo(() => {
-    const snapshot = rows.reduce((memo, row) => {
+   const snapshot = filteredRows.reduce((memo, row) => {
+      
       const type = row.site_type;
       const dateValue = row.report_date;
       if (!type || !dateValue || !siteTypeMeta[type]) return memo;
@@ -513,19 +536,7 @@ const latestReportDate = useMemo(() => {
       return memo;
     }, {});
 
-    const overallCard = {
-      type: "LATEST",
-      label: "Latest Upload",
-      bg: "from-violet-100 to-violet-50",
-      icon: Calendar,
-      count: rows.length,
-      date: latestReportDate ? formatDateOnly(latestReportDate) : "-",
-      highlight: true,
-    };
-
-    return [
-      overallCard,
-      ...allowedSiteTypes.map((site) => {
+    return allowedSiteTypes.map((site) => {
         const meta = siteTypeMeta[site.value] || {
           label: site.label,
           bg: "from-slate-100 to-slate-50",
@@ -539,8 +550,7 @@ const latestReportDate = useMemo(() => {
           date: metric?.dateRaw ? formatDateOnly(metric.dateRaw) : "-",
           highlight: meta.highlight || false,
         };
-      }),
-    ];
+      });
   }, [rows, allowedSiteTypes, latestReportDate]);
 
   const primaryButtonClass =
@@ -665,11 +675,8 @@ const latestReportDate = useMemo(() => {
                   </div>
                 </div>
 
-                <div className="grid gap-3 md:grid-cols-2">
+               <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-2">
                   <div className="space-y-2">
-  <label className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-    Date
-  </label>
 
   <div className="relative">
     <PremiumDatePicker
@@ -688,10 +695,8 @@ const latestReportDate = useMemo(() => {
 </div>
 
                   <div className="space-y-2">
-                    <label className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-                      Site Type
-                    </label>
-                    <Listbox value={filterSiteType} onChange={setFilterSiteType}>
+                    
+               <Listbox value={filterSiteType} onChange={setFilterSiteType}>
                <div className="relative">
 
     {/* Button */}
@@ -740,10 +745,60 @@ const latestReportDate = useMemo(() => {
 </Listbox>
         </div>
 
+<div className="space-y-2">
+  
+
+  <Listbox value={filterCircle} onChange={setFilterCircle}>
+    <div className="relative">
+
+      <Listbox.Button
+        className="w-full h-11 rounded-2xl bg-white border border-slate-200 px-4 text-sm text-left shadow-sm flex items-center justify-between hover:border-sky-300 focus:ring-2 focus:ring-sky-100 transition"
+      >
+        {filterCircle || "All Circles"}
+        <ChevronDown size={16} className="text-slate-400" />
+      </Listbox.Button>
+
+      <Listbox.Options
+        className="absolute z-50 mt-2 w-full rounded-2xl bg-white shadow-[0_20px_60px_rgba(0,0,0,0.08)] p-1 max-h-60 overflow-auto"
+      >
+
+        <Listbox.Option
+          value=""
+          className={({ active }) =>
+            `cursor-pointer rounded-xl px-3 py-2 text-sm ${
+              active
+                ? "bg-slate-100 text-slate-900"
+                : "text-slate-600"
+            }`
+          }
+        >
+          All Circles
+        </Listbox.Option>
+
+        {[...new Set(rows.map((r) => r.circle).filter(Boolean))].map(
+          (circle) => (
+            <Listbox.Option
+              key={circle}
+              value={circle}
+              className={({ active }) =>
+                `cursor-pointer rounded-xl px-3 py-2 text-sm ${
+                  active
+                    ? "bg-slate-100 text-slate-900"
+                    : "text-slate-600"
+                }`
+              }
+            >
+              {circle}
+            </Listbox.Option>
+          )
+        )}
+
+      </Listbox.Options>
+    </div>
+  </Listbox>
+</div>
                   <div className="space-y-2">
-                    <label className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-                      Report Type
-                    </label>
+                   
                    <Listbox value={filterReportType} onChange={setFilterReportType}>
   <div className="relative">
     
@@ -775,6 +830,69 @@ const latestReportDate = useMemo(() => {
 </Listbox>
                   </div>
 
+                  <div className="space-y-2">
+
+  <Listbox
+    value={filterUploadedBy}
+    onChange={setFilterUploadedBy}
+  >
+    <div className="relative">
+
+      <Listbox.Button
+        className="w-full h-11 rounded-2xl bg-white border border-slate-200 px-4 text-sm text-left shadow-sm flex items-center justify-between hover:border-sky-300 focus:ring-2 focus:ring-sky-100 transition"
+      >
+        {filterUploadedBy || " Uploaded By"}
+
+        <ChevronDown
+          size={16}
+          className="text-slate-400"
+        />
+      </Listbox.Button>
+
+      <Listbox.Options
+        className="absolute z-50 mt-2 w-full rounded-2xl bg-white shadow-[0_20px_60px_rgba(0,0,0,0.08)] p-1 max-h-60 overflow-auto"
+      >
+
+        <Listbox.Option
+          value=""
+          className={({ active }) =>
+            `cursor-pointer rounded-xl px-3 py-2 text-sm ${
+              active
+                ? "bg-slate-100 text-slate-900"
+                : "text-slate-600"
+            }`
+          }
+        >
+          All Uploaders
+        </Listbox.Option>
+
+        {[
+          ...new Set(
+            rows
+              .map((r) => r.uploaded_by)
+              .filter(Boolean)
+          ),
+        ].map((name) => (
+          <Listbox.Option
+            key={name}
+            value={name}
+            className={({ active }) =>
+              `cursor-pointer rounded-xl px-3 py-2 text-sm ${
+                active
+                  ? "bg-slate-100 text-slate-900"
+                  : "text-slate-600"
+              }`
+            }
+          >
+            {name}
+          </Listbox.Option>
+        ))}
+
+      </Listbox.Options>
+    </div>
+  </Listbox>
+</div>
+
                   <div className="flex items-end">
                     <button
                       onClick={() => {
@@ -782,6 +900,8 @@ const latestReportDate = useMemo(() => {
                         setFilterDate("");
                         setFilterSiteType("");
                         setFilterReportType("");
+                        setFilterCircle("");
+                        setFilterUploadedBy("");
                       }}
                       className={`${secondaryButtonClass} w-full justify-center border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100`}
                     >

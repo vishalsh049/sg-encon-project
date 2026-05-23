@@ -483,7 +483,6 @@ const handleDownload = async (item) => {
 </div>
 
 
-{/* Job Role Document Average */}
 
 {/* Job Role Document Average 
 <div className="mx-auto mt-3 w-full max-w-7xl">

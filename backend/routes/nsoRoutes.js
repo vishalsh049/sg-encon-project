@@ -108,8 +108,8 @@ function normalizeHeader(value) {
   return String(value || "")
     .trim()
     .toLowerCase()
-    .replace(/[_-]+/g, " ")
-    .replace(/\s+/g, " ");
+    .replace(/\s+/g, "_")
+    .replace(/[^a-z0-9_]/g, "");
 }
 
 function normalizeDate(value) {
@@ -132,10 +132,53 @@ function normalizeDate(value) {
   return null;
 }
 
+function getValue(row, possibleKeys = []) {
+
+  const normalizedRow = {};
+
+  Object.keys(row || {}).forEach((key) => {
+
+    normalizedRow[
+      normalizeHeader(key)
+    ] = row[key];
+
+  });
+
+  for (const key of possibleKeys) {
+
+    const normalizedKey =
+      normalizeHeader(key);
+
+    if (
+      normalizedRow[normalizedKey] !== undefined
+    ) {
+      return normalizedRow[normalizedKey];
+    }
+
+  }
+
+  return "";
+
+}
+
 function readRowsFromFile(filePath) {
-  const workbook = XLSX.readFile(filePath, { cellDates: true });
-  const sheet = workbook.Sheets[workbook.SheetNames[0]];
-  return XLSX.utils.sheet_to_json(sheet, { defval: "" });
+
+  const workbook = XLSX.readFile(filePath, {
+    cellDates: true,
+  });
+
+  const sheet = workbook.Sheets[
+    workbook.SheetNames[0]
+  ];
+
+  const rows = XLSX.utils.sheet_to_json(sheet, {
+    defval: "",
+    raw: false,
+  });
+
+  console.log("FIRST ROW =>", rows[0]);
+
+  return rows;
 }
 
 function parseWorkbookDefaults(rows, fallback = {}) {
@@ -196,6 +239,72 @@ function csvEscape(value) {
 
 function getCurrentIstSqlDateTime() {
   return "DATE_FORMAT(CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+05:30'), '%Y-%m-%d %H:%i:%s')";
+}
+
+function cleanNsoRows(rows) {
+  return rows.map((row) => ({
+    uid: row.uid || "",
+    year: row.year || "",
+    week: row.week || "",
+    ticket_no: row.ticket_no || "",
+    parent_ticket: row.parent_ticket || "",
+    circle: row.circle || "",
+    cmp: row.cmp || "",
+    cmm_name: row.cmm_name || "",
+    link_name: row.link_name || "",
+    span_name: row.span_name || "",
+    vendor_tt: row.vendor_tt || "",
+    fibre_owner: row.fibre_owner || "",
+    construction_type: row.construction_type || "",
+    impact: row.impact || "",
+    affected_service: row.affected_service || "",
+    reason: row.reason || "",
+    event_date: row.event_date || "",
+    reported_to_fibre_noc: row.reported_to_fibre_noc || "",
+    informed_date: row.informed_date || "",
+    etr: row.etr || "",
+    cleared_date: row.cleared_date || "",
+    status: row.status || "",
+    resolution: row.resolution || "",
+    fault_description: row.fault_description || "",
+    mttr: row.mttr || "",
+    mttn: row.mttn || "",
+    delay_reason: row.delay_reason || "",
+    inter_intra_bin: row.inter_intra_bin || "",
+    zone: row.zone || "",
+    bucket: row.bucket || "",
+    transport_ip_bin: row.transport_ip_bin || "",
+    restoration_status: row.restoration_status || "",
+    span_id: row.span_id || "",
+    workorder: row.workorder || "",
+    sp_name: row.sp_name || "",
+    rca_cause_code: row.rca_cause_code || "",
+    reason_high_mttr: row.reason_high_mttr || "",
+    day: row.day || "",
+    month: row.month || "",
+    week_name: row.week_name || "",
+    ttr_percentage: row.ttr_percentage || "",
+    report_date: row.report_date || "",
+  }));
+}
+
+function createWorkbookBuffer(rows, sheetName = "NSO Reports") {
+  const workbook = XLSX.utils.book_new();
+  const worksheet = XLSX.utils.json_to_sheet(rows);
+  XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
+  return XLSX.write(workbook, {
+    type: "buffer",
+    bookType: "xlsx",
+    compression: true,
+  });
+}
+
+function sanitizeFileName(name) {
+  return String(name || "")
+    .replace(/\s+/g, "_")
+    .replace(/[^a-zA-Z0-9_.\-]/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_+|_+$/g, "") || "nso_report";
 }
 
 async function getRowsByIds(ids) {
@@ -355,19 +464,93 @@ router.get("/export", async (_req, res) => {
   }
 });
 
-router.get("/download/:fileName", async (req, res) => {
+router.get("/download/:id", async (req, res) => {
   try {
-    const decodedName = decodeURIComponent(req.params.fileName);
-    const filePath = path.join(uploadsDir, decodedName);
+    const fileId = req.params.id;
 
-    if (!fs.existsSync(filePath)) {
-      return res.status(404).json({ message: "File not found" });
+    const metadata = await query(
+      `SELECT original_name, original_file_name
+       FROM nso_report_files
+       WHERE id = ?`,
+      [fileId]
+    );
+
+    if (!metadata.length) {
+      return res.status(404).json({ message: "Report not found" });
     }
 
-    res.download(filePath, decodedName);
+    const rows = await query(
+      `SELECT
+         uid,
+         year,
+         week,
+         ticket_no,
+         parent_ticket,
+         circle,
+         cmp,
+         cmm_name,
+         link_name,
+         span_name,
+         vendor_tt,
+         fibre_owner,
+         construction_type,
+         impact,
+         affected_service,
+         reason,
+         event_date,
+         reported_to_fibre_noc,
+         informed_date,
+         etr,
+         cleared_date,
+         status,
+         resolution,
+         fault_description,
+         mttr,
+         mttn,
+         delay_reason,
+         inter_intra_bin,
+         zone,
+         bucket,
+         transport_ip_bin,
+         restoration_status,
+         span_id,
+         workorder,
+         sp_name,
+         rca_cause_code,
+         reason_high_mttr,
+         day,
+         month,
+         week_name,
+         ttr_percentage,
+         report_date
+       FROM nso_reports
+       WHERE file_id = ?`,
+      [fileId]
+    );
+
+    if (!rows.length) {
+      return res.status(404).json({ message: "No data found" });
+    }
+
+    const cleanedRows = cleanNsoRows(rows);
+    const workbookBuffer = createWorkbookBuffer(cleanedRows);
+
+    const originalName = metadata[0].original_file_name || metadata[0].original_name || `nso_report_${fileId}`;
+    const filename = `${sanitizeFileName(originalName.replace(/\.[^/.]+$/, ""))}.xlsx`;
+
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${filename}"`
+    );
+    res.setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    );
+
+    res.end(workbookBuffer);
   } catch (error) {
-    console.error("NSO file download error:", error);
-    res.status(500).json({ message: "Failed to download file" });
+    console.error("NSO download error:", error);
+    res.status(500).json({ message: "Download failed" });
   }
 });
 
@@ -379,7 +562,7 @@ router.post("/bulk-download", async (req, res) => {
     }
 
     await ensureNsoTable();
-    const rows = await getRowsByIds(ids);
+    const files = await getRowsByIds(ids);
 
     res.setHeader("Content-Type", "application/zip");
     res.setHeader("Content-Disposition", 'attachment; filename="nso-reports.zip"');
@@ -387,14 +570,63 @@ router.post("/bulk-download", async (req, res) => {
     const archive = archiver("zip", { zlib: { level: 9 } });
     archive.pipe(res);
 
-    rows.forEach((row) => {
-      const target = path.join(uploadsDir, row.file_name);
-      if (fs.existsSync(target)) {
-        archive.file(target, {
-          name: row.original_file_name || row.original_name || row.file_name,
-        });
-      }
-    });
+    for (const file of files) {
+      const rows = await query(
+        `SELECT
+           uid,
+           year,
+           week,
+           ticket_no,
+           parent_ticket,
+           circle,
+           cmp,
+           cmm_name,
+           link_name,
+           span_name,
+           vendor_tt,
+           fibre_owner,
+           construction_type,
+           impact,
+           affected_service,
+           reason,
+           event_date,
+           reported_to_fibre_noc,
+           informed_date,
+           etr,
+           cleared_date,
+           status,
+           resolution,
+           fault_description,
+           mttr,
+           mttn,
+           delay_reason,
+           inter_intra_bin,
+           zone,
+           bucket,
+           transport_ip_bin,
+           restoration_status,
+           span_id,
+           workorder,
+           sp_name,
+           rca_cause_code,
+           reason_high_mttr,
+           day,
+           month,
+           week_name,
+           ttr_percentage,
+           report_date
+         FROM nso_reports
+         WHERE file_id = ?`,
+        [file.id]
+      );
+
+      const cleanedRows = cleanNsoRows(rows);
+      const workbookBuffer = createWorkbookBuffer(cleanedRows);
+      const originalName = file.original_file_name || file.original_name || `nso_report_${file.id}`;
+      const archiveName = `${sanitizeFileName(originalName.replace(/\.[^/.]+$/, ""))}.xlsx`;
+
+      archive.append(workbookBuffer, { name: archiveName });
+    }
 
     await archive.finalize();
   } catch (error) {
@@ -461,169 +693,120 @@ const fileId = fileResult.insertId;
 
 for (const row of workbookRows) {
 
+console.log("ROW DATA =>", row);
+
+console.log("MAPPED =>", {
+  uid: getValue(row, ["uid"]),
+  ticket_no: getValue(row, ["ticket_no"]),
+  circle: getValue(row, ["circle"]),
+  vendor_tt: getValue(row, ["vendor_tt"]),
+});
+
+
  await query(
-  `INSERT INTO nso_reports (
-
-    file_id,
-    uid,
-    year,
-    week,
-    ticket_no,
-    parent_ticket,
-    circle,
-    cmp,
-    cmm_name,
-    link_name,
-    span_name,
-    vendor_tt,
-    fibre_owner,
-    construction_type,
-    impact,
-    affected_service,
-    reason,
-    event_date,
-    reported_to_fibre_noc,
-    informed_date,
-    etr,
-    cleared_date,
-    status,
-    resolution,
-    fault_description,
-    mttr,
-    mttn,
-    delay_reason,
-    inter_intra_bin,
-    zone,
-    bucket,
-    transport_ip_bin,
-    restoration_status,
-    span_id,
-    workorder,
-    sp_name,
-    rca_cause_code,
-    reason_high_mttr,
-    day,
-    month,
-    week_name,
-    ttr_percentage,
-    report_date,
-    created_at
-
-  )
-  VALUES (
-
-    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-    ?, ?, ?, NOW()
-
-  )`,
-  [
-
-    fileId,
-
-    row["UID"],
-
-    row["Year"],
-
-    row["Week"],
-
-    row["Ticket No"],
-
-    row["Parent Ticket"],
-
-Object.keys(row).find(
-  (key) => key.trim().toLowerCase() === "circle"
+`
+INSERT INTO nso_reports (
+  file_id,
+  uid,
+  year,
+  week,
+  ticket_no,
+  parent_ticket,
+  circle,
+  cmp,
+  cmm_name,
+  link_name,
+  span_name,
+  vendor_tt,
+  fibre_owner,
+  construction_type,
+  impact,
+  affected_service,
+  reason,
+  event_date,
+  reported_to_fibre_noc,
+  informed_date,
+  etr,
+  cleared_date,
+  status,
+  resolution,
+  fault_description,
+  mttr,
+  mttn,
+  delay_reason,
+  inter_intra_bin,
+  zone,
+  bucket,
+  transport_ip_bin,
+  restoration_status,
+  span_id,
+  workorder,
+  sp_name,
+  rca_cause_code,
+  reason_high_mttr,
+  day,
+  month,
+  week_name,
+  ttr_percentage,
+  report_date,
+  created_at
 )
-  ? row[
-      Object.keys(row).find(
-        (key) => key.trim().toLowerCase() === "circle"
-      )
-    ]
-  : "",
+VALUES (
+  ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+  ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+  ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+  ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+ ?, ?, ?, NOW()
+)
+`,
+[
+  fileId,
 
-    row["CMP"],
+ getValue(row, ["uid"]),
+  getValue(row, ["year"]),
+  getValue(row, ["week"]),
 
-    row["CMM Name"],
+getValue(row, ["ticket_no"]),
+getValue(row, ["parent_ticket"]),
+getValue(row, ["circle"]),
+getValue(row, ["cmp"]),
+getValue(row, ["cmm_name"]),
+getValue(row, ["link_name"]),
+getValue(row, ["span_name"]),
+getValue(row, ["vendor_tt"]),
+getValue(row, ["fibre_owner"]),
+getValue(row, ["construction_type"]),
+getValue(row, ["impact"]),
+getValue(row, ["affected_service"]),
+getValue(row, ["reason"]),
+getValue(row, ["event_date"]),
+getValue(row, ["reported_to_fibre_noc"]),
+getValue(row, ["informed_date"]),
+getValue(row, ["etr"]),
+getValue(row, ["cleared_date"]),
+getValue(row, ["status"]),
+getValue(row, ["resolution"]),
+getValue(row, ["fault_description"]),
+getValue(row, ["mttr"]),
+getValue(row, ["mttn"]),
+getValue(row, ["delay_reason"]),
+getValue(row, ["inter_intra_bin"]),
+getValue(row, ["zone"]),
+getValue(row, ["bucket"]),
+getValue(row, ["transport_ip_bin"]),
+getValue(row, ["restoration_status"]),
+getValue(row, ["span_id"]),
+getValue(row, ["workorder"]),
+getValue(row, ["sp_name"]),
+getValue(row, ["rca_cause_code"]),
+getValue(row, ["reason_high_mttr"]),
+getValue(row, ["day"]),
+getValue(row, ["month"]),
+getValue(row, ["week_name"]),
+getValue(row, ["ttr_percentage"]),
 
-    row["Link Name"],
-
-    row["Span Name"],
-
-    row["VendorTT"],
-
-    Object.keys(row).find(
-    (key) =>
-    key.trim().toLowerCase() === "fibre owner"
-   )
-    ? row[
-      Object.keys(row).find(
-        (key) =>
-          key.trim().toLowerCase() === "fibre owner"
-      )
-    ]
-  : "",
-
-    row["Construction Type"],
-
-    row["Impact"],
-
-    row["Affected Service"],
-
-    row["Reason"],
-
-    row["Event Date"],
-
-    row["Reported To Fibre NOC"],
-
-    row["Informed Date"],
-
-    row["ETR"],
-
-    row["Cleared Date"],
-
-    row["Status"],
-
-    row["Resolution"],
-
-    row["Fault Description"],
-
-    row["MTTR"],
-
-    row["MTTN (min)"],
-
-    row["Delay Reason"],
-
-    row["Inter/Intra Bin"],
-
-    row["Zone"],
-
-    row["Bucket"],
-
-    row["Transport IP BIN"],
-
-    row["Restoration Status"],
-
-    row["SpanId"],
-
-    row["Workorder"],
-
-    row["SP Name"],
-
-    row["RCA Cause Code"],
-
-    row["Reason for High MTTR(> 4hrs)"],
-
-    row["Day"],
-
-    row["Month"],
-
-    row["Week"],
-
-    row["TTR%AGE"],
-
-    resolvedReportDate
-
-  ]
+  resolvedReportDate
+]
 );
 }
 
@@ -633,6 +816,8 @@ Object.keys(row).find(
       });
     } catch (uploadError) {
       console.error("NSO upload error:", uploadError);
+console.error("SQL Message:", uploadError.sqlMessage);
+console.error("SQL:", uploadError.sql);
       res.status(500).json({ message: "NSO upload failed" });
     }
   });

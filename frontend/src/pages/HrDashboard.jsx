@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import {
   Users,
   UserCheck,
@@ -7,6 +7,7 @@ import {
   BriefcaseBusiness,
   Layers3,
 } from "lucide-react";
+import { buildApiUrl } from "../lib/api";
 
 const MetricCard = ({
   icon: Icon,
@@ -36,12 +37,9 @@ const MetricCard = ({
 
   return (
     <div
-      className="flex min-h-[92px] flex-col justify-between rounded-[18px] bg-slate-50/90 border border-slate-100 p-4"
-    >
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex h-9 w-9 items-center justify-center rounded-[18px] bg-white/70 backdrop-blur-sm border border-slate-100">
-          <Icon className={`h-4 w-4 ${iconBg[tone] || iconBg.slate}`} />
-        </div>
+  className="flex min-h-[110px] flex-col justify-between rounded-[22px] bg-slate-50/90 border border-slate-100 px-5 py-4"
+>
+        <div className="flex justify-end">       
       </div>
 
       <div className="mt-2 flex items-start justify-between gap-2">
@@ -61,6 +59,114 @@ const MetricCard = ({
 };
 
 function HrDashboard() {
+
+  const [jobRoles, setJobRoles] = useState([]);
+  const [circles, setCircles] = useState([]);
+  const [employmentStatus, setEmploymentStatus] = useState([]);
+  const [jobRoleAverage, setJobRoleAverage] = useState([]);
+
+  const totalEmployees = jobRoles.reduce(
+    (sum, item) => sum + Number(item.total || 0),
+    0
+  );
+
+  useEffect(() => {
+
+    loadJobRoles();
+    loadCircles();
+    loadEmploymentStatus();
+    loadJobRoleAverage();
+
+  }, []);
+
+  const loadJobRoles = async () => {
+
+    try {
+
+      const response = await fetch(
+        buildApiUrl("/api/physical/job-role-count")
+      );
+
+      const result = await response.json();
+
+      if (result.success) {
+        setJobRoles(result.data || []);
+      }
+
+    } catch (error) {
+
+      console.log(error);
+
+    }
+
+  };
+
+  const loadCircles = async () => {
+
+    try {
+
+      const response = await fetch(
+        buildApiUrl("/api/physical/circle-count")
+      );
+
+      const result = await response.json();
+
+      if (result.success) {
+        setCircles(result.data || []);
+      }
+
+    } catch (error) {
+
+      console.log(error);
+
+    }
+
+  };
+
+  const loadEmploymentStatus = async () => {
+
+    try {
+
+      const response = await fetch(
+        buildApiUrl("/api/physical/employment-status-count")
+      );
+
+      const result = await response.json();
+
+      if (result.success) {
+        setEmploymentStatus(result.data || []);
+      }
+
+    } catch (error) {
+
+      console.log(error);
+
+    }
+
+  };
+
+  const loadJobRoleAverage = async () => {
+
+    try {
+
+      const response = await fetch(
+        buildApiUrl("/api/physical/job-role-document-average")
+      );
+
+      const result = await response.json();
+
+      if (result.success) {
+        setJobRoleAverage(result.data || []);
+      }
+
+    } catch (error) {
+
+      console.log(error);
+
+    }
+
+  };
+
   return (
     <div className="min-h-screen">
       {/* HEADER */}
@@ -95,46 +201,89 @@ function HrDashboard() {
                   <BriefcaseBusiness className="h-4 w-4 text-white" />
                 </div>
                 <div>
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-blue-100">
-                    MANPOWER
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-blue-100">
+                    PHYSICAL MANPOWER
                   </p>
-                  <p className="mt-1 text-[10px] uppercase tracking-[0.22em] text-white">
-                    overview manpower
+                  <p className="mt-1 text-[10px] uppercase tracking-[0.18em] text-white">
+                    overview physical manpower
                   </p>
                 </div>
               </div>
             </div>
           </div>
 
-          <div className="p-4">
+        <div className="p-4">
             <div className="grid grid-cols-2 gap-2">
               <MetricCard
-                icon={Users}
-                label="Total Employees"
-                value="245"
-                tone="blue"
-              />
-              <MetricCard
-                icon={UserCheck}
-                label="Present"
-                value="228"
-                tone="green"
-              />
-              <MetricCard
-                icon={UserX}
-                label="Absent"
-                value="17"
-                tone="red"
-              />
-              <MetricCard
-                icon={ClipboardList}
-                label="Attendance"
-                value="93%"
-                tone="cyan"
-              />
+  label="Total Employees"
+  value={totalEmployees}
+  tone="blue"
+/>
+
+<MetricCard
+  label="Employment Status"
+  value={employmentStatus.length}
+  tone="green"
+/>
+
+<MetricCard
+  label="Job Roles"
+  value={jobRoles.length}
+  tone="red"
+/>
+
+<MetricCard
+  label="Document Average"
+  value={
+    jobRoleAverage.length
+      ? `${Math.round(
+          jobRoleAverage.reduce(
+            (sum, item) =>
+              sum + Number(item.document_average || 0),
+            0
+          ) / jobRoleAverage.length
+        )}%`
+      : "0%"
+  }
+  tone="cyan"
+/>
             </div>
           </div>
+
+          <div className="border-t border-slate-100 px-4 py-5">
+
+  <h2 className="mb-3 text-sm font-semibold text-slate-800">
+    Circle Wise Count
+  </h2>
+
+  <div className="grid grid-cols-2 gap-2">
+
+    {circles.map((item, index) => (
+
+      <div
+        key={index}
+        className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-2"
+      >
+
+        <span className="text-xs font-semibold text-slate-700">
+          {item.circle}
+        </span>
+
+        <span className="text-sm font-bold text-emerald-600">
+          {item.total}
+        </span>
+
+      </div>
+
+    ))}
+
+  </div>
+
+</div>
+
         </div>
+
+      
 
         {/* SCRUM */}
         <div className="flex min-h-full flex-col overflow-hidden rounded-[18px] bg-white shadow-xl">
@@ -145,11 +294,11 @@ function HrDashboard() {
                   <Layers3 className="h-4 w-4 text-white" />
                 </div>
                 <div>
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-violet-100">
-                    SCRUM
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-violet-100">
+                    SCRUM MANPOWER
                   </p>
-                  <p className="mt-1 text-[10px] uppercase tracking-[0.22em] text-white">
-                    scrum overview
+                  <p className="mt-1 text-[10px] uppercase tracking-[0.18em] text-white">
+                     overview scrum manpower
                   </p>
                 </div>
               </div>
@@ -157,7 +306,7 @@ function HrDashboard() {
           </div>
 
           <div className="p-4">
-            <div className="grid grid-cols-2 gap-2">
+           <div className="grid grid-cols-2 gap-3">
               <MetricCard
                 icon={Layers3}
                 label="Active Teams"
