@@ -134,6 +134,15 @@ function Sidebar({ closeSidebar, collapsed, onExpandRequest }) {
   icon: BriefcaseBusiness,
   accessPage: "Scrum",
 },
+
+{
+  key: "signoff",
+  label: "Sign Off",
+  path: "/dashboard/manpower/signoff",
+  icon: BriefcaseBusiness,
+  accessPage: "Signoff",
+},
+
   // REPORTS
 
   {

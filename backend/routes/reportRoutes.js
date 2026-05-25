@@ -88,17 +88,35 @@
           };
 
           const ensureEscTable = async () => {
-            await query(`
-              CREATE TABLE IF NOT EXISTS esc (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                file_id BIGINT,
-                circle VARCHAR(50),
-                cmp VARCHAR(100),
-                date DATE,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-              )
-            `);
-          };
+  await query(`
+    CREATE TABLE IF NOT EXISTS esc (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+
+      file_id BIGINT,
+
+      sap_id VARCHAR(100),
+      circle VARCHAR(50),
+      cmp VARCHAR(100),
+
+      jc_name VARCHAR(150),
+      jc_id VARCHAR(100),
+      jc_sap_id VARCHAR(100),
+
+      city VARCHAR(100),
+      site_type VARCHAR(100),
+      device_type VARCHAR(100),
+
+      total_cnum_count INT,
+      total_outage BIGINT,
+      total_availability DECIMAL(10,4),
+      cells_up INT,
+
+      date DATE,
+
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+};
 
           const ensureIscTable = async () => {
             await query(`
@@ -116,15 +134,20 @@
 
           const ensureOscTable = async () => {
             await query(`
-              CREATE TABLE IF NOT EXISTS osc (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                file_id BIGINT,
-                circle VARCHAR(50),
-                cmp VARCHAR(100),
-                date DATE,
-                kpi_value DECIMAL(12,4),
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-              )
+             CREATE TABLE IF NOT EXISTS osc (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  file_id BIGINT,
+  circle VARCHAR(50),
+  cmp VARCHAR(100),
+  date DATE,
+  kpi_value DECIMAL(12,4),
+
+  sap_id VARCHAR(100),
+  jc_name VARCHAR(150),
+  jc_id VARCHAR(100),
+
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+)
             `);
           };
 
@@ -173,7 +196,23 @@
             if (!rows.length) return;
 
             await query(
-              `INSERT INTO esc (file_id, circle, cmp, date) VALUES ?`,
+              `INSERT INTO esc (
+  file_id,
+  sap_id,
+  circle,
+  cmp,
+  jc_name,
+  jc_id,
+  jc_sap_id,
+  city,
+  site_type,
+  device_type,
+  total_cnum_count,
+  total_outage,
+  total_availability,
+  cells_up,
+  date
+) VALUES ?`,
               [rows]
             );
           };
@@ -181,10 +220,44 @@
           const insertHpodscRows = async (rows) => {
             if (!rows.length) return;
 
-            await query(
-              `INSERT INTO hpodsc (file_id, circle, cmp, date) VALUES ?`,
-              [rows]
-            );
+          await query(
+  `INSERT INTO hpodsc (
+
+    file_id,
+
+    sap_id,
+
+    circle,
+
+    cmp,
+
+    jc_name,
+
+    jc_id,
+
+    jc_sap_id,
+
+    city,
+
+    site_type,
+
+    device_type,
+
+    integration_state,
+
+    total_cnum_count,
+
+    total_outage,
+
+    total_availability,
+
+    cells_up,
+
+    date
+
+  ) VALUES ?`,
+  [rows]
+);
           };
 
           const insertOscRows = async (rows) => {
@@ -193,7 +266,16 @@
             for (let i = 0; i < rows.length; i += batchSize) {
               const batch = rows.slice(i, i + batchSize);
               await query(
-                `INSERT INTO osc (file_id, circle, cmp, date, kpi_value) VALUES ?`,
+                `INSERT INTO osc (
+  file_id,
+  circle,
+  cmp,
+  date,
+  kpi_value,
+  sap_id,
+  jc_name,
+  jc_id
+) VALUES ?`,
                 [batch]
               );
             }
@@ -329,60 +411,179 @@ if (availability <= 1) {
           };    
           // ✅ CLOSE forEach loop
 
-          const parseEscRows = (rows, fallbackDate, fileId) => {
-            const insertRows = [];
-            const errors = [];
+         const parseEscRows = (rows, fallbackDate, fileId) => {
+  const insertRows = [];
+  const errors = [];
 
-            rows.forEach((row, index) => {
-              const cleanRow = {};
-              Object.keys(row).forEach((key) => {
-                cleanRow[key.toLowerCase().trim()] = row[key];
-              });
+  rows.forEach((row, index) => {
 
-              const circle = cleanRow["circle"];
-              const cmp = cleanRow["cmp"];
-            const date = normalizeDate(fallbackDate);
+    const cleanRow = {};
 
-              if (!circle || !cmp) {
-                errors.push(index + 2);
-                return;
-              }
+   Object.keys(row).forEach((key) => {
 
-              insertRows.push([
-                fileId,
-                String(circle).trim(),
-                String(cmp).trim(),
-                date,
-              ]);
-            });
+  const normalizedKey = key
+    .toString()
+    .trim()
+    .toLowerCase()
+    .replace(/[\s_]+/g, " ");
 
-            return { insertRows, errors };
-          };
+  cleanRow[normalizedKey] = row[key];
+});
 
-          function parseHpodscRows(rows, fallbackDate, fileId) {
-            const insertRows = [];
+    const circle =
+      cleanRow["circle"] ||
+      cleanRow["circle name"] ||
+      cleanRow["Circle"] ||
+      cleanRow["CIRCLE"];
 
-            rows.forEach((row) => {
-            const cleanRow = {};
-          Object.keys(row).forEach((key) => {
-            cleanRow[key.toLowerCase().trim()] = row[key];
-          });
+    const cmp =
+      cleanRow["cmp"] ||
+      cleanRow["cmp name"] ||
+      cleanRow["CMP"] ||
+      cleanRow["Cmp"];
 
-              const circle = cleanRow["circle"];
-              const cmp = cleanRow["cmp"];
+    const date = normalizeDate(fallbackDate);
 
-              const date = normalizeDate(fallbackDate);
+    console.log("ESC ROW:", cleanRow);
+    console.log("CIRCLE:", circle);
+    console.log("CMP:", cmp);
 
-              insertRows.push([
-                fileId,
-                circle,
-                cmp,
-                date
-              ]);
-            });
+    if (!circle || !cmp) {
+      errors.push(index + 2);
+      return;
+    }
 
-            return { insertRows };
-          }
+   insertRows.push([
+
+  fileId,
+
+  cleanRow["sap_id"] ||
+  cleanRow["sap id"] ||
+  null,
+
+  String(circle).trim(),
+
+  String(cmp).trim(),
+
+  cleanRow["jc_name"] ||
+  cleanRow["jc name"] ||
+  null,
+
+  cleanRow["jc code"] || 
+  cleanRow["jc_id"] ||
+  cleanRow["jc id"] ||
+  null,
+
+  cleanRow["jc_sap_id"] ||
+  cleanRow["jc sap id"] ||
+  null,
+
+  cleanRow["city"] || null,
+
+  cleanRow["site_type"] ||
+  cleanRow["site type"] ||
+  null,
+
+  cleanRow["device_type"] ||
+  cleanRow["device type"] ||
+  null,
+
+  cleanRow["total_cnum_count"] ||
+  cleanRow["total cnum count"] ||
+  null,
+
+  cleanRow["total_outage"] ||
+  cleanRow["total outage"] ||
+  null,
+
+  cleanRow["total_availability"] ||   
+  cleanRow["total availability"] ||
+  null,
+
+  cleanRow["cells_up"] ||
+  cleanRow["cells up"] ||
+  null,
+
+  date,
+]);
+  });
+
+  return { insertRows, errors };
+};
+
+ function parseHpodscRows(rows, fallbackDate, fileId) {
+
+  const insertRows = [];
+  const errors = [];
+
+  rows.forEach((row, index) => {
+
+    const cleanRow = {};
+
+    Object.keys(row).forEach((key) => {
+
+      const normalizedKey = key
+        .toString()
+        .trim()
+        .toLowerCase()
+        .replace(/[\s_]+/g, " ");
+
+      cleanRow[normalizedKey] = row[key];
+    });
+
+    const circle =
+      cleanRow["circle"] ||
+      cleanRow["circle name"];
+
+    const cmp =
+      cleanRow["cmp"] ||
+      cleanRow["cmp name"];
+
+    const date = normalizeDate(fallbackDate);
+
+    if (!circle || !cmp) {
+      errors.push(index + 2);
+      return;
+    }
+
+    insertRows.push([
+
+      fileId,
+
+      cleanRow["sap id"] || null,
+
+      String(circle).trim(),
+
+      String(cmp).trim(),
+
+      cleanRow["jc name"] || null,
+
+      cleanRow["jc code"] || null,
+
+      cleanRow["jc sap id"] || null,
+
+      cleanRow["city"] || null,
+
+      cleanRow["site type"] || null,
+
+      cleanRow["device type"] || null,
+
+      cleanRow["integration state"] || null,
+
+      cleanRow["total cnum count"] || null,
+
+      cleanRow["total outage"] || null,
+
+      cleanRow["total availability"] || null,
+
+      cleanRow["cells up"] || null,
+
+      date
+    ]);
+  });
+
+  return { insertRows, errors };
+}
 
           const readWorksheetRows = (fileBuffer) => {
 
@@ -954,12 +1155,21 @@ if (availability <= 1) {
           }
 
           // 🔥 HPODSC Upload
-          else if (normalizedSiteType === "hpodsc") {
-            await ensureHpodscTable();
-            const { insertRows } = parseHpodscRows(rows, date, fileId);
+        else if (normalizedSiteType === "hpodsc") {
 
-            await insertHpodscRows(insertRows);
-          }
+  await ensureHpodscTable();
+
+  const { insertRows, errors } =
+    parseHpodscRows(rows, date, fileId);
+
+  if (errors.length) {
+    return res.status(400).json({
+      message: `Missing required fields in rows: ${errors.join(", ")}`
+    });
+  }
+
+  await insertHpodscRows(insertRows);
+} 
 
           // 🔥 ISC Upload  ✅ CORRECT PLACE
           else if (normalizedSiteType === "isc") {
@@ -1074,17 +1284,32 @@ if (availability <= 1) {
                 cleanRow["cmp name"] ||
                 pickByPrefix(cleanRow, "cmp");
 
+                const sapId =
+  cleanRow["sap id"] ||
+  cleanRow["sap_id"];
+
+const jcName =
+  cleanRow["jc name"] ||
+  cleanRow["jc_name"];
+
+const jcId =
+  cleanRow["jc id"] ||
+  cleanRow["jc_id"];
+
             const dateValue = normalizeDate(date);
 
               if (!circle || !cmp) return;
 
               insertRows.push([
-                fileId,
-                String(circle).trim(),
-                String(cmp).trim(),
-                dateValue,
-                1,
-              ]);
+  fileId,
+  String(circle).trim(),
+  String(cmp).trim(),
+  dateValue,
+  1,
+  sapId || null,
+  jcName || null,
+  jcId || null
+]);
             });
 
             if (!insertRows.length) {
@@ -1181,7 +1406,7 @@ if (availability <= 1) {
     report_type,
     upload_type,
     uploadedBy,
-    file.filename,
+    file.originalname,
     fileId,
     totalRecords
   ]);
@@ -1189,7 +1414,7 @@ if (availability <= 1) {
                 res.status(200).json({
                   success: true,
                   message: "File uploaded successfully",
-                  file: file.filename,
+                  file: file.originalname,
                 });
               } catch (error) {
                 console.error(error);
@@ -1388,10 +1613,10 @@ if (availability <= 1) {
                   report_type,
                   "bulk",
                   uploadedBy,
-                  file.filename,
+                  file.originalname,
                   fileId,      
                   totalRecords,
-                  new Date()
+                  new Date()  
                   ]);
                 }
 
@@ -1454,16 +1679,16 @@ router.get("/download/:id", async (req, res) => {
 
     const siteType = uploadRows[0].site_type.toLowerCase();
 
-    const fileId = uploadRows[0].file_id;
+    const fileId = String(uploadRows[0].file_id);
 
-    const rows = await query(
-      `
-      SELECT *
-      FROM ${siteType}
-      WHERE file_id = ?
-      `,
-      [fileId]
-    );
+   const rows = await query(
+  `
+  SELECT *
+  FROM ${siteType}
+  WHERE CAST(file_id AS CHAR) = ?
+  `,
+  [String(fileId)]
+);
 
     if (!rows.length) {
       return res.status(404).json({

@@ -18,6 +18,7 @@ import BillingStatus from "./pages/BillingStatus";
 import BillingDashboard from "./pages/BillingDashboard";
 import Revenue from "./pages/Revenue";
 import HrDashboard from "./pages/HrDashboard";
+import Signoff from "./pages/Signoff";
 
 function App() {
   return (
@@ -86,6 +87,11 @@ function App() {
     <HrDashboard />
   </ProtectedRoute>
 } />
+
+<Route
+  path="/dashboard/manpower/signoff"
+  element={<Signoff />}
+/>
 
   {/* Users */}
   <Route path="users-access" element={

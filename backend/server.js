@@ -71,6 +71,7 @@ registerRoute("./routes/physicalRoutes", "/api/physical");
 registerRoute("./routes/uptimeRoutes", "/api/site-uptime");
 registerRoute("./routes/reportRoutes", "/api/reports");
 registerRoute("./routes/accessRoutes", "/api/access");
+registerRoute("./routes/signoff", "/api/signoff");
 registerRoute("./routes/nsoRoutes", "/api/nso"); 
 registerRoute("./routes/fiberRoutes", "/api/fiber");
 registerRoute("./routes/revenue", "/api/revenue");

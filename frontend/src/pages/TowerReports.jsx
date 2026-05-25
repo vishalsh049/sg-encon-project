@@ -59,8 +59,7 @@ function TowerReports() {
         { value: "HPODSC", label: "HPODSC" },
         { value: "OSC", label: "OSC" },
         { value: "GSC", label: "GSC", permission: "site.GSC" },
-        { value: "ISC", label: "ISC" },
-        { value: "WIFI", label: "WIFI", permission: "site.WIFI" },
+        
       ].filter((site) => !site.permission || hasPermission(site.permission)),
     []
   );
@@ -654,14 +653,11 @@ const latestReportDate = useMemo(() => {
             </div>
 
             <div className="rounded-[24px] border border-white/80 bg-white/85 p-5 shadow-soft backdrop-blur-xl">
-              <div className="mb-4 flex items-center gap-2 text-xs uppercase tracking-[0.28em] text-slate-500">
-                <Search size={14} />
-                Search & Filters
-              </div>
+             
               <div className="space-y-4">
                 <div>
-                  <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-                    Search Reports
+                  <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.06em] text-slate-500">
+                    Search Reports, Date, Reports, Site Types, Uploaded By... 
                   </label>
                   <div className="flex h-11 items-center gap-3 overflow-hidden rounded-2xl border border-slate-200/70 bg-white px-3 text-sm text-slate-700 shadow-[0_14px_30px_rgba(15,23,42,0.06)] transition focus-within:ring-2 focus-within:ring-sky-200">
                     <Search size={16} className="text-slate-400" />
