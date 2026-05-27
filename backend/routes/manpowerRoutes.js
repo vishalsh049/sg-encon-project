@@ -712,7 +712,7 @@ VALUES ?
     });
   });
 
-   router.get("/scrum/job-role-summary", (req, res) => {
+  router.get("/scrum/job-role-summary", (req, res) => {
   const { whereClause, params } = buildScrumFilterClause(req);
 
   const sql = `
@@ -763,5 +763,103 @@ END AS category,
     res.json(result);
   });
 });
+
+  router.get("/scrum/cmp-role-count", (req, res) => {
+    if (!isConnected()) {
+      return res.status(503).json({ success: false, message: "DB not connected" });
+    }
+
+    const { whereClause, params } = buildScrumFilterClause(req);
+
+    const sql = `
+      SELECT
+        cmp,
+        role_key,
+        COUNT(*) AS total
+      FROM (
+        SELECT
+          maintenance_point AS cmp,
+          CASE
+            WHEN normalized_job_role IN ('stateleadershipteam', 'stateleadership') THEN 'state_leadership_team'
+            WHEN normalized_job_role = 'nocexecutive' THEN 'noc_executive'
+            WHEN normalized_job_role = 'analyst' THEN 'analyst'
+            WHEN normalized_job_role = 'cmplead' THEN 'cmp_lead'
+            WHEN normalized_job_role = 'technician' THEN 'technician'
+            WHEN normalized_job_role = 'rigger' THEN 'rigger'
+            WHEN normalized_job_role = 'utilitysupervisor' THEN 'utility_supervisor'
+            WHEN normalized_job_role = 'utilityengineer' THEN 'utility_engineer'
+            WHEN normalized_job_role = 'ispengineer' THEN 'isp_engineer'
+            WHEN normalized_job_role IN ('warehouseinchargecumsecurity', 'whinchargecumsecurity') THEN 'wh_incharge_cum_security'
+            WHEN normalized_job_role = 'splicer' THEN 'splicer'
+            WHEN normalized_job_role = 'assistantsplicer' THEN 'assistant_splicer'
+            WHEN normalized_job_role IN ('fiberhelper', 'fibrehelper') THEN 'fiber_helper'
+            WHEN normalized_job_role = 'patroller' THEN 'patroller'
+            WHEN normalized_job_role IN ('fibersupervisor', 'fibresupervisor') THEN 'fiber_supervisor'
+            WHEN normalized_job_role IN ('fiberengineer', 'fibreengineer') THEN 'fibre_engineer'
+            WHEN normalized_job_role = 'fttxsplicer' THEN 'fttx_splicer'
+            WHEN normalized_job_role = 'fttxassistantsplicer' THEN 'fttx_assistant_splicer'
+            WHEN normalized_job_role = 'fttxsupervisor' THEN 'fttx_supervisor'
+            WHEN normalized_job_role = 'fttxhelper' THEN 'fttx_helper'
+            WHEN normalized_job_role = 'fttxengineer' THEN 'fttx_engineer'
+            WHEN normalized_job_role = 'fttxtechnician' THEN 'fttx_technician'
+            WHEN normalized_job_role = 'technicianb' THEN 'technicianb'
+            WHEN normalized_job_role = 'riggerb' THEN 'riggerb'
+            ELSE NULL
+          END AS role_key
+        FROM (
+          SELECT
+            maintenance_point,
+            LOWER(
+              REPLACE(
+                REPLACE(
+                  REPLACE(
+                    REPLACE(TRIM(job_role), ' ', ''),
+                    '-',
+                    ''
+                  ),
+                  '_',
+                  ''
+                ),
+                '.',
+                ''
+              )
+            ) AS normalized_job_role
+          FROM scrum_manpower
+          ${whereClause}
+            AND upload_batch_id = (
+              SELECT upload_batch_id
+              FROM scrum_manpower
+              ORDER BY uploaded_at DESC
+              LIMIT 1
+            )
+            AND UPPER(TRIM(COALESCE(status, ''))) = 'ACTIVE'
+            AND maintenance_point IS NOT NULL
+            AND maintenance_point != ''
+            AND job_role IS NOT NULL
+            AND job_role != ''
+        ) AS normalized_roles
+      ) AS role_counts
+      WHERE cmp IS NOT NULL
+        AND cmp != ''
+        AND role_key IS NOT NULL
+      GROUP BY cmp, role_key
+      ORDER BY cmp ASC, role_key ASC
+    `;
+
+    db.query(sql, params, (err, result) => {
+      if (err) {
+        console.log("SCRUM CMP ROLE COUNT ERROR:", err);
+        return res.status(500).json({
+          success: false,
+          message: "Error fetching scrum CMP role counts",
+        });
+      }
+
+      res.json({
+        success: true,
+        data: result || [],
+      });
+    });
+  });
 
     module.exports = router;

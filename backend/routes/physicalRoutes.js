@@ -112,7 +112,6 @@ async function ensurePhysicalTables() {
       aadhaar_no VARCHAR(50) DEFAULT NULL,
       uan_no VARCHAR(50) DEFAULT NULL,
       esic_ip_no VARCHAR(50) DEFAULT NULL,
-      esic_cmp VARCHAR(100) DEFAULT NULL,
       remarks TEXT DEFAULT NULL,
       created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
       report_id INT DEFAULT NULL,
@@ -152,7 +151,7 @@ async function ensurePhysicalTables() {
     ["aadhaar_no", "VARCHAR(50) DEFAULT NULL"],
     ["uan_no", "VARCHAR(50) DEFAULT NULL"],
     ["esic_ip_no", "VARCHAR(50) DEFAULT NULL"],
-    ["esic_cmp", "VARCHAR(100) DEFAULT NULL"],
+    
     ["remarks", "TEXT DEFAULT NULL"],
   ];
 
@@ -195,42 +194,179 @@ function toText(value) {
   return text ? text : null;
 }
 
+const circleCmpMap = {
+
+  Delhi: [
+    "Delhi SHQ",
+    "Delhi-1 (West)",
+    "Delhi-2 (South)",
+    "Delhi-3 (Central-East)",
+    "Delhi-4 (North)",
+    "Faridabad (NCR)",
+    "Ghaziabad (NCR)",
+    "Gurgaon (NCR)",
+    "Noida (NCR)",
+  ],
+
+  Haryana: [
+    "Haryana SHQ",
+    "Ambala",
+    "Hissar",
+    "Karnal",
+    "Panipat",
+    "Rewari",
+    "Rohtak",
+  ],
+
+  Punjab: [
+    "Punjab SHQ",
+    "Amritsar",
+    "Bathinda",
+    "Chandigarh",
+    "Jalandhar",
+    "Ludhiana-1",
+    "Ludhiana-2",
+    "Pathankot",
+    "Patiala",
+    "Sangrur",
+  ],
+
+  "UP East": [
+    "UP East SHQ",
+    "Allahabad",
+    "Azamgarh",
+    "Faizabad",
+    "Gorakhpur",
+    "Nanded",
+    "Raibareilly",
+    "Varanasi",
+  ],
+
+};
+
 function mapPhysicalRow(row, reportId) {
+
   return [
+
+    // report_id
     reportId,
+
+    // pprj_status
     toText(row["PPRJ Status"]),
-    toText(row["PPRJ code"]),
+
+    // pprj_code
+    toText(row["PPRJ Code"]),
+
+    // employee_code
     toText(row["Employee Code"]),
+
+    // employee_name
     toText(row["Employee Name"]),
+
+    // father_name
     toText(row["Father Name"]),
-    toText(row.Function),
-    toText(row["Job Role_Actual_CMP Verify"]),
+
+    // function_name
+    toText(row["Function"]),
+
+    // job_role_actual_cmp_verify
+    toText(row["Job Role Actual CMP Verify"]),
+
+    // job_role
     toText(row["Job Role"]),
+
+    // manpower_signoff_scope
     toText(row["Manpower SignOff Scope"]),
+
+    // scrum_job_role
     toText(row["Scrum Job Role"]),
-    toText(row.Circle),
-    toText(row.Cluster),
-    toText(row["Mobile number"]),
-    normalizeDate(row.DOB),
-    toNullableInt(row.AGE),
-    normalizeDate(row["Date of joining"]),
+
+    // circle
+    toText(row["Circle"]),
+
+    // cluster
+    toText(row["Cluster"]),
+
+    // mobile_number
+    toText(
+      row["Mobile number"] ||
+      row["Mobile Number"]
+    ),
+
+    // dob
+    normalizeDate(row["DOB"]),
+
+    // age
+    toNullableInt(
+      row["AGE"] ||
+      row["Age"]
+    ),
+
+    // date_of_joining
+    normalizeDate(
+      row["Date of joining"] ||
+      row["Date Of Joining"]
+    ),
+
+    // employment_status
     toText(row["Employment Status"]),
+
+    // resigned_date
     normalizeDate(row["Resigned Date"]),
+
+    // last_working_date
     normalizeDate(row["Last Working Date"]),
+
+    // rm_code
     toText(row["RM Code"]),
-    toText(row["Reporting manager"]),
-    toText(row["Company Email id"]),
+
+    // reporting_manager
+    toText(
+      row["Reporting manager"] ||
+      row["Reporting Manager"]
+    ),
+
+    // company_email_id
+    toText(
+      row["Company Email id"] ||
+      row["Company Email"]
+    ),
+
+    // laptop_status
     toText(row["Laptop Status"]),
+
+    // ifsc_code
     toText(row["IFSC Code"]),
-    toText(row["Bank Account No."]),
-    toText(row.PANNO),
-    toText(row["AADHAAR NO"]),
+
+    // bank_account_no
+    toText(
+      row["Bank Account No."] ||
+      row["Bank Account No"]
+    ),
+
+    // pan_no
+    toText(row["PAN No"]),
+
+    // aadhaar_no
+    toText(row["AADHAAR No"]),
+
+    // uan_no
     toText(row["UAN No"]),
-    toText(row["ESIC IP No "]),
-    toText(row["ESIC CMP"]),
-    toText(row.Remarks),
-    null,
+
+    // esic_ip_no
+    toText(
+      row["ESIC IP No "] ||
+      row["ESIC IP No"]
+    ),
+
+    // remarks
+    toText(row["Remarks"]),
+
+    // cmp
+    toText(row["CMP"]),
+
   ];
+
 }
 
 async function insertPhysicalRows(conn, reportId, rows) {
@@ -268,7 +404,6 @@ async function insertPhysicalRows(conn, reportId, rows) {
       aadhaar_no,
       uan_no,
       esic_ip_no,
-      esic_cmp,
       remarks,
       cmp
     ) VALUES ?
@@ -283,38 +418,30 @@ async function insertPhysicalRows(conn, reportId, rows) {
 }
 
 router.get("/", async (_req, res) => {
+
   try {
-    await ensurePhysicalTables();
 
-    const rows = await query(
-      `
-       SELECT
-  id,
-  employee_name,
-  employee_code,
-  circle,
-  job_role,
-  employment_status,
-  report_id
-FROM physical
-  ORDER BY report_date DESC, id DESC
-  LIMIT 1
-)
-ORDER BY id DESC
-      `
-    );
+    const rows = await query(`
+      SELECT * FROM physical
+      ORDER BY id DESC
+    `);
 
-    res.status(200).json({
+    res.json({
       success: true,
       data: rows,
     });
+
   } catch (error) {
-    console.error("Physical data fetch error:", error);
+
+    console.log(error);
+
     res.status(500).json({
       success: false,
-      message: "Server Error",
+      message: "Failed",
     });
+
   }
+
 });
 
 router.post("/upload-report", upload.single("file"), async (req, res) => {
@@ -364,6 +491,41 @@ if (!allowedExtensions.includes(fileExtension)) {
     const sheetName = workbook.SheetNames[0];
     const worksheet = workbook.Sheets[sheetName];
     const rows = XLSX.utils.sheet_to_json(worksheet, { defval: null });
+for (const row of rows) {
+
+  const circle = String(
+    row["Circle"] || ""
+  ).trim();
+
+  const cmp = String(
+    row["CMP"] || ""
+  ).trim();
+
+  // CHECK CIRCLE
+
+  if (!circleCmpMap[circle]) {
+
+    return res.status(400).json({
+      success: false,
+      message: `Invalid Circle: ${circle}`,
+    });
+
+  }
+
+  // CHECK CMP
+
+  if (
+    !circleCmpMap[circle].includes(cmp)
+  ) {
+
+    return res.status(400).json({
+      success: false,
+      message: `Invalid CMP "${cmp}" for Circle "${circle}"`,
+    });
+
+  }
+
+}
 
     if (!rows.length) {
       return res.status(400).json({
@@ -389,10 +551,10 @@ if (!allowedExtensions.includes(fileExtension)) {
         )
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       `,
-     [
+    [
   `physical_${Date.now()}.xlsx`,
   req.file.originalname,
-  null,
+  req.file.originalname,
   req.file.size,
         rows.length,
         reportDate,
@@ -429,6 +591,162 @@ if (!allowedExtensions.includes(fileExtension)) {
       conn.release();
     }
   }
+});
+
+router.post("/add-employee", async (req, res) => {
+
+ try {
+
+  const data = req.body;
+
+  // VALIDATE CIRCLE
+
+  if (!circleCmpMap[data.circle]) {
+
+    return res.status(400).json({
+      success: false,
+      message: "Invalid Circle",
+    });
+
+  }
+
+  // VALIDATE CMP
+
+  if (
+    !circleCmpMap[data.circle].includes(
+      data.cmp
+    )
+  ) {
+
+    return res.status(400).json({
+      success: false,
+      message: "Invalid CMP for selected Circle",
+    });
+
+  }
+
+    // DUPLICATE CHECK
+
+    const existingEmployee = await query(
+      `
+      SELECT id
+      FROM physical
+      WHERE aadhaar_no = ?
+      LIMIT 1
+      `,
+      [data.aadhaar_no]
+    );
+
+    if (existingEmployee.length > 0) {
+
+      return res.status(400).json({
+        success: false,
+        message:
+          "Employee already exists with this Aadhaar Number",
+      });
+
+    }
+
+    await query(
+      `
+      INSERT INTO physical (
+
+        circle,
+        cmp,
+        pprj_status,
+        pprj_code,
+        employee_code,
+        employee_name,
+        father_name,
+        function_name,
+        job_role_actual_cmp_verify,
+        job_role,
+        manpower_signoff_scope,
+        scrum_job_role,
+        cluster,
+        mobile_number,
+        dob,
+        age,
+        date_of_joining,
+        employment_status,
+        resigned_date,
+        last_working_date,
+        rm_code,
+        reporting_manager,
+        company_email_id,
+        laptop_status,
+        ifsc_code,
+        bank_account_no,
+        pan_no,
+        aadhaar_no,
+        uan_no,
+        esic_ip_no,
+        remarks
+
+      )
+
+      VALUES (
+
+        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+        ?
+
+      )
+      `,
+      [
+
+        data.circle || "",
+        data.cmp || "",
+        data.pprj_status || "",
+        data.pprj_code || "",
+        data.employee_code || "",
+        data.employee_name || "",
+        data.father_name || "",
+        data.function_name || "",
+        data.job_role_actual_cmp_verify || "",
+        data.job_role || "",
+        data.manpower_signoff_scope || "",
+        data.scrum_job_role || "",
+        data.cluster || "",
+        data.mobile_number || "",
+        data.dob || null,
+        data.age || null,
+        data.date_of_joining || null,
+        data.employment_status || "",
+        data.resigned_date || null,
+        data.last_working_date || null,
+        data.rm_code || "",
+        data.reporting_manager || "",
+        data.company_email_id || "",
+        data.laptop_status || "",
+        data.ifsc_code || "",
+        data.bank_account_no || "",
+        data.pan_no || "",
+        data.aadhaar_no || "",
+        data.uan_no || "",
+        data.esic_ip_no || "",
+        data.remarks || ""
+
+      ]
+    );
+
+    res.json({
+      success: true,
+      message: "Employee added successfully"
+    });
+
+  } catch (error) {
+
+    console.log(error);
+
+    res.status(500).json({
+      success: false,
+      message: "Server Error"
+    });
+
+  }
+
 });
 
 router.get("/reports", async (_req, res) => {
@@ -507,6 +825,44 @@ router.delete("/delete-report/:id", async (req, res) => {
   }
 });
 
+router.delete("/delete-employee/:id", async (req, res) => {
+
+  const id = Number(req.params.id);
+
+  if (!Number.isInteger(id) || id <= 0) {
+
+    return res.status(400).json({
+      success: false,
+      message: "Invalid Employee ID",
+    });
+
+  }
+
+  try {
+
+    await query(
+      `DELETE FROM physical WHERE id = ?`,
+      [id]
+    );
+
+    res.status(200).json({
+      success: true,
+      message: "Employee deleted successfully",
+    });
+
+  } catch (error) {
+
+    console.error("Employee delete error:", error);
+
+    res.status(500).json({
+      success: false,
+      message: "Server Error",
+    });
+
+  }
+
+});
+
 router.get("/download/:id", async (req, res) => {
 
   const reportId = Number(req.params.id);
@@ -545,7 +901,6 @@ router.get("/download/:id", async (req, res) => {
     aadhaar_no,
     uan_no,
     esic_ip_no,
-    esic_cmp,
     remarks
   FROM physical
   WHERE report_id = ?
@@ -604,33 +959,26 @@ router.get("/job-role-count", async (_req, res) => {
 
   try {
 
-   const rows = await query(`
- SELECT 
-  TRIM(
-    SUBSTRING_INDEX(
-      REPLACE(job_role, '-', ' '),
-      ' ',
-      1
-    )
-  ) as role_group,
+ const rows = await query(`
+  SELECT 
+    TRIM(
+      SUBSTRING_INDEX(
+        REPLACE(job_role, '-', ' '),
+        ' ',
+        1
+      )
+    ) as role_group,
 
-  COUNT(*) as total
+    COUNT(*) as total
 
-FROM physical
+  FROM physical
 
-WHERE report_id = (
-  SELECT id
-  FROM physical_reports
-  ORDER BY report_date DESC, id DESC
-  LIMIT 1
-)
+  WHERE job_role IS NOT NULL
+  AND job_role != ''
 
-AND job_role IS NOT NULL
-AND job_role != ''
+  GROUP BY role_group
 
-GROUP BY role_group
-
-ORDER BY total DESC
+  ORDER BY total DESC
 `);
 
     res.status(200).json({
@@ -655,25 +1003,18 @@ router.get("/circle-count", async (_req, res) => {
 
   try {
 
-    const rows = await query(`
- SELECT
-  circle,
-  COUNT(*) as total
-FROM physical
+  const rows = await query(`
+  SELECT
+    circle,
+    COUNT(*) as total
+  FROM physical
 
-WHERE report_id = (
-  SELECT id
-  FROM physical_reports
-  ORDER BY report_date DESC, id DESC
-  LIMIT 1
-)
+  WHERE circle IS NOT NULL
+  AND circle != ''
 
-AND circle IS NOT NULL
-AND circle != ''
-
-GROUP BY circle
-ORDER BY total DESC
-    `);
+  GROUP BY circle
+  ORDER BY total DESC
+`);
 
     res.status(200).json({
       success: true,
@@ -697,25 +1038,18 @@ router.get("/employment-status-count", async (_req, res) => {
 
   try {
 
-    const rows = await query(`
-      SELECT
-  employment_status,
-  COUNT(*) as total
-FROM physical
+  const rows = await query(`
+  SELECT
+    employment_status,
+    COUNT(*) as total
+  FROM physical
 
-WHERE report_id = (
-  SELECT id
-  FROM physical_reports
-  ORDER BY report_date DESC, id DESC
-  LIMIT 1
-)
+  WHERE employment_status IS NOT NULL
+  AND employment_status != ''
 
-AND employment_status IS NOT NULL
-AND employment_status != ''
-
-GROUP BY employment_status
-ORDER BY total DESC
-    `);
+  GROUP BY employment_status
+  ORDER BY total DESC
+`);
 
     res.status(200).json({
       success: true,
@@ -840,5 +1174,245 @@ router.get("/job-role-document-average", async (_req, res) => {
   }
 
 });
+
+router.get("/active-job-role-cmp-count", async (_req, res) => {
+
+  try {
+
+    const rows = await query(`
+SELECT
+  cmp,
+  role_key,
+  COUNT(*) AS total
+FROM (
+  SELECT
+    cmp,
+    CASE
+      WHEN normalized_job_role IN ('stateleadershipteam', 'stateleadership') THEN 'state_leadership_team'
+      WHEN normalized_job_role = 'nocexecutive' THEN 'noc_executive'
+      WHEN normalized_job_role = 'analyst' THEN 'analyst'
+      WHEN normalized_job_role = 'cmplead' THEN 'cmp_lead'
+      WHEN normalized_job_role = 'technician' THEN 'technician'
+      WHEN normalized_job_role = 'rigger' THEN 'rigger'
+      WHEN normalized_job_role = 'utilitysupervisor' THEN 'utility_supervisor'
+      WHEN normalized_job_role = 'utilityengineer' THEN 'utility_engineer'
+      WHEN normalized_job_role = 'ispengineer' THEN 'isp_engineer'
+      WHEN normalized_job_role = 'whinchargecumsecurity' THEN 'wh_incharge_cum_security'
+      WHEN normalized_job_role = 'splicer' THEN 'splicer'
+      WHEN normalized_job_role = 'assistantsplicer' THEN 'assistant_splicer'
+      WHEN normalized_job_role IN ('fiberhelper', 'fibrehelper') THEN 'fiber_helper'
+      WHEN normalized_job_role = 'patroller' THEN 'patroller'
+      WHEN normalized_job_role IN ('fibersupervisor', 'fibresupervisor') THEN 'fiber_supervisor'
+      WHEN normalized_job_role IN ('fiberengineer', 'fibreengineer') THEN 'fibre_engineer'
+      WHEN normalized_job_role = 'fttxsplicer' THEN 'fttx_splicer'
+      WHEN normalized_job_role = 'fttxassistantsplicer' THEN 'fttx_assistant_splicer'
+      WHEN normalized_job_role = 'fttxsupervisor' THEN 'fttx_supervisor'
+      WHEN normalized_job_role = 'fttxhelper' THEN 'fttx_helper'
+      WHEN normalized_job_role = 'fttxengineer' THEN 'fttx_engineer'
+      WHEN normalized_job_role = 'fttxtechnician' THEN 'fttx_technician'
+      WHEN normalized_job_role = 'technicianb' THEN 'technicianb'
+      WHEN normalized_job_role = 'riggerb' THEN 'riggerb'
+      ELSE NULL
+    END AS role_key
+  FROM (
+    SELECT
+      cmp,
+      LOWER(
+        REPLACE(
+          REPLACE(
+            REPLACE(
+              REPLACE(TRIM(job_role), ' ', ''),
+              '-',
+              ''
+            ),
+            '_',
+            ''
+          ),
+          '.',
+          ''
+        )
+      ) AS normalized_job_role
+    FROM physical
+    WHERE report_id = (
+      SELECT id
+      FROM physical_reports
+      ORDER BY report_date DESC, id DESC
+      LIMIT 1
+    )
+      AND LOWER(TRIM(COALESCE(employment_status, ''))) = 'active'
+      AND cmp IS NOT NULL
+      AND cmp != ''
+      AND job_role IS NOT NULL
+      AND job_role != ''
+  ) AS normalized_roles
+) AS role_counts
+WHERE role_key IS NOT NULL
+GROUP BY cmp, role_key
+ORDER BY cmp ASC, role_key ASC
+
+    `);
+
+    res.status(200).json({
+      success: true,
+      data: rows,
+    });
+
+  } catch (error) {
+
+    console.error(error);
+
+    res.status(500).json({
+      success: false,
+      message: "Server Error",
+    });
+
+  }
+
+});
+
+router.get(
+  "/aadhaar/:aadhaar",
+  async (req, res) => {
+
+    try {
+
+      const rows = await query(
+        `
+        SELECT *
+        FROM physical
+        WHERE aadhaar_no = ?
+        LIMIT 1
+        `,
+        [req.params.aadhaar]
+      );
+
+      if (rows.length === 0) {
+
+        return res.json({
+          success: false,
+        });
+
+      }
+
+      res.json({
+        success: true,
+        data: rows[0],
+      });
+
+    } catch (error) {
+
+      console.log(error);
+
+      res.status(500).json({
+        success: false,
+      });
+
+    }
+
+  }
+);
+
+router.put(
+  "/update-employee/:id",
+  async (req, res) => {
+
+    try {
+
+      const data = req.body;
+
+     await query(
+  `
+  UPDATE physical
+  SET
+
+    circle = ?,
+    cmp = ?,
+    pprj_status = ?,
+    pprj_code = ?,
+    employee_code = ?,
+    employee_name = ?,
+    father_name = ?,
+    function_name = ?,
+    job_role_actual_cmp_verify = ?,
+    job_role = ?,
+    manpower_signoff_scope = ?,
+    scrum_job_role = ?,
+    cluster = ?,
+    mobile_number = ?,
+    dob = ?,
+    age = ?,
+    date_of_joining = ?,
+    employment_status = ?,
+    resigned_date = ?,
+    last_working_date = ?,
+    rm_code = ?,
+    reporting_manager = ?,
+    company_email_id = ?,
+    laptop_status = ?,
+    ifsc_code = ?,
+    bank_account_no = ?,
+    pan_no = ?,
+    aadhaar_no = ?,
+    uan_no = ?,
+    esic_ip_no = ?,
+    remarks = ?
+
+  WHERE id = ?
+  `,
+  [
+
+    data.circle || "",
+    data.cmp || "",
+    data.pprj_status || "",
+    data.pprj_code || "",
+    data.employee_code || "",
+    data.employee_name || "",
+    data.father_name || "",
+    data.function_name || "",
+    data.job_role_actual_cmp_verify || "",
+    data.job_role || "",
+    data.manpower_signoff_scope || "",
+    data.scrum_job_role || "",
+    data.cluster || "",
+    data.mobile_number || "",
+    data.dob || null,
+    data.age || null,
+    data.date_of_joining || null,
+    data.employment_status || "",
+    data.resigned_date || null,
+    data.last_working_date || null,
+    data.rm_code || "",
+    data.reporting_manager || "",
+    data.company_email_id || "",
+    data.laptop_status || "",
+    data.ifsc_code || "",
+    data.bank_account_no || "",
+    data.pan_no || "",
+    data.aadhaar_no || "",
+    data.uan_no || "",
+    data.esic_ip_no || "",
+    data.remarks || "",
+
+    req.params.id,
+
+  ]
+);
+
+      res.json({
+        success: true,
+      });
+
+    } catch (error) {
+
+      console.log(error);
+
+      res.status(500).json({
+        success: false,
+      });
+
+    }
+
+  }
+);
 
 module.exports = router;

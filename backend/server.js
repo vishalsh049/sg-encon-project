@@ -23,7 +23,9 @@ function resolveEnvFile() {
 }
 
 const envPath = resolveEnvFile();
-dotenv.config(); 
+dotenv.config({
+  path: envPath,
+});
 console.log("Using ENV file:", envPath || "(process env only)");
 
 const express = require("express");
@@ -68,6 +70,7 @@ registerRoute("./routes/dashboardRoutes", "/api/dashboard");
 registerRoute("./routes/siteRoutes", "/api/sites");
 registerRoute("./routes/manpowerRoutes", "/api/manpower");
 registerRoute("./routes/physicalRoutes", "/api/physical");
+registerRoute("./routes/hrDashboard", "/api/physical");
 registerRoute("./routes/uptimeRoutes", "/api/site-uptime");
 registerRoute("./routes/reportRoutes", "/api/reports");
 registerRoute("./routes/accessRoutes", "/api/access");
@@ -79,6 +82,7 @@ registerRoute("./routes/kpidashboard", "/api");
 registerRoute("./routes/meRoute", "/api");
 registerRoute("./routes/billingStatus", "/api");
 registerRoute("./routes/billingDashboard", "/api/billing");
+registerRoute("./routes/newJoiningRoutes", "/api/new-joining");
 
 // Test Route
 app.get("/api", (req, res) => {
