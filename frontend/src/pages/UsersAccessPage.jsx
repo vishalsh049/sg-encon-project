@@ -62,12 +62,13 @@ const pageAccessList = [
 
 {
   title: "Manpower",
-  pages: [
-   "HR Dashboard",
-   "Physical",
-   "Scrum",
-   "Signoff",
-   ],
+ pages: [
+ "HR Dashboard",
+ "Physical",
+ "Scrum",
+ "New Joining",
+ "Signoff",
+],
 },
 
   {
@@ -461,7 +462,7 @@ if (sessionUser?.id === editingUser.id) {
       <div className="app-surface overflow-hidden p-6">
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
-            <h1 className="text-3xl font-semibold text-text-primary">
+            <h1 className="text-xl font-semibold text-text-primary">
               Users & Access
             </h1>
           </div>

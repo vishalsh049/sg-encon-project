@@ -2,6 +2,7 @@ import { useState } from "react";
 import axios from "axios";
 import { buildApiUrl } from "../lib/api";
 import { setStoredSession } from "../lib/session";
+import { getPageDisplayName } from "../lib/pageMap";
 
 const pageRouteMap = {
   Dashboard: "/dashboard",
@@ -19,7 +20,44 @@ const pageRouteMap = {
   "Fiber Reports": "/dashboard/reports/fiber/inventory",
   Users: "/dashboard/users-access",
   "Roles & Permissions": "/dashboard/users-access",
+  "HR Dashboard": "/dashboard/hr-dashboard",
+  Signoff: "/dashboard/manpower/signoff",
 };
+
+function getLoginRedirectPath(user) {
+  const rawPageAccess = Array.isArray(user?.pageAccess) ? user.pageAccess : [];
+  const viewablePagePermissions = Array.isArray(user?.pagePermissions)
+    ? user.pagePermissions
+        .filter((permission) => permission?.view)
+        .map((permission) => permission.page)
+    : [];
+
+  const allowedPages = rawPageAccess.length > 0 ? rawPageAccess : viewablePagePermissions;
+
+  if (allowedPages.length === 0) {
+    return "/dashboard";
+  }
+
+  const normalizedAllowedPages = allowedPages.map((page) =>
+    String(getPageDisplayName(page) || page || "").trim().toLowerCase()
+  );
+
+  if (normalizedAllowedPages.includes("dashboard")) {
+    return "/dashboard";
+  }
+
+  const firstAllowedRoute = allowedPages.find((page) => {
+    const displayName = getPageDisplayName(page);
+    return pageRouteMap[displayName] || pageRouteMap[page];
+  });
+
+  if (!firstAllowedRoute) {
+    return "/dashboard";
+  }
+
+  const displayName = getPageDisplayName(firstAllowedRoute);
+  return pageRouteMap[displayName] || pageRouteMap[firstAllowedRoute] || "/dashboard";
+}
 
 function Login() {
   const [email, setEmail] = useState("");
@@ -51,12 +89,7 @@ const handleLogin = async (e) => {
        roleName: res.data.user?.roleName || "Admin",
        permissions: res.data.user?.permissions || ["dashboard.view"],
      });
-     const firstAllowedPage = Array.isArray(res.data.user?.pageAccess)
-       ? res.data.user.pageAccess.find((page) => pageRouteMap[page])
-       : null;
-     window.location.href = firstAllowedPage
-       ? pageRouteMap[firstAllowedPage]
-       : "/dashboard";
+     window.location.href = getLoginRedirectPath(res.data.user);
      return;
    } 
 

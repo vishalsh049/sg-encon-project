@@ -19,6 +19,7 @@ import BillingDashboard from "./pages/BillingDashboard";
 import Revenue from "./pages/Revenue";
 import HrDashboard from "./pages/HrDashboard";
 import Signoff from "./pages/Signoff";
+import NewJoining from "./pages/NewJoining";
 
 function App() {
   return (
@@ -79,6 +80,12 @@ function App() {
   <Route path="manpower/scrum" element={
     <ProtectedRoute page={"Scrum"}>
       <Scrum />
+    </ProtectedRoute>
+  } />
+
+  <Route path="manpower/new-joining" element={
+    <ProtectedRoute page={"New Joining"}>
+      <NewJoining />
     </ProtectedRoute>
   } />
 

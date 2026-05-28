@@ -297,8 +297,8 @@ const latestUploads = uploads.filter(
 
   return (
     <div className="min-h-screen text-slate-900">
-     <div className="w-full space-y-3">  
-<section className="relative overflow-hidden rounded-[28px] border border-slate-200 bg-white p-3 sm:p-4 md:rounded-[32px] md:p-5">          <div className="relative grid gap-6 xl:grid-cols-1">
+     <div className="w-full space-y-2">  
+      <section className="relative overflow-hidden rounded-[28px] border border-slate-200 bg-white p-3 sm:p-4 md:rounded-[32px] md:p-5">          <div className="relative grid gap-6 xl:grid-cols-1">
             <div className="space-y-3 relative">
                <button
                 onClick={() => {
@@ -306,7 +306,7 @@ const latestUploads = uploads.filter(
                   setUploadDate(new Date().toISOString().slice(0, 10));
                    }}
   className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-cyan-600 px-4 py-2 text-sm font-medium text-white shadow hover:bg-cyan-700 sm:absolute sm:right-0 sm:top-0 sm:w-auto"
->
+> 
               <UploadCloud size={16} />
                Upload Excel
               </button>
@@ -316,19 +316,13 @@ const latestUploads = uploads.filter(
               </div>
 
               <div className="max-w-2xl">
-               <h1 className="text-xl font-semibold tracking-tight text-slate-900 md:text-2xl leading-tight">
+               <h1 className="text-lg font-semibold tracking-tight text-slate-900 md:text-xl leading-tight">
                   Complete visibility into scrum manpower operations
                 </h1>
-                <p className="mt-2 max-w-2xl text-sm leading-5 text-slate-600">
+                <p className="mt-1 max-w-2xl text-sm leading-5 text-slate-600">
                   Track workforce activity, refine views instantly, and manage upload history from one unified workspace.
                 </p>
-                <div className="mt-4 rounded-2xl border border-orange-200 bg-orange-50 p-4 text-sm text-orange-900 shadow-sm">
-                  <p className="font-semibold">Warning:</p>
-                  <p className="mt-1">
-                    Uploaded files are stored on the server disk. If a file is removed manually after upload, it cannot be recovered even if its database record remains.
-                    Keep a backup copy and re-upload missing files if needed.
-                  </p>
-                </div>
+                
               </div>
           
               <div className="grid gap-2 sm:grid-cols-2 min-[1024px]:grid-cols-4">
@@ -365,30 +359,30 @@ const latestUploads = uploads.filter(
                 ].map(({ label, value, note, icon: Icon, chip }) => (
                   <div
                     key={label}
-                    className="rounded-[22px] bg-white border border-slate-200 p-4"
+                    className="rounded-[22px] bg-white border border-slate-200 px-4 py-2"
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div>
                         <p className="text-xs uppercase tracking-[0.18em] text-slate-400">
                           {label}
                         </p>
-                        <p className="mt-1 text-xl font-semibold text-slate-900">
+                        <p className="text-xl font-semibold text-slate-900">
                           {value}
                         </p>
                       </div>
                       <div
-                        className={`flex h-9 w-9 items-center justify-center rounded-2xl ${chip}`}
+                        className={`flex h-8 w-8 items-center justify-center rounded-2xl ${chip}`}
                       >
-                        <Icon size={16} />
+                        <Icon size={14} />
                       </div>
                     </div>
-                    <p className="mt-1 text-sm text-slate-400">{note}</p>
+                    <p className="text-sm text-slate-400">{note}</p>
                   </div>
                 ))}
               </div>
 
-<div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
-  <div className="flex items-center justify-between mb-2">
+<div className="mt-2 rounded-2xl border border-slate-200 bg-white px-4 py-2">
+  <div className="flex items-center justify-between mb-1">
   <h3 className="text-md font-semibold">
     Job Roles
   </h3>
@@ -398,12 +392,12 @@ const latestUploads = uploads.filter(
   </span>
 </div>
 
-  <div className="grid grid-cols-1 gap-2 min-[1024px]:grid-cols-4 max-h-[180px]
+  <div className="grid grid-cols-1 gap-2 min-[1024px]:grid-cols-6 max-h-[120px]
    overflow-y-auto hide-scrollbar">
     {roleSummary.map((item) => (
       <div
         key={item.category}
-        className="flex justify-between text-sm bg-slate-50 px-2 py-1.5 rounded-lg"
+        className="flex justify-between text-sm bg-slate-50 px-2 py-1 rounded-lg"
       >
         <span className="text-slate-600 truncate">
           {item.category}
@@ -422,7 +416,7 @@ const latestUploads = uploads.filter(
           </div>
         </section>
 
-<section className="w-full rounded-2xl border border-slate-200 bg-white p-4">
+<section className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-2">
         <div className="grid gap-5 xl:grid-cols-1">
             <div className="space-y-4">
               <div className="flex flex-col gap-4 min-[1024px]:flex-row min-[1024px]:items-center
@@ -431,7 +425,7 @@ const latestUploads = uploads.filter(
                   <p className="text-xs uppercase tracking-[0.24em] text-slate-400">
                     Explore Workforce
                   </p>
-                  <h2 className=" text-xl font-semibold text-slate-900">
+                  <h2 className=" text-lg font-semibold text-slate-900">
                     Refine workforce view
                   </h2>
                 </div>
@@ -446,7 +440,7 @@ const latestUploads = uploads.filter(
                     placeholder="Search by name, role, or ID"
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
-                    className="h-10 w-full rounded-2xl border border-slate-200 bg-slate-50 pl-11 pr-4 text-sm text-slate-900 outline-none transition focus:border-cyan-400 focus:bg-white focus:ring-4 focus:ring-cyan-100"
+                    className="h-9 w-full rounded-2xl border border-slate-200 bg-slate-50 pl-10 pr-4 text-xs text-slate-900 outline-none transition focus:border-cyan-400 focus:bg-white focus:ring-4 focus:ring-cyan-100"
                   />
                 </div>
               </div>

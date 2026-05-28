@@ -47,6 +47,17 @@ const colorStyles = {
   },
 };
 
+const getBarHeight = (value) => {
+  const numericValue = Number(value);
+
+  if (!Number.isFinite(numericValue) || numericValue <= 0) {
+    return 8;
+  }
+
+  const normalizedValue = Math.min(Math.max(numericValue, 0), 100);
+  return Math.max(8, Math.round((normalizedValue / 100) * 140));
+};
+
 function KpiDashboard() {
   const [towerCards, setTowerCards] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -208,7 +219,7 @@ function KpiDashboard() {
         <div
           className={`w-4 rounded-full ${style.line}`}
           style={{
-           height: `${((height - 95) / 5) * 140 + 20}px`,
+           height: `${getBarHeight(height)}px`,
             minHeight: "8px",
             opacity: 0.9,
           }}

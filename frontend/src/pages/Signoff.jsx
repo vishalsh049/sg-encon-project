@@ -171,9 +171,28 @@ const totalUtility = rows.reduce(
         .includes(searchValue)
     );
 
-  const matchCircle =
-    !selectedCircle ||
-    row.circle === selectedCircle;
+const normalizeCircle = (value) => {
+
+  const normalized = value
+    ?.trim()
+    ?.toLowerCase();
+
+  if (
+    normalized === "Uttar Pradesh (East)" ||
+    normalized === "Up East"
+  ) {
+    return "upeast";
+  }
+
+  return normalized
+    ?.replace(/\s+/g, "");
+
+};
+
+const matchCircle =
+  !selectedCircle ||
+  normalizeCircle(row.circle) ===
+    normalizeCircle(selectedCircle);
 
   const matchCMP =
     !selectedCMP ||
@@ -186,14 +205,39 @@ const totalUtility = rows.reduce(
   );
 });
 
+const normalizeCircleName = (value) => {
+
+  const normalized = value
+    ?.trim()
+    ?.toLowerCase();
+
+  if (
+    normalized === "Uttar Pradesh (East)" ||
+    normalized === "Up East"
+  ) {
+    return "UP East";
+  }
+
+  return value;
+
+};
+
 const groupedRows = Object.entries(
   filteredRows.reduce((acc, row) => {
 
-    if (!acc[row.circle]) {
-      acc[row.circle] = [];
+    const normalizedCircle =
+      normalizeCircleName(
+        row.circle
+      );
+
+    if (!acc[normalizedCircle]) {
+      acc[normalizedCircle] = [];
     }
 
-    acc[row.circle].push(row);
+    acc[normalizedCircle].push({
+      ...row,
+      circle: normalizedCircle,
+    });
 
     return acc;
 
@@ -520,6 +564,65 @@ const exportCSV = () => {
       toast.error("Delete failed");
     }
   };
+
+  const categoryTotals = useMemo(() => {
+
+  return filteredRows.reduce(
+
+    (sum, row) => {
+
+      sum.admin +=
+        Number(row.state_leadership_team || 0) +
+        Number(row.noc_executive || 0) +
+        Number(row.analyst || 0) +
+        Number(row.cmp_lead || 0);
+
+      sum.utility +=
+        Number(row.technician || 0) +
+        Number(row.rigger || 0) +
+        Number(row.utility_supervisor || 0) +
+        Number(row.utility_engineer || 0) +
+        Number(row.isp_engineer || 0) +
+        Number(row.wh_incharge_cum_security || 0);
+
+      sum.fiber +=
+        Number(row.splicer || 0) +
+        Number(row.assistant_splicer || 0) +
+        Number(row.fiber_helper || 0) +
+        Number(row.patroller || 0) +
+        Number(row.fiber_supervisor || 0) +
+        Number(row.fibre_engineer || 0);
+
+      sum.fttx +=
+        Number(row.fttx_splicer || 0) +
+        Number(row.fttx_assistant_splicer || 0) +
+        Number(row.fttx_supervisor || 0) +
+        Number(row.fttx_helper || 0);
+
+        sum.fttxPo +=
+  Number(row.fttx_engineer || 0) +
+  Number(row.fttx_technician || 0);
+
+sum.bench +=
+  Number(row.technicianb || 0) +
+  Number(row.riggerb || 0);
+
+      return sum;
+
+    },
+
+   {
+  admin: 0,
+  utility: 0,
+  fiber: 0,
+  fttx: 0,
+  fttxPo: 0,
+  bench: 0,
+}
+
+  );
+
+}, [filteredRows]);
 
   return (
     <div className="min-h-screen space-y-3">
@@ -944,7 +1047,7 @@ const exportCSV = () => {
 
   <th
     colSpan={2}
-    className="border border-slate-500 px-4 py-2"
+    className="sticky left-0 z-50 min-w-[400px] border border-slate-500 bg-[#0b2945] px-4 py-2"
   />
 
   {/* ADMIN */}
@@ -952,7 +1055,7 @@ const exportCSV = () => {
     colSpan={4}
     className="border border-slate-500 px-4 py-2 text-center text-xs font-semibold"
   >
-    Admin
+    {`Admin (${categoryTotals.admin})`}
   </th>
 
   {/* UTILITY + ISP */}
@@ -960,7 +1063,7 @@ const exportCSV = () => {
     colSpan={6}
     className="border border-slate-500 px-4 py-2 text-center text-xs font-semibold"
   >
-    Utility and ISP
+    {`Utility and ISP (${categoryTotals.utility})`}
   </th>
 
   {/* FIBER */}
@@ -968,7 +1071,7 @@ const exportCSV = () => {
     colSpan={6}
     className="border border-slate-500 px-4 py-2 text-center text-xs font-semibold"
   >
-    Fiber
+    {`Fiber (${categoryTotals.fiber})`}
   </th>
 
   {/* FTTX */}
@@ -976,7 +1079,7 @@ const exportCSV = () => {
     colSpan={4}
     className="border border-slate-500 px-4 py-2 text-center text-xs font-semibold"
   >
-    FTTX
+    {`FTTX (${categoryTotals.fttx})`}
   </th>
 
   {/* FTTX PO BASED */}
@@ -984,7 +1087,7 @@ const exportCSV = () => {
     colSpan={2}
     className="border border-slate-500 px-4 py-2 text-center text-xs font-semibold"
   >
-    FTTX PO Based
+   {`FTTX PO Based (${categoryTotals.fttxPo})`}
   </th>
 
   {/* BENCH */}
@@ -992,7 +1095,7 @@ const exportCSV = () => {
     colSpan={2}
     className="border border-slate-500 px-4 py-2 text-center text-xs font-semibold"
   >
-    Bench Strength
+    {`Bench Strength (${categoryTotals.bench})`}
   </th>
 
 </tr>
@@ -1001,11 +1104,11 @@ const exportCSV = () => {
 
       <tr className="sticky bg-[#0d3557] text-white text-xs backdrop-blur-md">
 
-          <th className="border border-slate-500 px-4 py-2 whitespace-nowrap">
+          <th className="sticky left-0 z-50 border border-slate-500 bg-[#0d3557] px-4 py-2 whitespace-nowrap">
             Circle
           </th>
 
-          <th className="border border-slate-500 px-4 py-2 whitespace-nowrap">
+          <th className="sticky left-[180px] z-50 border border-slate-500 bg-[#0d3557] px-4 py-2 whitespace-nowrap">
             CMP
           </th>
 
@@ -1251,13 +1354,13 @@ const exportCSV = () => {
 
     <tr className="bg-slate-200 font-bold">
 
-      <td className="border border-slate-300 px-4 py-2">
-        {circle}
-      </td>
+        <td className="sticky left-0 z-20 min-w-[180px] border border-slate-300 bg-slate-200 px-4 py-2">
+          {circle}
+        </td>
 
-      <td className="border border-slate-300 px-4 py-2">
-        Total
-      </td>
+        <td className="sticky left-[180px] z-20 min-w-[220px] border border-slate-300 bg-slate-200 px-4 py-2">
+          Total
+        </td>
 
       <td className="border border-slate-300 px-4 py-2 text-center">
         {total.state_leadership_team}
@@ -1366,11 +1469,11 @@ const exportCSV = () => {
         className="border-b border-slate-100 hover:bg-indigo-50/40"
       >
 
-        <td className="border border-slate-200 px-4 py-2">
+        <td className="sticky left-0 z-10 min-w-[180px] border border-slate-200 bg-white px-4 py-2">
           {row.circle}
         </td>
 
-        <td className="border border-slate-200 px-4 py-2 font-medium">
+        <td className="sticky left-[180px] z-10 min-w-[220px] border border-slate-200 bg-white px-4 py-2 font-medium">
           {row.cmp}
         </td>
 
@@ -1540,9 +1643,7 @@ const exportCSV = () => {
          {/* CIRCLE DROPDOWN */}
 
 {key === "circle" ? (
-
   <>
-
     <select
       value={form[key]}
       onChange={(e) =>
@@ -1605,9 +1706,21 @@ const exportCSV = () => {
         Select CMP
       </option>
 
-      <option value="SHQ">
-        SHQ
-      </option>
+      <option value="Delhi SHQ">
+  Delhi SHQ
+</option>
+
+<option value="Haryana SHQ">
+  Haryana SHQ
+</option>
+
+<option value="Punjab SHQ">
+  Punjab SHQ
+</option>
+
+<option value="UP East SHQ">
+  UP East SHQ
+</option>
 
       {/* DELHI */}
       <option value="Delhi-1 (West)">
@@ -1672,8 +1785,8 @@ const exportCSV = () => {
         Amritsar
       </option>
 
-      <option value="Bhatinda">
-        Bhatinda
+      <option value="Bathinda">
+        Bathinda
       </option>
 
       <option value="Chandigarh">

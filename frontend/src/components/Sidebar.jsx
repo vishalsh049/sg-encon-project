@@ -136,6 +136,14 @@ function Sidebar({ closeSidebar, collapsed, onExpandRequest }) {
 },
 
 {
+  key: "new-joining",
+  label: "New Joining",
+  path: "/dashboard/manpower/new-joining",
+  icon: BriefcaseBusiness,
+  accessPage: "New Joining",
+},
+
+{
   key: "signoff",
   label: "Sign Off",
   path: "/dashboard/manpower/signoff",

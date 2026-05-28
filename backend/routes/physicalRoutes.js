@@ -1181,74 +1181,150 @@ router.get("/active-job-role-cmp-count", async (_req, res) => {
 
     const rows = await query(`
 SELECT
-  cmp,
-  role_key,
-  COUNT(*) AS total
+  combined.cmp,
+  combined.role_key,
+  SUM(combined.physical_count) AS physical_count,
+  SUM(combined.new_joining_count) AS new_joining_count,
+  SUM(combined.physical_count) + SUM(combined.new_joining_count) AS total
 FROM (
   SELECT
-    cmp,
-    CASE
-      WHEN normalized_job_role IN ('stateleadershipteam', 'stateleadership') THEN 'state_leadership_team'
-      WHEN normalized_job_role = 'nocexecutive' THEN 'noc_executive'
-      WHEN normalized_job_role = 'analyst' THEN 'analyst'
-      WHEN normalized_job_role = 'cmplead' THEN 'cmp_lead'
-      WHEN normalized_job_role = 'technician' THEN 'technician'
-      WHEN normalized_job_role = 'rigger' THEN 'rigger'
-      WHEN normalized_job_role = 'utilitysupervisor' THEN 'utility_supervisor'
-      WHEN normalized_job_role = 'utilityengineer' THEN 'utility_engineer'
-      WHEN normalized_job_role = 'ispengineer' THEN 'isp_engineer'
-      WHEN normalized_job_role = 'whinchargecumsecurity' THEN 'wh_incharge_cum_security'
-      WHEN normalized_job_role = 'splicer' THEN 'splicer'
-      WHEN normalized_job_role = 'assistantsplicer' THEN 'assistant_splicer'
-      WHEN normalized_job_role IN ('fiberhelper', 'fibrehelper') THEN 'fiber_helper'
-      WHEN normalized_job_role = 'patroller' THEN 'patroller'
-      WHEN normalized_job_role IN ('fibersupervisor', 'fibresupervisor') THEN 'fiber_supervisor'
-      WHEN normalized_job_role IN ('fiberengineer', 'fibreengineer') THEN 'fibre_engineer'
-      WHEN normalized_job_role = 'fttxsplicer' THEN 'fttx_splicer'
-      WHEN normalized_job_role = 'fttxassistantsplicer' THEN 'fttx_assistant_splicer'
-      WHEN normalized_job_role = 'fttxsupervisor' THEN 'fttx_supervisor'
-      WHEN normalized_job_role = 'fttxhelper' THEN 'fttx_helper'
-      WHEN normalized_job_role = 'fttxengineer' THEN 'fttx_engineer'
-      WHEN normalized_job_role = 'fttxtechnician' THEN 'fttx_technician'
-      WHEN normalized_job_role = 'technicianb' THEN 'technicianb'
-      WHEN normalized_job_role = 'riggerb' THEN 'riggerb'
-      ELSE NULL
-    END AS role_key
+    physical_roles.cmp,
+    physical_roles.role_key,
+    COUNT(*) AS physical_count,
+    0 AS new_joining_count
   FROM (
     SELECT
       cmp,
-      LOWER(
-        REPLACE(
+      CASE
+        WHEN normalized_role IN ('a', 'stateleadership') THEN 'state_leadership_team'
+        WHEN normalized_role = 'nocexecutive' THEN 'noc_executive'
+        WHEN normalized_role = 'analyst' THEN 'analyst'
+        WHEN normalized_role = 'cmplead' THEN 'cmp_lead'
+        WHEN normalized_role = 'technician' THEN 'technician'
+        WHEN normalized_role = 'rigger' THEN 'rigger'
+        WHEN normalized_role = 'utilitysupervisor' THEN 'utility_supervisor'
+        WHEN normalized_role = 'utilityengineer' THEN 'utility_engineer'
+        WHEN normalized_role = 'ispengineer' THEN 'isp_engineer'
+        WHEN normalized_role = 'whinchargecumsecurity' THEN 'wh_incharge_cum_security'
+        WHEN normalized_role = 'splicer' THEN 'splicer'
+        WHEN normalized_role = 'assistantsplicer' THEN 'assistant_splicer'
+        WHEN normalized_role IN ('fiberhelper', 'fibrehelper') THEN 'fiber_helper'
+        WHEN normalized_role = 'patroller' THEN 'patroller'
+        WHEN normalized_role IN ('fibersupervisor', 'fibresupervisor') THEN 'fiber_supervisor'
+        WHEN normalized_role IN ('fiberengineer', 'fibreengineer') THEN 'fibre_engineer'
+        WHEN normalized_role = 'fttxsplicer' THEN 'fttx_splicer'
+        WHEN normalized_role = 'fttxassistantsplicer' THEN 'fttx_assistant_splicer'
+        WHEN normalized_role = 'fttxsupervisor' THEN 'fttx_supervisor'
+        WHEN normalized_role = 'fttxhelper' THEN 'fttx_helper'
+        WHEN normalized_role = 'fttxengineer' THEN 'fttx_engineer'
+        WHEN normalized_role = 'fttxtechnician' THEN 'fttx_technician'
+        WHEN normalized_role = 'technicianb' THEN 'technicianb'
+        WHEN normalized_role = 'riggerb' THEN 'riggerb'
+        ELSE NULL
+      END AS role_key
+    FROM (
+      SELECT
+        cmp,
+        LOWER(
           REPLACE(
             REPLACE(
-              REPLACE(TRIM(job_role), ' ', ''),
-              '-',
+              REPLACE(
+                REPLACE(TRIM(job_role), ' ', ''),
+                '-',
+                ''
+              ),
+              '_',
               ''
             ),
-            '_',
+            '.',
             ''
-          ),
-          '.',
-          ''
-        )
-      ) AS normalized_job_role
-    FROM physical
-    WHERE report_id = (
-      SELECT id
-      FROM physical_reports
-      ORDER BY report_date DESC, id DESC
-      LIMIT 1
-    )
-      AND LOWER(TRIM(COALESCE(employment_status, ''))) = 'active'
-      AND cmp IS NOT NULL
-      AND cmp != ''
-      AND job_role IS NOT NULL
-      AND job_role != ''
-  ) AS normalized_roles
-) AS role_counts
-WHERE role_key IS NOT NULL
-GROUP BY cmp, role_key
-ORDER BY cmp ASC, role_key ASC
+          )
+        ) AS normalized_role
+      FROM physical
+      WHERE report_id = (
+        SELECT id
+        FROM physical_reports
+        ORDER BY report_date DESC, id DESC
+        LIMIT 1
+      )
+        AND LOWER(TRIM(COALESCE(employment_status, ''))) = 'active'
+        AND cmp IS NOT NULL
+        AND cmp != ''
+        AND job_role IS NOT NULL
+        AND job_role != ''
+    ) AS physical_source
+  ) AS physical_roles
+  WHERE physical_roles.role_key IS NOT NULL
+  GROUP BY physical_roles.cmp, physical_roles.role_key
+
+  UNION ALL
+
+  SELECT
+    new_joining_roles.cmp,
+    new_joining_roles.role_key,
+    0 AS physical_count,
+    COUNT(*) AS new_joining_count
+  FROM (
+    SELECT
+      cmp,
+      CASE
+        WHEN normalized_role IN ('a', 'stateleadership') THEN 'state_leadership_team'
+        WHEN normalized_role = 'nocexecutive' THEN 'noc_executive'
+        WHEN normalized_role = 'analyst' THEN 'analyst'
+        WHEN normalized_role = 'cmplead' THEN 'cmp_lead'
+        WHEN normalized_role = 'technician' THEN 'technician'
+        WHEN normalized_role = 'rigger' THEN 'rigger'
+        WHEN normalized_role = 'utilitysupervisor' THEN 'utility_supervisor'
+        WHEN normalized_role = 'utilityengineer' THEN 'utility_engineer'
+        WHEN normalized_role = 'ispengineer' THEN 'isp_engineer'
+        WHEN normalized_role = 'whinchargecumsecurity' THEN 'wh_incharge_cum_security'
+        WHEN normalized_role = 'splicer' THEN 'splicer'
+        WHEN normalized_role = 'assistantsplicer' THEN 'assistant_splicer'
+        WHEN normalized_role IN ('fiberhelper', 'fibrehelper') THEN 'fiber_helper'
+        WHEN normalized_role = 'patroller' THEN 'patroller'
+        WHEN normalized_role IN ('fibersupervisor', 'fibresupervisor') THEN 'fiber_supervisor'
+        WHEN normalized_role IN ('fiberengineer', 'fibreengineer') THEN 'fibre_engineer'
+        WHEN normalized_role = 'fttxsplicer' THEN 'fttx_splicer'
+        WHEN normalized_role = 'fttxassistantsplicer' THEN 'fttx_assistant_splicer'
+        WHEN normalized_role = 'fttxsupervisor' THEN 'fttx_supervisor'
+        WHEN normalized_role = 'fttxhelper' THEN 'fttx_helper'
+        WHEN normalized_role = 'fttxengineer' THEN 'fttx_engineer'
+        WHEN normalized_role = 'fttxtechnician' THEN 'fttx_technician'
+        WHEN normalized_role = 'technicianb' THEN 'technicianb'
+        WHEN normalized_role = 'riggerb' THEN 'riggerb'
+        ELSE NULL
+      END AS role_key
+    FROM (
+      SELECT
+        cmp,
+        LOWER(
+          REPLACE(
+            REPLACE(
+              REPLACE(
+                REPLACE(TRIM(designation), ' ', ''),
+                '-',
+                ''
+              ),
+              '_',
+              ''
+            ),
+            '.',
+            ''
+          )
+        ) AS normalized_role
+      FROM new_joining
+      WHERE LOWER(TRIM(COALESCE(l2_status, ''))) = 'joined'
+        AND cmp IS NOT NULL
+        AND cmp != ''
+        AND designation IS NOT NULL
+        AND designation != ''
+    ) AS new_joining_source
+  ) AS new_joining_roles
+  WHERE new_joining_roles.role_key IS NOT NULL
+  GROUP BY new_joining_roles.cmp, new_joining_roles.role_key
+) AS combined
+GROUP BY combined.cmp, combined.role_key
+ORDER BY combined.cmp ASC, combined.role_key ASC
 
     `);
 
