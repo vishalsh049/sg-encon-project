@@ -583,14 +583,14 @@ function HrDashboard() {
         </div>
       </div>
 
-      <div className="mt-1 grid grid-cols-1 gap-1 xl:grid-cols-2">
+      <div className="mt-1 grid grid-cols-1 gap-1 xl:grid-cols-1">
         <TablePanel
           panelId="physicalScroll"
            showJoining={true}
           icon={BriefcaseBusiness}
-          title="PHYSICAL REQUIREMENT"
+          title="PHYSICAL RAG"
           subtitle="Requirement vs Available Manpower"
-          description="Physical teams are field staff required for infrastructure deployment and maintenance."
+          description="Real-time view of physical workforce requirements, availability, and deployment gaps."
           gradient="from-sky-500 via-cyan-500 to-teal-400"
           accent="text-cyan-600"
           groups={filteredGroups}
@@ -602,9 +602,9 @@ function HrDashboard() {
         <TablePanel
           panelId="scrumScroll"
           icon={Layers3}
-          title="SCRUM MANPOWER"
+          title="SCRUM RAG"
           subtitle="Overview Scrum Manpower"
-          description="Scrum teams include project management and support staff for planning and execution."
+          description="Real-time view of scrum workforce requirements, availability, and deployment gaps."
           gradient="from-violet-600 via-fuchsia-500 to-pink-500"
           accent="text-violet-600"
           groups={filteredGroups}
@@ -717,7 +717,7 @@ function TablePanel({
 
       {/* PHYSICAL TOP CATEGORY CARDS */}
 
-<div className="grid grid-cols-2 gap-1 md:grid-cols-3 xl:grid-cols-3 p-1 border-b border-slate-200 bg-slate-50">
+<div className="grid grid-cols-2 gap-1 md:grid-cols-5 xl:grid-cols-5 p-1 border-b border-slate-200 bg-slate-50">
 
  {statCardConfig.map((card) => {
 
@@ -787,31 +787,33 @@ function TablePanel({
   return (
     <div
       key={card.key}
-      className={`rounded-[12px] border bg-white px-3 py-1 ${card.tint}`}
+     className={`rounded-[12px] border bg-white px-3 py-2 ${card.tint}`}
     >
 
-      <p className="truncate text-[0.58rem] font-semibold uppercase tracking-[0.16em] mb-1">
+      <p className="truncate text-[0.58rem] font-semibold uppercase tracking-[0.16em]">
         {card.label}
       </p>
 
-      <div className="flex items-center justify-between text-[11px] font-bold">
+    <div className="flex items-center justify-center gap-2 text-[14px] font-bold">
 
-        <div className="text-center">
-          <p className="text-red-500">R</p>
-          <p>{requirement}</p>
-        </div>
+  <span className="text-slate-800">
+    R {requirement}
+  </span>
 
-        <div className="text-center">
-          <p className="text-amber-500">A</p>
-          <p>{available}</p>
-        </div>
+  <span className="text-slate-400">|</span>
 
-        <div className="text-center">
-          <p className="text-emerald-600">G</p>
-          <p>{gap}</p>
-        </div>
+  <span className="text-slate-700">
+    A {available}
+  </span>
 
-      </div>
+  <span className="text-slate-400">|</span>
+
+  <span className="text-emerald-600">
+    G {gap}
+  </span>
+
+</div>
+
     </div>
   );
 })}

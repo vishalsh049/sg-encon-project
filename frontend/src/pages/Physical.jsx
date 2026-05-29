@@ -1321,25 +1321,25 @@ const CustomMenuList = (props) => {
 
     {/* Employment Status */}
 
-  <div className="lg:col-span-4 rounded-[12px] border border-white/100 bg-white/100 px-4 py-2 backdrop-blur-xl">
+ <div className="lg:col-span-4 rounded-[12px] border border-white/100 bg-white/100 px-4 py-2 backdrop-blur-xl">
 
     <div className="mb-2 flex items-center justify-between">
 
-      <h2 className="text-sm font-semibold text-slate-800">
+      <h2 className="text-sm font-semibold text-slate-700">
         Employment Status
       </h2>
 
     </div>
 
-    <div className="grid grid-cols-2 gap-3">
+    <div className="grid grid-cols-2 gap-2">
 
-  <div className="rounded-xl bg-emerald-50 border border-emerald-100 px-4 py-2 text-center">
+  <div className="flex flex-col justify-center rounded-xl bg-slate-50 border border-white/70 px-4 py-1 text-center">
 
     <div className="text-xs font-medium text-slate-500">
       Active
     </div>
 
-  <div className="text-xl font-bold text-emerald-600">
+  <div className="text-sm font-semibold text-emerald-600">
 {
   data.filter(
     item =>
@@ -1352,13 +1352,13 @@ const CustomMenuList = (props) => {
 
   </div>
 
-  <div className="rounded-xl bg-red-50 border border-red-100 px-4 py-2 text-center">
+ <div className="flex flex-col justify-center rounded-xl bg-slate-50 border border-white/70 px-4 py-1 text-center">
 
     <div className="text-xs font-medium text-slate-500">
       Inactive
     </div>
 
-<div className="text-xl font-bold text-red-600">
+<div className="text-sm font-semibold text-red-600">
 {
   data.filter(
     item =>
@@ -1378,7 +1378,7 @@ const CustomMenuList = (props) => {
 
     {/* Circle Wise Count */}
 
-  <div className="lg:col-span-6 rounded-[12px] border border-white/70 bg-white/100 px-4 py-2 backdrop-blur-xl">
+  <div className="lg:col-span-6 rounded-[12px] border border-white/70 bg-white/100 px-6 py-2 backdrop-blur-xl">
       <div className="mb-2 flex items-center justify-between">
 
         <h2 className="text-sm font-semibold text-slate-800">
