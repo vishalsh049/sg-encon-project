@@ -825,7 +825,7 @@ function TablePanel({
         className="custom-scrollbar overflow-x-auto overflow-y-auto bg-[linear-gradient(180deg,_#ffffff_0%,_#fbfdff_100%)]"
         style={{ maxHeight: "45vh", minHeight: "240px" }}
       >
-        <table className="min-w-max whitespace-nowrap text-sm">
+      <table className="min-w-max whitespace-nowrap text-sm border-separate [border-spacing:6px_4px]">
           <thead>
             <tr className="sticky top-0 z-[90] bg-[#f8fbff] text-[11px] uppercase text-slate-700">
               <th
@@ -836,28 +836,31 @@ function TablePanel({
               </th>
 
               {columns.map((column) => (
-                <th
-                  key={column.key}
-                  colSpan={3}
-                  className={`border border-slate-200 px-2 py-1 text-center font-semibold ${accent}`}
-                >
+<th
+  key={column.key}
+  colSpan={3}
+  className="min-w-[180px] bg-gradient-to-b from-sky-50 to-white
+    border border-slate-200 rounded-t-xl text-center py-2 font-bold
+    text-sky-700 shadow-sm">
                   {column.label}
                 </th>
               ))}
             </tr>
 
-            <tr className="sticky top-[27px] z-[85] bg-white text-[11px] text-slate-500">
+           <tr className="sticky top-[27px] z-[85] bg-slate-50 text-[11px] text-slate-500">
               {columns.map((column) => (
                 <React.Fragment key={column.key}>
-                  <th className="border border-slate-200 px-2 py-1 text-center font-semibold">
-                    R
-                  </th>
-                  <th className="border border-slate-200 px-2 py-1 text-center font-semibold">
-                    A
-                  </th>
-                  <th className="border border-slate-200 px-2 py-1 text-center font-semibold">
-                    G
-                  </th>
+ <th className=" bg-white border border-slate-200 py-1 text-center font-semibold text-slate-500 w-[40px]">
+  R
+</th>
+
+<th className=" bg-white border border-slate-200 py-1 text-center font-semibold text-slate-500 w-[40px]">
+  A
+</th>
+
+<th className=" bg-white border border-slate-200 py-1 text-center font-semibold text-slate-500 w-[40px]">
+  G
+</th>
                 </React.Fragment>
               ))}
             </tr>
@@ -904,14 +907,14 @@ function TablePanel({
 
                     return (
                       <React.Fragment key={column.key}>
-                        <td className="border border-slate-200 px-2 py-1 text-center">
+                        <td className="w-[55px] px-2 py-1 text-center">
                           {totalRequirement}
                         </td>
-                        <td className="border border-slate-200 px-2 py-1 text-center">
+                        <td className="w-[55px] px-2 py-1 text-center">
                           {totalAvailable}
                         </td>
                         <td
-                          className={`border border-slate-200 px-2 py-1 text-center font-bold ${
+                          className={`border border-slate-300 px-2 py-1 text-center font-bold ${
                             totalGap <= 0 ? "text-emerald-600" : "text-red-500"
                           }`}
                         >
@@ -965,11 +968,11 @@ if (showJoining) {
 
   return (
     <React.Fragment key={column.key}>
-      <td className="border border-slate-200 px-2 py-1 text-center font-semibold text-slate-900">
+     <td className="w-[55px] px-2 py-1 text-center font-semibold text-slate-900">
          {requirement}
       </td>
     
- <td className="border border-slate-200 px-2 py-1 text-center">
+ <td className="w-[55px] px-2 py-1 text-center">
 
   {showJoining ? (
 

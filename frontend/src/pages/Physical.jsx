@@ -25,11 +25,9 @@
     employee_name: "",
     father_name: "",
     function_name: "",
-    job_role_actual_cmp_verify: "",
     job_role: "",
     manpower_signoff_scope: "",
     scrum_job_role: "",
-    cluster: "",
     mobile_number: "",
     dob: "",
     age: "",
@@ -612,14 +610,11 @@ if (
         employee_name: result.data.employee_name || "",
         father_name: result.data.father_name || "",
         function_name: result.data.function_name || "",
-        job_role_actual_cmp_verify:
-          result.data.job_role_actual_cmp_verify || "",
         job_role: result.data.job_role || "",
         manpower_signoff_scope:
           result.data.manpower_signoff_scope || "",
         scrum_job_role:
           result.data.scrum_job_role || "",
-        cluster: result.data.cluster || "",
         mobile_number:
           result.data.mobile_number || "",
 
@@ -781,11 +776,9 @@ if (
         employee_name: "",
         father_name: "",
         function_name: "",
-        job_role_actual_cmp_verify: "",
         job_role: "",
         manpower_signoff_scope: "",
         scrum_job_role: "",
-        cluster: "",
         mobile_number: "",
         dob: "",
         age: "",
@@ -890,13 +883,10 @@ if (
       "Employee Name": item.employee_name,
       "Father Name": item.father_name,
       Function: item.function_name,
-      "Job Role Actual CMP Verify":
-        item.job_role_actual_cmp_verify,
       "Job Role": item.job_role,
       "Manpower SignOff Scope":
         item.manpower_signoff_scope,
       "Scrum Job Role": item.scrum_job_role,
-      Cluster: item.cluster,
       "Mobile Number": item.mobile_number,
       DOB: item.dob,
       Age: item.age,
@@ -1607,7 +1597,6 @@ const CustomMenuList = (props) => {
 
   <th className="border-b border-r border-slate-200 bg-slate-100/90 px-4 py-2 text-left text-sm font-semibold text-slate-700 whitespace-nowrap backdrop-blur-xl">Function</th>
 
-  <th className="border-b border-r border-slate-200 bg-slate-100/90 px-4 py-2 text-left text-sm font-semibold text-slate-700 whitespace-nowrap backdrop-blur-xl">Job Role Actual CMP Verify</th>
 
   <th className="border-b border-r border-slate-200 bg-slate-100/90 px-4 py-2 text-left text-sm font-semibold text-slate-700 whitespace-nowrap backdrop-blur-xl">Job Role</th>
 
@@ -1615,7 +1604,6 @@ const CustomMenuList = (props) => {
 
   <th className="border-b border-r border-slate-200 bg-slate-100/90 px-4 py-2 text-left text-sm font-semibold text-slate-700 whitespace-nowrap backdrop-blur-xl">Scrum Job Role</th>
 
-  <th className="border-b border-r border-slate-200 bg-slate-100/90 px-4 py-2 text-left text-sm font-semibold text-slate-700 whitespace-nowrap backdrop-blur-xl">Cluster</th>
 
   <th className="border-b border-r border-slate-200 bg-slate-100/90 px-4 py-2 text-left text-sm font-semibold text-slate-700 whitespace-nowrap backdrop-blur-xl">Mobile Number</th>
 
@@ -1715,11 +1703,11 @@ const CustomMenuList = (props) => {
   <td className="border-b border-r border-slate-200 px-4 py-2 text-sm text-slate-700 whitespace-nowrap">{item.employee_name || "-"}</td>
   <td className="border-b border-r border-slate-200 px-4 py-2 text-sm text-slate-700 whitespace-nowrap">{item.father_name || "-"}</td>
   <td className="border-b border-r border-slate-200 px-4 py-2 text-sm text-slate-700 whitespace-nowrap">{item.function_name || "-"}</td>
-  <td className="border-b border-r border-slate-200 px-4 py-2 text-sm text-slate-700 whitespace-nowrap">{item.job_role_actual_cmp_verify || "-"}</td>
+  
   <td className="border-b border-r border-slate-200 px-4 py-2 text-sm text-slate-700 whitespace-nowrap">{item.job_role || "-"}</td>
   <td className="border-b border-r border-slate-200 px-4 py-2 text-sm text-slate-700 whitespace-nowrap">{item.manpower_signoff_scope || "-"}</td>
   <td className="border-b border-r border-slate-200 px-4 py-2 text-sm text-slate-700 whitespace-nowrap">{item.scrum_job_role || "-"}</td>
-  <td className="border-b border-r border-slate-200 px-4 py-2 text-sm text-slate-700 whitespace-nowrap">{item.cluster || "-"}</td>
+ 
   <td className="border-b border-r border-slate-200 px-4 py-2 text-sm text-slate-700 whitespace-nowrap">{item.mobile_number || "-"}</td>
   <td className="border-b border-r border-slate-200 px-4 py-2 text-sm text-slate-700 whitespace-nowrap">{item.dob ? new Date(item.dob) .toLocaleDateString("en-GB") : "-"}</td>
   <td className="border-b border-r border-slate-200 px-4 py-2 text-sm text-slate-700 whitespace-nowrap">{item.age || "-"}</td>
@@ -2144,7 +2132,7 @@ const CustomMenuList = (props) => {
     Personal & Role Information
   </h3>
 
-  <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-6">
+  <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
 
     {/* Father Name */}
     <div>
@@ -2179,7 +2167,7 @@ const CustomMenuList = (props) => {
     </div>
 
     {/* Job Role Actual CMP Verify */}
-    <div>
+    {/* <div>
       <label className="mb-1 block text-xs px-1 font-semibold text-slate-700">
         Job Role Actual Cmp Verify
       </label>
@@ -2209,6 +2197,7 @@ onChange={(selected) =>
 }
 />
     </div>
+    */}
 
     {/* Job Role */}
     <div>
@@ -2297,7 +2286,7 @@ onChange={(selected) =>
     </div>
 
     {/* Cluster */}
-    <div>
+  {/*   <div>
       <label className="mb-1 block text-xs px-1 font-semibold text-slate-700">
         Cluster
       </label>
@@ -2311,6 +2300,8 @@ onChange={(selected) =>
         className="w-full rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs outline-none focus:border-violet-500"
       />
     </div>
+
+    */}
 
     {/* Mobile Number */}
     <div>

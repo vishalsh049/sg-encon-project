@@ -208,15 +208,16 @@ const circleCmpMap = {
     "Noida (NCR)",
   ],
 
-  Haryana: [
-    "Haryana SHQ",
-    "Ambala",
-    "Hissar",
-    "Karnal",
-    "Panipat",
-    "Rewari",
-    "Rohtak",
-  ],
+ Haryana: [
+  "Haryana SHQ",
+  "Ambala",
+  "Hissar",
+  "Karnal",
+  "Panipat",
+  "Palwal",
+  "Rewari",
+  "Rohtak",
+],
 
   Punjab: [
     "Punjab SHQ",
