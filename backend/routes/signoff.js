@@ -79,10 +79,6 @@ router.get("/", async (_req, res) => {
 
         fttx_technician INT DEFAULT 0,
 
-        technicianb INT DEFAULT 0,
-
-        riggerb INT DEFAULT 0,
-
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
@@ -139,8 +135,6 @@ router.post("/", async (req, res) => {
       fttx_helper,
       fttx_engineer,
       fttx_technician,
-      technicianb,
-      riggerb,
     } = req.body;
 
     const existing = await query(
@@ -179,9 +173,7 @@ router.post("/", async (req, res) => {
         fttx_supervisor=?,
         fttx_helper=?,
         fttx_engineer=?,
-        fttx_technician=?,
-        technicianb=?,
-        riggerb=?
+        fttx_technician=?
         WHERE circle=? AND cmp=?
         `,
         [
@@ -207,8 +199,6 @@ router.post("/", async (req, res) => {
   Number(fttx_helper) || 0,
   Number(fttx_engineer) || 0,
   Number(fttx_technician) || 0,
-  Number(technicianb) || 0,
-  Number(riggerb) || 0,
   circle,
   cmp,
 ]
@@ -247,9 +237,7 @@ router.post("/", async (req, res) => {
           fttx_supervisor,
           fttx_helper,
           fttx_engineer,
-          fttx_technician,
-          technicianb,
-          riggerb
+          fttx_technician
         )
         VALUES
         (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -279,8 +267,6 @@ router.post("/", async (req, res) => {
   Number(fttx_helper) || 0,
   Number(fttx_engineer) || 0,
   Number(fttx_technician) || 0,
-  Number(technicianb) || 0,
-  Number(riggerb) || 0,
 ]      );
 
       res.json({
@@ -329,8 +315,6 @@ router.put("/:id", async (req, res) => {
       fttx_helper,
       fttx_engineer,
       fttx_technician,
-      technicianb,
-      riggerb,
     } = req.body;
 
     await query(
@@ -360,9 +344,7 @@ router.put("/:id", async (req, res) => {
       fttx_supervisor=?,
       fttx_helper=?,
       fttx_engineer=?,
-      fttx_technician=?,
-      technicianb=?,
-      riggerb=?
+      fttx_technician=?
       WHERE id=?
       `,
       [
@@ -390,8 +372,6 @@ router.put("/:id", async (req, res) => {
         fttx_helper,
         fttx_engineer,
         fttx_technician,
-        technicianb,
-        riggerb,
         req.params.id,
       ]
     );

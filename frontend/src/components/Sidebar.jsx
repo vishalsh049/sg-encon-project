@@ -128,19 +128,19 @@ function Sidebar({ closeSidebar, collapsed, onExpandRequest }) {
 },
 
 {
-  key: "scrum",
-  label: "SCRUM",
-  path: "/dashboard/manpower/scrum",
-  icon: BriefcaseBusiness,
-  accessPage: "Scrum",
-},
-
-{
   key: "new-joining",
   label: "New Joining",
   path: "/dashboard/manpower/new-joining",
   icon: BriefcaseBusiness,
   accessPage: "New Joining",
+},
+
+{
+  key: "scrum",
+  label: "SCRUM",
+  path: "/dashboard/manpower/scrum",
+  icon: BriefcaseBusiness,
+  accessPage: "Scrum",
 },
 
 {

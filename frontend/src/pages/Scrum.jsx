@@ -381,6 +381,8 @@ const latestUploads = uploads.filter(
                 ))}
               </div>
 
+{/* 
+
 <div className="mt-2 rounded-2xl border border-slate-200 bg-white px-4 py-2">
   <div className="flex items-center justify-between mb-1">
   <h3 className="text-md font-semibold">
@@ -409,7 +411,7 @@ const latestUploads = uploads.filter(
     ))}
   </div>
 </div>
-
+*/}
             </div>
 
           

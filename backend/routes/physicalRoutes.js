@@ -255,7 +255,10 @@ function mapPhysicalRow(row, reportId) {
     toText(row["PPRJ Status"]),
 
     // pprj_code
-    toText(row["PPRJ Code"]),
+    toText(
+  row["PPRJ Code"] ||
+  row["PPRJ code"]
+),
 
     // employee_code
     toText(row["Employee Code"]),
@@ -270,13 +273,19 @@ function mapPhysicalRow(row, reportId) {
     toText(row["Function"]),
 
     // job_role_actual_cmp_verify
-    toText(row["Job Role Actual CMP Verify"]),
+    toText(
+  row["Job Role Actual CMP Verify"] ||
+  row["Job Role_Actual_CMP Verify"]
+),
 
     // job_role
     toText(row["Job Role"]),
 
     // manpower_signoff_scope
-    toText(row["Manpower SignOff Scope"]),
+    toText(
+  row["Manpower SignOff Scope"] ||
+  row["Manpower Signoff Scope"]
+),
 
     // scrum_job_role
     toText(row["Scrum Job Role"]),
@@ -309,7 +318,28 @@ function mapPhysicalRow(row, reportId) {
     ),
 
     // employment_status
-    toText(row["Employment Status"]),
+(() => {
+  const status = String(
+    row["Employment Status"] || ""
+  ).trim().toLowerCase();
+
+  if (
+    ["active","a","working"].includes(status)
+  ) {
+    return "Active";
+  }
+
+  if (
+    ["inactive","i","resigned"].includes(status)
+  ) {
+    return "Inactive";
+  }
+
+  return status
+    ? status.charAt(0).toUpperCase() +
+      status.slice(1)
+    : null;
+})(),
 
     // resigned_date
     normalizeDate(row["Resigned Date"]),
@@ -345,10 +375,16 @@ function mapPhysicalRow(row, reportId) {
     ),
 
     // pan_no
-    toText(row["PAN No"]),
+    toText(
+  row["PAN No"] ||
+  row["PANNO"]
+),
 
     // aadhaar_no
-    toText(row["AADHAAR No"]),
+    toText(
+  row["AADHAAR No"] ||
+  row["AADHAAR NO"]
+),
 
     // uan_no
     toText(row["UAN No"]),
@@ -491,16 +527,24 @@ if (!allowedExtensions.includes(fileExtension)) {
     const sheetName = workbook.SheetNames[0];
     const worksheet = workbook.Sheets[sheetName];
     const rows = XLSX.utils.sheet_to_json(worksheet, { defval: null });
+    console.log(
+  "Excel Headers:",
+  Object.keys(rows[0] || {})
+);
 for (const row of rows) {
 
-  const circle = String(
-    row["Circle"] || ""
-  ).trim();
+ const circle = String(
+  row["Circle"] ||
+  row["circle"] ||
+  ""
+).trim();
 
-  const cmp = String(
-    row["CMP"] || ""
-  ).trim();
-
+ const cmp = String(
+  row["CMP"] ||
+  row["Cmp"] ||
+  row["cmp"] ||
+  ""
+).trim();
   // CHECK CIRCLE
 
   if (!circleCmpMap[circle]) {
@@ -863,92 +907,53 @@ router.delete("/delete-employee/:id", async (req, res) => {
 
 });
 
-router.get("/download/:id", async (req, res) => {
+router.put("/:id", async (req, res) => {
 
-  const reportId = Number(req.params.id);
+  const id = Number(req.params.id);
+
+  const {
+    employee_name,
+    employee_code,
+    circle,
+    cluster,
+    mobile_number
+  } = req.body;
 
   try {
 
-    const rows = await query(
-  `
-  SELECT
-    pprj_status,
-    pprj_code,
-    employee_code,
-    employee_name,
-    father_name,
-    function_name,
-    job_role_actual_cmp_verify,
-    job_role,
-    manpower_signoff_scope,
-    scrum_job_role,
-    circle,
-    cluster,
-    mobile_number,
-    dob,
-    age,
-    date_of_joining,
-    employment_status,
-    resigned_date,
-    last_working_date,
-    rm_code,
-    reporting_manager,
-    company_email_id,
-    laptop_status,
-    ifsc_code,
-    bank_account_no,
-    pan_no,
-    aadhaar_no,
-    uan_no,
-    esic_ip_no,
-    remarks
-  FROM physical
-  WHERE report_id = ?
-  `,
-  [reportId]
-);
-
-    if (!rows.length) {
-      return res.status(404).json({
-        success: false,
-        message: "No data found",
-      });
-    }
-
-    const workbook = XLSX.utils.book_new();
-
-    const worksheet = XLSX.utils.json_to_sheet(rows);
-
-    XLSX.utils.book_append_sheet(
-      workbook,
-      worksheet,
-      "Physical Report"
+    await query(
+      `
+      UPDATE physical
+      SET
+        employee_name = ?,
+        employee_code = ?,
+        circle = ?,
+        cluster = ?,
+        mobile_number = ?
+      WHERE id = ?
+      `,
+      [
+        employee_name,
+        employee_code,
+        circle,
+        cluster,
+        mobile_number,
+        id
+      ]
     );
 
-    const buffer = XLSX.write(workbook, {
-      type: "buffer",
-      bookType: "xlsx",
+    res.status(200).json({
+      success: true,
+      message: "Employee updated successfully",
     });
-
-    res.setHeader(
-      "Content-Disposition",
-      `attachment; filename=physical_report_${reportId}.xlsx`
-    );
-
-    res.setHeader(
-      "Content-Type",
-      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    );
-
-    res.send(buffer);
 
   } catch (error) {
 
-    console.error("DOWNLOAD ERROR:", error);
+    console.error("Update error:", error);
 
     res.status(500).json({
       success: false,
-      message: "Download failed",
+      message: "Server Error",
     });
 
   }
@@ -1038,17 +1043,30 @@ router.get("/employment-status-count", async (_req, res) => {
 
   try {
 
-  const rows = await query(`
-  SELECT
-    employment_status,
-    COUNT(*) as total
-  FROM physical
+ const rows = await query(`
+SELECT
+CASE
 
-  WHERE employment_status IS NOT NULL
-  AND employment_status != ''
+WHEN LOWER(TRIM(employment_status)) IN
+('active','a','working')
+THEN 'active'
 
-  GROUP BY employment_status
-  ORDER BY total DESC
+WHEN LOWER(TRIM(employment_status)) IN
+('inactive','i','resigned')
+THEN 'inactive'
+
+ELSE 'other'
+
+END AS employment_status,
+
+COUNT(*) AS total
+
+FROM physical
+
+WHERE employment_status IS NOT NULL
+AND TRIM(employment_status) != ''
+
+GROUP BY employment_status
 `);
 
     res.status(200).json({

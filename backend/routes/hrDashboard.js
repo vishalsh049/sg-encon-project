@@ -37,9 +37,6 @@ router.get("/active-job-role-cmp-count", async (req, res) => {
         fttx_engineer,
         fttx_technician,
 
-        technicianb,
-        riggerb,
-
         new_joining
 
       FROM signoff
@@ -76,27 +73,35 @@ router.get("/active-job-role-cmp-count", async (req, res) => {
         "fttx_supervisor",
         "fttx_helper",
         "fttx_engineer",
-        "fttx_technician",
-
-        "technicianb",
-        "riggerb"
+        "fttx_technician"
       ];
 
       roles.forEach((role) => {
 
         const physicalCount = Number(item[role] || 0);
 
-        formatted.push({
-          cmp: item.cmp,
-          role_key: role,
+    const totalCount = physicalCount + newJoiningCount;
 
-          physical_count: physicalCount,
+const rCount = Math.floor(totalCount * 0.33);
+const aCount = Math.floor(totalCount * 0.33);
+const gCount = totalCount - rCount - aCount;
 
-          new_joining_count: newJoiningCount,
+formatted.push({
+  cmp: item.cmp,
+  role_key: role,
 
-          total: physicalCount + newJoiningCount
-        });
+  admin: totalCount,
 
+  r: rCount,
+  a: aCount,
+  g: gCount,
+
+  physical_count: physicalCount,
+
+  new_joining_count: newJoiningCount,
+
+  total: totalCount
+});
       });
 
     });

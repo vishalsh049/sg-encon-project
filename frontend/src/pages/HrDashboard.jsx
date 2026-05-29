@@ -40,8 +40,6 @@ const physicalDesignationColumns = [
   { key: "fttx_helper", label: "FTTx Helper" },
   { key: "fttx_engineer", label: "FTTx Engineer" },
   { key: "fttx_technician", label: "FTTx Technician" },
-  { key: "technicianb", label: "TechnicianB" },
-  { key: "riggerb", label: "RiggerB" },
 ];
 
 const scrumDesignationColumns = physicalDesignationColumns;
@@ -69,6 +67,7 @@ const cmpGroups = [
       "Hissar",
       "Karnal",
       "Panipat",
+      "Palwal",
       "Rewari",
       "Rohtak",
     ],
@@ -96,7 +95,6 @@ const cmpGroups = [
       "Azamgarh",
       "Faizabad",
       "Gorakhpur",
-      "Nanded",
       "Raibareilly",
       "Varanasi",
     ],
@@ -149,15 +147,7 @@ const statCardConfig = [
     badge: "bg-emerald-100/80 text-emerald-700",
     valueClass: "text-emerald-700",
   },
-{
-  key: "bench",
-  label: "Bench Strength",
-  icon: Users,
-  tint:
-    "from-slate-50 via-white to-gray-50/70 border-slate-200 text-slate-700",
-  badge: "bg-slate-100 text-slate-700",
-  valueClass: "text-slate-700",
-},
+
 ];
 
 const normalizeCircle = (value = "") =>
@@ -323,7 +313,7 @@ function HrDashboard() {
 
   return activeData.reduce((lookup, item) => {
 
-    const cmpName = item?.cmp;
+   const cmpName = item?.cmp;
     const roleKey = item?.role_key;
 
     if (!cmpName || !roleKey) return lookup;
@@ -432,9 +422,7 @@ function HrDashboard() {
         sum.fttxPo +=
           Number(row.fttx_engineer || 0) + Number(row.fttx_technician || 0);
 
-        sum.bench +=
-          Number(row.technicianb || 0) + Number(row.riggerb || 0);
-
+        
         return sum;
       },
       {
@@ -546,7 +534,7 @@ function HrDashboard() {
 
 
 
-      <div className="rounded-[12px] border border-slate-200/70 bg-white/90 p-2 backdrop-blur-xl">
+      <div className="rounded-[12px] border border-slate-200/70 bg-white/90 p-1 mt-1 backdrop-blur-xl">
         <div className="grid grid-cols-4 gap-2 xl:grid-cols-[1.15fr_1fr_1fr_0.9fr]">
           <div className="relative">
             <Search className="pointer-events-none absolute left-5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
@@ -592,51 +580,6 @@ function HrDashboard() {
             <RefreshCcw className="h-4 w-4" />
             Reset
           </button>
-        </div>
-      </div>
-
-      <div className="mt-1 grid grid-cols-2 gap-1 xl:grid-cols-[1.03fr_3.17fr]">
-        <div className="rounded-[12px] border border-slate-200/70 bg-white/92 px-4 py-2 shadow-[0_20px_60px_rgba(15,23,42,0.06)]">
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <p className="text-[0.62rem] font-bold uppercase tracking-[0.18em] text-indigo-600">
-                SIGN OFF
-              </p>
-              <p className="mt-1 text-xs text-slate-500">
-                Physical & Scrum Final Approval Status
-              </p>
-            </div>
-
-            <div className="flex h-9 w-9 items-center justify-center rounded-[14px] bg-emerald-50 text-emerald-600 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]">
-              <ShieldCheck className="h-4 w-4" />
-            </div>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-1 md:grid-cols-3 xl:grid-cols-6">
-          {statCardConfig.map((card) => {
-            const Icon = card.icon;
-
-            return (
-              <div
-                key={card.key}
-                className={`rounded-[12px] border bg-[linear-gradient(180deg,_rgba(255,255,255,0.98)_0%,_rgba(248,250,252,0.92)_100%)] px-3 py-2 ${card.tint}`}
-              >
-                <div className="flex items-center gap-2">
-                 
-
-                  <div className="min-w-0">
-                    <p className="truncate text-[0.58rem] font-semibold uppercase tracking-[0.16em]">
-                      {card.label}
-                    </p>
-                    <p className={`mt-1 text-[1rem] font-semibold leading-none ${card.valueClass}`}>
-                      {categoryTotals[card.key]}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
         </div>
       </div>
 
@@ -767,9 +710,113 @@ function TablePanel({
         </div>
       </div>
 
-      <div className="border-b border-slate-200 bg-white px-3 py-1 text-xs text-slate-500 md:px-4">
+          <div className="border-b border-slate-200 bg-white px-3 py-1 text-xs text-slate-500 md:px-4">
         {description}
       </div>
+
+
+      {/* PHYSICAL TOP CATEGORY CARDS */}
+
+<div className="grid grid-cols-2 gap-1 md:grid-cols-3 xl:grid-cols-3 p-1 border-b border-slate-200 bg-slate-50">
+
+ {statCardConfig.map((card) => {
+
+  let requirement = 0;
+  let available = 0;
+
+  groups.forEach((group) => {
+
+    group.items.forEach((cmpName) => {
+
+      const signoffRow = getSignoffRow(cmpName);
+
+      if (card.key === "admin") {
+        requirement +=
+          Number(signoffRow?.state_leadership_team || 0) +
+          Number(signoffRow?.noc_executive || 0) +
+          Number(signoffRow?.analyst || 0) +
+          Number(signoffRow?.cmp_lead || 0);
+      }
+
+      if (card.key === "utility") {
+        requirement +=
+          Number(signoffRow?.technician || 0) +
+          Number(signoffRow?.rigger || 0) +
+          Number(signoffRow?.utility_supervisor || 0) +
+          Number(signoffRow?.utility_engineer || 0) +
+          Number(signoffRow?.isp_engineer || 0) +
+          Number(signoffRow?.wh_incharge_cum_security || 0);
+      }
+
+      if (card.key === "fiber") {
+        requirement +=
+          Number(signoffRow?.splicer || 0) +
+          Number(signoffRow?.assistant_splicer || 0) +
+          Number(signoffRow?.fiber_helper || 0) +
+          Number(signoffRow?.patroller || 0) +
+          Number(signoffRow?.fiber_supervisor || 0) +
+          Number(signoffRow?.fibre_engineer || 0);
+      }
+
+      if (card.key === "fttx") {
+        requirement +=
+          Number(signoffRow?.fttx_splicer || 0) +
+          Number(signoffRow?.fttx_assistant_splicer || 0) +
+          Number(signoffRow?.fttx_supervisor || 0) +
+          Number(signoffRow?.fttx_helper || 0);
+      }
+
+      if (card.key === "fttxPo") {
+        requirement +=
+          Number(signoffRow?.fttx_engineer || 0) +
+          Number(signoffRow?.fttx_technician || 0);
+      }
+
+      Object.values(countLookup?.[cmpName] || {}).forEach((value) => {
+        available += Number(
+          showJoining ? value?.total || 0 : value || 0
+        );
+      });
+
+    });
+
+  });
+
+  const gap = requirement - available;
+
+  return (
+    <div
+      key={card.key}
+      className={`rounded-[12px] border bg-white px-3 py-1 ${card.tint}`}
+    >
+
+      <p className="truncate text-[0.58rem] font-semibold uppercase tracking-[0.16em] mb-1">
+        {card.label}
+      </p>
+
+      <div className="flex items-center justify-between text-[11px] font-bold">
+
+        <div className="text-center">
+          <p className="text-red-500">R</p>
+          <p>{requirement}</p>
+        </div>
+
+        <div className="text-center">
+          <p className="text-amber-500">A</p>
+          <p>{available}</p>
+        </div>
+
+        <div className="text-center">
+          <p className="text-emerald-600">G</p>
+          <p>{gap}</p>
+        </div>
+
+      </div>
+    </div>
+  );
+})}
+
+</div>
 
       <div
         id={panelId}

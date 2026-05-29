@@ -43,8 +43,56 @@ const initialForm = {
   fiber_helper: "",
   fibre_engineer: "",
   utility_engineer: "",
-  technicianb: "",
-  riggerb: "",
+};
+
+const circleCMPMap = {
+
+  Delhi: [
+    "Delhi SHQ",
+    "Delhi-1 (West)",
+    "Delhi-2 (South)",
+    "Delhi-3 (Central-East)",
+    "Delhi-4 (North)",
+    "Faridabad (NCR)",
+    "Ghaziabad (NCR)",
+    "Gurgaon (NCR)",
+    "Noida (NCR)",
+  ],
+
+  Haryana: [
+    "Haryana SHQ",
+    "Ambala",
+    "Hissar",
+    "Karnal",
+    "Panipat",
+    "Palwal",
+    "Rewari",
+    "Rohtak",
+  ],
+
+  Punjab: [
+    "Punjab SHQ",
+    "Amritsar",
+    "Bathinda",
+    "Chandigarh",
+    "Jalandhar",
+    "Ludhiana-1",
+    "Ludhiana-2",
+    "Pathankot",
+    "Patiala",
+    "Sangrur",
+  ],
+
+  "UP East": [
+    "UP East SHQ",
+    "Allahabad",
+    "Azamgarh",
+    "Faizabad",
+    "Gorakhpur",
+    "Raibareilly",
+    "Varanasi",
+  ],
+
 };
 
 function Signoff() {
@@ -244,6 +292,54 @@ const groupedRows = Object.entries(
   }, {})
 );
 
+const VALID_CIRCLES = [
+  "Punjab",
+  "Delhi",
+  "Haryana",
+  "UP East",
+];
+
+const VALID_CMPS = [
+  "Delhi SHQ",
+  "Haryana SHQ",
+  "Punjab SHQ",
+  "UP East SHQ",
+
+  "Delhi-1 (West)",
+  "Delhi-2 (South)",
+  "Delhi-3 (Central-East)",
+  "Delhi-4 (North)",
+  "Faridabad (NCR)",
+  "Ghaziabad (NCR)",
+  "Gurgaon (NCR)",
+  "Noida (NCR)",
+
+  "Ambala",
+  "Hissar",
+  "Karnal",
+  "Panipat",
+  "Palwal",
+  "Rewari",
+  "Rohtak",
+
+  "Amritsar",
+  "Bathinda",
+  "Chandigarh",
+  "Jalandhar",
+  "Ludhiana-1",
+  "Ludhiana-2",
+  "Pathankot",
+  "Patiala",
+  "Sangrur",
+
+  "Allahabad",
+  "Azamgarh",
+  "Faizabad",
+  "Gorakhpur",
+  "Raibareilly",
+  "Varanasi",
+];
+
   const handleExcelUpload = async (e) => {
 
   const file = e.target.files[0];
@@ -290,6 +386,56 @@ const normalizedData =
 
     return cleanRow;
   });
+
+const invalidRows = [];
+
+normalizedData.forEach((row, index) => {
+
+  const circle = String(
+    row.circle || ""
+  ).trim();
+
+  const cmp = String(
+    row.cmp || ""
+  ).trim();
+
+  if (
+    !VALID_CIRCLES.includes(circle)
+  ) {
+
+    invalidRows.push(
+      `Row ${index + 2}: Invalid Circle -> ${circle}`
+    );
+
+  }
+
+  if (
+    !VALID_CMPS.includes(cmp)
+  ) {
+
+    invalidRows.push(
+      `Row ${index + 2}: Invalid CMP -> ${cmp}`
+    );
+
+  }
+
+});
+
+if (invalidRows.length > 0) {
+
+  toast.error(
+    invalidRows[0]
+  );
+
+  console.log(
+    "Invalid Rows:",
+    invalidRows
+  );
+
+  setUploading(false);
+
+  return;
+}
 
   const formattedData =
     normalizedData.map((row, index) => ({
@@ -367,11 +513,6 @@ fttx_engineer:
 fttx_technician:
   Number(row.fttx_technician) || 0,
 
-technicianb:
-  Number(row.technicianb) || 0,
-
-riggerb:
-  Number(row.riggerb) || 0,
     }));
 
   try {
@@ -603,10 +744,6 @@ const exportCSV = () => {
   Number(row.fttx_engineer || 0) +
   Number(row.fttx_technician || 0);
 
-sum.bench +=
-  Number(row.technicianb || 0) +
-  Number(row.riggerb || 0);
-
       return sum;
 
     },
@@ -617,7 +754,6 @@ sum.bench +=
   fiber: 0,
   fttx: 0,
   fttxPo: 0,
-  bench: 0,
 }
 
   );
@@ -628,7 +764,7 @@ sum.bench +=
     <div className="min-h-screen space-y-3">
 
       {/* HEADER */}
-      <div className="rounded-[14px] border border-white/70 bg-white/80 px-4 py-3 shadow-[0_20px_80px_rgba(15,23,42,0.08)]">
+      <div className="rounded-[14px] border border-white/70 bg-white/80 px-4 py-3">
 
         <div className="flex items-center justify-between">
 
@@ -681,9 +817,13 @@ sum.bench +=
   }`}
 >
 
-    {uploading
-  ? "Uploading..."
-  : "Upload Excel"}
+<div className="flex items-center gap-2">
+
+  <span>
+    Upload Excel
+  </span>
+
+</div>
 
     <input
       type="file"
@@ -714,7 +854,7 @@ sum.bench +=
   {/* TOTAL CIRCLES */}
 
    <div className="group relative overflow-visible rounded-[14px] border border-white/60
-   bg-white/90 px-4 py-2 shadow-[0_10px_40px_rgba(15,23,42,0.08)] hover:-translate-y-1
+   bg-white/90 px-4 py-2  hover:-translate-y-1
     transition-all duration-300  hover:shadow-[0_20px_60px_rgba(79,70,229,0.18)]">
 
     <div className="flex items-center justify-between">
@@ -748,7 +888,7 @@ sum.bench +=
   {/* TOTAL CMP */}
 
    <div className="group relative overflow-hidden rounded-[14px] border border-white/60
-   bg-white/90 px-4 py-2 shadow-[0_10px_40px_rgba(15,23,42,0.08)] hover:-translate-y-1
+   bg-white/90 px-4 py-2 hover:-translate-y-1
     transition-all duration-300  hover:shadow-[0_20px_60px_rgba(79,70,229,0.18)]">
 
     <div className="flex items-center justify-between">
@@ -782,7 +922,7 @@ sum.bench +=
   {/* TOTAL WORKFORCE */}
 
    <div className="group relative overflow-hidden rounded-[14px] border border-white/60
-   bg-white/90 px-4 py-2 shadow-[0_10px_40px_rgba(15,23,42,0.08)] hover:-translate-y-1
+   bg-white/90 px-4 py-2 hover:-translate-y-1
     transition-all duration-300  hover:shadow-[0_20px_60px_rgba(79,70,229,0.18)]">
 
     <div className="flex items-center justify-between">
@@ -816,7 +956,7 @@ sum.bench +=
   {/* UTILITY */}
 
    <div className="group relative overflow-hidden rounded-[14px] border border-white/60
-   bg-white/90 px-4 py-2 shadow-[0_10px_40px_rgba(15,23,42,0.08)] hover:-translate-y-1
+   bg-white/90 px-4 py-2  hover:-translate-y-1
     transition-all duration-300  hover:shadow-[0_20px_60px_rgba(79,70,229,0.18)]">
 
     <div className="flex items-center justify-between">
@@ -850,7 +990,7 @@ sum.bench +=
   {/* ISP */}
 
   <div className="group relative overflow-hidden rounded-[14px] border border-white/60
-   bg-white/90 px-4 py-2 shadow-[0_10px_40px_rgba(15,23,42,0.08)] hover:-translate-y-1
+   bg-white/90 px-4 py-2 hover:-translate-y-1
     transition-all duration-300  hover:shadow-[0_20px_60px_rgba(79,70,229,0.18)]">
 
     <div className="flex items-center justify-between">
@@ -1017,7 +1157,6 @@ sum.bench +=
     border
     border-slate-200
     bg-white
-    shadow-[0_10px_40px_rgba(15,23,42,0.08)]
   "
   style={{
     scrollbarColor: "#f1f5f9 #e2e8f0",
@@ -1090,13 +1229,6 @@ sum.bench +=
    {`FTTX PO Based (${categoryTotals.fttxPo})`}
   </th>
 
-  {/* BENCH */}
-  <th
-    colSpan={2}
-    className="border border-slate-500 px-4 py-2 text-center text-xs font-semibold"
-  >
-    {`Bench Strength (${categoryTotals.bench})`}
-  </th>
 
 </tr>
 
@@ -1200,13 +1332,6 @@ sum.bench +=
             FTTx Technician
           </th>
 
-          <th className="border border-slate-500 px-4 py-2">
-            TechnicianB
-          </th>
-
-          <th className="border border-slate-500 px-4 py-2">
-            RiggerB
-          </th>
 
          
 
@@ -1310,14 +1435,6 @@ sum.bench +=
         sum.fttx_technician +
         Number(row.fttx_technician || 0),
 
-      technicianb:
-        sum.technicianb +
-        Number(row.technicianb || 0),
-
-      riggerb:
-        sum.riggerb +
-        Number(row.riggerb || 0),
-
     }),
     {
       state_leadership_team: 0,
@@ -1342,8 +1459,6 @@ sum.bench +=
       fttx_helper: 0,
       fttx_engineer: 0,
       fttx_technician: 0,
-      technicianb: 0,
-      riggerb: 0,
     }
   );
 
@@ -1448,14 +1563,6 @@ sum.bench +=
 
       <td className="border border-slate-300 px-4 py-2 text-center">
         {total.fttx_technician}
-      </td>
-
-      <td className="border border-slate-300 px-4 py-2 text-center">
-        {total.technicianb}
-      </td>
-
-      <td className="border border-slate-300 px-4 py-2 text-center">
-        {total.riggerb}
       </td>
 
     </tr>
@@ -1565,14 +1672,6 @@ sum.bench +=
   {row.fttx_technician}
 </td>
 
-<td className="border border-slate-200 px-4 py-2 text-center">
-  {row.technicianb}
-</td>
-
-<td className="border border-slate-200 px-4 py-2 text-center">
-  {row.riggerb}
-</td>
-
       </tr>
 
     ))}
@@ -1602,7 +1701,7 @@ sum.bench +=
 
       <div className="max-h-[100vh] w-full max-w-7xl overflow-y-auto rounded-[18px] bg-white px-6 py-4">
 
-      <div className="mb-4 flex items-center justify-between">
+      <div className="mb-4 flex items-center justify-between border-b border-slate-200 pb-3">
 
         <h2 className="text-lg font-semibold">
           {editingId
@@ -1693,12 +1792,13 @@ sum.bench +=
 
     <select
       value={form[key]}
-      onChange={(e) =>
-        setForm({
-          ...form,
-          [key]: e.target.value,
-        })
-      }
+     onChange={(e) =>
+  setForm({
+    ...form,
+    circle: e.target.value,
+    cmp: "",
+  })
+}
       className="h-9 text-sm rounded-xl border border-slate-200 bg-white px-2 outline-none"
     >
 
@@ -1706,145 +1806,17 @@ sum.bench +=
         Select CMP
       </option>
 
-      <option value="Delhi SHQ">
-  Delhi SHQ
-</option>
-
-<option value="Haryana SHQ">
-  Haryana SHQ
-</option>
-
-<option value="Punjab SHQ">
-  Punjab SHQ
-</option>
-
-<option value="UP East SHQ">
-  UP East SHQ
-</option>
-
-      {/* DELHI */}
-      <option value="Delhi-1 (West)">
-        Delhi-1 (West)
+   {form.circle &&
+  circleCMPMap[form.circle]?.map(
+    (cmp) => (
+      <option
+        key={cmp}
+        value={cmp}
+      >
+        {cmp}
       </option>
-
-      <option value="Delhi-2 (South)">
-        Delhi-2 (South)
-      </option>
-
-      <option value="Delhi-3 (Central-East)">
-        Delhi-3 (Central-East)
-      </option>
-
-      <option value="Delhi-4 (North)">
-        Delhi-4 (North)
-      </option>
-
-      <option value="Faridabad (NCR)">
-        Faridabad (NCR)
-      </option>
-
-      <option value="Ghaziabad (NCR)">
-        Ghaziabad (NCR)
-      </option>
-
-      <option value="Gurgaon (NCR)">
-        Gurgaon (NCR)
-      </option>
-
-      <option value="Noida (NCR)">
-        Noida (NCR)
-      </option>
-
-      {/* HARYANA */}
-      <option value="Ambala">
-        Ambala
-      </option>
-
-      <option value="Hissar">
-        Hissar
-      </option>
-
-      <option value="Karnal">
-        Karnal
-      </option>
-
-      <option value="Panipat">
-        Panipat
-      </option>
-
-      <option value="Rewari">
-        Rewari
-      </option>
-
-      <option value="Rohtak">
-        Rohtak
-      </option>
-
-      {/* PUNJAB */}
-      <option value="Amritsar">
-        Amritsar
-      </option>
-
-      <option value="Bathinda">
-        Bathinda
-      </option>
-
-      <option value="Chandigarh">
-        Chandigarh
-      </option>
-
-      <option value="Jalandhar">
-        Jalandhar
-      </option>
-
-      <option value="Ludhiana-1">
-        Ludhiana-1
-      </option>
-
-      <option value="Ludhiana-2">
-        Ludhiana-2
-      </option>
-
-      <option value="Pathankot">
-        Pathankot
-      </option>
-
-      <option value="Patiala">
-        Patiala
-      </option>
-
-      <option value="Sangrur">
-        Sangrur
-      </option>
-
-      {/* UP EAST */}
-      <option value="Allahabad">
-        Allahabad
-      </option>
-
-      <option value="Azamgarh">
-        Azamgarh
-      </option>
-
-      <option value="Faizabad">
-        Faizabad
-      </option>
-
-      <option value="Gorakhpur">
-        Gorakhpur
-      </option>
-
-      <option value="Nanded">
-        Nanded
-      </option>
-
-      <option value="Raibareilly">
-        Raibareilly
-      </option>
-
-      <option value="Varanasi">
-        Varanasi
-      </option>
+    )
+  )}
 
     </select>
 
