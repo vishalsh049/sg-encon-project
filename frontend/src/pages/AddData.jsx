@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { buildApiUrl } from "../lib/api";
+import { authFetch, buildApiUrl } from "../lib/api";
 import { useUser } from "../context/UserContext";
 
 function AddData() {
@@ -11,7 +11,7 @@ function AddData() {
 const userCircle = user?.circle || "ALL";
 
   useEffect(() => {
-    fetch(buildApiUrl("/api/manpower"))
+    authFetch(buildApiUrl("/api/manpower"))
       .then((res) => res.json())
       .then((result) => setData(result))
       .catch((err) => console.error(err));
@@ -23,14 +23,14 @@ const userCircle = user?.circle || "ALL";
       return;
     }
 
-    fetch(buildApiUrl("/api/manpower"), {
+    authFetch(buildApiUrl("/api/manpower"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ role, status }),
     })
       .then((res) => res.json())
       .then(() => {
-        fetch(buildApiUrl("/api/manpower"))
+        authFetch(buildApiUrl("/api/manpower"))
           .then((res) => res.json())
           .then((nextData) => setData(nextData));
 

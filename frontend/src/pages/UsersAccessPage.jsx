@@ -12,10 +12,11 @@ import {
 import { buildApiUrl } from "../lib/api";
 
 const initialUserForm = {
-  name: "",
+   name: "",
   designation: "",
   circle: "ALL",
   domain: "ALL",
+  username: "",
   email: "",
   password: "",
   status: "active",
@@ -120,38 +121,26 @@ function UsersAccessPage() {
   const [showPassword, setShowPassword] =
     useState(false);
 
-  const generatePassword = (length = 12) => {
-    const lower = "abcdefghijklmnopqrstuvwxyz";
-    const upper = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-    const digits = "0123456789";
-    const symbols = "!@#$%^&*()-_=+[]{}<>?";
-    const all = lower + upper + digits + symbols;
+const generatePassword = () => {
+  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
-    let password = "";
-    password += lower.charAt(
-      Math.floor(Math.random() * lower.length)
-    );
-    password += upper.charAt(
-      Math.floor(Math.random() * upper.length)
-    );
-    password += digits.charAt(
-      Math.floor(Math.random() * digits.length)
-    );
-    password += symbols.charAt(
-      Math.floor(Math.random() * symbols.length)
-    );
+  const p1 =
+    chars[Math.floor(Math.random() * chars.length)];
 
-    for (let i = 4; i < length; i += 1) {
-      password += all.charAt(
-        Math.floor(Math.random() * all.length)
-      );
-    }
+  const p2 =
+    Math.floor(Math.random() * 10);
 
-    return password
-      .split("")
-      .sort(() => Math.random() - 0.5)
-      .join("");
-  };
+  const p3 =
+    chars[Math.floor(Math.random() * chars.length)];
+
+  const p4 =
+    Math.floor(Math.random() * 10);
+
+  const p5 =
+    chars[Math.floor(Math.random() * chars.length)];
+
+  return `SGE@${p1}${p2}${p3}${p4}${p5}`;
+};
 
   const handleGeneratePassword = () => {
     setUserForm((prev) => ({
@@ -212,13 +201,13 @@ function UsersAccessPage() {
       .filter((user) => {
         const matchesSearch =
           !normalizedSearch ||
-          [
-            user.name,
-            user.email,
-            user.designation,
-            user.circle,
-            user.domain,
-          ]
+         [
+           user.name,
+           user.username,
+           user.designation,
+           user.circle,
+           user.domain,
+        ]
             .filter(Boolean)
             .some((value) =>
               String(value)
@@ -280,6 +269,7 @@ function UsersAccessPage() {
         user.designation || "",
       circle: user.circle || "ALL",
       domain: user.domain || "ALL",
+      username: user.username || "",
       email: user.email || "",
       password: "",
       status: user.status || "active",
@@ -294,7 +284,8 @@ function UsersAccessPage() {
     if (
       !userForm.name.trim() ||
       !userForm.designation.trim() ||
-      !userForm.email.trim() ||
+      !userForm.username.trim() ||
+      !userForm.email.trim()||
       !userForm.circle.trim() ||
       !userForm.domain.trim() ||
       (!editingUser &&
@@ -309,12 +300,9 @@ function UsersAccessPage() {
 
     const payload = {
       name: userForm.name.trim(),
-      designation:
-        userForm.designation.trim(),
-
-      email: userForm.email
-        .trim()
-        .toLowerCase(),
+      designation: userForm.designation.trim(),
+      username: userForm.username.trim(),
+      email: userForm.email.trim().toLowerCase(),
 
       password: userForm.password,
 
@@ -458,8 +446,8 @@ if (sessionUser?.id === editingUser.id) {
   };
 
   return (
-    <div className="mx-auto max-w-7xl space-y-6">
-      <div className="app-surface overflow-hidden p-6">
+    <div className="mx-auto max-w-7xl">
+      <div className="app-surface overflow-hidden ">
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
             <h1 className="text-xl font-semibold text-text-primary">
@@ -490,7 +478,7 @@ if (sessionUser?.id === editingUser.id) {
 
             <input
               type="text"
-              placeholder="Search by name, email, designation, circle, or domain"
+              placeholder="Search by name, username, designation, circle, or domain"
               value={searchTerm}
               onChange={(e) =>
                 setSearchTerm(
@@ -602,10 +590,14 @@ if (sessionUser?.id === editingUser.id) {
                         {user.name || "-"}
                       </div>
 
-                      <div className="mt-1 inline-flex items-center gap-1 text-xs text-text-secondary">
-                        <Mail size={12} />
-                        {user.email || "-"}
-                      </div>
+                      <div className="mt-1 text-xs text-text-secondary">
+                       Username: {user.username || "-"}
+                     </div>
+
+<div className="mt-1 inline-flex items-center gap-1 text-xs text-text-secondary">
+  <Mail size={12} />
+  {user.email || "-"}
+</div>
                     </td>
 
                     <td>
@@ -813,19 +805,31 @@ if (sessionUser?.id === editingUser.id) {
         )}
       </select>
 
-      <input
-        type="email"
-        placeholder="Email"
-        value={userForm.email}
-        onChange={(e) =>
-          setUserForm((prev) => ({
-            ...prev,
-            email:
-              e.target.value,
-          }))
-        }
-        className="app-input rounded-xl"
-      />
+ <input
+  type="text"
+  placeholder="Username"
+  value={userForm.username}
+  onChange={(e) =>
+    setUserForm((prev) => ({
+      ...prev,
+      username: e.target.value,
+    }))
+  }
+  className="app-input rounded-xl"
+/>
+
+<input
+  type="email"
+  placeholder="Email"
+  value={userForm.email}
+  onChange={(e) =>
+    setUserForm((prev) => ({
+      ...prev,
+      email: e.target.value,
+    }))
+  }
+  className="app-input rounded-xl"
+/>
 
       <div className="space-y-2">
         <div className="flex items-center gap-2">

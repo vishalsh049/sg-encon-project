@@ -6,6 +6,13 @@
     const path = require("path");
     const archiver = require("archiver");
     const fs = require("fs");
+    const {
+      assertRowsAllowedCircle,
+      authMiddleware,
+      isAllCircle,
+    } = require("../middleware/circleAccess");
+
+    router.use(authMiddleware);
 
     // storage
   const storage = multer.diskStorage({
@@ -214,6 +221,11 @@
     const cmps = parseFilterList(req.query.cmp);
     const domains = parseFilterList(req.query.domain);
 
+    if (!isAllCircle(req.authUser)) {
+      filters.push(`LOWER(TRIM(state)) = LOWER(TRIM(?))`);
+      params.push(req.authUser.circle);
+    }
+
     if (circles.length) {
       filters.push(`state IN (${circles.map(() => "?").join(",")})`);
       params.push(...circles);
@@ -242,6 +254,18 @@
     };
   };
 
+  const buildLatestScrumBatchSubquery = (req) => `
+    SELECT upload_batch_id
+    FROM scrum_manpower
+    ${isAllCircle(req.authUser) ? "" : "WHERE LOWER(TRIM(state)) = LOWER(TRIM(?))"}
+    ORDER BY uploaded_at DESC
+    LIMIT 1
+  `;
+
+  const addLatestBatchParam = (req, params) => {
+    if (!isAllCircle(req.authUser)) params.push(req.authUser.circle);
+  };
+
     // ✅ 1. SCRUM COUNT (FIRST)
     router.get("/scrum/count", (req, res) => {
       if (!isConnected()) {
@@ -258,12 +282,10 @@
 FROM scrum_manpower 
 ${whereClause}
 AND upload_batch_id = (
-  SELECT upload_batch_id
-  FROM scrum_manpower
-  ORDER BY uploaded_at DESC
-  LIMIT 1
+  ${buildLatestScrumBatchSubquery(req)}
 )
   `;
+      addLatestBatchParam(req, params);
 
       db.query(sql, params, (err, result) => {
         if (err) return res.status(500).json(err);
@@ -273,23 +295,25 @@ AND upload_batch_id = (
 
     // ✅ 2. SCRUM DATA
     router.get("/scrum", (req, res) => {
-      const latestBatchQuery = `
-        SELECT upload_batch_id 
-        FROM scrum_manpower 
-        ORDER BY uploaded_at DESC 
-        LIMIT 1
-      `;
+      const latestBatchQuery = buildLatestScrumBatchSubquery(req);
+      const latestBatchParams = [];
+      addLatestBatchParam(req, latestBatchParams);
 
-      db.query(latestBatchQuery, (err, batchResult) => {
+      db.query(latestBatchQuery, latestBatchParams, (err, batchResult) => {
         if (err) return res.status(500).json(err);
 
         if (batchResult.length === 0) return res.json([]);
 
         const batchId = batchResult[0].upload_batch_id;
 
+      const circleSql = isAllCircle(req.authUser)
+        ? ""
+        : " AND LOWER(TRIM(state)) = LOWER(TRIM(?))";
+      const params = [batchId, "S G ENCON PVT LTD"];
+      if (!isAllCircle(req.authUser)) params.push(req.authUser.circle);
       db.query(
-    "SELECT * FROM scrum_manpower WHERE upload_batch_id = ? AND UPPER(TRIM(vendor)) = ?",
-    [batchId, "S G ENCON PVT LTD"],
+    `SELECT * FROM scrum_manpower WHERE upload_batch_id = ? AND UPPER(TRIM(vendor)) = ?${circleSql}`,
+    params,
     (err, result) => {
       if (err) return res.status(500).json(err);
       res.json(result);
@@ -328,11 +352,13 @@ AND upload_batch_id = (
           file_name,
           uploaded_at
         FROM scrum_manpower
+        ${isAllCircle(req.authUser) ? "" : "WHERE LOWER(TRIM(state)) = LOWER(TRIM(?))"}
         ORDER BY uploaded_at DESC
         LIMIT 1
       `;
 
-      db.query(sql, (err, result) => {
+      const params = isAllCircle(req.authUser) ? [] : [req.authUser.circle];
+      db.query(sql, params, (err, result) => {
         if (err) return res.status(500).json(err);
 
         res.json(result[0] || {});
@@ -352,12 +378,10 @@ AND upload_batch_id = (
         FROM scrum_manpower
         ${whereClause}
           AND upload_batch_id = (
-            SELECT upload_batch_id
-            FROM scrum_manpower
-            ORDER BY uploaded_at DESC
-            LIMIT 1
+  ${buildLatestScrumBatchSubquery(req)}
           )
       `;
+      addLatestBatchParam(req, params);
 
       db.query(sql, params, (err, result) => {
         if (err) {
@@ -377,6 +401,26 @@ AND upload_batch_id = (
     const decodedName = decodeURIComponent(req.params.fileName);
     const filePath = path.join(__dirname, "../uploads", decodedName);
 
+    if (!isAllCircle(req.authUser)) {
+      return db.query(
+        `SELECT * FROM scrum_manpower
+         WHERE file_name = ?
+           AND LOWER(TRIM(state)) = LOWER(TRIM(?))
+         ORDER BY uploaded_at DESC`,
+        [decodedName, req.authUser.circle],
+        (err, rows) => {
+          if (err) return res.status(500).json({ message: "Download failed" });
+          if (!rows.length) return res.status(404).json({ message: "File not found" });
+
+          const workbook = xlsx.utils.book_new();
+          xlsx.utils.book_append_sheet(workbook, xlsx.utils.json_to_sheet(rows), "Scrum");
+          const buffer = xlsx.write(workbook, { type: "buffer", bookType: "xlsx" });
+          res.attachment(`${req.authUser.circle}_${decodedName.replace(/\.[^.]+$/, "")}.xlsx`);
+          return res.send(buffer);
+        }
+      );
+    }
+
     if (!fs.existsSync(filePath)) {
       return res.status(404).json({ message: "File not found" });
     }
@@ -390,6 +434,10 @@ AND upload_batch_id = (
   });
 
     router.get("/scrum/uploads", (req, res) => {
+    const circleSql = isAllCircle(req.authUser)
+      ? ""
+      : "WHERE LOWER(TRIM(state)) = LOWER(TRIM(?))";
+    const params = isAllCircle(req.authUser) ? [] : [req.authUser.circle];
     const sql = `
      SELECT 
   upload_batch_id,
@@ -398,11 +446,12 @@ AND upload_batch_id = (
   MAX(uploaded_by) as uploaded_by,
   MAX(file_name) as file_name
 FROM scrum_manpower
+${circleSql}
 GROUP BY upload_batch_id, manual_date
 ORDER BY uploaded_at DESC
     `;
 
-    db.query(sql, (err, result) => {
+    db.query(sql, params, (err, result) => {
       if (err) return res.status(500).json(err);
       res.json(result);
     });
@@ -436,6 +485,12 @@ ORDER BY uploaded_at DESC
       if (!data.length) {
         return res.status(400).json({ message: "Excel file is empty" });
       }
+
+      assertRowsAllowedCircle(
+        req.authUser,
+        data,
+        (row) => getTextValue(cleanRow(row), ["state"])
+      );
 
       console.log("Total Excel Rows:", data.length);
       console.log("Excel Keys:", Object.keys(data[0]));
@@ -553,7 +608,7 @@ VALUES ?
 
     } catch (err) {
     console.log("UPLOAD ERROR:", err);
-    res.status(500).json({ message: err.message });
+    res.status(err.statusCode || 500).json({ message: err.message });
   }
   });
 
@@ -584,6 +639,9 @@ VALUES ?
     });
 
   router.post("/download/bulk", (req, res) => {
+    if (!isAllCircle(req.authUser)) {
+      return res.status(403).json({ message: "Download is available only through circle-filtered exports." });
+    }
     const { batchIds } = req.body;
 
     if (!batchIds || batchIds.length === 0) {
@@ -639,27 +697,33 @@ VALUES ?
     }
 
     const placeholders = batchIds.map(() => "?").join(",");
+    const circleSql = isAllCircle(req.authUser)
+      ? ""
+      : " AND LOWER(TRIM(state)) = LOWER(TRIM(?))";
+    const scopedParams = isAllCircle(req.authUser)
+      ? batchIds
+      : [...batchIds, req.authUser.circle];
     const selectSql = `
       SELECT upload_batch_id, file_name
       FROM scrum_manpower
-      WHERE upload_batch_id IN (${placeholders})
+      WHERE upload_batch_id IN (${placeholders})${circleSql}
       GROUP BY upload_batch_id, file_name
     `;
-    const deleteSql = `DELETE FROM scrum_manpower WHERE upload_batch_id IN (${placeholders})`;
+    const deleteSql = `DELETE FROM scrum_manpower WHERE upload_batch_id IN (${placeholders})${circleSql}`;
 
-    db.query(selectSql, batchIds, (selectErr, rows) => {
+    db.query(selectSql, scopedParams, (selectErr, rows) => {
       if (selectErr) {
         console.log("BULK DELETE SELECT ERROR:", selectErr);
         return res.status(500).json({ message: "Bulk delete failed" });
       }
 
-      db.query(deleteSql, batchIds, (err) => {
+      db.query(deleteSql, scopedParams, (err) => {
         if (err) {
           console.log("BULK DELETE ERROR:", err);
           return res.status(500).json({ message: "Bulk delete failed" });
         }
 
-        rows.forEach((row) => {
+        if (isAllCircle(req.authUser)) rows.forEach((row) => {
       const filePath = path.join(process.cwd(), "uploads", row.file_name);        if (fs.existsSync(filePath)) {
             try {
               fs.unlinkSync(filePath);
@@ -676,27 +740,33 @@ VALUES ?
 
   router.delete("/upload/:batchId", (req, res) => {
     const { batchId } = req.params;
+    const circleSql = isAllCircle(req.authUser)
+      ? ""
+      : " AND LOWER(TRIM(state)) = LOWER(TRIM(?))";
+    const params = isAllCircle(req.authUser)
+      ? [batchId]
+      : [batchId, req.authUser.circle];
     const selectSql = `
       SELECT file_name
       FROM scrum_manpower
-      WHERE upload_batch_id = ?
+      WHERE upload_batch_id = ?${circleSql}
       GROUP BY file_name
     `;
-    const deleteSql = "DELETE FROM scrum_manpower WHERE upload_batch_id = ?";
+    const deleteSql = `DELETE FROM scrum_manpower WHERE upload_batch_id = ?${circleSql}`;
 
-    db.query(selectSql, [batchId], (selectErr, rows) => {
+    db.query(selectSql, params, (selectErr, rows) => {
       if (selectErr) {
         console.log("DELETE SELECT ERROR:", selectErr);
         return res.status(500).json({ message: "Delete failed" });
       }
 
-      db.query(deleteSql, [batchId], (err) => {
+      db.query(deleteSql, params, (err) => {
         if (err) {
           console.log("DELETE ERROR:", err);
           return res.status(500).json({ message: "Delete failed" });
         }
 
-        rows.forEach((row) => {
+        if (isAllCircle(req.authUser)) rows.forEach((row) => {
           const filePath = path.join(process.cwd(), "uploads", row.file_name);
           if (fs.existsSync(filePath)) {
             try {
@@ -745,16 +815,14 @@ END AS category,
     FROM scrum_manpower
     ${whereClause}
       AND upload_batch_id = (
-  SELECT upload_batch_id
-  FROM scrum_manpower
-  ORDER BY uploaded_at DESC
-  LIMIT 1
+  ${buildLatestScrumBatchSubquery(req)}
 )
     GROUP BY category
     HAVING category IS NOT NULL
     ORDER BY total DESC
   `;
 
+  addLatestBatchParam(req, params);
   db.query(sql, params, (err, result) => {
     if (err) {
       console.log("ROLE SUMMARY ERROR:", err);
@@ -827,10 +895,7 @@ END AS category,
           FROM scrum_manpower
           ${whereClause}
             AND upload_batch_id = (
-              SELECT upload_batch_id
-              FROM scrum_manpower
-              ORDER BY uploaded_at DESC
-              LIMIT 1
+              ${buildLatestScrumBatchSubquery(req)}
             )
             AND UPPER(TRIM(COALESCE(status, ''))) = 'ACTIVE'
             AND maintenance_point IS NOT NULL
@@ -846,6 +911,7 @@ END AS category,
       ORDER BY cmp ASC, role_key ASC
     `;
 
+    addLatestBatchParam(req, params);
     db.query(sql, params, (err, result) => {
       if (err) {
         console.log("SCRUM CMP ROLE COUNT ERROR:", err);

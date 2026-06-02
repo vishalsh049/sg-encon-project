@@ -3,6 +3,14 @@ const multer = require("multer");
 const XLSX = require("xlsx");
 
 const { db } = require("../config/db");
+const {
+  addCircleFilter,
+  assertRowsAllowedCircle,
+  authMiddleware,
+  canAccessCircle,
+  forbid,
+  isAllCircle,
+} = require("../middleware/circleAccess");
 
 const router = express.Router();
 const storage = multer.memoryStorage();
@@ -11,6 +19,16 @@ const upload = multer({
   storage,
   limits: { fileSize: 25 * 1024 * 1024 },
 });
+
+router.use(authMiddleware);
+
+function getCircleScope(req, column = "circle") {
+  if (isAllCircle(req.authUser)) return { sql: "", params: [] };
+  return {
+    sql: ` AND LOWER(TRIM(${column})) = LOWER(TRIM(?))`,
+    params: [req.authUser.circle],
+  };
+}
 
 const query = (sql, params = []) =>
   new Promise((resolve, reject) => {
@@ -454,14 +472,36 @@ async function insertPhysicalRows(conn, reportId, rows) {
   }
 }
 
-router.get("/", async (_req, res) => {
+router.get("/", async (req, res) => {
 
   try {
 
-    const rows = await query(`
-      SELECT * FROM physical
+    const userCircle =
+      req.authUser?.circle || "ALL";
+
+    let sql = `
+      SELECT *
+      FROM physical
+    `;
+
+    let params = [];
+
+    if (
+      userCircle &&
+      userCircle !== "ALL"
+    ) {
+      sql += `
+        WHERE circle = ?
+      `;
+      params.push(userCircle);
+    }
+
+    sql += `
       ORDER BY id DESC
-    `);
+    `;
+
+    const rows =
+      await query(sql, params);
 
     res.json({
       success: true,
@@ -528,6 +568,7 @@ if (!allowedExtensions.includes(fileExtension)) {
     const sheetName = workbook.SheetNames[0];
     const worksheet = workbook.Sheets[sheetName];
     const rows = XLSX.utils.sheet_to_json(worksheet, { defval: null });
+    assertRowsAllowedCircle(req.authUser, rows, (row) => row["Circle"] || row["circle"] || "");
     console.log(
   "Excel Headers:",
   Object.keys(rows[0] || {})
@@ -627,7 +668,7 @@ for (const row of rows) {
     }
 
     console.error("Physical upload error:", error);
-    res.status(500).json({
+    res.status(error.statusCode || 500).json({
       success: false,
       message: error.message || "Server Error",
     });
@@ -643,6 +684,10 @@ router.post("/add-employee", async (req, res) => {
  try {
 
   const data = req.body;
+
+  if (!canAccessCircle(req.authUser, data.circle)) {
+    return forbid(res);
+  }
 
   // VALIDATE CIRCLE
 
@@ -804,10 +849,19 @@ if (existingEmployee.length > 0) {
 
 });
 
-router.get("/reports", async (_req, res) => {
+router.get("/reports", async (req, res) => {
   try {
     await ensurePhysicalTables();
 
+    const params = [];
+    const circleClause = isAllCircle(req.authUser)
+      ? ""
+      : `WHERE EXISTS (
+          SELECT 1 FROM physical p
+          WHERE p.report_id = physical_reports.id
+            AND LOWER(TRIM(p.circle)) = LOWER(TRIM(?))
+        )`;
+    if (!isAllCircle(req.authUser)) params.push(req.authUser.circle);
     const rows = await query(`
       SELECT
         id,
@@ -822,9 +876,10 @@ router.get("/reports", async (_req, res) => {
         uploaded_at,
         created_at
       FROM physical_reports
+      ${circleClause}
       ORDER BY uploaded_at DESC, id DESC
       LIMIT 200
-    `);
+    `, params);
 
     res.status(200).json({
       success: true,
@@ -852,9 +907,12 @@ router.delete("/delete-report/:id", async (req, res) => {
   try {
     await ensurePhysicalTables();
 
+    const filters = ["report_id = ?"];
+    const params = [reportId];
+    addCircleFilter(filters, params, req.authUser);
     const [report] = await query(
-      `SELECT id, file_path FROM physical_reports WHERE id = ? LIMIT 1`,
-      [reportId]
+      `SELECT report_id FROM physical WHERE ${filters.join(" AND ")} LIMIT 1`,
+      params
     );
 
     if (!report) {
@@ -862,6 +920,17 @@ router.delete("/delete-report/:id", async (req, res) => {
         success: false,
         message: "Report not found",
       });
+    }
+
+    if (!isAllCircle(req.authUser)) {
+      const [foreignRow] = await query(
+        `SELECT id FROM physical
+         WHERE report_id = ?
+           AND LOWER(TRIM(COALESCE(circle, ''))) <> LOWER(TRIM(?))
+         LIMIT 1`,
+        [reportId, req.authUser.circle]
+      );
+      if (foreignRow) return forbid(res);
     }
 
     await query(`DELETE FROM physical WHERE report_id = ?`, [reportId]);
@@ -895,10 +964,13 @@ router.delete("/delete-employee/:id", async (req, res) => {
 
   try {
 
-    await query(
-      `DELETE FROM physical WHERE id = ?`,
-      [id]
+    const result = await query(
+      `DELETE FROM physical WHERE id = ?${
+        isAllCircle(req.authUser) ? "" : " AND LOWER(TRIM(circle)) = LOWER(TRIM(?))"
+      }`,
+      isAllCircle(req.authUser) ? [id] : [id, req.authUser.circle]
     );
+    if (!result.affectedRows) return forbid(res);
 
     res.status(200).json({
       success: true,
@@ -931,6 +1003,14 @@ router.put("/:id", async (req, res) => {
   } = req.body;
 
   try {
+    const [existing] = await query(`SELECT circle FROM physical WHERE id = ? LIMIT 1`, [id]);
+    if (
+      !existing ||
+      !canAccessCircle(req.authUser, existing.circle) ||
+      !canAccessCircle(req.authUser, circle)
+    ) {
+      return forbid(res);
+    }
 
     await query(
       `
@@ -971,10 +1051,11 @@ router.put("/:id", async (req, res) => {
 
 });
 
-router.get("/job-role-count", async (_req, res) => {
+router.get("/job-role-count", async (req, res) => {
 
   try {
 
+ const scope = getCircleScope(req);
  const rows = await query(`
   SELECT 
     TRIM(
@@ -991,11 +1072,12 @@ router.get("/job-role-count", async (_req, res) => {
 
   WHERE job_role IS NOT NULL
   AND job_role != ''
+  ${scope.sql}
 
   GROUP BY role_group
 
   ORDER BY total DESC
-`);
+`, scope.params);
 
     res.status(200).json({
       success: true,
@@ -1015,10 +1097,11 @@ router.get("/job-role-count", async (_req, res) => {
 
 });
 
-router.get("/circle-count", async (_req, res) => {
+router.get("/circle-count", async (req, res) => {
 
   try {
 
+  const scope = getCircleScope(req);
   const rows = await query(`
   SELECT
     circle,
@@ -1027,10 +1110,11 @@ router.get("/circle-count", async (_req, res) => {
 
   WHERE circle IS NOT NULL
   AND circle != ''
+  ${scope.sql}
 
   GROUP BY circle
   ORDER BY total DESC
-`);
+`, scope.params);
 
     res.status(200).json({
       success: true,
@@ -1050,10 +1134,11 @@ router.get("/circle-count", async (_req, res) => {
 
 });
 
-router.get("/employment-status-count", async (_req, res) => {
+router.get("/employment-status-count", async (req, res) => {
 
   try {
 
+ const scope = getCircleScope(req);
  const rows = await query(`
 SELECT
 CASE
@@ -1076,9 +1161,10 @@ FROM physical
 
 WHERE employment_status IS NOT NULL
 AND TRIM(employment_status) != ''
+${scope.sql}
 
 GROUP BY employment_status
-`);
+`, scope.params);
 
     res.status(200).json({
       success: true,
@@ -1098,10 +1184,11 @@ GROUP BY employment_status
 
 });
 
-router.get("/job-role-document-average", async (_req, res) => {
+router.get("/job-role-document-average", async (req, res) => {
 
   try {
 
+    const scope = getCircleScope(req);
     const rows = await query(`
       SELECT
 
@@ -1180,11 +1267,12 @@ router.get("/job-role-document-average", async (_req, res) => {
 
       WHERE job_role IS NOT NULL
         AND job_role != ''
+        ${scope.sql}
 
       GROUP BY role_group
 
       ORDER BY document_average DESC
-    `);
+    `, scope.params);
 
     res.status(200).json({
       success: true,
@@ -1204,10 +1292,12 @@ router.get("/job-role-document-average", async (_req, res) => {
 
 });
 
-router.get("/active-job-role-cmp-count", async (_req, res) => {
+router.get("/active-job-role-cmp-count", async (req, res) => {
 
   try {
 
+    const physicalScope = getCircleScope(req);
+    const newJoiningScope = getCircleScope(req);
     const rows = await query(`
 SELECT
   combined.cmp,
@@ -1294,6 +1384,7 @@ THEN 'wh_incharge_cum_security'
         AND cmp != ''
         AND job_role IS NOT NULL
         AND job_role != ''
+        ${physicalScope.sql}
     ) AS physical_source
   ) AS physical_roles
   WHERE physical_roles.role_key IS NOT NULL
@@ -1373,6 +1464,7 @@ THEN 'wh_incharge_cum_security'
         AND cmp != ''
         AND designation IS NOT NULL
         AND designation != ''
+        ${newJoiningScope.sql}
     ) AS new_joining_source
   ) AS new_joining_roles
   WHERE new_joining_roles.role_key IS NOT NULL
@@ -1381,7 +1473,7 @@ THEN 'wh_incharge_cum_security'
 GROUP BY combined.cmp, combined.role_key
 ORDER BY combined.cmp ASC, combined.role_key ASC
 
-    `);
+    `, [...physicalScope.params, ...newJoiningScope.params]);
 
     res.status(200).json({
       success: true,
@@ -1407,14 +1499,16 @@ router.get(
 
     try {
 
+      const scope = getCircleScope(req);
       const rows = await query(
         `
         SELECT *
         FROM physical
         WHERE aadhaar_no = ?
+        ${scope.sql}
         LIMIT 1
         `,
-        [req.params.aadhaar]
+        [req.params.aadhaar, ...scope.params]
       );
 
       if (rows.length === 0) {
@@ -1452,14 +1546,16 @@ router.get(
       req.params.employeeCode
     );
 
+    const scope = getCircleScope(req);
     const rows = await query(
       `
       SELECT *
       FROM physical
       WHERE TRIM(employee_code) = TRIM(?)
+      ${scope.sql}
       LIMIT 1
       `,
-      [req.params.employeeCode]
+      [req.params.employeeCode, ...scope.params]
     );
 
     console.log("Rows Found:", rows.length);
@@ -1488,6 +1584,17 @@ router.put(
     try {
 
       const data = req.body;
+
+      const [existing] = await query(`SELECT circle FROM physical WHERE id = ? LIMIT 1`, [
+        req.params.id,
+      ]);
+      if (
+        !existing ||
+        !canAccessCircle(req.authUser, existing.circle) ||
+        !canAccessCircle(req.authUser, data.circle)
+      ) {
+        return forbid(res);
+      }
 
      const result = await query(
   `

@@ -3,7 +3,7 @@ import axios from "axios";
 import React, { useEffect, useMemo, useState } from "react";
 import { ArrowDownToLine, Building2, CalendarDays, Clock3, FileSpreadsheet,
   Search, Sparkles, Trash2, UploadCloud, UserCheck, UserX, Users, X, } from "lucide-react";
-import { buildApiUrl } from "../lib/api";
+import { authFetch, buildApiUrl } from "../lib/api";
 
 function formatDate(value) {
   if (!value) return "--";
@@ -54,10 +54,10 @@ export default function Scrum() {
 
   const refreshScrumData = async () => {
     const [uploadsRes, dataRes, latestRes, roleRes] = await Promise.all([
-    fetch(buildApiUrl("/api/manpower/scrum/uploads")),
-    fetch(buildApiUrl("/api/manpower/scrum")),
-    fetch(buildApiUrl("/api/manpower/scrum/latest-upload")),
-    fetch(buildApiUrl("/api/manpower/scrum/job-role-summary"))
+    authFetch(buildApiUrl("/api/manpower/scrum/uploads")),
+    authFetch(buildApiUrl("/api/manpower/scrum")),
+    authFetch(buildApiUrl("/api/manpower/scrum/latest-upload")),
+    authFetch(buildApiUrl("/api/manpower/scrum/job-role-summary"))
    ]);
 
     const [uploadsData, scrumData, latestData, roleData] = await Promise.all([
@@ -184,7 +184,7 @@ const handleUpload = async () => {
     if (!window.confirm("Are you sure you want to delete this file?")) return;
 
     try {
-      const res = await fetch(buildApiUrl(`/api/manpower/upload/${id}`), {
+      const res = await authFetch(buildApiUrl(`/api/manpower/upload/${id}`), {
         method: "DELETE",
       });
 
@@ -211,7 +211,7 @@ const handleBulkDelete = async () => {
   if (!window.confirm("Delete selected files?")) return;
 
   try {
-    const res = await fetch(buildApiUrl("/api/manpower/upload/bulk"), {
+    const res = await authFetch(buildApiUrl("/api/manpower/upload/bulk"), {
       method: "DELETE",
       headers: {
         "Content-Type": "application/json",
@@ -242,7 +242,7 @@ const handleBulkDownload = async () => {
   }
 
   try {
-    const res = await fetch(buildApiUrl("/api/manpower/download/bulk"), {
+    const res = await authFetch(buildApiUrl("/api/manpower/download/bulk"), {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

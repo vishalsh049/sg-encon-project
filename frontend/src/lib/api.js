@@ -22,3 +22,13 @@ export function getAuthHeaders() {
       }
     : {};
 }
+
+export function authFetch(path, options = {}) {
+  return fetch(path, {
+    ...options,
+    headers: {
+      ...getAuthHeaders(),
+      ...(options.headers || {}),
+    },
+  });
+}

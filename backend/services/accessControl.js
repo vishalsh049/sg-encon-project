@@ -67,6 +67,11 @@ async function ensureAccessTables() {
 
   await ensureColumn("users", "role_id", "INT NULL");
   await ensureColumn("users", "designation", "VARCHAR(120) NULL");
+  await ensureColumn(
+  "users",
+  "username",
+  "VARCHAR(120) NULL"
+);
   await ensureColumn("users", "circle", "VARCHAR(120) NULL");
   await ensureColumn("users", "domain", "VARCHAR(120) NULL");
   await ensureColumn("users", "status", "ENUM('active','inactive') DEFAULT 'active'");
@@ -119,6 +124,7 @@ async function listUsers() {
     SELECT
       u.id,
       u.name,
+      u.username,
       u.email,
       u.designation,
       u.circle,
@@ -136,6 +142,7 @@ async function listUsers() {
   return rows.map((row) => ({
     id: row.id,
     name: row.name,
+    username: row.username,
     email: row.email,
     designation: row.designation,
     circle: row.circle,

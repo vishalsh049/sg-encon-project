@@ -3,7 +3,7 @@
   import Select from "react-select";
   import * as XLSX from "xlsx";
   import { saveAs } from "file-saver";
-  import { buildApiUrl } from "../lib/api";
+  import { authFetch, buildApiUrl } from "../lib/api";
 
   export default function Physical() {
     const [showModal, setShowModal] = useState(false);
@@ -73,7 +73,7 @@
       try {
         setTableLoading(true);
     
-        const response = await fetch(
+        const response = await authFetch(
     buildApiUrl("/api/physical")
   );
 
@@ -103,7 +103,7 @@
 
     try {
 
-      const response = await fetch(
+      const response = await authFetch(
         buildApiUrl("/api/physical/job-role-count")
       );
 
@@ -127,7 +127,7 @@
 
     try {
 
-      const response = await fetch(
+      const response = await authFetch(
         buildApiUrl("/api/physical/job-role-document-average")
       );
 
@@ -151,7 +151,7 @@
 
     try {
 
-      const response = await fetch(
+      const response = await authFetch(
         buildApiUrl("/api/physical/circle-count")
       );
 
@@ -175,7 +175,7 @@
 
     try {
 
-      const response = await fetch(
+      const response = await authFetch(
         buildApiUrl("/api/physical/employment-status-count")
       );
 
@@ -312,7 +312,7 @@
     try {
       setUploading(true);
 
-      const response = await fetch(
+      const response = await authFetch(
         buildApiUrl("/api/physical/upload-report"),
         {
           method: "POST",
@@ -454,7 +454,7 @@ const handleEdit = (item) => {
     setDeletingId(id);
 
     try {
-      const response = await fetch(
+      const response = await authFetch(
         buildApiUrl(`/api/physical/delete-employee/${id}`),
         {
           method: "DELETE",
@@ -495,7 +495,7 @@ const handleEdit = (item) => {
 
       for (const id of selectedRows) {
 
-        await fetch(
+        await authFetch(
           buildApiUrl(`/api/physical/delete-employee/${id}`),
           {
             method: "DELETE",
@@ -584,7 +584,7 @@ if (
 
   try {
 
-    const response = await fetch(
+    const response = await authFetch(
       buildApiUrl(
         `/api/physical/aadhaar/${cleanAadhaar}`
       )
@@ -701,7 +701,7 @@ if (
 
   try {
 
-    const response = await fetch(
+    const response = await authFetch(
       buildApiUrl(
         `/api/physical/employee-code/${value}`
       )
@@ -839,7 +839,7 @@ if (
     ? "PUT"
     : "POST";
 
-  const response = await fetch(
+  const response = await authFetch(
     buildApiUrl(apiUrl),
     {
       method,
@@ -863,7 +863,7 @@ if (
     const parsedEmployee =
       JSON.parse(newJoiningEmployee);
 
-    await fetch(
+    await authFetch(
       buildApiUrl(
         `/api/new-joining/delete/${parsedEmployee.id}`
       ),
@@ -952,7 +952,7 @@ if (
       excelFile
     );
 
-  const response = await fetch(
+  const response = await authFetch(
 
   isEditMode
     ? buildApiUrl(`/api/physical/${editingId}`)
@@ -1072,7 +1072,7 @@ if (
     setDownloadingId(item.id);
 
     try {
-      const response = await fetch(
+      const response = await authFetch(
         buildApiUrl(`/api/physical/download/${item.id}`)
       );
 
@@ -1236,12 +1236,12 @@ const signoffOptions = [
 const selectStyles = {
   control: (provided) => ({
     ...provided,
-    minHeight: "32px",
-    height: "32px",
+    minHeight: "36px",
+    height: "36px",
     borderRadius: "8px",
     borderColor: "#e2e8f0",
     boxShadow: "none",
-    fontSize: "12px",
+    fontSize: "13px",
   }),
 
   valueContainer: (provided) => ({
@@ -1299,6 +1299,36 @@ const CustomMenuList = (props) => {
   );
 };
 
+const circleFilterOptions = [
+  { value: "", label: "All Circles" },
+
+  ...[...new Set(data.map(item => item.circle))]
+    .filter(Boolean)
+    .map(circle => ({
+      value: circle,
+      label: circle
+    }))
+];  
+
+const cmpFilterOptions = [
+  { value: "", label: "All CMP" },
+
+  ...[...new Set(
+    data
+      .filter(
+        item =>
+          !circleFilter ||
+          item.circle === circleFilter
+      )
+      .map(item => item.cmp)
+  )]
+    .filter(Boolean)
+    .map(cmp => ({
+      value: cmp,
+      label: cmp
+    }))
+];
+
     return (
       <div className="min-h-screen">
         <div className="relative min-h-screen overflow-hidden">
@@ -1316,14 +1346,14 @@ const CustomMenuList = (props) => {
 
     <button
       onClick={() => setShowEmployeeModal(true)}
-      className="rounded-2xl bg-blue-600 px-5 py-2 text-sm font-semibold text-white shadow-lg transition hover:bg-blue-700"
+      className="rounded-xl bg-blue-600 px-4 py-2 text-xs font-semibold text-white transition hover:bg-blue-700"
     >
      Add Employee
     </button>
 
     <button
       onClick={() => setShowUploadModal(true)}
-      className="rounded-2xl bg-green-600 px-5 py-2 text-sm font-semibold text-white shadow-lg transition hover:bg-green-700"
+      className="rounded-xl bg-green-600 px-4 py-2 text-xs font-semibold text-white transition hover:bg-green-700"
     >
       Upload Report
     </button>
@@ -1332,104 +1362,97 @@ const CustomMenuList = (props) => {
 
             </div>
 
-            <div className="mt-2 flex flex-wrap items-center gap-3">
+{/* Filters and Actions Row */ }
+<div className="mt-2 flex items-center gap-3 rounded-xl bg-white p-1">
 
-    <input
-      type="text"
-      placeholder="Search Employee..."
-      value={search}
-      onChange={(e) =>
-        setSearch(e.target.value)
+  {/* Search */}
+  <input
+    type="text"
+    placeholder="Search by Employee Name, Employee Code, Aadhaar No, Mobile Number, CMP, Circle..."
+    value={search}
+    onChange={(e) => setSearch(e.target.value)}
+    className="h-9 flex-1 rounded-lg border border-slate-200 px-4 text-[13px] outline-none focus:border-blue-500"
+  />
+
+  {/* Circle */}
+  <div className="w-52">
+    <Select
+      styles={selectStyles}
+      placeholder="Select Circle"
+      options={circleFilterOptions}
+      value={
+        circleFilterOptions.find(
+          item => item.value === circleFilter
+        ) || null
       }
-      className="rounded-xl border border-slate-200 px-4 py-2 text-sm outline-none focus:border-blue-500"
+      onChange={(selected) =>
+        setCircleFilter(selected?.value || "")
+      }
     />
+  </div>
 
-    <select
-      value={circleFilter}
-      onChange={(e) =>
-        setCircleFilter(e.target.value)
+  {/* CMP */}
+  <div className="w-52">
+    <Select
+      styles={selectStyles}
+      placeholder="Select CMP"
+      options={cmpFilterOptions}
+      value={
+        cmpFilterOptions.find(
+          item => item.value === cmpFilter
+        ) || null
       }
-      className="rounded-xl border border-slate-200 px-4 py-2 text-sm outline-none"
-    >
-      <option value="">Select Circle</option>
-
-      {[...new Set(data.map((item) => item.circle))]
-        .filter(Boolean)
-        .map((circle, index) => (
-          <option key={index} value={circle}>
-            {circle}
-          </option>
-        ))}
-    </select>
-
-    <select
-      value={cmpFilter}
-      onChange={(e) =>
-        setCmpFilter(e.target.value)
+      onChange={(selected) =>
+        setCmpFilter(selected?.value || "")
       }
-      className="rounded-xl border border-slate-200 px-4 py-2 text-sm outline-none"
-    >
-      <option value="">Select CMP</option>
+    />
+  </div>
 
-      {[...new Set(data.map((item) => item.cmp))]
-        .filter(Boolean)
-        .map((cmp, index) => (
-          <option key={index} value={cmp}>
-            {cmp}
-          </option>
-        ))}
-    </select>
-
+  {/* Export */}
   <button
     onClick={handleExportExcel}
-    className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700"
+    className="h-8 rounded-xl bg-emerald-600 px-4 text-[13px] font-semibold text-white"
   >
-    Export Excel
+    Export
   </button>
 
+  {/* Delete */}
   <button
     onClick={handleBulkDelete}
-    disabled={selectedRows.length === 0}
-    className={`rounded-xl px-4 py-2 text-sm font-semibold text-white transition ${
-      selectedRows.length === 0
-        ? "bg-red-300 cursor-not-allowed"
-        : "bg-red-600 hover:bg-red-700"
-    }`}
+    className="h-8 rounded-xl bg-red-600 px-4 text-[13px] font-semibold text-white"
   >
-    Delete Selected ({selectedRows.length})
+    Delete ({selectedRows.length})
   </button>
 
-    <button
-      onClick={() => {
-        setSearch("");
-        setCircleFilter("");
-        setCmpFilter("");
-      }}
-      className="rounded-xl bg-red-500 px-4 py-2 text-sm font-semibold text-white hover:bg-red-600"
-    >
-      Reset
-    </button>
+  {/* Reset */}
+  <button
+    onClick={() => {
+      setSearch("");
+      setCircleFilter("");
+      setCmpFilter("");
+      setCurrentPage(1);
+    }}
+    className="h-8 rounded-xl bg-slate-700 px-4 text-[13px] font-semibold text-white"
+  >
+    Reset
+  </button>
 
-  </div>
+</div>
 
     {/* Top KPI Row */}
 
-  <div className="mx-auto mt-3 grid w-full max-w-7xl grid-cols-1 gap-2 lg:grid-cols-12">
+ <div className="mx-auto mt-2 grid w-full max-w-7xl grid-cols-2 gap-2 lg:grid-cols-12">
 
     {/* Total Employees */}
 
-  <div className="lg:col-span-2 rounded-[12px] border border-white/70 bg-white/100 px-4 py-2 backdrop-blur-xl">
+  <div className="lg:col-span-2 rounded-xl border border-slate-100 bg-white px-3 py-2 shadow-sm hover:shadow-lg transition-all">
 
-      <div className="text-sm font-semibold text-slate-500">
+      <div className="text-[13px] font-semibold text-slate-500">
         Total Employees
       </div>
 
-      <div className=" text-xl font-semibold text-slate-900">
+      <div className="text-lg mt-1 font-semibold text-slate-900">
         {jobRoles.reduce((sum, item) => sum + item.total, 0)}
-      </div>
-
-      <div className=" text-xs text-emerald-600">
-        Active Workforce
       </div>
 
     </div>
@@ -1437,54 +1460,52 @@ const CustomMenuList = (props) => {
 
     {/* Employment Status */}
 
- <div className="lg:col-span-4 rounded-[12px] border border-white/100 bg-white/100 px-4 py-2 backdrop-blur-xl">
+ <div className="lg:col-span-4 rounded-xl border border-slate-100 bg-white px-4 py-2 shadow-sm hover:shadow-lg transition-all">
 
-    <div className="mb-2 flex items-center justify-between">
+    <div className="mb-1 flex items-center justify-between">
 
-      <h2 className="text-sm font-semibold text-slate-700">
+      <h2 className="text-[13px] font-semibold text-slate-700">
         Employment Status
       </h2>
 
     </div>
 
-    <div className="grid grid-cols-2 gap-2">
+   <div className="flex items-center gap-20 rounded-xl bg-slate-50 px-4 py-1">
 
-  <div className="flex flex-col justify-center rounded-xl bg-slate-50 border border-white/70 px-4 py-1 text-center">
+  <div className="flex items-center gap-2">
+    <span className="text-sm font-medium text-slate-600">
+      Active:
+    </span>
 
-    <div className="text-xs font-medium text-slate-500">
-      Active
-    </div>
-
-  <div className="text-sm font-semibold text-emerald-600">
-{
-  data.filter(
-    item =>
-      String(item.employment_status || "")
-        .trim()
-        .toLowerCase() === "active"
-  ).length
-}
-</div>
-
+    <span className="text-sm font-semibold text-emerald-600">
+      {
+        data.filter(
+          item =>
+            String(item.employment_status || "")
+              .trim()
+              .toLowerCase() === "active"
+        ).length
+      }
+    </span>
   </div>
 
- <div className="flex flex-col justify-center rounded-xl bg-slate-50 border border-white/70 px-4 py-1 text-center">
+  <div className="h-4 w-px bg-slate-200" />
 
-    <div className="text-xs font-medium text-slate-500">
-      Inactive
-    </div>
+  <div className="flex items-center gap-2">
+    <span className="text-sm font-medium text-slate-600">
+      Inactive:
+    </span>
 
-<div className="text-sm font-semibold text-red-600">
-{
-  data.filter(
-    item =>
-      String(item.employment_status || "")
-        .trim()
-        .toLowerCase() === "inactive"
-  ).length
-}
-</div>
-
+    <span className="text-sm font-semibold text-red-600">
+      {
+        data.filter(
+          item =>
+            String(item.employment_status || "")
+              .trim()
+              .toLowerCase() === "inactive"
+        ).length
+      }
+    </span>
   </div>
 
 </div>
@@ -1494,33 +1515,29 @@ const CustomMenuList = (props) => {
 
     {/* Circle Wise Count */}
 
-  <div className="lg:col-span-6 rounded-[12px] border border-white/70 bg-white/100 px-6 py-2 backdrop-blur-xl">
-      <div className="mb-2 flex items-center justify-between">
+  <div className="lg:col-span-6 rounded-xl border border-slate-100 bg-white px-4 py-2 shadow-sm hover:shadow-lg transition-all">
+      <div className="mb-1 flex items-center justify-between">
 
-        <h2 className="text-sm font-semibold text-slate-800">
+        <h2 className="text-[13px] font-semibold text-slate-800">
           Circle Wise Count
         </h2>
 
-        <div className="text-xs text-slate-500">
-          Workforce Distribution
-        </div>
-
       </div>
 
-      <div className="grid grid-cols-2 gap-1 md:grid-cols-4">
+      <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
 
         {circles.map((item, index) => (
 
           <div
             key={index}
-            className="flex items-center justify-between rounded-xl bg-slate-50 px-4 py-2"
+            className="flex items-center justify-between rounded-lg border border-slate-100 bg-gradient-to-r from-slate-50 to-white px-2 py-1 hover:shadow-md transition-all"
           >
 
-            <span className="text-sm font-semibold text-slate-700">
+            <span className="text-[13px] font-semibold text-slate-700">
               {item.circle}
             </span>
 
-            <span className="text-sm font-semibold text-emerald-600">
+            <span className="text-[13px] font-semibold text-emerald-600">
               {item.total}
             </span>
 
@@ -1678,23 +1695,24 @@ const CustomMenuList = (props) => {
   </div>
   */}
 
-            {/* Table Section */}
-            <div className="mx-auto mt-3 w-full max-w-7xl">
-           <div className="relative overflow-hidden rounded-[24px] border border-slate-200 bg-white shadow-xl px-4 py-2">
+     {/* Table Section */}
+      <div className="mx-auto mt-2 w-full max-w-7xl">
+         <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
                 <div className="absolute inset-0" />
-
-
-                <div className="relative flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <h2 className="text-md font-semibold tracking-tight text-slate-900">Employee Records</h2>
+         <div className="flex items-center justify-between border-b border-slate-100 px-4 py-2">
+           <h2 className="text-md font-semibold text-slate-900">
+                    Employee Records</h2>
                   <div className="text-sm text-slate-600/80">
-                    Total: <span className="font-semibold text-slate-900">{filteredData.length}</span>
+          
+ <span className="font-semibold text-slate-900">
+  Total: {filteredData.length}</span>
                   </div>
                 </div>
 
   <div className="relative mt-2 overflow-x-auto overflow-y-auto custom-scrollbar">
   <div>
   <table className="w-max min-w-full border-separate border border-spacing-0">
-  <thead className="sticky top-0 z-20 bg-gradient-to-r from-slate-100 to-blue-50 shadow-sm">
+ <thead className="sticky top-0 z-20 bg-white">
     <tr>
     <th className="px-3 py-2">
     <input

@@ -52,6 +52,7 @@ const rows = await query(
   SELECT
     id,
     name,
+    username,
     email,
     designation,
     circle,
@@ -76,7 +77,7 @@ if (!user) {
 req.authUser = {
   id: user.id,
   name: user.name,
-  email: user.email,
+  username: user.username,
   designation:
     user.designation || "",
   circle: user.circle || "",
@@ -139,6 +140,7 @@ try {
 const {
 name,
 designation = "",
+username,
 email,
 password,
 circle = "",
@@ -156,10 +158,13 @@ pagePermissions = [],
       designation || ""
     ).trim();
 
-  const normalizedEmail =
-    String(email || "")
-      .trim()
-      .toLowerCase();
+  const normalizedUsername =
+     String(username || "").trim();
+
+     const normalizedEmail =
+  String(email || "")
+    .trim()
+    .toLowerCase();
 
   const normalizedCircle =
     String(circle || "").trim();
@@ -173,6 +178,7 @@ pagePermissions = [],
   if (
     !normalizedName ||
     !normalizedDesignation ||
+    !normalizedUsername ||
     !normalizedEmail ||
     !normalizedPassword ||
     !normalizedCircle ||
@@ -180,7 +186,7 @@ pagePermissions = [],
   ) {
     return res.status(400).json({
       message:
-        "Name, designation, email, password, circle, and domain are required",
+        "Name, designation, username, email, password, circle, and domain are required",
     });
   }
 
@@ -189,6 +195,7 @@ pagePermissions = [],
     INSERT INTO users (
       name,
       designation,
+      username,
       email,
       password,
       circle,
@@ -196,11 +203,12 @@ pagePermissions = [],
       status,
       page_permissions
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `,
     [
       normalizedName,
       normalizedDesignation,
+      normalizedUsername,
       normalizedEmail,
       normalizedPassword,
       normalizedCircle,
@@ -249,6 +257,7 @@ req.params.id
   const {
     name,
     designation = "",
+    username,
     email,
     password,
     circle = "",
@@ -265,10 +274,13 @@ req.params.id
       designation || ""
     ).trim();
 
-  const normalizedEmail =
-    String(email || "")
-      .trim()
-      .toLowerCase();
+  const normalizedUsername =
+     String(username || "").trim();
+
+     const normalizedEmail =
+  String(email || "")
+    .trim()
+    .toLowerCase();
 
   const normalizedCircle =
     String(circle || "").trim();
@@ -283,6 +295,7 @@ req.params.id
     !userId ||
     !normalizedName ||
     !normalizedDesignation ||
+    !normalizedUsername ||
     !normalizedEmail ||
     !normalizedCircle ||
     !normalizedDomain
@@ -296,6 +309,7 @@ req.params.id
   const updates = [
     normalizedName,
     normalizedDesignation,
+    normalizedUsername,
     normalizedEmail,
     normalizedCircle,
     normalizedDomain,
@@ -310,6 +324,7 @@ req.params.id
     SET
       name = ?,
       designation = ?,
+      username = ?,
       email = ?,
       circle = ?,
       domain = ?,

@@ -3,6 +3,12 @@ const express = require("express");
 const router = express.Router();
 
 const { db } = require("../config/db");
+const {
+  addCircleFilter,
+  authMiddleware,
+  canAccessCircle,
+  forbid,
+} = require("../middleware/circleAccess");
 
 
 const query = (sql, params = []) =>
@@ -21,9 +27,11 @@ const query = (sql, params = []) =>
     );
   });
 
+router.use(authMiddleware);
+
 /* GET ALL DATA */
 
-router.get("/", async (_req, res) => {
+router.get("/", async (req, res) => {
 
   try {
 
@@ -83,11 +91,15 @@ router.get("/", async (_req, res) => {
       )
     `);
 
+    const filters = [];
+    const params = [];
+    addCircleFilter(filters, params, req.authUser);
     const rows = await query(`
       SELECT *
       FROM signoff
+      ${filters.length ? `WHERE ${filters.join(" AND ")}` : ""}
       ORDER BY id ASC
-    `);
+    `, params);
 
     res.json({
       rows,
@@ -136,6 +148,10 @@ router.post("/", async (req, res) => {
       fttx_engineer,
       fttx_technician,
     } = req.body;
+
+    if (!canAccessCircle(req.authUser, circle)) {
+      return forbid(res);
+    }
 
     const existing = await query(
       `
@@ -317,6 +333,17 @@ router.put("/:id", async (req, res) => {
       fttx_technician,
     } = req.body;
 
+    const [existing] = await query(`SELECT circle FROM signoff WHERE id = ? LIMIT 1`, [
+      req.params.id,
+    ]);
+    if (
+      !existing ||
+      !canAccessCircle(req.authUser, existing.circle) ||
+      !canAccessCircle(req.authUser, circle)
+    ) {
+      return forbid(res);
+    }
+
     await query(
       `
       UPDATE signoff
@@ -397,13 +424,17 @@ router.delete("/:id", async (req, res) => {
 
   try {
 
-    await query(
+    const filters = ["id=?"];
+    const params = [req.params.id];
+    addCircleFilter(filters, params, req.authUser);
+    const result = await query(
       `
       DELETE FROM signoff
-      WHERE id=?
+      WHERE ${filters.join(" AND ")}
       `,
-      [req.params.id]
+      params
     );
+    if (!result.affectedRows) return forbid(res);
 
     res.json({
       message: "Deleted successfully",

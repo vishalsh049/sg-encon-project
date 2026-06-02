@@ -25,7 +25,7 @@ import {
   CreditCard,
   Upload,
 } from "lucide-react";
-import { buildApiUrl } from "../lib/api";
+import { authFetch, buildApiUrl } from "../lib/api";
 
 function formatDateTime(d) {
   try {
@@ -209,7 +209,7 @@ export default function NewJoining() {
       "Patiala",
       "Sangrur",
     ],
-    "Uttar Pradesh (East)": [
+    "UP East": [
       "UP East SHQ",
       "Allahabad",
       "Azamgarh",
@@ -239,14 +239,14 @@ export default function NewJoining() {
   const loadData = async () => {
     try {
       setTableLoading(true);
-      const response = await fetch(buildApiUrl("/api/new-joining"));
+      const response = await authFetch(buildApiUrl("/api/new-joining"));
       const result = await response.json();
 
       if (!response.ok || !result.success) {
         throw new Error("Failed");
       }
 
-      setData(result.data || []);
+      setData(result.data || result.rows || []);
     } catch (error) {
       console.log(error);
     } finally {
@@ -305,7 +305,7 @@ export default function NewJoining() {
 
     try {
       setDeletingId(id);
-      await fetch(buildApiUrl(`/api/new-joining/delete/${id}`), {
+      await authFetch(buildApiUrl(`/api/new-joining/delete/${id}`), {
         method: "DELETE",
       });
       loadData();
@@ -326,7 +326,7 @@ export default function NewJoining() {
     try {
       const employee_status = status === "Joined" ? "Active" : "Inactive";
 
-      const response = await fetch(
+      const response = await authFetch(
         buildApiUrl(`/api/new-joining/update-status/${id}`),
         {
           method: "PUT",
@@ -367,7 +367,7 @@ export default function NewJoining() {
 
   const handleAddEmployee = async () => {
     try {
-      const response = await fetch(buildApiUrl("/api/new-joining/add-employee"), {
+      const response = await authFetch(buildApiUrl("/api/new-joining/add-employee"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -409,7 +409,7 @@ export default function NewJoining() {
       const formData = new FormData();
       formData.append("file", excelFile);
 
-      const response = await fetch(buildApiUrl("/api/new-joining/upload-excel"), {
+      const response = await authFetch(buildApiUrl("/api/new-joining/upload-excel"), {
         method: "POST",
         body: formData,
       });
@@ -925,11 +925,11 @@ export default function NewJoining() {
               placeholder="Enter Employee Code"
               value={employeeForm.employee_code || ""}
               onChange={(e) =>
-                setEmployeeForm({
-                  ...form,
-                  employee_code: e.target.value,
+               setEmployeeForm({
+               ...employeeForm,
+               employee_code: e.target.value,
                 })
-              }
+               }
               className="h-9 w-full rounded-xl border border-slate-200 bg-white pl-8 pr-2 text-xs outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100"
             />
 
@@ -956,12 +956,12 @@ export default function NewJoining() {
               type="text"
               placeholder="Enter Employee Name"
               value={employeeForm.employee_name || ""}
-              onChange={(e) =>
-                setForm({
-                  ...form,
-                  employee_name: e.target.value,
-                })
-              }
+             onChange={(e) =>
+  setEmployeeForm({
+    ...employeeForm,
+    employee_name: e.target.value,
+  })
+}
               className="h-9 w-full rounded-2xl border border-slate-200 bg-white pl-8 pr-4 text-xs outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100"
             />
 
@@ -986,13 +986,13 @@ export default function NewJoining() {
 
             <select
               value={employeeForm.circle}
-              onChange={(e) =>
-                setForm({
-                  ...form,
-                  circle: e.target.value,
-                  cmp: "",
-                })
-              }
+             onChange={(e) =>
+  setEmployeeForm({
+    ...employeeForm,
+    circle: e.target.value,
+    cmp: "",
+  })
+}
               className="h-9 w-full rounded-2xl border border-slate-200 bg-white pl-8 pr-4 text-xs outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100"
             >
 
@@ -1039,12 +1039,12 @@ export default function NewJoining() {
 
             <select
               value={employeeForm.cmp}
-              onChange={(e) =>
-                setForm({
-                  ...form,
-                  cmp: e.target.value,
-                })
-              }
+             onChange={(e) =>
+  setEmployeeForm({
+    ...employeeForm,
+    cmp: e.target.value,
+  })
+}
               className="h-9 w-full rounded-2xl border border-slate-200 bg-white pl-8 pr-4 text-xs outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100"
             >
 
@@ -1052,10 +1052,10 @@ export default function NewJoining() {
                 Select CMP
               </option>
 
-              {employeeForm.circle &&
-                circleCMPMap[
-                  employeeForm.circle
-                ]?.map((cmp) => (
+             {employeeForm.circle &&
+  circleCmpData[
+    employeeForm.circle
+  ]?.map((cmp) => (
                   <option
                     key={cmp}
                     value={cmp}
@@ -1085,11 +1085,18 @@ export default function NewJoining() {
               className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400"
             />
 
-            <input
-              type="text"
-              placeholder="Select Designation"
-              className="h-9 w-full rounded-2xl border border-slate-200 bg-white pl-8 pr-4 text-xs outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100"
-            />
+        <input
+  type="text"
+  placeholder="Select Designation"
+  value={employeeForm.designation || ""}
+  onChange={(e) =>
+    setEmployeeForm({
+      ...employeeForm,
+      designation: e.target.value,
+    })
+  }
+  className="h-9 w-full rounded-2xl border border-slate-200 bg-white pl-8 pr-4 text-xs outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100"
+/>
 
           </div>
 
@@ -1113,6 +1120,13 @@ export default function NewJoining() {
             <input
               type="text"
               placeholder="Enter Aadhaar Number"
+              value={employeeForm.aadhaar_no || ""}
+              onChange={(e) =>
+                setEmployeeForm({
+                  ...employeeForm,
+                  aadhaar_no: e.target.value,
+                })
+              }
               className="h-9 w-full rounded-2xl border border-slate-200 bg-white pl-8 pr-4 text-xs outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100"
             />
 

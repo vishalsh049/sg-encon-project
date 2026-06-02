@@ -15,7 +15,7 @@ import {
   BarChart3,
 } from "lucide-react";
 
-import { buildApiUrl } from "../lib/api";
+import { authFetch, buildApiUrl } from "../lib/api";
 
 const physicalDesignationColumns = [
   { key: "state_leadership_team", label: "State Leadership Team" },
@@ -213,7 +213,7 @@ function HrDashboard() {
 
   const loadJobRoles = async () => {
     try {
-      const response = await fetch(buildApiUrl("/api/physical/job-role-count"));
+      const response = await authFetch(buildApiUrl("/api/physical/job-role-count"));
       const result = await response.json();
 
       if (result.success) {
@@ -226,7 +226,7 @@ function HrDashboard() {
 
   const loadCircles = async () => {
     try {
-      const response = await fetch(buildApiUrl("/api/physical/circle-count"));
+      const response = await authFetch(buildApiUrl("/api/physical/circle-count"));
       const result = await response.json();
 
       if (result.success) {
@@ -239,7 +239,7 @@ function HrDashboard() {
 
   const loadEmploymentStatus = async () => {
     try {
-      const response = await fetch(
+      const response = await authFetch(
         buildApiUrl("/api/physical/employment-status-count")
       );
       const result = await response.json();
@@ -254,7 +254,7 @@ function HrDashboard() {
 
   const loadScrumCount = async () => {
     try {
-      const response = await fetch(buildApiUrl("/api/manpower/scrum/count"));
+      const response = await authFetch(buildApiUrl("/api/manpower/scrum/count"));
       const result = await response.json();
       setScrumCount(result);
     } catch (error) {
@@ -264,7 +264,7 @@ function HrDashboard() {
 
   const loadActiveData = async () => {
     try {
-      const response = await fetch(
+      const response = await authFetch(
         buildApiUrl("/api/physical/active-job-role-cmp-count")
       );
       const result = await response.json();
@@ -279,7 +279,7 @@ function HrDashboard() {
 
   const loadScrumActiveData = async () => {
     try {
-      const response = await fetch(
+      const response = await authFetch(
         buildApiUrl("/api/manpower/scrum/cmp-role-count")
       );
       const result = await response.json();
@@ -294,7 +294,7 @@ function HrDashboard() {
 
   const loadSignoffData = async () => {
     try {
-      const response = await fetch(buildApiUrl("/api/signoff"));
+      const response = await authFetch(buildApiUrl("/api/signoff"));
       const result = await response.json();
       setSignoffData(result.rows || []);
     } catch (error) {
@@ -543,14 +543,14 @@ function HrDashboard() {
               placeholder="Search anything..."
               value={searchText}
               onChange={(event) => setSearchText(event.target.value)}
-              className="h-9 w-full rounded-[12px] border border-slate-200 bg-[linear-gradient(180deg,_#ffffff_0%,_#f8fafc_100%)] pl-12 pr-4 text-[15px] text-slate-700 outline-none transition focus:border-indigo-300 focus:ring-4 focus:ring-indigo-50"
+              className="h-8 w-full rounded-[12px] border border-slate-200 bg-[linear-gradient(180deg,_#ffffff_0%,_#f8fafc_100%)] pl-12 pr-4 text-[13px] text-slate-700 outline-none transition focus:border-indigo-300 focus:ring-4 focus:ring-indigo-50"
             />
           </div>
 
           <select
             value={selectedCircle}
             onChange={(event) => setSelectedCircle(event.target.value)}
-            className="h-9 w-full rounded-[12px] border border-slate-200 bg-[linear-gradient(180deg,_#ffffff_0%,_#f8fafc_100%)] px-4 text-[13px] text-slate-700 outline-none transition focus:border-indigo-300 focus:ring-4 focus:ring-indigo-50"
+            className="h-8 w-full rounded-[12px] border border-slate-200 bg-[linear-gradient(180deg,_#ffffff_0%,_#f8fafc_100%)] px-4 text-[13px] text-slate-700 outline-none transition focus:border-indigo-300 focus:ring-4 focus:ring-indigo-50"
           >
             <option value="">Select Circle</option>
             <option value="Punjab">Punjab</option>
@@ -562,7 +562,7 @@ function HrDashboard() {
           <select
             value={selectedCmp}
             onChange={(event) => setSelectedCmp(event.target.value)}
-            className="h-9 w-full rounded-[12px] border border-slate-200 bg-[linear-gradient(180deg,_#ffffff_0%,_#f8fafc_100%)] px-4 text-[13px] text-slate-700 outline-none transition focus:border-indigo-300 focus:ring-4 focus:ring-indigo-50"
+            className="h-8 w-full rounded-[12px] border border-slate-200 bg-[linear-gradient(180deg,_#ffffff_0%,_#f8fafc_100%)] px-4 text-[13px] text-slate-700 outline-none transition focus:border-indigo-300 focus:ring-4 focus:ring-indigo-50"
           >
             <option value="">Select CMP</option>
             {filteredCmpOptions.map((cmp) => (
@@ -575,7 +575,7 @@ function HrDashboard() {
           <button
             type="button"
             onClick={resetFilters}
-            className="inline-flex h-9 items-center justify-center gap-3 rounded-[12px] bg-[linear-gradient(96deg,_#3b82f6_0%,_#7c3aed_100%)] px-4 text-base font-semibold text-white transition hover:brightness-105"
+            className="inline-flex h-8 items-center justify-center gap-3 rounded-[12px] bg-[linear-gradient(96deg,_#3b82f6_0%,_#7c3aed_100%)] px-4 text-base font-semibold text-white transition hover:brightness-105"
           >
             <RefreshCcw className="h-4 w-4" />
             Reset
@@ -878,7 +878,7 @@ if (card.key === "fttxPo") {
       <div
         id={panelId}
         className="custom-scrollbar overflow-x-auto overflow-y-auto bg-[linear-gradient(180deg,_#ffffff_0%,_#fbfdff_100%)]"
-        style={{ maxHeight: "45vh", minHeight: "240px" }}
+        style={{ maxHeight: "55vh", minHeight: "240px" }}
       >
       <table className="min-w-max whitespace-nowrap text-sm border-collapse w-full">
           <thead>

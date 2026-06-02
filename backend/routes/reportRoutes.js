@@ -4,6 +4,13 @@
           const ExcelJS = require("exceljs");
           const router = express.Router();
           const { db } = require("../config/db");
+          const {
+            assertRowsAllowedCircle,
+            authMiddleware,
+            isAllCircle,
+          } = require("../middleware/circleAccess");
+
+          router.use(authMiddleware);
 
 
           // ✅ Storage config
@@ -39,6 +46,44 @@
         });
       });
     });
+
+          const reportDataTables = new Set([
+            "ag1", "ag2", "enb", "esc", "gnb", "gsc",
+            "hpodsc", "ila", "isc", "osc", "wifi",
+          ]);
+
+          const getRawCircle = (row = {}) => {
+            const normalized = {};
+            Object.keys(row).forEach((key) => {
+              normalized[key.toString().trim().toLowerCase().replace(/[\s_]+/g, " ")] = row[key];
+            });
+            return normalized.circle || normalized["circle name"] || "";
+          };
+
+          const isUploadAccessible = async (upload, authUser, requireExclusive = false) => {
+            if (isAllCircle(authUser)) return true;
+            const tableName = String(upload.site_type || "").toLowerCase();
+            if (!reportDataTables.has(tableName)) return false;
+
+            const [counts] = await query(
+              `SELECT
+                 SUM(LOWER(TRIM(circle)) = LOWER(TRIM(?))) AS allowed_count,
+                 SUM(LOWER(TRIM(COALESCE(circle, ''))) <> LOWER(TRIM(?))) AS foreign_count
+               FROM ${tableName}
+               WHERE file_id = ?`,
+              [authUser.circle, authUser.circle, upload.file_id]
+            );
+            return Number(counts?.allowed_count || 0) > 0 &&
+              (!requireExclusive || Number(counts?.foreign_count || 0) === 0);
+          };
+
+          const filterAccessibleUploads = async (uploads, authUser) => {
+            if (isAllCircle(authUser)) return uploads;
+            const allowed = await Promise.all(
+              uploads.map(async (upload) => (await isUploadAccessible(upload, authUser) ? upload : null))
+            );
+            return allowed.filter(Boolean);
+          };
 
 
 
@@ -282,17 +327,17 @@
             }
           };
 
-          const getLatestUploadRow = async (siteCategory) => {
+          const getLatestUploadRow = async (siteCategory, authUser) => {
             await ensureUploadsTable();
             const rows = await query(
-              `SELECT id, file_name, report_date, total_records, uploaded_at
+              `SELECT id, file_name, report_date, total_records, uploaded_at, site_type, file_id
               FROM report_uploads
               WHERE site_category = ?
               ORDER BY report_date DESC, uploaded_at DESC, id DESC
-              LIMIT 1`,
+              LIMIT 200`,
               [siteCategory]
             );
-            return rows[0] || null;
+            return (await filterAccessibleUploads(rows, authUser))[0] || null;
           };
 
   const formatDateOnly = (value) => {
@@ -705,15 +750,21 @@ if (availability <= 1) {
             return { weekly, monthly, yearly };
           };
 
-          const getLatestEnbTrendDatasets = async () => {
+          const getLatestEnbTrendDatasets = async (authUser) => {
             await ensureEnbTable();
+            const circleSql = isAllCircle(authUser)
+              ? ""
+              : " AND LOWER(TRIM(circle)) = LOWER(TRIM(?))";
+            const circleParams = isAllCircle(authUser) ? [] : [authUser.circle];
 
             const latestFileRows = await query(
               `SELECT file_id
               FROM enb
               WHERE site_type = 'enb'
+                ${circleSql}
               ORDER BY created_at DESC, file_id DESC
-              LIMIT 1`
+              LIMIT 1`,
+              circleParams
             );
 
             const latestFileId = latestFileRows[0]?.file_id;
@@ -726,8 +777,9 @@ if (availability <= 1) {
               `SELECT date, COALESCE(availability, kpi_value) AS uptime
               FROM enb
               WHERE file_id = ?
-                AND site_type = 'enb'`,
-              [latestFileId]
+                AND site_type = 'enb'
+                ${circleSql}`,
+              [latestFileId, ...circleParams]
             );
 
             return buildEnbTrendDatasets(rows);
@@ -967,7 +1019,7 @@ if (availability <= 1) {
             try {
               const siteCategory = req.query.siteCategory || "tower";
               await ensureUploadsTable();
-           const rows = await query(
+           const allRows = await query(
   `SELECT id, site_category, report_date, site_type,
   report_type, upload_type, uploaded_by,
   file_name, total_records, file_id, uploaded_at
@@ -976,6 +1028,7 @@ if (availability <= 1) {
   ORDER BY uploaded_at DESC`,
   [siteCategory]
 );
+              const rows = await filterAccessibleUploads(allRows, req.authUser);
 
               const rowsWithStatus = rows.map((row) => ({
   ...row,
@@ -993,7 +1046,7 @@ if (availability <= 1) {
           router.get("/latest-summary", async (req, res) => {
             try {
               const siteCategory = (req.query.siteCategory || "tower").toLowerCase();
-              const latest = await getLatestUploadRow(siteCategory);
+              const latest = await getLatestUploadRow(siteCategory, req.authUser);
 
               if (!latest) {
                 return res.json({
@@ -1018,7 +1071,7 @@ if (availability <= 1) {
           router.get("/latest", async (req, res) => {
             try {
               const siteCategory = (req.query.siteCategory || "tower").toLowerCase();
-              const latest = await getLatestUploadRow(siteCategory);
+              const latest = await getLatestUploadRow(siteCategory, req.authUser);
 
               if (!latest) {
                 return res.json({ fileName: null, uploadDate: null });
@@ -1038,7 +1091,7 @@ if (availability <= 1) {
           router.get("/latest/count", async (req, res) => {
             try {
               const siteCategory = (req.query.siteCategory || "tower").toLowerCase();
-              const latest = await getLatestUploadRow(siteCategory);
+              const latest = await getLatestUploadRow(siteCategory, req.authUser);
 
               if (!latest) {
                 return res.json({ totalRecords: 0 });
@@ -1051,9 +1104,9 @@ if (availability <= 1) {
             }
           });
 
-          router.get("/enb/uptime-trend", async (_req, res) => {
+          router.get("/enb/uptime-trend", async (req, res) => {
             try {
-              const trends = await getLatestEnbTrendDatasets();
+              const trends = await getLatestEnbTrendDatasets(req.authUser);
               res.json(trends);
             } catch (error) {
               console.error("ENB uptime trend error:", error);
@@ -1113,6 +1166,8 @@ if (availability <= 1) {
                     .status(400)
                     .json({ message: "No rows found in uploaded file" });
                 }
+
+                assertRowsAllowedCircle(req.authUser, rows, getRawCircle);
 
                 const fileId = Date.now();
                 const totalRecords = rows.length;
@@ -1419,7 +1474,10 @@ const jcId =
                 });
               } catch (error) {
                 console.error(error);
-                res.status(500).json({ success: false, message: "Upload failed" });
+                res.status(error.statusCode || 500).json({
+                  success: false,
+                  message: error.message || "Upload failed",
+                });
               }
             });
           });
@@ -1447,6 +1505,13 @@ const jcId =
     WHERE id IN (${placeholders})`,
     ids   // 🔥 NOT [ids]
   );
+
+      const accessChecks = await Promise.all(
+        rows.map((row) => isUploadAccessible(row, req.authUser, true))
+      );
+      if (accessChecks.some((allowed) => !allowed)) {
+        return res.status(403).json({ message: "You cannot delete another circle's data." });
+      }
 
       // 🔥 DELETE FILE
 
@@ -1623,6 +1688,10 @@ const jcId =
                 ORDER BY report_date ASC, id ASC`,
                 [...ids, month]
               );
+              const accessibleUploads = await filterAccessibleUploads(uploads, req.authUser);
+              if (accessibleUploads.length !== uploads.length) {
+                return res.status(403).json({ message: "You cannot download another circle's data." });
+              }
 
               if (!uploads.length) {
                 return res.status(404).json({
@@ -1631,7 +1700,7 @@ const jcId =
               }
 
               const tableNames = [...new Set(
-                uploads.map((upload) => String(upload.site_type || "").toLowerCase())
+                accessibleUploads.map((upload) => String(upload.site_type || "").toLowerCase())
               )];
               const invalidTable = tableNames.find((tableName) => !bulkExportTables.has(tableName));
 
@@ -1701,14 +1770,20 @@ const jcId =
 
               addWorksheet();
 
-              for (const upload of uploads) {
+              for (const upload of accessibleUploads) {
                 const tableName = String(upload.site_type).toLowerCase();
                 const rows = streamBulkExportRows(
                   `SELECT *
                   FROM ${tableName}
-                  WHERE file_id = ?
+                  WHERE file_id = ?${
+                    isAllCircle(req.authUser)
+                      ? ""
+                      : " AND LOWER(TRIM(circle)) = LOWER(TRIM(?))"
+                  }
                   ORDER BY id ASC`,
-                  [upload.file_id]
+                  isAllCircle(req.authUser)
+                    ? [upload.file_id]
+                    : [upload.file_id, req.authUser.circle]
                 );
 
                 for await (const row of rows) {
@@ -1787,6 +1862,7 @@ const jcId =
                   }
 
                   const worksheetRows = readWorksheetRows(file.buffer);
+                  assertRowsAllowedCircle(req.authUser, worksheetRows, getRawCircle);
                   const fileId = Date.now() + index;
 
                   const totalRecords = await processSiteUploadRows({
@@ -1868,6 +1944,9 @@ router.get("/download/:id", async (req, res) => {
     }
 
     const siteType = uploadRows[0].site_type.toLowerCase();
+    if (!reportDataTables.has(siteType)) {
+      return res.status(400).json({ message: "Unsupported report type" });
+    }
 
     const fileId = String(uploadRows[0].file_id);
 
@@ -1875,9 +1954,15 @@ router.get("/download/:id", async (req, res) => {
   `
   SELECT *
   FROM ${siteType}
-  WHERE CAST(file_id AS CHAR) = ?
+  WHERE CAST(file_id AS CHAR) = ?${
+    isAllCircle(req.authUser)
+      ? ""
+      : " AND LOWER(TRIM(circle)) = LOWER(TRIM(?))"
+  }
   `,
-  [String(fileId)]
+  isAllCircle(req.authUser)
+    ? [String(fileId)]
+    : [String(fileId), req.authUser.circle]
 );
 
     if (!rows.length) {
@@ -1937,6 +2022,10 @@ router.get("/download/:id", async (req, res) => {
 
       if (!rows.length) {
         return res.status(404).json({ message: "Record not found" });
+      }
+
+      if (!(await isUploadAccessible(rows[0], req.authUser, true))) {
+        return res.status(403).json({ message: "You cannot delete another circle's data." });
       }
 
     const { file_name, report_date, site_type } = rows[0];
@@ -2034,6 +2123,14 @@ router.get("/download/:id", async (req, res) => {
               const id = req.params.id;
               const { site_type, report_type, upload_type, uploaded_by, report_date } =
                 req.body;
+
+              const [existing] = await query(
+                `SELECT site_type, file_id FROM report_uploads WHERE id = ? LIMIT 1`,
+                [id]
+              );
+              if (!existing || !(await isUploadAccessible(existing, req.authUser, true))) {
+                return res.status(403).json({ message: "You cannot edit another circle's data." });
+              }
 
               await query(
                 `UPDATE report_uploads 

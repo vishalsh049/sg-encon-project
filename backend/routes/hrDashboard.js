@@ -1,12 +1,18 @@
 const express = require("express");
 const router = express.Router();
 const db = require("../config/db");
+const { addCircleFilter, authMiddleware } = require("../middleware/circleAccess");
+
+router.use(authMiddleware);
 
 // PHYSICAL + NEW JOINING COUNT CMP WISE
 router.get("/active-job-role-cmp-count", async (req, res) => {
 
   try {
 
+    const filters = [];
+    const params = [];
+    addCircleFilter(filters, params, req.authUser);
     const [rows] = await db.query(`
       SELECT
         cmp,
@@ -40,7 +46,8 @@ router.get("/active-job-role-cmp-count", async (req, res) => {
         new_joining
 
       FROM signoff
-    `);
+      ${filters.length ? `WHERE ${filters.join(" AND ")}` : ""}
+    `, params);
 
     const formatted = [];
 

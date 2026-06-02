@@ -60,22 +60,21 @@ function getLoginRedirectPath(user) {
 }
 
 function Login() {
-  const [email, setEmail] = useState("");
+  const [loginId, setLoginId] = useState("");
   const [password, setPassword] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [loading, setLoading] = useState(false);
 
 const handleLogin = async (e) => {
   e.preventDefault();
-  console.log("LOGIN ATTEMPT:", { email });
-
+  console.log("LOGIN ATTEMPT:", { loginId });
   setErrorMessage("");
   setLoading(true);
 
   try {
     const res = await axios.post(
  buildApiUrl("/api/auth/login"),
- { email: email.trim().toLowerCase(), password },
+ { loginId: loginId.trim(), password },
  { withCredentials: false }
 );
 
@@ -124,14 +123,14 @@ const handleLogin = async (e) => {
           ) : null}
 
           <div>
-            <input
-              type="email"
-              placeholder="Email address"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              className="app-input-lg w-full"
-            />
+     <input
+  type="text"
+  placeholder="Username or Email"
+  value={loginId}
+  onChange={(e) => setLoginId(e.target.value)}
+  required
+  className="app-input-lg w-full"
+/>
           </div>
 
           <div>

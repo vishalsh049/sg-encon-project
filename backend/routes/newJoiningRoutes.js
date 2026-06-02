@@ -6,6 +6,13 @@ const { query } = require("../services/accessControl");
 
 const multer = require("multer");
 const XLSX = require("xlsx");
+const {
+  addCircleFilter,
+  assertRowsAllowedCircle,
+  authMiddleware,
+  canAccessCircle,
+  forbid,
+} = require("../middleware/circleAccess");
 
 const storage = multer.memoryStorage();
 
@@ -13,12 +20,20 @@ const upload = multer({
   storage,
 });
 
-router.get("/", async (_req, res) => {
+router.use(authMiddleware);
+
+router.get("/", async (req, res) => {
 
   try {
 
+    const filters = [];
+    const params = [];
+    addCircleFilter(filters, params, req.authUser);
     const rows = await query(
-      `SELECT * FROM new_joining ORDER BY id DESC`
+      `SELECT * FROM new_joining
+       ${filters.length ? `WHERE ${filters.join(" AND ")}` : ""}
+       ORDER BY id DESC`,
+      params
     );
 
     res.json({
@@ -52,6 +67,10 @@ router.post("/add-employee", async (req, res) => {
       aadhaar_no,
       l2_status,
     } = req.body || {};
+
+    if (!canAccessCircle(req.authUser, circle)) {
+      return forbid(res);
+    }
 
     await query(
       `
@@ -99,10 +118,11 @@ router.delete("/delete/:id", async (req, res) => {
 
   try {
 
-    await query(
-      `DELETE FROM new_joining WHERE id = ?`,
-      [req.params.id]
-    );
+    const filters = ["id = ?"];
+    const params = [req.params.id];
+    addCircleFilter(filters, params, req.authUser);
+    const result = await query(`DELETE FROM new_joining WHERE ${filters.join(" AND ")}`, params);
+    if (!result.affectedRows) return forbid(res);
 
     res.json({
       success: true,
@@ -124,19 +144,19 @@ router.put("/update-status/:id", async (req, res) => {
 
     const { status, employee_status } = req.body;
 
-   await query(
+   const filters = ["id = ?"];
+   const params = [status, employee_status, req.params.id];
+   addCircleFilter(filters, params, req.authUser);
+   const result = await query(
   `
   UPDATE new_joining
   SET l2_status = ?,
       employee_status = ?
-  WHERE id = ?
+  WHERE ${filters.join(" AND ")}
   `,
-  [
-    status,
-    employee_status,
-    req.params.id,
-  ]
+  params
 );
+    if (!result.affectedRows) return forbid(res);
 
     res.json({
       success: true,
@@ -199,6 +219,12 @@ router.post(
         });
 
       }
+
+      assertRowsAllowedCircle(
+        req.authUser,
+        rows,
+        (row) => row.circle || row["Circle"] || ""
+      );
 
    for (const row of rows) {
 
@@ -278,9 +304,9 @@ router.post(
 
       console.log(error);
 
-      res.status(500).json({
+      res.status(error.statusCode || 500).json({
         success: false,
-        message: "Upload Failed",
+        message: error.message || "Upload Failed",
       });
 
     }
