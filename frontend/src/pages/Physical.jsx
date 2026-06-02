@@ -593,14 +593,18 @@ if (
     const result =
       await response.json();
 
-    if (
-      response.ok &&
-      result.success
-    ) {
+ if (
+  response.ok &&
+  result.success
+) {
 
-      setEmployeeForm((prev) => ({
+  setIsEditMode(true);
+  setEditingId(result.data.id);
 
-        ...prev,
+  setEmployeeForm((prev) => ({
+
+    ...prev,
+    id: result.data.id,
 
         circle: result.data.circle || "",
         cmp: result.data.cmp || "",
@@ -689,7 +693,128 @@ if (
   }
 
 }
+
+ if (
+  name === "employee_code" &&
+  value.trim().length > 0
+) {
+
+  try {
+
+    const response = await fetch(
+      buildApiUrl(
+        `/api/physical/employee-code/${value}`
+      )
+    );
+
+    const result =
+      await response.json();
+
+   if (
+  response.ok &&
+  result.success
+) {
+
+  setIsEditMode(true);
+  setEditingId(result.data.id);
+
+  setEmployeeForm((prev) => ({
+
+    ...prev,
+    id: result.data.id,
+
+  circle: result.data.circle || "",
+  cmp: result.data.cmp || "",
+  pprj_status: result.data.pprj_status || "",
+  pprj_code: result.data.pprj_code || "",
+
+  employee_code: result.data.employee_code || "",
+  employee_name: result.data.employee_name || "",
+  father_name: result.data.father_name || "",
+
+  function_name: result.data.function_name || "",
+  job_role: result.data.job_role || "",
+
+  manpower_signoff_scope:
+    result.data.manpower_signoff_scope || "",
+
+  scrum_job_role:
+    result.data.scrum_job_role || "",
+
+  mobile_number:
+    result.data.mobile_number || "",
+
+  dob: result.data.dob
+    ? result.data.dob.split("T")[0]
+    : "",
+
+  age: result.data.age || "",
+
+  date_of_joining:
+    result.data.date_of_joining
+      ? result.data.date_of_joining.split("T")[0]
+      : "",
+
+  employment_status:
+    result.data.employment_status || "",
+
+  resigned_date:
+    result.data.resigned_date
+      ? result.data.resigned_date.split("T")[0]
+      : "",
+
+  last_working_date:
+    result.data.last_working_date
+      ? result.data.last_working_date.split("T")[0]
+      : "",
+
+  rm_code:
+    result.data.rm_code || "",
+
+  reporting_manager:
+    result.data.reporting_manager || "",
+
+  company_email_id:
+    result.data.company_email_id || "",
+
+  laptop_status:
+    result.data.laptop_status || "",
+
+  ifsc_code:
+    result.data.ifsc_code || "",
+
+  bank_account_no:
+    result.data.bank_account_no || "",
+
+  pan_no:
+    result.data.pan_no || "",
+
+  aadhaar_no:
+    result.data.aadhaar_no || "",
+
+  uan_no:
+    result.data.uan_no || "",
+
+  esic_ip_no:
+    result.data.esic_ip_no || "",
+
+  remarks:
+    result.data.remarks || "",
+
+}));
+
+    }
+
+  } catch (error) {
+
+    console.log(error);
+
+  }
+
+}
   };
+
+ 
 
   const handleAddEmployee = async () => {
     try {
@@ -705,6 +830,7 @@ if (
     return;
 
   }
+  console.log("Employee ID =", employeeForm.id);
   const apiUrl = employeeForm.id
     ? `/api/physical/update-employee/${employeeForm.id}`
     : "/api/physical/add-employee";
@@ -1554,7 +1680,7 @@ const CustomMenuList = (props) => {
 
             {/* Table Section */}
             <div className="mx-auto mt-3 w-full max-w-7xl">
-              <div className="relative overflow-hidden rounded-[22px] border border-white/70 bg-white/65 px-4 py-2 backdrop-blur-xl">
+           <div className="relative overflow-hidden rounded-[24px] border border-slate-200 bg-white shadow-xl px-4 py-2">
                 <div className="absolute inset-0" />
 
 
@@ -1580,8 +1706,8 @@ const CustomMenuList = (props) => {
       onChange={handleSelectAll}
     />
   </th>
-
-  <th className="border-b border-r border-slate-200 bg-slate-100/90 px-4 py-2 text-left text-sm font-semibold text-slate-700 whitespace-nowrap backdrop-blur-xl">Circle</th>
+<th className="border-b border-r border-slate-200 bg-slate-100/90 px-4 py-2 text-left text-sm font-semibold text-slate-700 whitespace-nowrap backdrop-blur-xl">
+  Circle</th>
 
   <th className="border-b border-r border-slate-200 bg-slate-100/90 px-4 py-2 text-left text-sm font-semibold text-slate-700 whitespace-nowrap backdrop-blur-xl">CMP</th>
 
@@ -1681,7 +1807,7 @@ const CustomMenuList = (props) => {
       paginatedData.map((item, index) => (
         <tr
           key={index}
-          className={`transition-all duration-200 hover:bg-blue-50/60 ${
+          className={`transition-all duration-200 hover:bg-slate-50 hover:shadow-md ${
         index % 2 === 0
           ? "bg-white/80"
         : "bg-slate-50/70"
@@ -1697,12 +1823,30 @@ const CustomMenuList = (props) => {
 
   <td className="border-b border-r border-slate-200 px-4 py-2 text-sm text-slate-700 whitespace-nowrap">{item.circle || "-"}</td>
   <td className="border-b border-r border-slate-200 px-4 py-2 text-sm text-slate-700 whitespace-nowrap">{item.cmp || "-"}</td>
-  <td className="border-b border-r border-slate-200 px-4 py-2 text-sm text-slate-700 whitespace-nowrap">{item.pprj_status || "-"}</td>
+  <td className="border-b border-slate-100 px-4 py-2 whitespace-nowrap">
+  <span
+    className={`px-3 py-1 rounded-full text-xs font-semibold ${
+      item.pprj_status === "Active"
+        ? "bg-emerald-100 text-emerald-700"
+        : item.pprj_status === "Pending"
+        ? "bg-orange-100 text-orange-700"
+        : item.pprj_status === "Inactive"
+        ? "bg-red-100 text-red-700"
+        : "bg-slate-100 text-slate-600"
+    }`}
+  >
+    {item.pprj_status || "-"}
+  </span>
+</td>
   <td className="border-b border-r border-slate-200 px-4 py-2 text-sm text-slate-700 whitespace-nowrap">{item.pprj_code || "-"}</td>
   <td className="border-b border-r border-slate-200 px-4 py-2 text-sm text-slate-700 whitespace-nowrap">{item.employee_code || "-"}</td>
   <td className="border-b border-r border-slate-200 px-4 py-2 text-sm text-slate-700 whitespace-nowrap">{item.employee_name || "-"}</td>
   <td className="border-b border-r border-slate-200 px-4 py-2 text-sm text-slate-700 whitespace-nowrap">{item.father_name || "-"}</td>
-  <td className="border-b border-r border-slate-200 px-4 py-2 text-sm text-slate-700 whitespace-nowrap">{item.function_name || "-"}</td>
+ <td className="border-b border-slate-100 px-4 py-2 whitespace-nowrap">
+  <span className="px-3 py-1 rounded-lg bg-blue-50 text-blue-700 text-xs font-semibold">
+    {item.function_name || "-"}
+  </span>
+</td>
   
   <td className="border-b border-r border-slate-200 px-4 py-2 text-sm text-slate-700 whitespace-nowrap">{item.job_role || "-"}</td>
   <td className="border-b border-r border-slate-200 px-4 py-2 text-sm text-slate-700 whitespace-nowrap">{item.manpower_signoff_scope || "-"}</td>
@@ -2217,10 +2361,14 @@ onChange={(selected) =>
   blurInputOnSelect={false}
   noOptionsMessage={() => "No Role Found"}
   value={
-    jobRoleOptions.find(
-      item => item.value === employeeForm.job_role
-    ) || null
-  }
+  jobRoleOptions.find(
+    item =>
+      item.value?.trim().toLowerCase() ===
+      String(employeeForm.job_role || "")
+        .trim()
+        .toLowerCase()
+  ) || null
+}
   onChange={(selected) =>
     setEmployeeForm({
       ...employeeForm,

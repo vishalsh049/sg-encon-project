@@ -672,16 +672,26 @@ router.post("/add-employee", async (req, res) => {
 
     // DUPLICATE CHECK
 
-    const existingEmployee = await query(
-      `
-      SELECT id
-      FROM physical
-      WHERE aadhaar_no = ?
-      LIMIT 1
-      `,
-      [data.aadhaar_no]
-    );
+   const existingEmployee = await query(
+  `
+  SELECT id
+  FROM physical
+  WHERE aadhaar_no = ?
+  AND id != ?
+  LIMIT 1
+  `,
+  [data.aadhaar_no, req.params.id]
+);
 
+if (existingEmployee.length > 0) {
+
+  return res.status(400).json({
+    success: false,
+    message:
+      "Employee already exists with this Aadhaar Number",
+  });
+
+}
     if (existingEmployee.length > 0) {
 
       return res.status(400).json({
@@ -1215,7 +1225,16 @@ FROM (
     SELECT
       cmp,
       CASE
-        WHEN normalized_role IN ('a', 'stateleadership') THEN 'state_leadership_team'
+        WHEN normalized_role IN (
+  'stateenergymanager',
+  'statefibersme',
+  'stateispsme',
+  'statematerialmanager',
+  'stateoperationhead',
+  'stateplanningmanager',
+  'stateutilitysme'
+)
+THEN 'state_leadership_team'
         WHEN normalized_role = 'nocexecutive' THEN 'noc_executive'
         WHEN normalized_role = 'analyst' THEN 'analyst'
         WHEN normalized_role = 'cmplead' THEN 'cmp_lead'
@@ -1224,7 +1243,11 @@ FROM (
         WHEN normalized_role = 'utilitysupervisor' THEN 'utility_supervisor'
         WHEN normalized_role = 'utilityengineer' THEN 'utility_engineer'
         WHEN normalized_role = 'ispengineer' THEN 'isp_engineer'
-        WHEN normalized_role = 'whinchargecumsecurity' THEN 'wh_incharge_cum_security'
+       WHEN normalized_role IN (
+  'whinchargecumsecurity',
+  'warehouseincharge'
+)
+THEN 'wh_incharge_cum_security'
         WHEN normalized_role = 'splicer' THEN 'splicer'
         WHEN normalized_role = 'assistantsplicer' THEN 'assistant_splicer'
         WHEN normalized_role IN ('fiberhelper', 'fibrehelper') THEN 'fiber_helper'
@@ -1287,7 +1310,16 @@ FROM (
     SELECT
       cmp,
       CASE
-        WHEN normalized_role IN ('a', 'stateleadership') THEN 'state_leadership_team'
+        WHEN normalized_role IN (
+  'stateenergymanager',
+  'statefibersme',
+  'stateispsme',
+  'statematerialmanager',
+  'stateoperationhead',
+  'stateplanningmanager',
+  'stateutilitysme'
+)
+THEN 'state_leadership_team'
         WHEN normalized_role = 'nocexecutive' THEN 'noc_executive'
         WHEN normalized_role = 'analyst' THEN 'analyst'
         WHEN normalized_role = 'cmplead' THEN 'cmp_lead'
@@ -1296,7 +1328,11 @@ FROM (
         WHEN normalized_role = 'utilitysupervisor' THEN 'utility_supervisor'
         WHEN normalized_role = 'utilityengineer' THEN 'utility_engineer'
         WHEN normalized_role = 'ispengineer' THEN 'isp_engineer'
-        WHEN normalized_role = 'whinchargecumsecurity' THEN 'wh_incharge_cum_security'
+        WHEN normalized_role IN (
+  'whinchargecumsecurity',
+  'warehouseincharge'
+)
+THEN 'wh_incharge_cum_security'
         WHEN normalized_role = 'splicer' THEN 'splicer'
         WHEN normalized_role = 'assistantsplicer' THEN 'assistant_splicer'
         WHEN normalized_role IN ('fiberhelper', 'fibrehelper') THEN 'fiber_helper'
@@ -1407,6 +1443,44 @@ router.get(
   }
 );
 
+router.get(
+  "/employee-code/:employeeCode",
+  async (req, res) => {
+
+    console.log(
+      "Searching Employee Code:",
+      req.params.employeeCode
+    );
+
+    const rows = await query(
+      `
+      SELECT *
+      FROM physical
+      WHERE TRIM(employee_code) = TRIM(?)
+      LIMIT 1
+      `,
+      [req.params.employeeCode]
+    );
+
+    console.log("Rows Found:", rows.length);
+
+    if (rows.length === 0) {
+
+      return res.json({
+        success: false,
+        message: "Employee Code Not Found"
+      });
+
+    }
+
+    res.json({
+      success: true,
+      data: rows[0],
+    });
+
+  }
+);
+
 router.put(
   "/update-employee/:id",
   async (req, res) => {
@@ -1415,7 +1489,7 @@ router.put(
 
       const data = req.body;
 
-     await query(
+     const result = await query(
   `
   UPDATE physical
   SET

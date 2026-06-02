@@ -8,7 +8,9 @@ const query = (sql, params = []) => {
   return new Promise((resolve, reject) => {
     db.query(sql, params, (err, results) => {
       if (err) {
-        console.error("❌ Query Error:", err);
+        if (err.code !== "ER_DUP_FIELDNAME") {
+          console.error("❌ Query Error:", err);
+        }
         return reject(err);
       }
       resolve(results);
@@ -29,14 +31,21 @@ const uploadsDir = path.join(__dirname, "..", "uploads");
 const allowedExtensions = new Set(["xlsx", "csv"]);
 
 async function ensureColumn(table, column, definition) {
-  try {
-    await query(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
-  } catch (err) {
-    if (err?.code !== "ER_DUP_FIELDNAME") {
-      throw err;
-    }
+  const exists = await query(`
+    SELECT COLUMN_NAME
+    FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = ?
+    AND COLUMN_NAME = ?
+  `, [table, column]);
+
+  if (exists.length === 0) {
+    await query(
+      `ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`
+    );
   }
 }
+
 
 async function ensureColumnDefinition(table, column, definition) {
   await query(`ALTER TABLE ${table} MODIFY COLUMN ${column} ${definition}`);
@@ -542,21 +551,39 @@ function parseFiberRows(rows) {
     const rawFiberType = fiberTypeKey ? cleanRow[fiberTypeKey] : "";
     const fiberType = normalizeFiberType(rawFiberType || "FTTx");
 
-    const cmmAppd = toNumber(
-      pickFirst(cleanRow, ["cmm_appd", "cmm_approved", "cmm", "cmm_app"])
-    );
-    const ug = toNumber(cleanRow[ugKey]);
-    const aerial = toNumber(cleanRow[aerialKey]);
+ const cmmAppd = toNumber(
+  pickFirst(cleanRow, ["cmm_appd", "cmm_approved", "cmm", "cmm_app"])
+);
 
-    parsedRows.push({
-      fiberType,
-      spanType: null,
-      cmmAppd,
-      ug,
-      aerial,
-      rawRow: JSON.stringify(row || {}),
-      sourceRowNumber: row.__sourceRowNumber || index + 2,
-    });
+const ug = toNumber(cleanRow[ugKey]);
+
+const aerial = toNumber(cleanRow[aerialKey]);
+
+const spanType =
+  cleanRow["span_type"] ||
+  cleanRow["spantype"] ||
+  "";
+
+parsedRows.push({
+  circle: cleanRow["circle"] || "",
+  cmp: cleanRow["cmp"] || "",
+  network: cleanRow["n_w"] || "",
+  fiber: cleanRow["fiber"] || "",
+  status: cleanRow["status"] || "",
+  spanLinkId: cleanRow["span_link_id"] || "",
+  spName: cleanRow["sp_name"] || "",
+  patrollingStatus: cleanRow["patrolling_status"] || "",
+  routeStatus: cleanRow["route_status"] || "",
+  mpCode: cleanRow["mp_code"] || "",
+
+  fiberType,
+  spanType,
+  cmmAppd,
+  ug,
+  aerial,
+  rawRow: JSON.stringify(row || {}),
+  sourceRowNumber: row.__sourceRowNumber || index + 2,
+});
   });
 
   return parsedRows;
@@ -590,7 +617,12 @@ async function createFiberUpload({ date, uploadedBy, fileName, rows }) {
  const conn = await getConnection();
 
 try {
-  await conn.beginTransaction();
+ await new Promise((resolve, reject) => {
+  conn.beginTransaction((err) => {
+    if (err) return reject(err);
+    resolve();
+  });
+});
 
   const uploadResult = await new Promise((resolve, reject) => {
     conn.query(
@@ -606,22 +638,49 @@ try {
   const uploadId = uploadResult.insertId;
 
   if (parsedRows.length) {
-    const values = parsedRows.map((item) => [
-      uploadId,
-      item.fiberType,
-      item.spanType,
-      item.cmmAppd,
-      item.ug,
-      item.aerial,
-      item.rawRow,
-      item.sourceRowNumber,
-    ]);
+   const values = parsedRows.map((item) => [
+  uploadId,
+  item.circle,
+  item.cmp,
+  item.network,
+  item.status,
+  item.spanLinkId,
+  item.spName,
+  item.patrollingStatus,
+  item.routeStatus,
+  item.fiber,
+  item.fiberType,
+  item.spanType,
+  item.cmmAppd,
+  item.ug,
+  item.aerial,
+  item.rawRow,
+  item.sourceRowNumber,
+]);
 
     await new Promise((resolve, reject) => {
       conn.query(
         `INSERT INTO fiber_inventory
-        (upload_id, fiber_type, span_type, cmm_appd, ug, aerial, raw_row, source_row_number)
-        VALUES ?`,
+(
+ upload_id,
+ circle,
+ cmp,
+ network,
+ status,
+ span_link_id,
+ sp_name,
+ patrolling_status,
+ route_status,
+ fiber,
+ fiber_type,
+ span_type,
+ cmm_appd,
+ ug,
+ aerial,
+ raw_row,
+ source_row_number
+)
+VALUES ?`,
         [values],
         (err) => {
           if (err) return reject(err);
@@ -631,13 +690,20 @@ try {
     });
   }
 
-  await conn.commit();
+  await new Promise((resolve, reject) => {
+  conn.commit((err) => {
+    if (err) return reject(err);
+    resolve();
+  });
+});
   conn.release();
 
   return uploadId;
 
 } catch (err) {
-  await conn.rollback();
+  await new Promise((resolve) => {
+  conn.rollback(() => resolve());
+});
   conn.release();
   throw err;
 }
@@ -674,6 +740,22 @@ async function getFiberUploadById(id) {
     [id]
   );
   return rows[0] || null;
+}
+
+async function getFiberRowsByUploadId(uploadId) {
+  return await query(
+    `SELECT
+      fiber_type,
+      span_type,
+      cmm_appd,
+      ug,
+      aerial,
+      source_row_number
+     FROM fiber_inventory
+     WHERE upload_id = ?
+     ORDER BY source_row_number ASC`,
+    [uploadId]
+  );
 }
 
 async function getLatestFiberSummary() {
@@ -812,15 +894,15 @@ async function deleteFiberUpload(id) {
 
   const filePath = path.join(uploadsDir, upload.file_name);
 
-  await beginTransaction();
-  try {
-    await query(`DELETE FROM fiber_inventory WHERE upload_id = ?`, [id]);
-    await query(`DELETE FROM fiber_uploads WHERE id = ?`, [id]);
-    await commit();
-  } catch (err) {
-    await rollback();
-    throw err;
-  }
+  await query(
+  `DELETE FROM fiber_inventory WHERE upload_id = ?`,
+  [id]
+);
+
+await query(
+  `DELETE FROM fiber_uploads WHERE id = ?`,
+  [id]
+);
 
   if (fs.existsSync(filePath)) {
     fs.unlinkSync(filePath);
@@ -867,6 +949,7 @@ async function downloadZip(req, res) {
 }
 
 module.exports = {
+  getFiberRowsByUploadId,
   ensureFiberTables,
   ensureUploadsDir,
   fiberUpload,

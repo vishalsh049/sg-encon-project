@@ -1,6 +1,8 @@
 const express = require("express");
 const path = require("path");
+const xlsx = require("xlsx");
 const { isConnected } = require("../config/db");
+
 const {
   ensureFiberTables,
   fiberUpload,
@@ -9,6 +11,7 @@ const {
   getAllFiberUploads,
   getLatestFiberUpload,
   getFiberUploadById,
+  getFiberRowsByUploadId,
   getLatestFiberSummary,
   getLatestFiberInventoryRows,
   updateFiberUpload,
@@ -100,9 +103,42 @@ router.get("/uploads/:id/download", async (req, res) => {
     if (!upload) {
       return res.status(404).json({ message: "Upload not found." });
     }
+const rows = await getFiberRowsByUploadId(req.params.id);
 
-    const filePath = path.join(uploadsDir, upload.file_name);
-    return res.download(filePath, upload.file_name);
+const workbook = xlsx.utils.book_new();
+
+const worksheet = xlsx.utils.json_to_sheet(
+  rows.map((r) => ({
+    Fiber_Type: r.fiber_type,
+    Span_Type: r.span_type,
+    CMM_APPD: r.cmm_appd,
+    UG: r.ug,
+    Aerial: r.aerial,
+  }))
+);
+
+xlsx.utils.book_append_sheet(
+  workbook,
+  worksheet,
+  "Fiber Data"
+);
+
+const buffer = xlsx.write(workbook, {
+  type: "buffer",
+  bookType: "xlsx",
+});
+
+res.setHeader(
+  "Content-Disposition",
+  `attachment; filename=Fiber_${upload.id}.xlsx`
+);
+
+res.setHeader(
+  "Content-Type",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+);
+
+return res.send(buffer);
   } catch (err) {
     console.error("Fiber download error:", err);
     res.status(500).json({

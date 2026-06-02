@@ -216,8 +216,8 @@ useEffect(() => {
       <div className={`relative flex min-w-0 h-full flex-col gap-6 ${showUploadModal ? "blur-sm" : ""}`}>
         <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
           
-            <div className="space-y-2">
-              <h1 className="text-2xl font-semibold tracking-[-0.05em] text-slate-900 sm:text-3xl md:text-[1.6rem]">
+            <div className="space-y-1">
+              <h1 className="text-2xl font-semibold tracking-[-0.05em] text-slate-900 sm:text-xl md:text-[1.2rem]">
                 Fiber Inventory
               </h1>
               <p className="max-w-3xl text-sm text-slate-500 md:text-[15px]">
@@ -232,14 +232,14 @@ useEffect(() => {
             setSaveError("");
               setShowUploadModal(true);
             }}
-          className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-blue-600 to-cyan-500 px-6 text-sm font-semibold text-white shadow-[0_10px_30px_rgba(59,130,246,0.35)] transition hover:-translate-y-1 hover:shadow-[0_20px_40px_rgba(59,130,246,0.45)] sm:w-auto"
+          className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-blue-600 to-cyan-500 px-4 text-sm font-semibold text-white transition hover:-translate-y-1 sm:w-auto"
           >
             <Plus size={16} />
             Add Upload
           </button>
         </div>
 
-        <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+        <div className="grid grid-cols-1 gap-2 xl:grid-cols-3">
           {cardValues.map((card) => (
             <Card
               key={card.key}
@@ -252,14 +252,14 @@ useEffect(() => {
         </div>
 
 
-  <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[24px] border border-slate-200/60 bg-white/80 backdrop-blur-xl shadow-[0_20px_50px_rgba(0,0,0,0.06)] sm:rounded-[28px]">
-   <div className="flex flex-col gap-4 border-b border-slate-200/80 px-4 py-4 sm:px-6 sm:py-5 lg:flex-row lg:items-center lg:justify-between">
+  <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[14px] border border-slate-200/60 bg-white/80 backdrop-blur-xl sm:rounded-[18px]">
+   <div className="flex flex-col gap-4 border-b border-slate-200/80 px-4 py-3 sm:px-6 sm:py-3 lg:flex-row lg:items-center lg:justify-between">
 
     <div>
      <h2 className="text-lg font-semibold tracking-[-0.03em] text-slate-900">
        Upload History
      </h2>
-     <p className="mt-1 text-sm text-slate-500">
+     <p className=" text-sm text-slate-500">
         Uploads are stored separately, and each dashboard card resolves its own
         latest matching upload.
       </p>
@@ -267,20 +267,28 @@ useEffect(() => {
 
      <div className="flex flex-col gap-2 sm:flex-row">
   <button
-    onClick={async () => {
-      if (!selectedIds.length) return alert("Select items first");
+ onClick={async () => {
+  if (!selectedIds.length) {
+    return alert("Please select at least one record.");
+  }
 
-      await Promise.all(
-        selectedIds.map((id) =>
-          axios.delete(buildApiUrl(`/api/fiber/uploads/${id}`))
-        )
-      );
+  const confirmed = window.confirm(
+    `⚠️ Are you sure you want to delete ${selectedIds.length} selected upload(s)?\n\nThis action cannot be undone.`
+  );
 
-      alert("Deleted selected");
-      setSelectedIds([]);
-      fetchSummary();
-      fetchUploads(); 
-    }}
+  if (!confirmed) return;
+
+  await Promise.all(
+    selectedIds.map((id) =>
+      axios.delete(buildApiUrl(`/api/fiber/uploads/${id}`))
+    )
+  );
+
+  alert("Selected records deleted successfully.");
+  setSelectedIds([]);
+  fetchSummary();
+  fetchUploads();
+}}
     className="w-full rounded-lg bg-red-100 px-3 py-2 text-xs text-red-700 sm:w-auto"
   >
     Delete Selected
@@ -318,7 +326,7 @@ useEffect(() => {
      </div>
 
        {error ? (
-       <div className="m-6 rounded-2xl border border-rose-100 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+       <div className="m-5 rounded-2xl border border-rose-100 bg-rose-50 px-4 py-3 text-sm text-rose-700">
         {error}
         </div>
       ) : null}
@@ -329,7 +337,7 @@ useEffect(() => {
         <thead className="sticky top-0 z-10 bg-white/95 backdrop-blur-xl">
   <tr>
     {/* SELECT ALL CHECKBOX */}
-    <th className="px-4 py-4 sm:px-6">
+    <th className="px-4 py-4 sm:px-4">
       <input
         type="checkbox"
         className="h-4 w-4 rounded-md border-slate-300 text-blue-600"
@@ -348,12 +356,12 @@ useEffect(() => {
     </th>
 
     {/* HEADERS */}
-    <th className="px-4 py-4 text-[11px] font-semibold uppercase text-slate-400 sm:px-6">Date</th>
-    <th className="px-4 py-4 text-[11px] font-semibold uppercase text-slate-400 sm:px-6">Uploaded By</th>
-    <th className="px-4 py-4 text-[11px] font-semibold uppercase text-slate-400 sm:px-6">Scope</th>
-    <th className="px-4 py-4 text-[11px] font-semibold uppercase text-slate-400 sm:px-6">Uploaded At</th>
-    <th className="px-4 py-4 text-[11px] font-semibold uppercase text-slate-400 sm:px-6">File Name</th>
-    <th className="px-4 py-4 text-[11px] font-semibold uppercase text-slate-400 sm:px-6">Actions</th>
+    <th className="px-4 py-4 text-[12px] font-semibold uppercase text-slate-400 sm:px-6">Date</th>
+    <th className="px-4 py-4 text-[12px] font-semibold uppercase text-slate-400 sm:px-6">Uploaded By</th>
+    <th className="px-4 py-4 text-[12px] font-semibold uppercase text-slate-400 sm:px-6">Scope</th>
+    <th className="px-4 py-4 text-[12px] font-semibold uppercase text-slate-400 sm:px-6">Uploaded At</th>
+    <th className="px-4 py-4 text-[12px] font-semibold uppercase text-slate-400 sm:px-6">File Name</th>
+    <th className="px-4 py-4 text-[12px] font-semibold uppercase text-slate-400 sm:px-6">Actions</th>
   </tr>
 </thead>
       <tbody>
@@ -437,7 +445,15 @@ useEffect(() => {
                         </button>
                         <button
                           type="button"
-                          onClick={() => handleDelete(item.id)}
+                          onClick={() => {
+  const confirmed = window.confirm(
+    "⚠️ Are you sure you want to delete this upload?\n\nThis will permanently delete the file and all related fiber data."
+  );
+
+  if (confirmed) {
+    handleDelete(item.id);
+  }
+}}
                          className="p-2 rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-100 transition"
                         >
                           <Trash2 size={14} />

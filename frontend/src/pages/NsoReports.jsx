@@ -364,9 +364,12 @@ const handleDownload = async (row) => {
       buildApiUrl(`/api/nso/download/${row.id}`)
     );
 
-    if (!response.ok) {
-      throw new Error("Download failed");
-    }
+  if (!response.ok) {
+  const err = await response.text();
+  console.log(err);
+  throw new Error(err);
+}
+
 
     const blob = await response.blob();
 
@@ -378,9 +381,9 @@ const handleDownload = async (row) => {
 
     link.href = url;
 
-    const sanitizedName = row.original_name
-      ? `${row.original_name.replace(/\.[^/.]+$/, "")}.xlsx`
-      : `nso_report_${id}.xlsx`;
+  const sanitizedName = row.original_name
+  ? `${row.original_name.replace(/\.[^/.]+$/, "")}.xlsx`
+  : `nso_report_${row.id}.xlsx`;
 
     link.download = sanitizedName;
 

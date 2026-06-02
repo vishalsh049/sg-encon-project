@@ -60,6 +60,7 @@ const getBarHeight = (value) => {
 
 function KpiDashboard() {
   const [towerCards, setTowerCards] = useState([]);
+  const [fiberCards, setFiberCards] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -241,7 +242,38 @@ function KpiDashboard() {
           );
         })}
       </div>
+
+      
       )}
+
+{/* Fiber Section */}
+<div className="mt-8">
+  <div className="mb-4">
+    <h2 className="text-lg font-semibold text-slate-900">
+      Fiber Overview
+    </h2>
+
+    <p className="text-sm text-slate-500">
+      Real-time uptime trend of all monitored fiber systems.
+    </p>
+  </div>
+
+  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+    <div className="rounded-[14px] border border-emerald-100 bg-white p-4 shadow-sm">
+      <h3 className="text-sm font-semibold text-slate-900">
+        Fiber KPI
+      </h3>
+
+      <p className="mt-2 text-2xl font-bold text-emerald-600">
+        99.00%
+      </p>
+
+      <p className="mt-1 text-xs text-slate-500">
+        Fiber uptime placeholder
+      </p>
+    </div>
+  </div>
+</div>
 
       {/* Empty State */}
       {!loading && towerCards.length === 0 && !error && (

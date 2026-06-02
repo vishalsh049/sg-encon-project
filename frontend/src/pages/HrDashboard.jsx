@@ -730,53 +730,108 @@ function TablePanel({
 
       const signoffRow = getSignoffRow(cmpName);
 
-      if (card.key === "admin") {
-        requirement +=
-          Number(signoffRow?.state_leadership_team || 0) +
-          Number(signoffRow?.noc_executive || 0) +
-          Number(signoffRow?.analyst || 0) +
-          Number(signoffRow?.cmp_lead || 0);
-      }
+      // ADMIN REQUIREMENT
+if (card.key === "admin") {
+  requirement +=
+    Number(signoffRow?.state_leadership_team || 0) +
+    Number(signoffRow?.noc_executive || 0) +
+    Number(signoffRow?.analyst || 0) +
+    Number(signoffRow?.cmp_lead || 0);
+}
 
-      if (card.key === "utility") {
-        requirement +=
-          Number(signoffRow?.technician || 0) +
-          Number(signoffRow?.rigger || 0) +
-          Number(signoffRow?.utility_supervisor || 0) +
-          Number(signoffRow?.utility_engineer || 0) +
-          Number(signoffRow?.isp_engineer || 0) +
-          Number(signoffRow?.wh_incharge_cum_security || 0);
-      }
+// UTILITY REQUIREMENT
+if (card.key === "utility") {
+  requirement +=
+    Number(signoffRow?.technician || 0) +
+    Number(signoffRow?.rigger || 0) +
+    Number(signoffRow?.utility_supervisor || 0) +
+    Number(signoffRow?.utility_engineer || 0) +
+    Number(signoffRow?.isp_engineer || 0) +
+    Number(signoffRow?.wh_incharge_cum_security || 0);
+}
 
-      if (card.key === "fiber") {
-        requirement +=
-          Number(signoffRow?.splicer || 0) +
-          Number(signoffRow?.assistant_splicer || 0) +
-          Number(signoffRow?.fiber_helper || 0) +
-          Number(signoffRow?.patroller || 0) +
-          Number(signoffRow?.fiber_supervisor || 0) +
-          Number(signoffRow?.fibre_engineer || 0);
-      }
+// FIBER REQUIREMENT
+if (card.key === "fiber") {
+  requirement +=
+    Number(signoffRow?.splicer || 0) +
+    Number(signoffRow?.assistant_splicer || 0) +
+    Number(signoffRow?.fiber_helper || 0) +
+    Number(signoffRow?.patroller || 0) +
+    Number(signoffRow?.fiber_supervisor || 0) +
+    Number(signoffRow?.fibre_engineer || 0);
+}
 
-      if (card.key === "fttx") {
-        requirement +=
-          Number(signoffRow?.fttx_splicer || 0) +
-          Number(signoffRow?.fttx_assistant_splicer || 0) +
-          Number(signoffRow?.fttx_supervisor || 0) +
-          Number(signoffRow?.fttx_helper || 0);
-      }
+// FTTX REQUIREMENT
+if (card.key === "fttx") {
+  requirement +=
+    Number(signoffRow?.fttx_splicer || 0) +
+    Number(signoffRow?.fttx_assistant_splicer || 0) +
+    Number(signoffRow?.fttx_supervisor || 0) +
+    Number(signoffRow?.fttx_helper || 0);
+}
 
-      if (card.key === "fttxPo") {
-        requirement +=
-          Number(signoffRow?.fttx_engineer || 0) +
-          Number(signoffRow?.fttx_technician || 0);
-      }
+// FTTX PO REQUIREMENT
+if (card.key === "fttxPo") {
+  requirement +=
+    Number(signoffRow?.fttx_engineer || 0) +
+    Number(signoffRow?.fttx_technician || 0);
+}
 
-      Object.values(countLookup?.[cmpName] || {}).forEach((value) => {
-        available += Number(
-          showJoining ? value?.total || 0 : value || 0
-        );
-      });
+{/* admin category calculate availability */}
+     if (card.key === "admin") {
+
+  available +=
+    Number(countLookup?.[cmpName]?.state_leadership_team?.total || 0) +
+    Number(countLookup?.[cmpName]?.noc_executive?.total || 0) +
+    Number(countLookup?.[cmpName]?.analyst?.total || 0) +
+    Number(countLookup?.[cmpName]?.cmp_lead?.total || 0);
+
+}
+
+{/* utility category calculate availability */}
+   if (card.key === "utility") {
+
+  available +=
+    Number(countLookup?.[cmpName]?.technician?.total || 0) +
+    Number(countLookup?.[cmpName]?.rigger?.total || 0) +
+    Number(countLookup?.[cmpName]?.utility_supervisor?.total || 0) +
+    Number(countLookup?.[cmpName]?.utility_engineer?.total || 0) +
+    Number(countLookup?.[cmpName]?.isp_engineer?.total || 0) +
+    Number(countLookup?.[cmpName]?.wh_incharge_cum_security?.total || 0);
+
+}
+{/* fiber category calculate availability */}
+   if (card.key === "fiber") {
+
+  available +=
+    Number(countLookup?.[cmpName]?.splicer?.total || 0) +
+    Number(countLookup?.[cmpName]?.assistant_splicer?.total || 0) +
+    Number(countLookup?.[cmpName]?.fiber_helper?.total || 0) +
+    Number(countLookup?.[cmpName]?.patroller?.total || 0) +
+    Number(countLookup?.[cmpName]?.fiber_supervisor?.total || 0) +
+    Number(countLookup?.[cmpName]?.fibre_engineer?.total || 0);
+
+}
+
+{/* fttx category calculate availability */}
+    if (card.key === "fttx") {
+
+  available +=
+    Number(countLookup?.[cmpName]?.fttx_splicer?.total || 0) +
+    Number(countLookup?.[cmpName]?.fttx_assistant_splicer?.total || 0) +
+    Number(countLookup?.[cmpName]?.fttx_supervisor?.total || 0) +
+    Number(countLookup?.[cmpName]?.fttx_helper?.total || 0);
+
+}
+
+{/* fttxPo category calculate availability */}
+   if (card.key === "fttxPo") {
+
+  available +=
+    Number(countLookup?.[cmpName]?.fttx_engineer?.total || 0) +
+    Number(countLookup?.[cmpName]?.fttx_technician?.total || 0);
+
+}
 
     });
 
@@ -825,40 +880,78 @@ function TablePanel({
         className="custom-scrollbar overflow-x-auto overflow-y-auto bg-[linear-gradient(180deg,_#ffffff_0%,_#fbfdff_100%)]"
         style={{ maxHeight: "45vh", minHeight: "240px" }}
       >
-      <table className="min-w-max whitespace-nowrap text-sm border-separate [border-spacing:6px_4px]">
+      <table className="min-w-max whitespace-nowrap text-sm border-collapse w-full">
           <thead>
-            <tr className="sticky top-0 z-[90] bg-[#f8fbff] text-[11px] uppercase text-slate-700">
-              <th
-                rowSpan={2}
-                className="sticky left-0 top-0 z-[95] min-w-[140px] border border-slate-200 bg-[#f8fbff] px-4 py-1 text-left font-bold shadow-[8px_0_20px_rgba(241,245,249,0.95)]"
-              >
-                CMP
-              </th>
 
-              {columns.map((column) => (
+            <tr className="sticky top-0 z-[100] bg-slate-100 text-[13px] font-bold">
+
+ <th
+  colSpan={13}
+  className="bg-blue-900 text-white border border-white py-2 font-semibold"
+>
+  ADMIN
+</th>
+
+  <th
+  colSpan={18}
+ className="bg-blue-900 text-white border border-white py-2 font-semibold"
+>
+  UTILITY & ISP
+</th>
+
+<th
+  colSpan={18}
+ className="bg-blue-900 text-white border border-white py-2 font-semibold"
+>
+  FIBER
+</th>
+
+<th
+  colSpan={12}
+ className="bg-blue-900 text-white border border-white py-2 font-semibold"
+>
+  FTTX
+</th>
+
+<th
+  colSpan={6}
+  className="bg-blue-900 text-white border border-white py-2 font-semibold"
+>
+  FTTX PO BASED
+</th>
+</tr>
+  
+<tr className="sticky top-[36px] z-[90] bg-[#f8fbff] text-[12px] uppercase text-slate-700">
+ <th
+  rowSpan={3}
+ className="sticky left-0 top-[36px] z-[105] min-w-[140px] border-r border-slate-300 bg-violet-50 px-4 py-1 text-left text-[13px] font-semibold text-slate-700"
+   >
+    CMP
+  </th>
+
+  {columns.map((column, index) => (
 <th
   key={column.key}
   colSpan={3}
-  className="min-w-[180px] bg-gradient-to-b from-sky-50 to-white
-    border border-slate-200 rounded-t-xl text-center py-2 font-bold
-    text-sky-700 shadow-sm">
-                  {column.label}
-                </th>
-              ))}
-            </tr>
+ className="min-w-[180px] text-center py-2 font-semibold border-r-2 border-blue-300 bg-blue-200 text-blue-900"
+>
+    {column.label}
+  </th>
+ ))}
+</tr>
 
-           <tr className="sticky top-[27px] z-[85] bg-slate-50 text-[11px] text-slate-500">
-              {columns.map((column) => (
-                <React.Fragment key={column.key}>
- <th className=" bg-white border border-slate-200 py-1 text-center font-semibold text-slate-500 w-[40px]">
+ <tr className="sticky top-[72px] z-[85] bg-[#F1F5F9] text-[12px] text-slate-500">
+  {columns.map((column, index) => (
+<React.Fragment key={column.key}>
+<th className="border-b border-blue-500 py-1 text-center font-semibold text-blue-700 w-[40px] bg-blue-100">
   R
 </th>
 
-<th className=" bg-white border border-slate-200 py-1 text-center font-semibold text-slate-500 w-[40px]">
+<th className="border-b border-blue-500 py-1 text-center font-semibold text-blue-700 w-[40px] bg-blue-100">
   A
 </th>
 
-<th className=" bg-white border border-slate-200 py-1 text-center font-semibold text-slate-500 w-[40px]">
+<th className="border-b border-blue-500 py-1 text-center font-semibold text-blue-700 w-[40px] bg-blue-100">
   G
 </th>
                 </React.Fragment>
@@ -869,21 +962,9 @@ function TablePanel({
           <tbody className="text-[12px] text-slate-700">
             {groups.map((group) => (
               <React.Fragment key={group.title}>
-                <tr className="bg-slate-50 font-semibold">
-                  <td className="sticky left-0 z-[80] min-w-[140px] border border-slate-200 bg-slate-50 px-4 py-1 text-[12px] shadow-[8px_0_20px_rgba(241,245,249,0.95)]">
-                    {`Total (${group.items.reduce(
-                      (sum, cmpName) =>
-                        sum +
-                        Object.values(countLookup?.[cmpName] || {}).reduce(
-                          (roleSum, value) =>
-                            roleSum +
-                            Number(
-                              showJoining ? value?.total || 0 : value || 0
-                            ),
-                          0
-                        ),
-                      0
-                    )})`}
+              <tr className="bg-white font-bold border-y border-slate-200">
+                 <td className="sticky left-0 z-[80] min-w-[140px] border-r-2 bg-indigo-50 border-blue-200 px-4 py-2 text-[13px] font-bold text-slate-900">
+                  {`${group.title.replace(" SHQ", "")} Total`}
                   </td>
 
                   {columns.map((column) => {
@@ -903,18 +984,30 @@ function TablePanel({
                       0
                     );
 
+                    console.log(
+  group.title,
+  column.key,
+  "R=",
+  totalRequirement,
+  "A=",
+  totalAvailable,
+  "G=",
+  totalRequirement - totalAvailable
+);
+
                     const totalGap = totalRequirement - totalAvailable;
 
                     return (
                       <React.Fragment key={column.key}>
-                        <td className="w-[55px] px-2 py-1 text-center">
+                        <td className="w-[55px] px-2 py-2 text-center bg-indigo-50 border-slate-300 font-bold border-y ">
                           {totalRequirement}
                         </td>
-                        <td className="w-[55px] px-2 py-1 text-center">
+                        <td className="w-[55px] px-2 py-2 text-center font-bold border-y bg-indigo-50 border-slate-300">
                           {totalAvailable}
                         </td>
                         <td
-                          className={`border border-slate-300 px-2 py-1 text-center font-bold ${
+                           className={`px-2 py-2 text-center font-bold border-r border-y bg-indigo-50 border-slate-300 ${
+
                             totalGap <= 0 ? "text-emerald-600" : "text-red-500"
                           }`}
                         >
@@ -925,17 +1018,21 @@ function TablePanel({
                   })}
                 </tr>
 
-                {group.items.map((cmpName) => {
+               {group.items.map((cmpName, rowIndex) => {
                   const signoffRow = getSignoffRow(cmpName);
 
                   return (
-                    <tr key={cmpName} className="transition hover:bg-slate-50/90">
-                      <td className="sticky left-0 z-[70] min-w-[140px] border border-slate-200 bg-white px-2 py-1 font-medium">
-                        {cmpName}
-                      </td>
-
-                      {columns.map((column) => {
-                        const requirement = Number(signoffRow?.[column.key] || 0);
+                   <tr
+  key={cmpName}
+  className={`transition hover:bg-blue-50 ${
+    rowIndex % 2 === 0 ? "bg-white" : "bg-slate-50"
+  }`}
+>
+  <td className="sticky left-0 z-[70] min-w-[160px] border-r-2 border-b border-slate-300 bg-slate-50 px-3 py-2 font-semibold text-slate-800">
+    {cmpName}
+  </td>
+     {columns.map((column) => {
+   const requirement = Number(signoffRow?.[column.key] || 0);
   let physicalCount = 0;
 let newJoiningCount = 0;
 let available = 0;
@@ -968,11 +1065,11 @@ if (showJoining) {
 
   return (
     <React.Fragment key={column.key}>
-     <td className="w-[55px] px-2 py-1 text-center font-semibold text-slate-900">
+     <td className="w-[55px] px-2 py-2 text-center border-b border-slate-200">
          {requirement}
       </td>
     
- <td className="w-[55px] px-2 py-1 text-center">
+ <td className="w-[55px] px-2 py-2 text-center border-b border-slate-200">
 
   {showJoining ? (
 
@@ -1010,13 +1107,15 @@ if (showJoining) {
 
 </td>
 
-    <td
-      className={`border border-slate-200 px-2 py-1 text-center font-semibold ${
-                 gap <= 0 ? "text-emerald-600" : "text-red-500"
-        }`}
-      >
-      {gap}
-     </td>
+ <td
+    className={`px-2 py-2 text-center font-bold border-r border-slate-300 ${
+
+    gap <= 0 ? "text-emerald-600" : "text-red-500"
+  }`}
+>
+  {gap}
+</td>
+
     </React.Fragment>
           );
        })}

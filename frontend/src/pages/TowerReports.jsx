@@ -24,6 +24,21 @@ import {
   User,
 } from "lucide-react";
 
+const bulkDownloadMonths = [
+  { value: "01", label: "January" },
+  { value: "02", label: "February" },
+  { value: "03", label: "March" },
+  { value: "04", label: "April" },
+  { value: "05", label: "May" },
+  { value: "06", label: "June" },
+  { value: "07", label: "July" },
+  { value: "08", label: "August" },
+  { value: "09", label: "September" },
+  { value: "10", label: "October" },
+  { value: "11", label: "November" },
+  { value: "12", label: "December" },
+];
+
 function TowerReports() {
   const { siteCategory } = useParams();
   const normalizedCategory =
@@ -119,6 +134,9 @@ function TowerReports() {
     );
     const [file, setFile] = useState(null);
     const [uploading, setUploading] = useState(false);
+    const [downloading, setDownloading] = useState(false);
+    const [monthPopupOpen, setMonthPopupOpen] = useState(false);
+    const [selectedMonth, setSelectedMonth] = useState("");
     const [editingId, setEditingId] = useState(null);
 
   const [modalOpen, setModalOpen] = useState(false);
@@ -275,36 +293,64 @@ function TowerReports() {
     }
   };
 
-  const handleBulkDownload = async () => {
-    if (selectedIds.length === 0) return;
+const handleBulkDownload = (month) => {
+  if (selectedIds.length === 0) return;
 
-    try {
-      const response = await fetch(
-        buildApiUrl("/api/reports/bulk-download"),
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ ids: selectedIds }),
-        }
-      );
+  const monthLabel =
+    bulkDownloadMonths.find((item) => item.value === month)?.label || "selected month";
+  const hasSelectedReportsForMonth = rows.some((row) => {
+    const reportDate = toSafeDate(row.report_date, true);
 
-      const blob = await response.blob();
+    return (
+      selectedIds.includes(row.id) &&
+      reportDate &&
+      reportDate.getMonth() + 1 === Number(month)
+    );
+  });
 
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "reports.zip";
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
+  if (!hasSelectedReportsForMonth) {
+    alert(`No selected reports found for ${monthLabel}`);
+    return;
+  }
 
-    } catch (error) {
-      console.error(error);
-      alert("Download failed");
-    }
-  };
+  setDownloading(true);
+
+  const targetName = `bulk-download-${Date.now()}`;
+  const target = document.createElement("iframe");
+  const form = document.createElement("form");
+
+  target.name = targetName;
+  target.hidden = true;
+
+  form.method = "POST";
+  form.action = buildApiUrl("/api/reports/bulk-download");
+  form.target = targetName;
+  form.hidden = true;
+
+  [
+    ["ids", JSON.stringify(selectedIds)],
+    ["month", month],
+  ].forEach(([name, value]) => {
+    const input = document.createElement("input");
+    input.type = "hidden";
+    input.name = name;
+    input.value = value;
+    form.appendChild(input);
+  });
+
+  document.body.appendChild(target);
+  document.body.appendChild(form);
+  form.submit();
+  form.remove();
+
+  window.setTimeout(() => {
+    setDownloading(false);
+  }, 3000);
+
+  window.setTimeout(() => {
+    target.remove();
+  }, 24 * 60 * 60 * 1000);
+};
 
   const handleDownload = (id, fileName) => {
     if (!id || !fileName) return;
@@ -566,10 +612,10 @@ const latestReportDate = useMemo(() => {
 {/* main return */}
 
     return (
-      <div className="min-h-screen w-full pb-28 text-slate-900 -mt-4">
+      <div className="min-h-screen w-full pb-28 text-slate-900 -mt-2">
         <div className=" top-0 z-30 mb-4 overflow-hidden rounded-[22px] px-5 py-4 
         bg-[linear-gradient(135deg,rgba(219,234,254,0.82),rgba(255,255,255,0.9),rgba(237,233,254,0.9))] 
-        shadow-[0_24px_80px_rgba(15,23,42,0.08)] backdrop-blur-xl">
+       backdrop-blur-xl">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between ">
             <div className="min-w-0 space-y-3">
               <div className="space-y-0">
@@ -598,7 +644,7 @@ const latestReportDate = useMemo(() => {
                   setFile(null);
                   setModalOpen(true);
                 }}
-                className={`${primaryButtonClass} bg-gradient-to-r from-sky-500 to-indigo-500 shadow-[0_16px_40px_rgba(56,189,248,0.24)]`}
+                className={`${primaryButtonClass} bg-gradient-to-r from-sky-500 to-indigo-500`}
               >
                 <Upload size={16} />
                 Upload Reports
@@ -612,12 +658,24 @@ const latestReportDate = useMemo(() => {
                 Delete
               </button>
               <button
-                onClick={handleBulkDownload}
-                disabled={selectedIds.length === 0}
+                onClick={() => {
+                  setSelectedMonth("");
+                  setMonthPopupOpen(true);
+                }}
+               disabled={selectedIds.length === 0 || downloading}
                 className={`${secondaryButtonClass} border-transparent bg-emerald-50 text-emerald-700 shadow-sm hover:bg-emerald-100 disabled:opacity-40`}
               >
-                <Download size={16} />
-                Download
+               {downloading ? (
+  <>
+    <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+    Downloading...
+  </>
+) : (
+  <>
+    <Download size={16} />
+    Download
+  </>
+)}
               </button>
             </div>
           </div>
@@ -631,8 +689,8 @@ const latestReportDate = useMemo(() => {
                 return (
                   <div
                     key={item.type}
-                    className={`rounded-[20px] border border-white/85 bg-white/90 px-4 py-2 shadow-soft transition duration-200 
-                    hover:-translate-y-0.5 hover:shadow-[0_20px_60px_rgba(15,23,42,0.09)] ${item.highlight ? "ring-1 ring-indigo-100" : ""}`}>
+                    className={`rounded-[20px] border border-white/85 bg-white/90 px-4 py-2 transition duration-200
+                    hover:-translate-y-0.5 hover:shadow-soft ${item.highlight ? "ring-1 ring-indigo-100" : ""}`}>
                     <div className="flex items-center justify-between gap-4">
                       <div className="">
                         <p className="text-[11px] mt-1 font-semibold uppercase tracking-[0.2em] text-slate-500">
@@ -643,7 +701,7 @@ const latestReportDate = useMemo(() => {
                         </h2>
                         <p className="text-xs text-slate-400">Date: {item.date}</p>
                       </div>
-                      <div className={`flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br ${item.bg} text-slate-900 shadow-[0_12px_30px_rgba(15,23,42,0.08)]`}>
+                      <div className={`flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br ${item.bg} text-slate-900`}>
                         <Icon size={16} />
                       </div>
                     </div>
@@ -652,14 +710,14 @@ const latestReportDate = useMemo(() => {
               })}
             </div>
 
-            <div className="rounded-[24px] border border-white/80 bg-white/85 p-5 shadow-soft backdrop-blur-xl">
+            <div className="rounded-[24px] border border-white/80 bg-white/85 p-4 backdrop-blur-xl">
              
               <div className="space-y-4">
                 <div>
                   <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.06em] text-slate-500">
                     Search Reports, Date, Reports, Site Types, Uploaded By... 
                   </label>
-                  <div className="flex h-11 items-center gap-3 overflow-hidden rounded-2xl border border-slate-200/70 bg-white px-3 text-sm text-slate-700 shadow-[0_14px_30px_rgba(15,23,42,0.06)] transition focus-within:ring-2 focus-within:ring-sky-200">
+                  <div className="flex h-10 items-center gap-3 overflow-hidden rounded-2xl border border-slate-200/70 bg-white px-3 text-sm text-slate-700 transition focus-within:ring-2 focus-within:ring-sky-200">
                     <Search size={16} className="text-slate-400" />
                     <input
                       type="text"
@@ -697,7 +755,7 @@ const latestReportDate = useMemo(() => {
 
     {/* Button */}
     <Listbox.Button className="w-full h-11 rounded-2xl border border-slate-200 bg-white px-4
-     text-sm text-left shadow-sm flex items-center justify-between hover:border-sky-300 focus:ring-2 focus:ring-sky-100 transition">
+     text-sm text-left flex items-center justify-between hover:border-sky-300 focus:ring-2 focus:ring-sky-100 transition">
       <span className="truncate">
         {filterSiteType
           ? allowedSiteTypes.find((s) => s.value === filterSiteType)?.label
@@ -707,7 +765,7 @@ const latestReportDate = useMemo(() => {
     </Listbox.Button>
 
     {/* Dropdown */}
-    <Listbox.Options className="absolute z-50 mt-2 w-full rounded-2xl bg-white border border-slate-200 shadow-[0_20px_60px_rgba(15,23,42,0.12)] p-1">
+    <Listbox.Options className="absolute z-50 mt-2 w-full rounded-2xl bg-white border border-slate-200 p-1">
 
       {/* Default Option */}
       <Listbox.Option
@@ -748,14 +806,14 @@ const latestReportDate = useMemo(() => {
     <div className="relative">
 
       <Listbox.Button
-        className="w-full h-11 rounded-2xl bg-white border border-slate-200 px-4 text-sm text-left shadow-sm flex items-center justify-between hover:border-sky-300 focus:ring-2 focus:ring-sky-100 transition"
+        className="w-full h-11 rounded-2xl bg-white border border-slate-200 px-4 text-sm text-left flex items-center justify-between hover:border-sky-300 focus:ring-2 focus:ring-sky-100 transition"
       >
         {filterCircle || "All Circles"}
         <ChevronDown size={16} className="text-slate-400" />
       </Listbox.Button>
 
       <Listbox.Options
-        className="absolute z-50 mt-2 w-full rounded-2xl bg-white shadow-[0_20px_60px_rgba(0,0,0,0.08)] p-1 max-h-60 overflow-auto"
+        className="absolute z-50 mt-2 w-full rounded-2xl bg-white p-1 max-h-60 overflow-auto"
       >
 
         <Listbox.Option
@@ -799,7 +857,7 @@ const latestReportDate = useMemo(() => {
   <div className="relative">
     
     {/* Button */}
-    <Listbox.Button className="w-full h-11 rounded-2xl bg-white border border-slate-200 px-4 text-sm text-left shadow-sm flex items-center 
+    <Listbox.Button className="w-full h-11 rounded-2xl bg-white border border-slate-200 px-4 text-sm text-left flex items-center
     justify-between hover:border-sky-300 focus:ring-2 focus:ring-sky-100 transition">
       {reportOptions.find(o => o.value === filterReportType)?.label || "All Report Types"}
       <ChevronDown size={16} className="text-slate-400" />
@@ -846,7 +904,7 @@ const latestReportDate = useMemo(() => {
       </Listbox.Button>
 
       <Listbox.Options
-        className="absolute z-50 mt-2 w-full rounded-2xl bg-white shadow-[0_20px_60px_rgba(0,0,0,0.08)] p-1 max-h-60 overflow-auto"
+        className="absolute z-50 mt-2 w-full rounded-2xl bg-white p-1 max-h-60 overflow-auto"
       >
 
         <Listbox.Option
@@ -899,7 +957,7 @@ const latestReportDate = useMemo(() => {
                         setFilterCircle("");
                         setFilterUploadedBy("");
                       }}
-                      className={`${secondaryButtonClass} w-full justify-center border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100`}
+                      className={`${secondaryButtonClass} w-full justify-center border-slate-200 border rounded-xl bg-slate-50 text-slate-600 hover:bg-slate-100`}
                     >
                       <RotateCcw size={16} />
                       Reset
@@ -910,7 +968,7 @@ const latestReportDate = useMemo(() => {
             </div>
           </div>
 
-          <div className="overflow-hidden rounded-[24px] border border-white/80 bg-white/90 shadow-[0_24px_80px_rgba(15,23,42,0.1)]">
+          <div className="overflow-hidden rounded-[24px] border border-white/80 bg-white/90 ">
             <div className="overflow-x-auto">
               <table className="min-w-full text-left text-sm text-slate-600">
                 <thead>
@@ -1033,7 +1091,7 @@ const latestReportDate = useMemo(() => {
 
 
         <div className="fixed bottom-0 left-0 right-0 z-50 md:left-[var(--sidebar-width)]">
-          <div className="w-full border-t border-slate-200/80 bg-white/90 px-3 py-1 shadow-[0_-8px_24px_rgba(15,23,42,0.04)] backdrop-blur md:px-4">
+          <div className="w-full border-t border-slate-200/80 bg-white/90 px-3 py-1 backdrop-blur md:px-4">
 
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
 
@@ -1375,8 +1433,60 @@ const latestReportDate = useMemo(() => {
             </div>
           </div>
         ) : null}
-      </div>
-    );
-  }
 
-  export default TowerReports;
+      {monthPopupOpen && (
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+
+    <div className="bg-white rounded-xl p-6 w-80">
+
+      <h3 className="text-lg font-semibold mb-4">
+        Select Month
+      </h3>
+
+      <select
+        value={selectedMonth}
+        onChange={(e) => setSelectedMonth(e.target.value)}
+        className="w-full border p-2 rounded"
+      >
+        <option value="">Select Month</option>
+        {bulkDownloadMonths.map((month) => (
+          <option key={month.value} value={month.value}>
+            {month.label}
+          </option>
+        ))}
+      </select>
+
+      <div className="flex gap-2 mt-4">
+
+        <button
+          onClick={() => setMonthPopupOpen(false)}
+          className="px-4 py-2 border rounded"
+        >
+          Cancel
+        </button>
+
+        <button
+          onClick={() => {
+            if (!selectedMonth) {
+              alert("Please select month");
+              return;
+            }
+
+            handleBulkDownload(selectedMonth);
+            setMonthPopupOpen(false);
+          }}
+          disabled={downloading}
+          className="px-4 py-2 bg-blue-600 text-white rounded"
+        >
+          Download
+        </button>
+
+      </div>
+    </div>
+  </div>
+)}
+      </div>
+);
+}
+
+export default TowerReports;

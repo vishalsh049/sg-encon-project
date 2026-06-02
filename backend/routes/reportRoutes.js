@@ -1,6 +1,7 @@
           const express = require("express");
           const multer = require("multer");
           const xlsx = require("xlsx");
+          const ExcelJS = require("exceljs");
           const router = express.Router();
           const { db } = require("../config/db");
 
@@ -1520,37 +1521,226 @@ const jcId =
     }
   });
 
-          const archiver = require("archiver");
+          const bulkExportTables = new Set([
+            "ag1",
+            "ag2",
+            "enb",
+            "esc",
+            "gnb",
+            "gsc",
+            "hpodsc",
+            "ila",
+            "isc",
+            "osc",
+            "wifi",
+          ]);
+          const bulkExportMonths = [
+            "January",
+            "February",
+            "March",
+            "April",
+            "May",
+            "June",
+            "July",
+            "August",
+            "September",
+            "October",
+            "November",
+            "December",
+          ];
+          const bulkExportHighWaterMark = 1000;
+          const maxExcelDataRowsPerSheet = 1048575;
 
-          router.post("/bulk-download", async (req, res) => {
+          const parseBulkExportIds = (value) => {
+            let rawIds = value;
+
+            if (typeof rawIds === "string") {
+              try {
+                rawIds = JSON.parse(rawIds);
+              } catch {
+                rawIds = rawIds.split(",");
+              }
+            }
+
+            if (!Array.isArray(rawIds)) return [];
+
+            return [...new Set(
+              rawIds
+                .map((id) => Number(id))
+                .filter((id) => Number.isInteger(id) && id > 0)
+            )];
+          };
+
+          const streamBulkExportRows = async function* (sql, params) {
+            const connection = await new Promise((resolve, reject) => {
+              db.getConnection((err, pooledConnection) => {
+                if (err) return reject(err);
+                resolve(pooledConnection);
+              });
+            });
+
             try {
-              const { ids } = req.body;
+              await new Promise((resolve, reject) => {
+                connection.query("SET time_zone = '+05:30'", (err) => {
+                  if (err) return reject(err);
+                  resolve();
+                });
+              });
 
-              if (!ids || ids.length === 0) {
+              const rowStream = connection
+                .query(sql, params)
+                .stream({ highWaterMark: bulkExportHighWaterMark });
+
+              for await (const row of rowStream) {
+                yield row;
+              }
+            } finally {
+              connection.release();
+            }
+          };
+
+          router.post("/bulk-download", express.urlencoded({ extended: false }), async (req, res) => {
+            let workbook;
+
+            try {
+              const ids = parseBulkExportIds(req.body?.ids);
+              const month = Number(req.body?.month);
+
+              if (!ids.length) {
                 return res.status(400).json({ message: "No IDs provided" });
               }
 
-              const rows = await query(
-                "SELECT file_name FROM report_uploads WHERE id IN (?)",
-                [ids]
+              if (!Number.isInteger(month) || month < 1 || month > 12) {
+                return res.status(400).json({ message: "Invalid month" });
+              }
+
+              const placeholders = ids.map(() => "?").join(",");
+              const uploads = await query(
+                `SELECT id, site_type, file_id, report_date
+                FROM report_uploads
+                WHERE id IN (${placeholders})
+                  AND MONTH(report_date) = ?
+                ORDER BY report_date ASC, id ASC`,
+                [...ids, month]
               );
 
-              res.setHeader("Content-Type", "application/zip");
-              res.setHeader("Content-Disposition", "attachment; filename=reports.zip");
+              if (!uploads.length) {
+                return res.status(404).json({
+                  message: `No selected reports found for ${bulkExportMonths[month - 1]}`,
+                });
+              }
 
-              const archive = archiver("zip", {
-                zlib: { level: 9 },
+              const tableNames = [...new Set(
+                uploads.map((upload) => String(upload.site_type || "").toLowerCase())
+              )];
+              const invalidTable = tableNames.find((tableName) => !bulkExportTables.has(tableName));
+
+              if (invalidTable) {
+                return res.status(400).json({ message: "Unsupported report type" });
+              }
+
+              const dataColumns = [];
+              const seenColumns = new Set();
+
+              for (const tableName of tableNames) {
+                const columns = await query(
+                  `SELECT COLUMN_NAME
+                  FROM INFORMATION_SCHEMA.COLUMNS
+                  WHERE TABLE_SCHEMA = DATABASE()
+                    AND TABLE_NAME = ?
+                  ORDER BY ORDINAL_POSITION`,
+                  [tableName]
+                );
+
+                columns.forEach(({ COLUMN_NAME: columnName }) => {
+                  if (!seenColumns.has(columnName)) {
+                    seenColumns.add(columnName);
+                    dataColumns.push(columnName);
+                  }
+                });
+              }
+
+              const monthName = bulkExportMonths[month - 1];
+              const exportColumns = [
+                "source_site_type",
+                "source_report_date",
+                "source_upload_id",
+                ...dataColumns,
+              ];
+
+              res.setHeader(
+                "Content-Disposition",
+                `attachment; filename="${monthName}_Report.xlsx"`
+              );
+              res.setHeader(
+                "Content-Type",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+              );
+
+              workbook = new ExcelJS.stream.xlsx.WorkbookWriter({
+                stream: res,
+                useStyles: false,
+                useSharedStrings: false,
               });
 
-              archive.pipe(res);
+              let worksheet;
+              let sheetNumber = 0;
+              let sheetDataRows = 0;
 
-              
+              const addWorksheet = () => {
+                sheetNumber += 1;
+                sheetDataRows = 0;
+                worksheet = workbook.addWorksheet(
+                  sheetNumber === 1 ? "Reports" : `Reports_${sheetNumber}`
+                );
+                worksheet.columns = exportColumns.map((columnName) => ({
+                  header: columnName,
+                  key: columnName,
+                }));
+              };
 
-              await archive.finalize();
+              addWorksheet();
 
+              for (const upload of uploads) {
+                const tableName = String(upload.site_type).toLowerCase();
+                const rows = streamBulkExportRows(
+                  `SELECT *
+                  FROM ${tableName}
+                  WHERE file_id = ?
+                  ORDER BY id ASC`,
+                  [upload.file_id]
+                );
+
+                for await (const row of rows) {
+                  if (res.destroyed) {
+                    throw new Error("Client disconnected during bulk download");
+                  }
+
+                  if (sheetDataRows >= maxExcelDataRowsPerSheet) {
+                    worksheet.commit();
+                    addWorksheet();
+                  }
+
+                  worksheet.addRow({
+                    source_site_type: String(upload.site_type).toUpperCase(),
+                    source_report_date: upload.report_date,
+                    source_upload_id: upload.id,
+                    ...row,
+                  }).commit();
+                  sheetDataRows += 1;
+                }
+              }
+
+              worksheet.commit();
+              await workbook.commit();
             } catch (err) {
-              console.error(err);
-              res.status(500).json({ message: "Download failed" });
+              console.error("BULK DOWNLOAD ERROR:", err);
+
+              if (!res.headersSent) {
+                return res.status(500).json({ message: "Download failed" });
+              }
+
+              res.destroy(err);
             }
           });
 

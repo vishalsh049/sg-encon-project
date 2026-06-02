@@ -241,51 +241,62 @@ function getCurrentIstSqlDateTime() {
   return "DATE_FORMAT(CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+05:30'), '%Y-%m-%d %H:%i:%s')";
 }
 
+function sanitizeSpreadsheetValue(value) {
+  if (typeof value !== "string") return value ?? "";
+
+  // XML 1.0 forbids these characters, and an .xlsx file is a ZIP of XML files.
+  return value.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\uFFFE\uFFFF]/g, "");
+}
+
 function cleanNsoRows(rows) {
-  return rows.map((row) => ({
-    uid: row.uid || "",
-    year: row.year || "",
-    week: row.week || "",
-    ticket_no: row.ticket_no || "",
-    parent_ticket: row.parent_ticket || "",
-    circle: row.circle || "",
-    cmp: row.cmp || "",
-    cmm_name: row.cmm_name || "",
-    link_name: row.link_name || "",
-    span_name: row.span_name || "",
-    vendor_tt: row.vendor_tt || "",
-    fibre_owner: row.fibre_owner || "",
-    construction_type: row.construction_type || "",
-    impact: row.impact || "",
-    affected_service: row.affected_service || "",
-    reason: row.reason || "",
-    event_date: row.event_date || "",
-    reported_to_fibre_noc: row.reported_to_fibre_noc || "",
-    informed_date: row.informed_date || "",
-    etr: row.etr || "",
-    cleared_date: row.cleared_date || "",
-    status: row.status || "",
-    resolution: row.resolution || "",
-    fault_description: row.fault_description || "",
-    mttr: row.mttr || "",
-    mttn: row.mttn || "",
-    delay_reason: row.delay_reason || "",
-    inter_intra_bin: row.inter_intra_bin || "",
-    zone: row.zone || "",
-    bucket: row.bucket || "",
-    transport_ip_bin: row.transport_ip_bin || "",
-    restoration_status: row.restoration_status || "",
-    span_id: row.span_id || "",
-    workorder: row.workorder || "",
-    sp_name: row.sp_name || "",
-    rca_cause_code: row.rca_cause_code || "",
-    reason_high_mttr: row.reason_high_mttr || "",
-    day: row.day || "",
-    month: row.month || "",
-    week_name: row.week_name || "",
-    ttr_percentage: row.ttr_percentage || "",
-    report_date: row.report_date || "",
-  }));
+  return rows.map((row) =>
+    Object.fromEntries(
+      Object.entries({
+        uid: row.uid,
+        year: row.year,
+        week: row.week,
+        ticket_no: row.ticket_no,
+        parent_ticket: row.parent_ticket,
+        circle: row.circle,
+        cmp: row.cmp,
+        cmm_name: row.cmm_name,
+        link_name: row.link_name,
+        span_name: row.span_name,
+        vendor_tt: row.vendor_tt,
+        fibre_owner: row.fibre_owner,
+        construction_type: row.construction_type,
+        impact: row.impact,
+        affected_service: row.affected_service,
+        reason: row.reason,
+        event_date: row.event_date,
+        reported_to_fibre_noc: row.reported_to_fibre_noc,
+        informed_date: row.informed_date,
+        etr: row.etr,
+        cleared_date: row.cleared_date,
+        status: row.status,
+        resolution: row.resolution,
+        fault_description: row.fault_description,
+        mttr: row.mttr,
+        mttn: row.mttn,
+        delay_reason: row.delay_reason,
+        inter_intra_bin: row.inter_intra_bin,
+        zone: row.zone,
+        bucket: row.bucket,
+        transport_ip_bin: row.transport_ip_bin,
+        restoration_status: row.restoration_status,
+        span_id: row.span_id,
+        workorder: row.workorder,
+        sp_name: row.sp_name,
+        rca_cause_code: row.rca_cause_code,
+        reason_high_mttr: row.reason_high_mttr,
+        day: row.day,
+        month: row.month,
+        week_name: row.week_name,
+        ttr_percentage: row.ttr_percentage,
+        report_date: row.report_date,
+      }).map(([key, value]) => [key, sanitizeSpreadsheetValue(value)])
+    )
+  );
 }
 
 function createWorkbookBuffer(rows, sheetName = "NSO Reports") {
