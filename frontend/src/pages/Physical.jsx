@@ -1470,7 +1470,7 @@ const cmpFilterOptions = [
 
     </div>
 
-   <div className="flex items-center gap-20 rounded-xl bg-slate-50 px-4 py-1">
+  <div className="flex flex-wrap items-center justify-between rounded-xl bg-slate-50 px-4 py-2 gap-3">
 
   <div className="flex items-center gap-2">
     <span className="text-sm font-medium text-slate-600">
@@ -1697,8 +1697,8 @@ const cmpFilterOptions = [
 
      {/* Table Section */}
       <div className="mx-auto mt-2 w-full max-w-7xl">
-         <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-                <div className="absolute inset-0" />
+       <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+        
          <div className="flex items-center justify-between border-b border-slate-100 px-4 py-2">
            <h2 className="text-md font-semibold text-slate-900">
                     Employee Records</h2>
@@ -1724,66 +1724,66 @@ const cmpFilterOptions = [
       onChange={handleSelectAll}
     />
   </th>
-<th className="border-b border-r border-slate-200 bg-slate-100/90 px-4 py-2 text-left text-sm font-semibold text-slate-700 whitespace-nowrap backdrop-blur-xl">
+<th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-700 whitespace-nowrap">
   Circle</th>
 
-  <th className="border-b border-r border-slate-200 bg-slate-100/90 px-4 py-2 text-left text-sm font-semibold text-slate-700 whitespace-nowrap backdrop-blur-xl">CMP</th>
+  <th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-700 whitespace-nowrap">CMP</th>
 
-  <th className="border-b border-r border-slate-200 bg-slate-100/90 px-4 py-2 text-left text-sm font-semibold text-slate-700 whitespace-nowrap backdrop-blur-xl">PPRJ Status</th>
+  <th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-700 whitespace-nowrap">PPRJ Status</th>
 
-  <th className="border-b border-r border-slate-200 bg-slate-100/90 px-4 py-2 text-left text-sm font-semibold text-slate-700 whitespace-nowrap backdrop-blur-xl">PPRJ Code</th>
+  <th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-700 whitespace-nowrap">PPRJ Code</th>
 
-  <th className="border-b border-r border-slate-200 bg-slate-100/90 px-4 py-2 text-left text-sm font-semibold text-slate-700 whitespace-nowrap backdrop-blur-xl">Employee Code</th>
+  <th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-700 whitespace-nowrap">Employee Code</th>
       
-  <th className="border-b border-r border-slate-200 bg-slate-100/90 px-4 py-2 text-left text-sm font-semibold text-slate-700 whitespace-nowrap backdrop-blur-xl">Employee Name</th>
+  <th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-700 whitespace-nowrap">Employee Name</th>
 
-  <th className="border-b border-r border-slate-200 bg-slate-100/90 px-4 py-2 text-left text-sm font-semibold text-slate-700 whitespace-nowrap backdrop-blur-xl">Father Name</th>
+  <th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-700 whitespace-nowrap">Father Name</th>
 
-  <th className="border-b border-r border-slate-200 bg-slate-100/90 px-4 py-2 text-left text-sm font-semibold text-slate-700 whitespace-nowrap backdrop-blur-xl">Function</th>
-
-
-  <th className="border-b border-r border-slate-200 bg-slate-100/90 px-4 py-2 text-left text-sm font-semibold text-slate-700 whitespace-nowrap backdrop-blur-xl">Job Role</th>
-
-  <th className="border-b border-r border-slate-200 bg-slate-100/90 px-4 py-2 text-left text-sm font-semibold text-slate-700 whitespace-nowrap backdrop-blur-xl">Manpower SignOff Scope</th>
-
-  <th className="border-b border-r border-slate-200 bg-slate-100/90 px-4 py-2 text-left text-sm font-semibold text-slate-700 whitespace-nowrap backdrop-blur-xl">Scrum Job Role</th>
+  <th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-700 whitespace-nowrap">Function</th>
 
 
-  <th className="border-b border-r border-slate-200 bg-slate-100/90 px-4 py-2 text-left text-sm font-semibold text-slate-700 whitespace-nowrap backdrop-blur-xl">Mobile Number</th>
+  <th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-700 whitespace-nowrap">Job Role</th>
 
-  <th className="border-b border-r border-slate-200 bg-slate-100/90 px-4 py-2 text-left text-sm font-semibold text-slate-700 whitespace-nowrap backdrop-blur-xl">DOB</th>
+  <th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-700 whitespace-nowrap">Manpower SignOff Scope</th>
 
-  <th className="border-b border-r border-slate-200 bg-slate-100/90 px-4 py-2 text-left text-sm font-semibold text-slate-700 whitespace-nowrap backdrop-blur-xl">Age</th>
+  <th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-700 whitespace-nowrap">Scrum Job Role</th>
 
-  <th className="border-b border-r border-slate-200 bg-slate-100/90 px-4 py-2 text-left text-sm font-semibold text-slate-700 whitespace-nowrap backdrop-blur-xl">Date Of Joining</th>
 
-  <th className="border-b border-r border-slate-200 bg-slate-100/90 px-4 py-2 text-left text-sm font-semibold text-slate-700 whitespace-nowrap backdrop-blur-xl">Employment Status</th>
+  <th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-700 whitespace-nowrap">Mobile Number</th>
 
-  <th className="border-b border-r border-slate-200 bg-slate-100/90 px-4 py-2 text-left text-sm font-semibold text-slate-700 whitespace-nowrap backdrop-blur-xl">Resigned Date</th>
+  <th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-700 whitespace-nowrap">DOB</th>
 
-  <th className="border-b border-r border-slate-200 bg-slate-100/90 px-4 py-2 text-left text-sm font-semibold text-slate-700 whitespace-nowrap backdrop-blur-xl">Last Working Date</th>
+  <th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-700 whitespace-nowrap">Age</th>
 
-  <th className="border-b border-r border-slate-200 bg-slate-100/90 px-4 py-2 text-left text-sm font-semibold text-slate-700 whitespace-nowrap backdrop-blur-xl">RM Code</th>
+  <th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-700 whitespace-nowrap">Date Of Joining</th>
 
-  <th className="border-b border-r border-slate-200 bg-slate-100/90 px-4 py-2 text-left text-sm font-semibold text-slate-700 whitespace-nowrap backdrop-blur-xl">Reporting Manager</th>
+  <th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-700 whitespace-nowrap">Employment Status</th>
 
-  <th className="border-b border-r border-slate-200 bg-slate-100/90 px-4 py-2 text-left text-sm font-semibold text-slate-700 whitespace-nowrap backdrop-blur-xl">Company Email</th>
+  <th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-700 whitespace-nowrap">Resigned Date</th>
 
-  <th className="border-b border-r border-slate-200 bg-slate-100/90 px-4 py-2 text-left text-sm font-semibold text-slate-700 whitespace-nowrap backdrop-blur-xl">Laptop Status</th>
+  <th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-700 whitespace-nowrap">Last Working Date</th>
 
-  <th className="border-b border-r border-slate-200 bg-slate-100/90 px-4 py-2 text-left text-sm font-semibold text-slate-700 whitespace-nowrap backdrop-blur-xl">IFSC Code</th>
+  <th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-700 whitespace-nowrap">RM Code</th>
 
-  <th className="border-b border-r border-slate-200 bg-slate-100/90 px-4 py-2 text-left text-sm font-semibold text-slate-700 whitespace-nowrap backdrop-blur-xl">Bank Account No</th>
+  <th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-700 whitespace-nowrap">Reporting Manager</th>
 
-  <th className="border-b border-r border-slate-200 bg-slate-100/90 px-4 py-2 text-left text-sm font-semibold text-slate-700 whitespace-nowrap backdrop-blur-xl">PAN No</th>
+  <th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-700 whitespace-nowrap">Company Email</th>
 
-  <th className="border-b border-r border-slate-200 bg-slate-100/90 px-4 py-2 text-left text-sm font-semibold text-slate-700 whitespace-nowrap backdrop-blur-xl">AADHAAR No</th>
+  <th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-700 whitespace-nowrap">Laptop Status</th>
 
-  <th className="border-b border-r border-slate-200 bg-slate-100/90 px-4 py-2 text-left text-sm font-semibold text-slate-700 whitespace-nowrap backdrop-blur-xl">UAN No</th>
+  <th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-700 whitespace-nowrap">IFSC Code</th>
 
-  <th className="border-b border-r border-slate-200 bg-slate-100/90 px-4 py-2 text-left text-sm font-semibold text-slate-700 whitespace-nowrap backdrop-blur-xl">ESIC IP No</th>
+  <th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-700 whitespace-nowrap">Bank Account No</th>
 
-  <th className="border-b border-r border-slate-200 bg-slate-100/90 px-4 py-2 text-left text-sm font-semibold text-slate-700 whitespace-nowrap backdrop-blur-xl">Remarks</th>
+  <th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-700 whitespace-nowrap">PAN No</th>
+
+  <th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-700 whitespace-nowrap">AADHAAR No</th>
+
+  <th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-700 whitespace-nowrap">UAN No</th>
+
+  <th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-700 whitespace-nowrap">ESIC IP No</th>
+
+  <th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-700 whitespace-nowrap">Remarks</th>
 
   <th className="border-b border-r border-slate-200 bg-slate-100/90 px-4 py-2  text-left text-sm font-semibold text-slate-700 whitespace-nowrap backdrop-blur-xl">
         Action
@@ -1823,14 +1823,14 @@ const cmpFilterOptions = [
       </tr>
     ) : (
       paginatedData.map((item, index) => (
-        <tr
-          key={index}
-          className={`transition-all duration-200 hover:bg-slate-50 hover:shadow-md ${
-        index % 2 === 0
-          ? "bg-white/80"
-        : "bg-slate-50/70"
-        }`}
-        >
+      <tr
+      key={index}
+      className={`group transition-all duration-200 hover:bg-blue-50 ${
+      index % 2 === 0
+      ? "bg-white"
+      : "bg-slate-50"
+     }`}
+>
       <td className="px-3 py-2">
     <input
       type="checkbox"
@@ -1904,7 +1904,7 @@ const cmpFilterOptions = [
       <button
         disabled={deletingId === item.id}
         onClick={() => handleDelete(item.id)}
-        className={`rounded-xl px-3 py-1 text-xs font-semibold text-white transition ${
+       className={`h-9 w-9 rounded-xl bg-red-50 text-red-600 transition ${
           deletingId === item.id
             ? "bg-red-300 cursor-not-allowed"
             : "bg-red-500 hover:bg-red-600"
@@ -1915,7 +1915,7 @@ const cmpFilterOptions = [
 
     <button
   onClick={() => handleEdit(item)}
-  className="rounded-xl bg-blue-600 hover:bg-blue-700 px-3 py-1 text-xs font-semibold text-white transition"
+  className="h-9 w-9 rounded-xl bg-blue-50 text-blue-600 hover:bg-blue-100 transition"
 >
   Edit
 </button>
@@ -1932,7 +1932,7 @@ const cmpFilterOptions = [
                   </div>
                 </div>
               </div>
-  <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+  <div className="flex items-center justify-between border-t border-slate-100 px-6 py-4">
 
     <div className="text-sm text-slate-600">
       Total Files:
