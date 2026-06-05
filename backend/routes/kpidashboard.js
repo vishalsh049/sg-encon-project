@@ -220,6 +220,11 @@ router.get("/tower-uptime", async (req, res) => {
           uptime: normalizeUptimeValue(row.uptime),
         }));
 
+        console.log(
+        site.name,
+        normalizedRows.map(r => r.report_date)
+        );
+
         const last7Days = [];
 
         for (let i = 6; i >= 0; i--) {
@@ -335,10 +340,7 @@ router.get("/tower-uptime", async (req, res) => {
       }
 
     }
-    console.log(
-  "LATEST ROWS",
-  normalizedRows
-);
+
 
     res.json(finalData);
 
