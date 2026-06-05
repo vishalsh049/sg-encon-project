@@ -213,7 +213,7 @@ router.get("/tower-uptime", async (req, res) => {
 
           GROUP BY DATE(${dateColumn})
 
-          ORDER BY DATE(${dateColumn})
+          ORDER BY DATE(${dateColumn}) ASC
 
         `);
 
@@ -227,14 +227,15 @@ router.get("/tower-uptime", async (req, res) => {
         for (let i = 6; i >= 0; i--) {
 
           const latestDate =
-
-            normalizedRows.length > 0
-              ? new Date(
-                  normalizedRows[
-                    normalizedRows.length - 1
-                  ].report_date
-                )
-              : new Date();
+  normalizedRows.length > 0
+    ? new Date(
+        Math.max(
+          ...normalizedRows.map(
+            (r) => new Date(r.report_date)
+          )
+        )
+      )
+    : new Date();
 
           const d =
             new Date(latestDate);

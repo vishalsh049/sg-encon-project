@@ -11,8 +11,10 @@
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [jobRoleSearch, setJobRoleSearch] = useState("");
+  const [bulkDeleting, setBulkDeleting] = useState(false);
 
   const [showEmployeeModal, setShowEmployeeModal] = useState(false);
+
 
   const [isEditMode, setIsEditMode] = useState(false);
   const [editingId, setEditingId] = useState(null);
@@ -45,6 +47,7 @@
     aadhaar_no: "",
     uan_no: "",
     esic_ip_no: "",
+    nth_salary: "",
     remarks: "",
   });
 
@@ -234,6 +237,8 @@
 
       aadhaar_no:
         parsedEmployee.aadhaar_no || "",
+
+        nth_salary: parsedEmployee.nth_salary || "",
 
       job_role:
         parsedEmployee.designation || "",
@@ -478,47 +483,49 @@ const handleEdit = (item) => {
     }
   };
 
-  const handleBulkDelete = async () => {
+const handleBulkDelete = async () => {
+  if (selectedRows.length === 0) {
+    alert("Please select rows");
+    return;
+  }
 
-    if (selectedRows.length === 0) {
-      alert("Please select rows");
-      return;
-    }
+  const confirmDelete = window.confirm(
+    `Delete ${selectedRows.length} selected records?`
+  );
 
-    const confirmDelete = window.confirm(
-      `Delete ${selectedRows.length} selected records?`
+  if (!confirmDelete) return;
+
+  try {
+    setBulkDeleting(true);
+
+  await authFetch(
+  buildApiUrl("/api/physical/bulk-delete"),
+  {
+    method: "DELETE",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      ids: selectedRows,
+    }),
+  }
+);
+
+    alert(
+      `${selectedRows.length} records deleted successfully`
     );
 
-    if (!confirmDelete) return;
+    setSelectedRows([]);
 
-    try {
+    await loadPhysicalData();
 
-      for (const id of selectedRows) {
-
-        await authFetch(
-          buildApiUrl(`/api/physical/delete-employee/${id}`),
-          {
-            method: "DELETE",
-          }
-        );
-
-      }
-
-      alert("Selected records deleted successfully");
-
-      setSelectedRows([]);
-
-      loadPhysicalData();
-
-    } catch (error) {
-
-      console.log(error);
-
-      alert("Bulk delete failed");
-
-    }
-
-  };
+  } catch (error) {
+    console.log(error);
+    alert("Bulk delete failed");
+  } finally {
+    setBulkDeleting(false);
+  }
+};
 
   const handleEmployeeChange = async (e) => {
 
@@ -675,6 +682,8 @@ if (
         esic_ip_no:
           result.data.esic_ip_no || "",
 
+          nth_salary:
+          result.data.nth_salary || "",
         remarks:
           result.data.remarks || "",
 
@@ -797,6 +806,9 @@ if (
 
   esic_ip_no:
     result.data.esic_ip_no || "",
+
+  nth_salary:
+    result.data.nth_salary || "",
 
   remarks:
     result.data.remarks || "",
@@ -922,6 +934,7 @@ if (
         aadhaar_no: "",
         uan_no: "",
         esic_ip_no: "",
+        nth_salary: "",
         remarks: "",
       });
 
@@ -1030,6 +1043,7 @@ if (
       "AADHAAR No": item.aadhaar_no,
       "UAN No": item.uan_no,
       "ESIC IP No": item.esic_ip_no,
+      "NTH Salary": item.nth_salary,
       Remarks: item.remarks,
     }));
 
@@ -1329,6 +1343,17 @@ const cmpFilterOptions = [
     }))
 ];
 
+const startRecord =
+  filteredData.length === 0
+    ? 0
+    : (currentPage - 1) * pageSize + 1;
+
+const endRecord =
+  Math.min(
+    currentPage * pageSize,
+    filteredData.length
+  );
+
     return (
       <div className="min-h-screen">
         <div className="relative min-h-screen overflow-hidden">
@@ -1417,12 +1442,15 @@ const cmpFilterOptions = [
   </button>
 
   {/* Delete */}
-  <button
-    onClick={handleBulkDelete}
-    className="h-8 rounded-xl bg-red-600 px-4 text-[13px] font-semibold text-white"
-  >
-    Delete ({selectedRows.length})
-  </button>
+ <button
+  onClick={handleBulkDelete}
+  disabled={bulkDeleting}
+  className="h-8 rounded-xl bg-red-600 px-4 text-[13px] font-semibold text-white disabled:opacity-60"
+>
+  {bulkDeleting
+    ? `Deleting ${selectedRows.length}...`
+    : `Delete (${selectedRows.length})`}
+</button>
 
   {/* Reset */}
   <button
@@ -1646,7 +1674,7 @@ const cmpFilterOptions = [
 
 
   {/* Job Roles Section */}
-  {/*
+
   <div className="mx-auto mt-2 w-full max-w-7xl">
 
     <div className="rounded-[22px] border border-white/70 bg-white/100 px-4 py-2 backdrop-blur-xl">
@@ -1693,7 +1721,7 @@ const cmpFilterOptions = [
     </div>
 
   </div>
-  */}
+
 
      {/* Table Section */}
       <div className="mx-auto mt-2 w-full max-w-7xl">
@@ -1782,6 +1810,8 @@ const cmpFilterOptions = [
   <th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-700 whitespace-nowrap">UAN No</th>
 
   <th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-700 whitespace-nowrap">ESIC IP No</th>
+
+  <th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-700 whitespace-nowrap">NTH Salary</th>
 
   <th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-700 whitespace-nowrap">Remarks</th>
 
@@ -1896,31 +1926,32 @@ const cmpFilterOptions = [
   <td className="border-b border-r border-slate-200 px-4 py-2 text-sm text-slate-700 whitespace-nowrap">{item.aadhaar_no || "-"}</td>
   <td className="border-b border-r border-slate-200 px-4 py-2 text-sm text-slate-700 whitespace-nowrap">{item.uan_no || "-"}</td>
   <td className="border-b border-r border-slate-200 px-4 py-2 text-sm text-slate-700 whitespace-nowrap">{item.esic_ip_no || "-"}</td>
+  <td className="border-b border-r border-slate-200 px-4 py-2 text-sm text-slate-700 whitespace-nowrap">{item.nth_salary || "-"}</td>
   <td className="border-b border-r border-slate-200 px-4 py-2 text-sm text-slate-700 whitespace-nowrap">{item.remarks || "-"}</td>
 
         <td className="px-3 py-2">
-    <div className="flex items-center gap-2">
+   <div className="flex items-center gap-2">
 
-      <button
-        disabled={deletingId === item.id}
-        onClick={() => handleDelete(item.id)}
-       className={`h-9 w-9 rounded-xl bg-red-50 text-red-600 transition ${
-          deletingId === item.id
-            ? "bg-red-300 cursor-not-allowed"
-            : "bg-red-500 hover:bg-red-600"
-        }`}
-      >
-        {deletingId === item.id ? "Deleting..." : "Delete"}
-      </button>
+  <button
+    disabled={deletingId === item.id}
+    onClick={() => handleDelete(item.id)}
+    className={`rounded-lg px-3 py-1 text-xs font-semibold text-white transition-all ${
+      deletingId === item.id
+        ? "bg-red-300 cursor-not-allowed"
+        : "bg-red-500 hover:bg-red-600"
+    }`}
+  >
+    {deletingId === item.id ? "Deleting..." : "Delete"}
+  </button>
 
-    <button
-  onClick={() => handleEdit(item)}
-  className="h-9 w-9 rounded-xl bg-blue-50 text-blue-600 hover:bg-blue-100 transition"
->
-  Edit
-</button>
+  <button
+    onClick={() => handleEdit(item)}
+    className="rounded-lg bg-blue-500 px-3 py-1 text-xs font-semibold text-white hover:bg-blue-600 transition-all"
+  >
+    Edit
+  </button>
 
-    </div>
+</div>
   </td>
         </tr>
       ))
@@ -1934,12 +1965,21 @@ const cmpFilterOptions = [
               </div>
   <div className="flex items-center justify-between border-t border-slate-100 px-6 py-4">
 
-    <div className="text-sm text-slate-600">
-      Total Files:
-      <span className="ml-1 font-semibold text-slate-900">
-        {filteredData.length}
-      </span>
-    </div>
+  <div className="text-sm text-slate-600">
+  Showing
+  <span className="mx-1 font-semibold text-slate-900">
+    {startRecord}
+  </span>
+  to
+  <span className="mx-1 font-semibold text-slate-900">
+    {endRecord}
+  </span>
+  of
+  <span className="mx-1 font-semibold text-slate-900">
+    {filteredData.length}
+  </span>
+  records
+</div>
 
     <div className="flex items-center gap-2">
 
@@ -1947,20 +1987,20 @@ const cmpFilterOptions = [
         Show
       </span>
 
-      <select
-        value={pageSize}
-        onChange={(e) => {
-          setPageSize(Number(e.target.value));
-          setCurrentPage(1);
-        }}
-        className="rounded-lg border border-slate-200 px-2 py-1 text-sm"
-      >
-        {[10, 20, 50, 100].map((size) => (
-          <option key={size} value={size}>
-            {size}
-          </option>
-        ))}
-      </select>
+ <select
+  value={pageSize}
+  onChange={(e) => {
+    setPageSize(Number(e.target.value));
+    setCurrentPage(1);
+  }}
+  className="rounded-lg border border-slate-200 px-2 py-1 text-sm"
+>
+  {[10, 20, 50, 100, 200, 300, 400, 500, 750, 1000].map((size) => (
+    <option key={size} value={size}>
+      {size}
+    </option>
+  ))}
+</select>
 
       <button
         onClick={() =>
@@ -2567,7 +2607,7 @@ onChange={(selected) =>
     Work & Reporting Information
   </h3>
 
-  <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-6">
+  <div className="grid grid-cols-1 gap-2 md:grid-cols-5 xl:grid-cols-6">
 
     {/* Resigned Date */}
     <div>
@@ -2685,7 +2725,7 @@ onChange={(selected) =>
     Additional Information
   </h3>
 
-  <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-6">
+  <div className="grid grid-cols-1 gap-2 md:grid-cols-5 xl:grid-cols-7">
 
     {/* IFSC Code */}
     <div>
@@ -2782,6 +2822,22 @@ onChange={(selected) =>
         className="w-full rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs outline-none focus:border-violet-500"
       />
     </div>
+
+{/* NTH Salary Amount */}
+  <div>
+  <label className="mb-1 block text-xs px-1 font-semibold text-slate-700">
+    NTH Salary Amount
+  </label>
+
+  <input
+    type="number"
+    name="nth_salary"
+    value={employeeForm.nth_salary}
+    onChange={handleEmployeeChange}
+    placeholder="Enter Salary Amount"
+    className="w-full rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs outline-none focus:border-violet-500"
+  />
+</div>
 
   </div>
 

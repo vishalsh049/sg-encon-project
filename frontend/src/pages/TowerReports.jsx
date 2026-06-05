@@ -135,8 +135,10 @@ function TowerReports() {
     const [file, setFile] = useState(null);
     const [uploading, setUploading] = useState(false);
     const [downloading, setDownloading] = useState(false);
-    const [monthPopupOpen, setMonthPopupOpen] = useState(false);
-    const [selectedMonth, setSelectedMonth] = useState("");
+    const [exportPopupOpen, setExportPopupOpen] = useState(false);
+    const [exportFromDate, setExportFromDate] = useState("");
+    const [exportToDate, setExportToDate] = useState("");
+    const [exportSiteType, setExportSiteType] = useState("");
     const [editingId, setEditingId] = useState(null);
 
   const [modalOpen, setModalOpen] = useState(false);
@@ -293,63 +295,80 @@ function TowerReports() {
     }
   };
 
-const handleBulkDownload = (month) => {
-  if (selectedIds.length === 0) return;
-
-  const monthLabel =
-    bulkDownloadMonths.find((item) => item.value === month)?.label || "selected month";
-  const hasSelectedReportsForMonth = rows.some((row) => {
-    const reportDate = toSafeDate(row.report_date, true);
-
-    return (
-      selectedIds.includes(row.id) &&
-      reportDate &&
-      reportDate.getMonth() + 1 === Number(month)
-    );
-  });
-
-  if (!hasSelectedReportsForMonth) {
-    alert(`No selected reports found for ${monthLabel}`);
-    return;
-  }
+const handleExportExcel = async () => {
 
   setDownloading(true);
 
-  const targetName = `bulk-download-${Date.now()}`;
-  const target = document.createElement("iframe");
-  const form = document.createElement("form");
+  try {
 
-  target.name = targetName;
-  target.hidden = true;
+    if (!exportSiteType) {
+      alert("Select Site Type");
+      return;
+    }
 
-  form.method = "POST";
-  form.action = buildApiUrl("/api/reports/bulk-download");
-  form.target = targetName;
-  form.hidden = true;
+    if (!exportFromDate || !exportToDate) {
+      alert("Select date range");
+      return;
+    }
 
-  [
-    ["ids", JSON.stringify(selectedIds)],
-    ["month", month],
-  ].forEach(([name, value]) => {
-    const input = document.createElement("input");
-    input.type = "hidden";
-    input.name = name;
-    input.value = value;
-    form.appendChild(input);
-  });
+    const token =
+      localStorage.getItem("token");
 
-  document.body.appendChild(target);
-  document.body.appendChild(form);
-  form.submit();
-  form.remove();
+    const response = await axios.get(
+      buildApiUrl("/api/reports/export-excel"),
+      {
+        params: {
+          siteType: exportSiteType,
+          fromDate: exportFromDate,
+          toDate: exportToDate,
+        },
 
-  window.setTimeout(() => {
-    setDownloading(false);
-  }, 3000);
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
 
-  window.setTimeout(() => {
-    target.remove();
-  }, 24 * 60 * 60 * 1000);
+        responseType: "blob",
+      }
+    );
+
+    const blob = new Blob([
+      response.data,
+    ]);
+
+    const url =
+      window.URL.createObjectURL(blob);
+
+    const link =
+      document.createElement("a");
+
+    link.href = url;
+
+    link.download =
+      `${exportSiteType}_Report.xlsx`;
+
+    document.body.appendChild(link);
+
+    link.click();
+
+    link.remove();
+
+    window.URL.revokeObjectURL(url);
+
+    setExportPopupOpen(false);
+
+  } catch (err) {
+
+    console.error(err);
+
+    alert(
+      err?.response?.data?.message ||
+      "Download failed"
+    );
+
+  }
+finally {
+  setDownloading(false);
+}
 };
 
   const handleDownload = (id, fileName) => {
@@ -659,10 +678,9 @@ const latestReportDate = useMemo(() => {
               </button>
               <button
                 onClick={() => {
-                  setSelectedMonth("");
-                  setMonthPopupOpen(true);
-                }}
-               disabled={selectedIds.length === 0 || downloading}
+                 setExportPopupOpen(true);
+               }}
+               disabled={downloading}
                 className={`${secondaryButtonClass} border-transparent bg-emerald-50 text-emerald-700 shadow-sm hover:bg-emerald-100 disabled:opacity-40`}
               >
                {downloading ? (
@@ -733,18 +751,11 @@ const latestReportDate = useMemo(() => {
                   <div className="space-y-2">
 
   <div className="relative">
-    <PremiumDatePicker
-      value={filterDate}
-      onChange={setFilterDate}
-      isDateDisabled={(d) => {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const selected = new Date(d);
-        selected.setHours(0, 0, 0, 0);
-        return selected >= today;
-      }}
-      
-    />
+  <PremiumDatePicker
+  value={filterDate}
+  onChange={setFilterDate}
+  isDateDisabled={() => false}
+/>
   </div>
 </div>
 
@@ -1434,55 +1445,80 @@ const latestReportDate = useMemo(() => {
           </div>
         ) : null}
 
-      {monthPopupOpen && (
+    {exportPopupOpen && (
   <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
 
-    <div className="bg-white rounded-xl p-6 w-80">
+    <div className="bg-white rounded-2xl p-6 w-[450px]">
 
-      <h3 className="text-lg font-semibold mb-4">
-        Select Month
+      <h3 className="text-xl font-semibold mb-5">
+        Export Reports
       </h3>
 
-      <select
-        value={selectedMonth}
-        onChange={(e) => setSelectedMonth(e.target.value)}
-        className="w-full border p-2 rounded"
-      >
-        <option value="">Select Month</option>
-        {bulkDownloadMonths.map((month) => (
-          <option key={month.value} value={month.value}>
-            {month.label}
-          </option>
-        ))}
-      </select>
+      <div className="space-y-4">
 
-      <div className="flex gap-2 mt-4">
+      <div>
+  <label className="block text-sm font-medium text-slate-600 mb-2">
+    From Date
+  </label>
+
+  <input
+    type="date"
+    value={exportFromDate}
+    onChange={(e) => setExportFromDate(e.target.value)}
+    className="w-full border rounded-xl p-3"
+  />
+</div>
+
+<div>
+  <label className="block text-sm font-medium text-slate-600 mb-2">
+    To Date
+  </label>
+
+  <input
+    type="date"
+    value={exportToDate}
+    onChange={(e) => setExportToDate(e.target.value)}
+    className="w-full border rounded-xl p-3"
+  />
+</div>
+
+        <select
+          value={exportSiteType}
+          onChange={(e) => setExportSiteType(e.target.value)}
+          className="w-full border rounded-xl p-3"
+        >
+          <option value="">Select Site Type</option>
+
+          {allowedSiteTypes.map((site) => (
+            <option key={site.value} value={site.value}>
+              {site.label}
+            </option>
+          ))}
+        </select>
+
+      </div>
+
+      <div className="flex justify-end gap-2 mt-6">
 
         <button
-          onClick={() => setMonthPopupOpen(false)}
-          className="px-4 py-2 border rounded"
+          onClick={() => setExportPopupOpen(false)}
+          className="px-4 py-2 border rounded-xl"
         >
           Cancel
         </button>
 
         <button
-          onClick={() => {
-            if (!selectedMonth) {
-              alert("Please select month");
-              return;
-            }
-
-            handleBulkDownload(selectedMonth);
-            setMonthPopupOpen(false);
-          }}
-          disabled={downloading}
-          className="px-4 py-2 bg-blue-600 text-white rounded"
-        >
-          Download
-        </button>
+  onClick={handleExportExcel}
+  disabled={downloading}
+  className="px-4 py-2 bg-green-600 text-white rounded-xl disabled:opacity-50"
+>
+  {downloading ? "Downloading..." : "Download Excel"}
+</button>
 
       </div>
+
     </div>
+
   </div>
 )}
       </div>

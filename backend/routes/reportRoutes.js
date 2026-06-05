@@ -1664,7 +1664,7 @@ const jcId =
             }
           };
 
-          router.post("/bulk-download", express.urlencoded({ extended: false }), async (req, res) => {
+         router.post("/upload-bulk", express.urlencoded({ extended: false }), async (req, res) => {
             let workbook;
 
             try {
@@ -2006,6 +2006,111 @@ router.get("/download/:id", async (req, res) => {
     res.status(500).json({
       message: "Download failed",
     });
+
+  }
+
+});
+
+router.get("/export-excel", async (req, res) => {
+
+  try {
+
+    const {
+      siteType,
+      fromDate,
+      toDate
+    } = req.query;
+
+    if (!siteType || !fromDate || !toDate) {
+      return res.status(400).json({
+        message: "Missing parameters"
+      });
+    }
+
+    const tableName = siteType.toLowerCase();
+
+    // validate table name whitelist to avoid SQL injection
+    if (!reportDataTables.has(tableName)) {
+      return res.status(400).json({ message: "Unsupported site type" });
+    }
+
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${String(siteType).toUpperCase()}_Report.xlsx"`
+    );
+
+    res.setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    );
+
+    const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({
+      stream: res,
+      useStyles: false,
+      useSharedStrings: false,
+    });
+
+    const worksheet = workbook.addWorksheet(String(siteType).toUpperCase());
+
+    let columnsAdded = false;
+
+    // Build SQL with optional circle restriction
+    let sql = `SELECT * FROM ${tableName} WHERE DATE(date) >= DATE(?) AND DATE(date) <= DATE(?)`;
+    const params = [fromDate, toDate];
+    if (!isAllCircle(req.authUser)) {
+      sql += ` AND LOWER(TRIM(circle)) = LOWER(TRIM(?))`;
+      params.push(req.authUser.circle);
+    }
+    sql += ` ORDER BY date ASC`;
+
+    const rows = streamBulkExportRows(sql, params);
+
+    try {
+      for await (const row of rows) {
+        if (res.destroyed) throw new Error("Client disconnected during export");
+
+        if (!columnsAdded) {
+          worksheet.columns = Object.keys(row).map((key) => ({ header: key, key }));
+          columnsAdded = true;
+        }
+
+        // Replace null/undefined with empty string to avoid Excel repair warnings
+        const cleanRow = {};
+        Object.keys(row).forEach((key) => {
+          const val = row[key];
+          cleanRow[key] = val === undefined || val === null ? "" : val;
+        });
+
+        worksheet.addRow(cleanRow).commit();
+      }
+
+      // If no rows were emitted, create an empty sheet with at least the `date` column
+      if (!columnsAdded) {
+        worksheet.columns = [{ header: "date", key: "date" }];
+      }
+
+      worksheet.commit();
+      await workbook.commit();
+      return;
+    } catch (innerErr) {
+      // if an error happens after headers sent, destroy the response to terminate stream
+      console.error("EXPORT STREAM ERROR:", innerErr);
+      if (!res.headersSent) {
+        return res.status(500).json({ message: "Export failed" });
+      }
+      res.destroy(innerErr);
+      return;
+    }
+
+  } catch (err) {
+
+    console.error("EXPORT ERROR:", err);
+
+    if (!res.headersSent) {
+      res.status(500).json({
+        message: "Export failed"
+      });
+    }
 
   }
 

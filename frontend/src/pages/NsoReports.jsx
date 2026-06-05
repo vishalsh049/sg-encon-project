@@ -36,13 +36,17 @@ function NsoReports() {
   const [pageSize, setPageSize] = useState(10);
   const [circleCounts, setCircleCounts] = useState([]);
 
-  const today = useMemo(() => {
-    const date = new Date();
-    const yyyy = date.getFullYear();
-    const mm = String(date.getMonth() + 1).padStart(2, "0");
-    const dd = String(date.getDate()).padStart(2, "0");
-    return `${yyyy}-${mm}-${dd}`;
-  }, []);
+const today = useMemo(() => {
+  const date = new Date();
+
+  date.setDate(date.getDate() - 1);
+
+  const yyyy = date.getFullYear();
+  const mm = String(date.getMonth() + 1).padStart(2, "0");
+  const dd = String(date.getDate()).padStart(2, "0");
+
+  return `${yyyy}-${mm}-${dd}`;
+}, []);
 
   const [form, setForm] = useState({
     report_date: today,
@@ -444,23 +448,19 @@ const handleDownload = async (row) => {
 
   return (
    <div className="w-full pb-24">
-    <div className="mx-auto w-full space-y-3">
-     <section className="relative overflow-hidden rounded-[22px] border border-slate-200 px-5 py-4
-      bg-[radial-gradient(circle_at_top_left,_rgba(14,165,233,0.2),_transparent_30%),linear-gradient(135deg,#f8fafc_0%,#eef6ff_45%,#fff8ed_100%)]
-      hadow-[0_24px_60px_rgba(15,23,42,0.08)]">
+    <div className="mx-auto w-full space-y-2">
+     <section className="relative overflow-hidden rounded-[18px] border border-slate-200 px-4 py-3
+      bg-[radial-gradient(circle_at_top_left,_rgba(14,165,233,0.2),_transparent_30%),linear-gradient(135deg,#f8fafc_0%,#eef6ff_45%,#fff8ed_100%)]">
      <div className="absolute right-0 top-0 h-40 w-40 rounded-full bg-cyan-300/20 blur-3xl" />
       <div className="absolute bottom-0 left-1/3 h-32 w-32 rounded-full bg-amber-200/30 blur-3xl" />
 
      <div className="relative flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
       <div className="max-w-3xl">
-       <div className="mb-1 inline-flex items-center rounded-full border border-cyan-200 px-3 py-1
-        bg-white/80 text-[11px] font-semibold uppercase tracking-[0.28em] text-cyan-700">
-                Fiber Reports / NSO Console
-       </div>
-        <h1 className="text-xl font-semibold tracking-[-0.03em] text-slate-900 md:text-xl">
+      
+        <h1 className="text-sm font-semibold tracking-[-0.03em] text-slate-900 md:text-lg">
                 NSO reports with a real operations workflow
         </h1>
-          <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-600 md:text-base">
+          <p className=" max-w-2xl text-sm leading-6 text-slate-600 md:text-md">
                 Upload, search, export, and manage NSO activity in one place.
           </p>
       </div>
@@ -468,12 +468,12 @@ const handleDownload = async (row) => {
        <div className="flex flex-wrap gap-3">
          <button onClick={handleExport}
           className="inline-flex items-center gap-2 rounded-2xl border border-slate-300 bg-white/85
-           px-4 py-3 text-sm font-medium text-slate-700 transition hover:bg-white">
+           px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-white">
             <Download size={16} />
                Export CSV
          </button>
          <button onClick={openCreateModal}
-          className="inline-flex items-center gap-2 rounded-2xl bg-slate-900 px-4 py-3 text-sm
+          className="inline-flex items-center gap-2 rounded-2xl bg-slate-900 px-4 py-2 text-sm
            font-medium text-white transition hover:bg-slate-800">
              <Upload size={16} />
                 Upload NSO Report
@@ -489,7 +489,7 @@ const handleDownload = async (row) => {
     return (
      <div key={stat.label}
        className="rounded-[22px] border border-slate-200 bg-white px-4 py-2
-        shadow-[0_12px_36px_rgba(15,23,42,0.05)]">
+        ">
         <div className=" flex items-center justify-between">
          <div className="text-sm font-medium text-slate-500">
              {stat.label}
@@ -510,7 +510,7 @@ const handleDownload = async (row) => {
  </div>
 
     {/* circle wise count */}
-  <div className="rounded-[22px] border border-slate-200 bg-white px-4 py-3 shadow-[0_12px_36px_rgba(15,23,42,0.05)]">
+  <div className="rounded-[22px] border border-slate-200 bg-white px-4 py-3">
 
   <div className="mb-2 flex items-center">
     <h2 className="text-sm font-medium text-slate-800 tracking-[-0.03em]">
@@ -551,7 +551,7 @@ const handleDownload = async (row) => {
 
     <div
       key={index}
-      className="rounded-xl border border-slate-100 bg-gradient-to-br from-slate-50 to-white px-3 py-2 shadow-sm"
+      className="rounded-xl border border-slate-100 bg-gradient-to-br from-slate-50 to-white px-3 py-2"
     >
 
    <div className="flex items-center justify-between text-sm font-medium text-slate-500">
@@ -576,7 +576,7 @@ const handleDownload = async (row) => {
 
         </section>
 
-        <section className="rounded-[22px] border border-slate-200 bg-white/90 backdrop-blur-xl p-5 shadow-[0_20px_50px_rgba(15,23,42,0.05)] md:p-4">
+        <section className="rounded-[18px] border border-slate-200 bg-white/90 backdrop-blur-xl p-2 md:p-2">
 
           <div className="flex flex-wrap items-center gap-3">
             <label className="relative block">
@@ -639,14 +639,11 @@ const handleDownload = async (row) => {
 
     
         <section className="overflow-hidden rounded-[22px] border border-slate-200 bg-white shadow-[0_20px_50px_rgba(15,23,42,0.05)]">
-          <div className="flex flex-col gap-3 border-b border-slate-200 px-5 py-4 md:flex-row md:items-center md:justify-between">
+          <div className="flex flex-col gap-3 border-b border-slate-200 px-5 py-3 md:flex-row md:items-center md:justify-between">
             <div>
-              <h2 className="text-lg font-semibold text-slate-900">
+              <h2 className="text-sm font-semibold text-slate-900">
                 NSO Upload Register
               </h2>
-              <p className="text-sm text-slate-500">
-                {filteredRows.length} matching report{filteredRows.length === 1 ? "" : "s"}
-              </p>
             </div>
 
             <div className="flex items-center gap-3 text-sm text-slate-500">
@@ -654,7 +651,7 @@ const handleDownload = async (row) => {
               <select
                 value={pageSize}
                 onChange={(event) => setPageSize(Number(event.target.value))}
-                className="h-8 rounded-xl border border-slate-200 bg-slate-50 px-2 text-sm text-slate-700"
+                className="h-6 rounded-xl border border-slate-200 bg-slate-50 px-2 text-sm text-slate-700"
               >
                 {[10, 20, 50, 100].map((size) => (
                   <option key={size} value={size}>
@@ -866,13 +863,25 @@ const handleDownload = async (row) => {
                   <label className="mb-2 block text-xs font-medium uppercase tracking-[0.2em] text-slate-400">
                     Report Date
                   </label>
-                  <PremiumDatePicker
-                    value={form.report_date}
-                    onChange={(value) =>
-                      setForm((prev) => ({ ...prev, report_date: value }))
-                    }
-                    className="w-full"
-                  />
+                 <PremiumDatePicker
+  value={form.report_date}
+  onChange={(value) =>
+    setForm((prev) => ({
+      ...prev,
+      report_date: value,
+    }))
+  }
+  isDateDisabled={(d) => {
+    const yesterday = new Date();
+    yesterday.setHours(0, 0, 0, 0);
+
+    const selected = new Date(d);
+    selected.setHours(0, 0, 0, 0);
+
+    return selected >= yesterday;
+  }}
+  className="w-full"
+/>
                 </div>
 
                 <label className="block">

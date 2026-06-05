@@ -174,6 +174,7 @@ export default function NewJoining() {
   const [deletingId, setDeletingId] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [excelFile, setExcelFile] = useState(null);
+  const [uploadingExcel, setUploadingExcel] = useState(false);
   const [now, setNow] = useState(() => new Date());
 
   const circleCmpData = {
@@ -221,15 +222,16 @@ export default function NewJoining() {
     ],
   };
 
-  const [employeeForm, setEmployeeForm] = useState({
-    employee_code: "",
-    employee_name: "",
-    circle: "",
-    cmp: "",
-    designation: "",
-    aadhaar_no: "",
-    l2_status: "",
-  });
+ const [employeeForm, setEmployeeForm] = useState({
+  employee_code: "",
+  employee_name: "",
+  circle: "",
+  cmp: "",
+  designation: "",
+  aadhaar_no: "",
+  nth_salary: "",
+  l2_status: "",
+});
 
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 1000);
@@ -316,6 +318,40 @@ export default function NewJoining() {
     }
   };
 
+const handleBulkDelete = async () => {
+  if (selectedRows.length === 0) {
+    alert("Please select records");
+    return;
+  }
+
+  const confirmDelete = window.confirm(
+    `Delete ${selectedRows.length} selected records?`
+  );
+
+  if (!confirmDelete) return;
+
+  try {
+    await Promise.all(
+      selectedRows.map((id) =>
+        authFetch(
+          buildApiUrl(`/api/new-joining/delete/${id}`),
+          {
+            method: "DELETE",
+          }
+        )
+      )
+    );
+
+    alert("Records deleted successfully");
+
+    setSelectedRows([]);
+    loadData();
+  } catch (error) {
+    console.log(error);
+    alert("Delete failed");
+  }
+};
+
   const handleStatusUpdate = async (id, status, item) => {
     const confirmUpdate = window.confirm(
       `Are you sure you want to mark this employee as ${status}?`
@@ -384,15 +420,16 @@ export default function NewJoining() {
 
       alert("Employee Added");
       setShowModal(false);
-      setEmployeeForm({
-        employee_code: "",
-        employee_name: "",
-        circle: "",
-        cmp: "",
-        designation: "",
-        aadhaar_no: "",
-        l2_status: "",
-      });
+     setEmployeeForm({
+  employee_code: "",
+  employee_name: "",
+  circle: "",
+  cmp: "",
+  designation: "",
+  aadhaar_no: "",
+  nth_salary: "",
+  l2_status: "",
+});
       loadData();
     } catch (error) {
       console.log(error);
@@ -406,6 +443,7 @@ export default function NewJoining() {
     }
 
     try {
+  setUploadingExcel(true);
       const formData = new FormData();
       formData.append("file", excelFile);
 
@@ -421,13 +459,19 @@ export default function NewJoining() {
         return;
       }
 
-      alert("Excel Uploaded Successfully");
-      setExcelFile(null);
-      loadData();
+     alert("Excel Uploaded Successfully");
+
+setExcelFile(null);
+
+setShowModal(false); // Close popup automatically
+
+loadData();
     } catch (error) {
       console.log(error);
       alert("Upload Failed");
-    }
+    }finally {
+  setUploadingExcel(false);
+}
   };
 
   const statCards = [
@@ -505,15 +549,15 @@ export default function NewJoining() {
           </div>
         </div>
 
-        <div className="mb-2 grid gap-2 xl:grid-cols-4">
+        <div className="mb-2 grid gap-2 grid-cols-4">
           {statCards.map((card) => (
             <MetricCard key={card.label} {...card} />
           ))}
         </div>
 
-        <div className="mb-2 rounded-[18px] border border-white/70 bg-white/78 px-2 py-1 shadow-[0_22px_70px_rgba(15,23,42,0.08)] backdrop-blur-2xl">
+        <div className="mb-2 rounded-[18px] border border-white/70 bg-white/78 px-2 py-1 backdrop-blur-2xl">
           <div className="flex flex-col gap-2 xl:flex-row xl:items-center xl:justify-between">
-            <div className="grid flex-1 gap-2 xl:grid-cols-[minmax(320px,1.5fr)_minmax(180px,0.7fr)_minmax(180px,0.7fr)_minmax(180px,0.7fr)]">
+            <div className="grid flex-1 gap-2 grid-cols-5">
               <label className="relative block">
                 <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                 <input
@@ -571,10 +615,19 @@ export default function NewJoining() {
                 </select>
                 <ChevronDown className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
               </label>
-            </div>
 
-            <div className="flex flex-wrap items-center gap-3">
+                <div className="flex flex-wrap items-center gap-3">
              
+{selectedRows.length > 0 && (
+  <button
+    type="button"
+    onClick={handleBulkDelete}
+    className="inline-flex h-10 items-center gap-2 rounded-[14px] border border-red-100 bg-red-50 px-4 py-2 text-sm font-semibold text-red-700 transition hover:bg-red-100"
+  >
+    <Trash2 className="h-4 w-4" />
+    Delete Selected ({selectedRows.length})
+  </button>
+)}
 
               <button
                 type="button"
@@ -586,6 +639,7 @@ export default function NewJoining() {
                     "CMP / Cluster",
                     "Designation",
                     "Aadhaar Number",
+                    "NTH Salary",
                     "L2 Status",
                     "Employee Status",
                   ];
@@ -599,6 +653,7 @@ export default function NewJoining() {
                         row.cmp || row.cluster || "",
                         row.designation || "",
                         row.aadhaar_no || "",
+                        row.nth_salary || "",
                         row.l2_status || "",
                         row.employee_status || "",
                       ]
@@ -624,23 +679,26 @@ export default function NewJoining() {
                 <Download className="h-4 w-4" />
                 Export
               </button>
+            </div>  
             </div>
+
+          
           </div>
 
           
         </div>
 
         <div className="overflow-hidden rounded-[18px] border border-white/70 bg-white/85 backdrop-blur-2xl">
-          <div className="flex flex-col gap-4 border-b border-slate-100 px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-4">
+          <div className="flex flex-col gap-4 border-b border-slate-100 px-5 py-2 sm:flex-row sm:items-center sm:justify-between sm:px-4">
             <div className="flex items-center gap-3">
               <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-blue-50 text-blue-600">
                 <FileSpreadsheet className="h-4 w-4" />
               </div>
               <div>
-                <h2 className="text-sm font-semibold tracking-[-0.03em] text-slate-900">
+                <h2 className="text-sm font-semibold tracking-[0.02em] text-slate-900">
                   Employee Records
                 </h2>
-                <p className="text-sm text-slate-500">
+                <p className="text-sm text-slate-500 tracking-[-0.01em]">
                   Review and manage employee joining records
                 </p>
               </div>
@@ -654,21 +712,23 @@ export default function NewJoining() {
             </div>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="min-w-full border-collapse">
-              <thead>
-                <tr className="bg-slate-50/90">
-                  <th className="border-b border-slate-100 px-4 py-2 text-left">
-                    <input
-                      type="checkbox"
-                      checked={
-                        filteredData.length > 0 &&
-                        selectedRows.length === paginatedData.length
-                      }
-                      onChange={handleSelectAll}
-                      className="h-3 w-3 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                    />
-                  </th>
+  <div className="overflow-x-auto">
+   <table className="min-w-full border-collapse">
+     <thead>
+      <tr className="bg-slate-50/90">
+        <th className="border-b border-slate-100 px-4 py-2 text-left">
+          <input
+           type="checkbox"
+           checked={
+           paginatedData.length > 0 &&
+           paginatedData.every((row) =>
+           selectedRows.includes(row.id)
+           )
+          }
+          onChange={handleSelectAll}
+         className="h-3 w-3 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+         />
+        </th>
                   {[
                     "Employee Code",
                     "Employee Name",
@@ -676,6 +736,7 @@ export default function NewJoining() {
                     "CMP / Cluster",
                     "Designation",
                     "Aadhaar Number",
+                    "NTH Salary",
                     "L2 Status",
                     "Employee Status",
                     "Action",
@@ -734,6 +795,9 @@ export default function NewJoining() {
                       <td className="border-b border-slate-100 px-4 py-2 text-sm text-slate-600">
                         {item.aadhaar_no || "-"}
                       </td>
+                      <td className="border-b border-slate-100 px-4 py-2 text-sm text-slate-600">
+  ₹ {Number(item.nth_salary || 0).toLocaleString("en-IN")}
+</td>
                       <td className="border-b border-slate-100 px-4 py-2 text-sm">
                         <StatusPill
                           variant={
@@ -844,9 +908,9 @@ export default function NewJoining() {
 
 {showModal && (
 
-<div className="fixed inset-0 z-[99999] overflow-y-auto bg-black/40 backdrop-blur-md p-6">
+<div className="fixed inset-0 z-[99999] overflow-hidden bg-black/40 backdrop-blur-md p-4">
 
- <div className="mx-auto my-10 h-[80vh] w-full max-w-4xl overflow-hidden rounded-[14px] bg-white shadow-[0_30px_80px_rgba(15,23,42,0.25)]">
+<div className="mx-auto my-4 h-[90vh] w-full max-w-4xl overflow-hidden rounded-[14px] bg-white shadow-[0_30px_80px_rgba(15,23,42,0.25)] flex flex-col">
 
     {/* HEADER */}
 
@@ -899,7 +963,7 @@ export default function NewJoining() {
 
     {/* BODY */}
 
-    <div className="px-6 py-4">
+  <div className="flex-1 overflow-y-auto px-6 py-4">
 
       {/* FORM GRID */}
 
@@ -1134,6 +1198,27 @@ export default function NewJoining() {
 
         </div>
 
+        <div>
+
+  <label className="mb-1 px-1 block text-[13px] font-semibold text-slate-800">
+    NTH Salary
+  </label>
+
+  <input
+    type="number"
+    placeholder="Enter NTH Salary"
+    value={employeeForm.nth_salary || ""}
+    onChange={(e) =>
+      setEmployeeForm({
+        ...employeeForm,
+        nth_salary: e.target.value,
+      })
+    }
+    className="h-9 w-full rounded-2xl border border-slate-200 bg-white px-4 text-xs outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100"
+  />
+
+</div>
+
       </div>
 
       {/* BULK UPLOAD */}
@@ -1181,22 +1266,25 @@ export default function NewJoining() {
 
               Select Excel
 
-              <input
-                type="file"
-                accept=".xlsx,.xls,.csv"
-                onChange={handleExcelUpload}
-                className="hidden"
-              />
+             <input
+  type="file"
+  accept=".xlsx,.xls,.csv"
+  onChange={(e) =>
+    setExcelFile(e.target.files?.[0] || null)
+  }
+  className="hidden"
+/>
 
             </label>
 
-            <button className="flex items-center gap-3 rounded-2xl border border-emerald-300 bg-white px-4 py-2 text-sm font-semibold text-emerald-700">
-
-              <Upload size={14} />
-
-              Upload File
-
-            </button>
+    <button
+  onClick={handleExcelUpload}
+  disabled={uploadingExcel}
+  className="flex items-center gap-3 rounded-2xl border border-emerald-300 bg-white px-4 py-2 text-sm font-semibold text-emerald-700 disabled:opacity-60"
+>
+  <Upload size={14} />
+  {uploadingExcel ? "Uploading..." : "Upload File"}
+</button>
 
           </div>
 
@@ -1206,9 +1294,9 @@ export default function NewJoining() {
 
         <div className="mt-2 rounded-[14px] border-2 border-dashed border-slate-300 bg-white px-4 py-4 text-center">
 
-          <p className="text-sm font-semibold text-slate-700">
-            No file selected
-          </p>
+         <p className="text-sm font-semibold text-slate-700">
+  {excelFile ? excelFile.name : "No file selected"}
+</p>
 
           <p className="mt-1 text-xs text-slate-400">
             Drag & drop your file here or click to browse

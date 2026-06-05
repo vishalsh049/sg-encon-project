@@ -130,6 +130,7 @@ async function ensurePhysicalTables() {
       aadhaar_no VARCHAR(50) DEFAULT NULL,
       uan_no VARCHAR(50) DEFAULT NULL,
       esic_ip_no VARCHAR(50) DEFAULT NULL,
+      nth_salary DECIMAL(12,2) DEFAULT 0,
       remarks TEXT DEFAULT NULL,
       created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
       report_id INT DEFAULT NULL,
@@ -169,7 +170,7 @@ async function ensurePhysicalTables() {
     ["aadhaar_no", "VARCHAR(50) DEFAULT NULL"],
     ["uan_no", "VARCHAR(50) DEFAULT NULL"],
     ["esic_ip_no", "VARCHAR(50) DEFAULT NULL"],
-    
+    ["nth_salary", "DECIMAL(12,2) DEFAULT 0"],
     ["remarks", "TEXT DEFAULT NULL"],
   ];
 
@@ -297,8 +298,24 @@ function mapPhysicalRow(row, reportId) {
   row["Job Role_Actual_CMP Verify"]
 ),
 
-    // job_role
-    toText(row["Job Role"]),
+   (() => {
+
+  const role = String(
+    row["Job Role"] || ""
+  ).trim().toLowerCase();
+
+  if (
+    role === "wh incharge cum security" ||
+    role === "warehouse incharge cum security" ||
+    role === "wh incharge cum security " ||
+    role === "warehouse incharge cum security "
+  ) {
+    return "WH Incharge cum Security";
+  }
+
+  return toText(row["Job Role"]);
+
+})(),
 
     // manpower_signoff_scope
     toText(
@@ -414,6 +431,13 @@ function mapPhysicalRow(row, reportId) {
       row["ESIC IP No"]
     ),
 
+    // nth_salary
+toNullableInt(
+  row["NTH Salary"] ||
+  row["Nth Salary"] ||
+  row["Salary"]
+),
+
     // remarks
     toText(row["Remarks"]),
 
@@ -459,6 +483,7 @@ async function insertPhysicalRows(conn, reportId, rows) {
       aadhaar_no,
       uan_no,
       esic_ip_no,
+      nth_salary,
       remarks,
       cmp
     ) VALUES ?
@@ -496,10 +521,9 @@ router.get("/", async (req, res) => {
       params.push(userCircle);
     }
 
-    sql += `
-      ORDER BY id DESC
-    `;
-
+   sql += `
+  ORDER BY id ASC
+`;
     const rows =
       await query(sql, params);
 
@@ -781,18 +805,19 @@ if (existingEmployee.length > 0) {
         aadhaar_no,
         uan_no,
         esic_ip_no,
+        nth_salary,
         remarks
 
       )
 
-      VALUES (
+    VALUES (
 
-        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-        ?
+?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+?, ?
 
-      )
+)
       `,
       [
 
@@ -826,6 +851,7 @@ if (existingEmployee.length > 0) {
         data.aadhaar_no || "",
         data.uan_no || "",
         data.esic_ip_no || "",
+        data.nth_salary || 0,
         data.remarks || ""
 
       ]
@@ -947,6 +973,45 @@ router.delete("/delete-report/:id", async (req, res) => {
       message: "Server Error",
     });
   }
+});
+
+router.delete("/bulk-delete", async (req, res) => {
+
+  try {
+
+    const { ids } = req.body;
+
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "No records selected"
+      });
+    }
+
+    const placeholders = ids.map(() => "?").join(",");
+
+    await query(
+      `DELETE FROM physical
+       WHERE id IN (${placeholders})`,
+      ids
+    );
+
+    res.json({
+      success: true,
+      message: `${ids.length} records deleted successfully`
+    });
+
+  } catch (error) {
+
+    console.log(error);
+
+    res.status(500).json({
+      success: false,
+      message: "Delete failed"
+    });
+
+  }
+
 });
 
 router.delete("/delete-employee/:id", async (req, res) => {
@@ -1631,6 +1696,7 @@ router.put(
     aadhaar_no = ?,
     uan_no = ?,
     esic_ip_no = ?,
+    nth_salary = ?,
     remarks = ?
 
   WHERE id = ?
@@ -1667,6 +1733,7 @@ router.put(
     data.aadhaar_no || "",
     data.uan_no || "",
     data.esic_ip_no || "",
+    data.nth_salary || 0,
     data.remarks || "",
 
     req.params.id,

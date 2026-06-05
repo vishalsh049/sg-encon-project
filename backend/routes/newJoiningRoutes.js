@@ -56,8 +56,8 @@ router.post("/add-employee", async (req, res) => {
 
   try {
 
-    console.log(req.body);
-
+    console.log("FULL BODY =", req.body);
+    console.log("NTH SALARY =", req.body.nth_salary);
     const {
       employee_code,
       employee_name,
@@ -65,6 +65,7 @@ router.post("/add-employee", async (req, res) => {
       cmp,
       designation,
       aadhaar_no,
+      nth_salary,
       l2_status,
     } = req.body || {};
 
@@ -81,9 +82,10 @@ router.post("/add-employee", async (req, res) => {
         cmp,
         designation,
         aadhaar_no,
+         nth_salary,
         l2_status
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       `,
       [
         employee_code || "",
@@ -92,6 +94,7 @@ router.post("/add-employee", async (req, res) => {
         cmp || "",
         designation || "",
         aadhaar_no || "",
+         nth_salary || 0,
         l2_status || "",
       ]
     );
@@ -226,7 +229,9 @@ router.post(
         (row) => row.circle || row["Circle"] || ""
       );
 
-   for (const row of rows) {
+const values = [];
+
+for (const row of rows) {
 
   const employee_code =
     row.employee_code ||
@@ -259,41 +264,47 @@ router.post(
     row["Aadhar Number"] ||
     "";
 
+  const nth_salary =
+    row.nth_salary ||
+    row["NTH Salary"] ||
+    row["Nth Salary"] ||
+    0;
+
   const l2_status =
     row.l2_status ||
     row["L2 status"] ||
     "Pending";
 
-  await query(
-    `
-    INSERT INTO new_joining (
-
-      employee_code,
-      employee_name,
-      circle,
-      cmp,
-      designation,
-      aadhaar_no,
-      l2_status,
-      employee_status
-
-    )
-
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `,
-    [
-      employee_code,
-      employee_name,
-      circle,
-      cmp,
-      designation,
-      aadhaar_no,
-      l2_status,
-      "Active",
-    ]
-  );
-
+  values.push([
+    employee_code,
+    employee_name,
+    circle,
+    cmp,
+    designation,
+    aadhaar_no,
+    nth_salary,
+    l2_status,
+    "Active",
+  ]);
 }
+
+await query(
+  `
+  INSERT INTO new_joining (
+    employee_code,
+    employee_name,
+    circle,
+    cmp,
+    designation,
+    aadhaar_no,
+    nth_salary,
+    l2_status,
+    employee_status
+  )
+  VALUES ?
+  `,
+  [values]
+);
 
       res.json({
         success: true,
