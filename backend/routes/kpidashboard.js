@@ -171,11 +171,9 @@ router.get("/tower-uptime", async (req, res) => {
 
         // MAIN QUERY
 
-        const rows = await query(`
-
-          SELECT
-
-            DATE(${dateColumn}) as report_date,
+   const rows = await query(`
+    SELECT
+    DATE_FORMAT(${dateColumn}, '%Y-%m-%d') as report_date,
 
             ROUND(
 
@@ -226,14 +224,12 @@ router.get("/tower-uptime", async (req, res) => {
 
         for (let i = 6; i >= 0; i--) {
 
-          const latestDate =
-  normalizedRows.length > 0
-    ? new Date(
-        Math.max(
-          ...normalizedRows.map(
-            (r) => new Date(r.report_date)
-          )
-        )
+     const latestDate =
+     normalizedRows.length > 0
+     ? new Date(
+        normalizedRows[
+          normalizedRows.length - 1
+        ].report_date + "T00:00:00"
       )
     : new Date();
 
@@ -244,20 +240,17 @@ router.get("/tower-uptime", async (req, res) => {
             latestDate.getDate() - i
           );
 
-          const formatted =
-            d.toISOString()
-              .split("T")[0];
+   const formatted =
+   `${d.getFullYear()}-${String(
+    d.getMonth() + 1
+  ).padStart(2, "0")}-${String(
+    d.getDate()
+  ).padStart(2, "0")}`;
 
-          const existing =
-            normalizedRows.find(
-              (r) =>
-                new Date(
-                  r.report_date
-                )
-                  .toISOString()
-                  .split("T")[0] ===
-                formatted
-            );
+    const existing =
+    normalizedRows.find(
+    (r) => r.report_date === formatted
+    );
 
           last7Days.push({
 
@@ -342,6 +335,10 @@ router.get("/tower-uptime", async (req, res) => {
       }
 
     }
+    console.log(
+  "LATEST ROWS",
+  normalizedRows
+);
 
     res.json(finalData);
 
