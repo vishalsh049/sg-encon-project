@@ -447,8 +447,8 @@ if (sessionUser?.id === editingUser.id) {
 
   return (
     <div className="mx-auto max-w-7xl">
-      <div className="app-surface overflow-hidden ">
-        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+      <div className="app-surface overflow-hidden mb-2">
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between px-4 py-2">
           <div>
             <h1 className="text-xl font-semibold text-text-primary">
               Users & Access
@@ -467,7 +467,7 @@ if (sessionUser?.id === editingUser.id) {
         </div>
       </div>
 
-      <div className="app-surface p-4">
+      <div className="app-surface p-2 mb-2">
         <div className="grid gap-4 md:grid-cols-[1fr_220px_220px_180px]">
 
           <label className="relative block">
@@ -686,385 +686,345 @@ if (sessionUser?.id === editingUser.id) {
       </div>
 
 {userModalOpen ? (
-
   <div
-    className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm"
+    className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm"
     onClick={() => setUserModalOpen(false)}
   >
     <div
-      className="app-surface flex max-h-[90vh] w-full max-w-4xl flex-col rounded-2xl p-0 shadow-2xl"
+  className="relative flex h-[95vh] w-full max-w-8xl flex-col overflow-hidden rounded-[22px] border border-slate-200/70 bg-white shadow-[0_40px_90px_rgba(15,23,42,0.18)]"
       onClick={(e) => e.stopPropagation()}
     >
-      <div className="flex items-center justify-between border-b border-border-color px-6 py-4">
-        <h3 className="text-lg font-semibold text-text-primary">
-          {editingUser
-            ? "Edit User"
-            : "Add User"}
+      <div className="relative overflow-hidden bg-gradient-to-r from-purple-600 via-violet-600 to-indigo-600 px-6 py-4 sm:px-6 sm:py-2 flex items-center">
+
+  <div className="relative flex items-center justify-between w-full">
+    <div className="flex items-start gap-4">
+      <div className="flex h-10 w-10 items-center justify-center rounded-[14px] bg-white/15 text-white shadow-slate-950/20 ring-1 ring-white/30">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="h-4 w-4 text-white" fill="none" stroke="currentColor" strokeWidth="1.8">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M12 12c2.761 0 5-2.239 5-5s-2.239-5-5-5-5 2.239-5 5 2.239 5 5 5z" />
+          <path strokeLinecap="round" strokeLinejoin="round" d="M4 21c0-4.418 3.582-8 8-8s8 3.582 8 8" />
+        </svg>
+      </div>
+      <div>
+      
+       <h3 className="text-lg font-semibold text-white">
+          {editingUser ? "Edit User" : "Add User"}
         </h3>
+       <p className=" text-sm text-white/80">
+          Create and manage user access permissions
+        </p>
+      </div>
+    </div>
 
     <button
       type="button"
-      onClick={() =>
-        setUserModalOpen(false)
-      }
-      className="text-lg text-text-muted hover:text-danger"
+      onClick={() => setUserModalOpen(false)}
+      className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-white/20 bg-white/10 text-white transition hover:bg-white/20"
+      aria-label="Close modal"
     >
-      x
+      ✕
     </button>
-  </div>
-
-  <div className="flex-1 overflow-y-auto p-6">
-    <div className="grid gap-4 md:grid-cols-2">
-
-      <input
-        type="text"
-        placeholder="Name"
-        value={userForm.name}
-        onChange={(e) =>
-          setUserForm((prev) => ({
-            ...prev,
-            name: e.target.value,
-          }))
-        }
-        className="app-input rounded-xl"
-      />
-
-      <input
-        type="text"
-        placeholder="Designation"
-        value={userForm.designation}
-        onChange={(e) =>
-          setUserForm((prev) => ({
-            ...prev,
-            designation:
-              e.target.value,
-          }))
-        }
-        className="app-input rounded-xl"
-      />
-
-      <select
-        value={userForm.circle}
-        onChange={(e) =>
-          setUserForm((prev) => ({
-            ...prev,
-            circle:
-              e.target.value,
-          }))
-        }
-        className="app-select"
-      >
-        <option value="">
-          Select Circle
-        </option>
-
-        <option value="ALL">
-          All Circles
-        </option>
-
-        {circleOptions.map(
-          (circle) => (
-            <option
-              key={circle}
-              value={circle}
-            >
-              {circle}
-            </option>
-          )
-        )}
-      </select>
-
-      <select
-        value={userForm.domain}
-        onChange={(e) =>
-          setUserForm((prev) => ({
-            ...prev,
-            domain:
-              e.target.value,
-          }))
-        }
-        className="app-select"
-      >
-        <option value="">
-          Select Domain
-        </option>
-
-        <option value="ALL">
-          All Domains
-        </option>
-
-        {domainOptions.map(
-          (domain) => (
-            <option
-              key={domain}
-              value={domain}
-            >
-              {domain}
-            </option>
-          )
-        )}
-      </select>
-
- <input
-  type="text"
-  placeholder="Username"
-  value={userForm.username}
-  onChange={(e) =>
-    setUserForm((prev) => ({
-      ...prev,
-      username: e.target.value,
-    }))
-  }
-  className="app-input rounded-xl"
-/>
-
-<input
-  type="email"
-  placeholder="Email"
-  value={userForm.email}
-  onChange={(e) =>
-    setUserForm((prev) => ({
-      ...prev,
-      email: e.target.value,
-    }))
-  }
-  className="app-input rounded-xl"
-/>
-
-      <div className="space-y-2">
-        <div className="flex items-center gap-2">
-          <input
-            type={showPassword ? "text" : "password"}
-            placeholder={
-              editingUser
-                ? "Leave blank to keep password"
-                : "Password"
-            }
-            value={userForm.password}
-            onChange={(e) =>
-              setUserForm((prev) => ({
-                ...prev,
-                password:
-                  e.target.value,
-              }))
-            }
-            className="app-input rounded-xl flex-1"
-          />
-
-          <button
-            type="button"
-            onClick={handleGeneratePassword}
-            className="app-button-ghost whitespace-nowrap"
-          >
-            Generate
-          </button>
-
-          <button
-            type="button"
-            onClick={() =>
-              setShowPassword((prev) => !prev)
-            }
-            className="app-button-ghost whitespace-nowrap"
-          >
-            {showPassword ? "Hide" : "Show"}
-          </button>
-        </div>
-
-        <p className="text-xs text-text-secondary">
-          {editingUser
-            ? "Leave blank to keep the current password."
-            : "Generate a strong password automatically when creating a user."}
-        </p>
-      </div>
-
-      <select
-        value={userForm.status}
-        onChange={(e) =>
-          setUserForm((prev) => ({
-            ...prev,
-            status:
-              e.target.value,
-          }))
-        }
-        className="app-select"
-      >
-        <option value="active">
-          Active
-        </option>
-
-        <option value="inactive">
-          Inactive
-        </option>
-      </select>
-
-<div className="md:col-span-2 rounded-2xl border border-gray-200 bg-white p-5">
-
-  <div className="mb-5 text-lg font-semibold text-gray-900">
-    Page Permissions
-  </div>
-
-  <div className="space-y-6">
-
-
-{pageAccessList.map((section) => (
-  <div
-    key={section.title}
-    className="rounded-2xl border border-gray-100 p-4"
-  >
-
-    <div className="mb-4 flex items-center justify-between">
-
-      <div className="text-base font-semibold text-gray-800">
-        {section.title}
-      </div>
-
-      <button
-        type="button"
-        className="rounded-lg bg-indigo-100 px-3 py-1 text-sm font-medium text-indigo-700 hover:bg-indigo-200"
-        onClick={() => {
-          setUserForm((prev) => {
-            const updated = [
-              ...(prev.pagePermissions || []),
-            ];
-
-            section.pages.forEach((page) => {
-              const index =
-                updated.findIndex(
-                  (p) => p.page === page
-                );
-
-              if (index >= 0) {
-                updated[index] = {
-                  ...updated[index],
-                  view: true,
-                  edit: true,
-                  download: true,
-                  delete: true,
-                };
-              } else {
-                updated.push({
-                  page,
-                  view: true,
-                  edit: true,
-                  download: true,
-                  delete: true,
-                });
-              }
-            });
-
-            return {
-              ...prev,
-              pagePermissions: updated,
-            };
-          });
-        }}
-      >
-        Select All
-      </button>
-    </div>
-
-    <div className="space-y-3">
-
-      {section.pages.map((page) => {
-        const current =
-          userForm.pagePermissions?.find(
-            (p) => p.page === page
-          ) || {};
-
-        return (
-          <div
-            key={page}
-            className="grid grid-cols-[240px_repeat(4,1fr)] gap-4 items-center border-b border-gray-100 pb-3"
-          >
-
-            <div className="font-medium text-gray-700">
-              {page}
-            </div>
-
-            {[
-              "view",
-              "edit",
-              "download",
-              "delete",
-            ].map((action) => (
-              <label
-                key={action}
-                className="flex items-center gap-2 text-sm capitalize"
-              >
-
-                <input
-                  type="checkbox"
-                  checked={
-                    current[action] || false
-                  }
-                  onChange={(e) => {
-                    setUserForm((prev) => {
-                      const updated = [
-                        ...(prev.pagePermissions || []),
-                      ];
-
-                      const index =
-                        updated.findIndex(
-                          (p) =>
-                            p.page === page
-                        );
-
-                      if (index >= 0) {
-                        updated[index][action] =
-                          e.target.checked;
-                      } else {
-                        updated.push({
-                          page,
-                          view: false,
-                          edit: false,
-                          download: false,
-                          delete: false,
-                          [action]:
-                            e.target.checked,
-                        });
-                      }
-
-                      return {
-                        ...prev,
-                        pagePermissions:
-                          updated,
-                      };
-                    });
-                  }}
-                />
-
-                {action}
-              </label>
-            ))}
-          </div>
-        );
-      })}
-    </div>
-  </div>
-))}
-
   </div>
 </div>
 
+<div className="grid flex-1 min-h-0 gap-2 bg-slate-50 px-4 py-2 md:grid-cols-[32%_68%] overflow-hidden">
+    <div className="h-full overflow-y-auto rounded-[18px] border border-slate-200/80 bg-white px-4 py-3 shadow-sm">
+      <div>
+        <p className="text-[13px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+          User Information
+        </p>
+        <p className=" text-xs text-slate-500">
+          Add the user details to create the account.
+        </p>
+      </div>
 
+      <div className="mt-2 space-y-2 flex-1 overflow-y-auto pr-2">
+        <label className="block space-y-0">
+          <span className="text-sm px-1 font-semibold text-slate-700">Name</span>
+          <input
+            type="text"
+            placeholder="Enter User Name"
+            value={userForm.name}
+            onChange={(e) =>
+              setUserForm((prev) => ({
+                ...prev,
+                name: e.target.value,
+              }))
+            }
+            className="h-9 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 text-sm text-slate-900 transition focus:border-indigo-500 focus:bg-white focus:ring-4 focus:ring-indigo-100"
+          />
+        </label>
+
+        <label className="block space-y-0">
+          <span className="text-sm px-1 font-semibold text-slate-700">Designation</span>
+          <input
+            type="text"
+            placeholder="Enter Designation"
+            value={userForm.designation}
+            onChange={(e) =>
+              setUserForm((prev) => ({
+                ...prev,
+                designation: e.target.value,
+              }))
+            }
+            className="h-9 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 text-sm text-slate-900 transition focus:border-indigo-500 focus:bg-white focus:ring-4 focus:ring-indigo-100"
+          />
+        </label>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <label className="block space-y-0">
+            <span className="text-sm px-1 font-semibold text-slate-700">Circle</span>
+            <select
+              value={userForm.circle}
+              onChange={(e) =>
+                setUserForm((prev) => ({
+                  ...prev,
+                  circle: e.target.value,
+                }))
+              }
+              className="h-9 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 text-sm text-slate-900 focus:border-indigo-500 focus:bg-white focus:ring-4 focus:ring-indigo-100"
+            >
+              <option value="">Select Circle</option>
+              <option value="ALL">All Circles</option>
+              {circleOptions.map((circle) => (
+                <option key={circle} value={circle}>
+                  {circle}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="block space-y-0">
+            <span className="text-sm px-1 font-semibold text-slate-700">Domain</span>
+            <select
+              value={userForm.domain}
+              onChange={(e) =>
+                setUserForm((prev) => ({
+                  ...prev,
+                  domain: e.target.value,
+                }))
+              }
+              className="h-9 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 text-sm text-slate-900 focus:border-indigo-500 focus:bg-white focus:ring-4 focus:ring-indigo-100"
+            >
+              <option value="">Select Domain</option>
+              <option value="ALL">All Domains</option>
+              {domainOptions.map((domain) => (
+                <option key={domain} value={domain}>
+                  {domain}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+
+        <label className="block space-y-0">
+          <span className="text-sm px-1 font-semibold text-slate-700">Username</span>
+          <input
+            type="text"
+            placeholder="Username"
+            value={userForm.username}
+            onChange={(e) =>
+              setUserForm((prev) => ({
+                ...prev,
+                username: e.target.value,
+              }))
+            }
+            className="h-9 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 text-sm text-slate-900 focus:border-indigo-500 focus:bg-white focus:ring-4 focus:ring-indigo-100"
+          />
+        </label>
+
+        <label className="block space-y-0">
+          <span className="text-sm px-1 font-semibold text-slate-700">Email</span>
+          <input
+            type="email"
+            placeholder="Enter Email"
+            value={userForm.email}
+            onChange={(e) =>
+              setUserForm((prev) => ({
+                ...prev,
+                email: e.target.value,
+              }))
+            }
+            className="h-9 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 text-sm text-slate-900 focus:border-indigo-500 focus:bg-white focus:ring-4 focus:ring-indigo-100"
+          />
+        </label>
+
+        <div className="space-y-2">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <input
+              type={showPassword ? "text" : "password"}
+              placeholder={
+                editingUser
+                  ? "Leave blank to keep password"
+                  : "Password"
+              }
+              value={userForm.password}
+              onChange={(e) =>
+                setUserForm((prev) => ({
+                  ...prev,
+                  password: e.target.value,
+                }))
+              }
+              className="h-9 min-w-0 flex-1 rounded-xl border border-slate-200 bg-slate-50 px-4 text-sm text-slate-900 transition focus:border-indigo-500 focus:bg-white focus:ring-4 focus:ring-indigo-100"
+            />
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <button
+                type="button"
+                onClick={handleGeneratePassword}
+                className="h-9 rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
+              >
+                Generate Password
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowPassword((prev) => !prev)}
+                className="h-9 rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
+              >
+                {showPassword ? "Hide Password" : "Show Password"}
+              </button>
+            </div>
+          </div>
+          <p className="text-xs text-slate-500">
+            {editingUser
+              ? "Leave blank to keep the current password."
+              : "Generate a strong password automatically when creating a user."}
+          </p>
+        </div>
+
+        <label className="block space-y-0">
+          <span className="text-sm font-semibold text-slate-700">Status</span>
+          <select
+            value={userForm.status}
+            onChange={(e) =>
+              setUserForm((prev) => ({
+                ...prev,
+                status: e.target.value,
+              }))
+            }
+            className="h-9 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 text-sm text-slate-900 focus:border-indigo-500 focus:bg-white focus:ring-4 focus:ring-indigo-100"
+          >
+            <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
+          </select>
+        </label>
+      </div>
+    </div>
+
+   
+
+ <div className="h-full min-h-0 overflow-hidden">
+<div className="h-full min-h-0 rounded-[18px] border border-slate-200/80 bg-white px-4 py-3 flex flex-col">
+        <div>
+          <p className="text-[13px] font-semibold uppercase tracking-[0.24em] text-slate-500">
+            Page Permissions
+          </p>
+          <p className=" text-xs text-slate-500">
+            Control access for each module.
+          </p>
+        </div>
+
+        <div className="mt-2 flex-1 overflow-y-auto space-y-1 pr-2">
+          {pageAccessList.map((section) => (
+            <div key={section.title} className="rounded-[14px] border border-slate-200 bg-slate-50 px-4 py-2">
+              <div className="mb-1 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="text-sm px-2 font-semibold text-slate-900">{section.title}</div>
+                <button
+                  type="button"
+                  className="inline-flex items-center justify-center rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 px-3 py-1 text-xs font-semibold text-white transition hover:scale-[1.02]"
+                  onClick={() => {
+                    setUserForm((prev) => {
+                      const updated = [...(prev.pagePermissions || [])];
+                      section.pages.forEach((page) => {
+                        const index = updated.findIndex((p) => p.page === page);
+                        if (index >= 0) {
+                          updated[index] = {
+                            ...updated[index],
+                            view: true,
+                            edit: true,
+                            download: true,
+                            delete: true,
+                          };
+                        } else {
+                          updated.push({
+                            page,
+                            view: true,
+                            edit: true,
+                            download: true,
+                            delete: true,
+                          });
+                        }
+                      });
+                      return {
+                        ...prev,
+                        pagePermissions: updated,
+                      };
+                    });
+                  }}
+                >
+                  Select All
+                </button>
+              </div>
+
+              <div className="space-y-2">
+                {section.pages.map((page) => {
+                  const current = userForm.pagePermissions?.find((p) => p.page === page) || {};
+                  return (
+                    <div key={page} className="grid grid-cols-[220px_repeat(4,1fr)] gap-4 rounded-xl bg-white px-4 py-2 shadow-sm ring-1 ring-slate-200">
+                      <div className="flex items-center text-sm font-medium text-slate-700">{page}</div>
+                      {['view', 'edit', 'download', 'delete'].map((action) => (
+                        <label key={action} className="flex items-center gap-2 text-sm capitalize text-slate-600">
+                          <input
+                            type="checkbox"
+                            className="h-3 w-3 rounded-md border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                            checked={current[action] || false}
+                            onChange={(e) => {
+                              setUserForm((prev) => {
+                                const updated = [...(prev.pagePermissions || [])];
+                                const index = updated.findIndex((p) => p.page === page);
+                                if (index >= 0) {
+                                  updated[index][action] = e.target.checked;
+                                } else {
+                                  updated.push({
+                                    page,
+                                    view: false,
+                                    edit: false,
+                                    download: false,
+                                    delete: false,
+                                    [action]: e.target.checked,
+                                  });
+                                }
+                                return {
+                                  ...prev,
+                                  pagePermissions: updated,
+                                };
+                              });
+                            }}
+                          />
+                          {action}
+                        </label>
+                      ))}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   </div>
 
-  <div className="flex justify-end gap-3 border-t border-border-color px-6 py-4">
+ <div className="sticky bottom-0 flex items-center justify-end gap-3 border-t border-slate-200/80 bg-white px-4 py-1.5">
     <button
       type="button"
-      onClick={() =>
-        setUserModalOpen(false)
-      }
-      className="app-button-ghost"
+      onClick={() => setUserModalOpen(false)}
+      className=" rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
     >
       Cancel
     </button>
-
     <button
       type="button"
       onClick={saveUser}
-      className="app-button-primary"
+      className=" rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 px-4 py-2 text-sm font-semibold text-white shadow-indigo-500/20 transition hover:shadow-xl"
     >
       Save User
     </button>

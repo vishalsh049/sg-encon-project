@@ -1049,7 +1049,7 @@ const trendColor = getTrendColor(uptimeTrend);
 
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
         <div className="app-card flex items-center justify-between bg-white/70
-         backdrop-blur-md border border-white/40 shadow-[0_8px_30px_rgba(0,0,0,0.06)] 
+         backdrop-blur-md border border-white/40
          rounded-2xl px-4 py-3 transition-all duration-300 hover:shadow-[0_12px_40px_rgba(0,0,0,0.08)]">
           <div>
             <p className="mb-1 text-sm text-text-secondary">Total Active Sites</p>

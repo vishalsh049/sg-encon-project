@@ -1130,6 +1130,8 @@ if (availability <= 1) {
               try {
                 const { site_type, report_type, upload_type, date, uploadedBy } = req.body;
                 const finalDate = normalizeDate(date);
+                console.log("DATE RECEIVED:", date);
+                console.log("FINAL DATE:", finalDate);
                 const site_category = (req.body.siteCategory || "tower").toLowerCase();
                 const uploadType = (upload_type || "single").toLowerCase();
                 const normalizedSiteType = normalizeSiteTypeValue(site_type);
@@ -1948,28 +1950,35 @@ router.get("/download/:id", async (req, res) => {
       return res.status(400).json({ message: "Unsupported report type" });
     }
 
-    const fileId = String(uploadRows[0].file_id);
+   const fileId = Number(uploadRows[0].file_id);
 
-   const rows = await query(
-  `
-  SELECT *
-  FROM ${siteType}
-  WHERE CAST(file_id AS CHAR) = ?${
-    isAllCircle(req.authUser)
-      ? ""
-      : " AND LOWER(TRIM(circle)) = LOWER(TRIM(?))"
-  }
-  `,
+const rows = await query(
+`
+SELECT *
+FROM ${siteType}
+WHERE file_id = ?${
   isAllCircle(req.authUser)
-    ? [String(fileId)]
-    : [String(fileId), req.authUser.circle]
+    ? ""
+    : " AND LOWER(TRIM(circle)) = LOWER(TRIM(?))"
+}
+`,
+isAllCircle(req.authUser)
+  ? [fileId]
+  : [fileId, req.authUser.circle]
 );
 
-    if (!rows.length) {
-      return res.status(404).json({
-        message: "No data found",
-      });
-    }
+console.log("DOWNLOAD ID:", id);
+console.log("FILE ID:", fileId);
+console.log("SITE TYPE:", siteType);
+console.log("ROWS FOUND:", rows.length);
+
+  if (!rows.length) {
+  console.log("NO ROWS FOUND FOR DOWNLOAD");
+
+  return res.status(404).json({
+    message: "No data found",
+  });
+}
 
     const workbook = xlsx.utils.book_new();
 
@@ -1986,6 +1995,10 @@ router.get("/download/:id", async (req, res) => {
       type: "buffer",
       bookType: "xlsx",
     });
+
+  console.log("BUFFER SIZE:", buffer.length);
+console.log("ROWS EXPORTED:", rows.length);
+
 
     res.setHeader(
       "Content-Disposition",
@@ -2020,6 +2033,9 @@ router.get("/export-excel", async (req, res) => {
       fromDate,
       toDate
     } = req.query;
+
+    console.log("FROM DATE:", fromDate);
+    console.log("TO DATE:", toDate);
 
     if (!siteType || !fromDate || !toDate) {
       return res.status(400).json({

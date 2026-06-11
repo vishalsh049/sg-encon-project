@@ -5,7 +5,9 @@ import {
   Filter,
   MoreVertical,
   TrendingUp,
+  Download,
 } from "lucide-react";
+
 import { buildApiUrl } from "../lib/api";
 
 const colorStyles = {
@@ -61,35 +63,56 @@ const getBarHeight = (value) => {
 function KpiDashboard() {
   const [towerCards, setTowerCards] = useState([]);
   const [fiberCards, setFiberCards] = useState([]);
+  const [circleData, setCircleData] = useState([]);
+  const [kpiData, setKpiData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  useEffect(() => {
-    const fetchTowerData = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        const url = buildApiUrl("/api/tower-uptime");
-        console.log("Fetching from:", url);
-        const res = await fetch(url);
-        
-        if (!res.ok) {
-          throw new Error(`HTTP Error: ${res.status}`);
-        }
-        
-        const data = await res.json();
-        console.log("Tower data received:", data);
-        setTowerCards(data);
-      } catch (err) {
-        console.error("Error fetching tower data:", err);
-        setError(err.message);
-      } finally {
-        setLoading(false);
-      }
-    };
+useEffect(() => {
+  const fetchTowerData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
 
-    fetchTowerData();
-  }, []);
+      const url = buildApiUrl("/api/tower-uptime");
+      const res = await fetch(url);
+
+      if (!res.ok) {
+        throw new Error(`HTTP Error: ${res.status}`);
+      }
+
+      const data = await res.json();
+      setTowerCards(data);
+    } catch (err) {
+      console.error(err);
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchNsoData = async () => {
+    try {
+      const res = await fetch(
+        buildApiUrl("/api/nso-kpi-dashboard")
+      );
+
+      const data = await res.json();
+
+setKpiData(data);
+setCircleData(data);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  fetchTowerData();
+  fetchNsoData();
+}, []); 
+
+const handleDownloadReport = () => {
+  alert("Download Report Clicked");
+};
 
   return (
     <div className="min-h-screen">
@@ -246,34 +269,138 @@ function KpiDashboard() {
       
       )}
 
-{/* Fiber Section */}
-<div className="mt-8">
-  <div className="mb-4">
-    <h2 className="text-lg font-semibold text-slate-900">
-      Fiber Overview
-    </h2>
+{/* Section Separator */}
+<div className="my-4 border-t border-slate-300"></div>
 
-    <p className="text-sm text-slate-500">
-      Real-time uptime trend of all monitored fiber systems.
-    </p>
-  </div>
+{/* NSO KPI Dashboard */}
 
-  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-    <div className="rounded-[14px] border border-emerald-100 bg-white p-4 shadow-sm">
-      <h3 className="text-sm font-semibold text-slate-900">
-        Fiber KPI
-      </h3>
+<div className="mb-1 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
 
-      <p className="mt-2 text-2xl font-bold text-emerald-600">
-        99.00%
-      </p>
+<div className="bg-gradient-to-r from-blue-900 to-blue-700 px-4 py-3 text-white">
 
-      <p className="mt-1 text-xs text-slate-500">
-        Fiber uptime placeholder
+  <div className="flex items-center gap-3">
+
+    <div className="rounded-xl bg-white/20 p-2">
+      <Filter className="h-4 w-4" />
+    </div>
+
+    <div>
+      <h2 className="text-[17px] font-semibold">
+        NSO Fiber Performance
+      </h2>
+
+      <p className="text-xs text-blue-100">
+        Circle-wise and CMP-wise Fiber Network Performance Analysis
       </p>
     </div>
+
   </div>
+
 </div>
+
+<div className="p-1">
+<div className="grid grid-cols-6 gap-2">
+  {/* Circle Filter */}
+  <select
+ className="h-9 w-full rounded-xl border border-slate-300 px-4 text-sm font-medium"
+>
+  <option>Select Circle</option>
+  <option>Delhi</option>
+  <option>Haryana</option>
+  <option>Punjab</option>
+  <option>UP East</option>
+</select>
+
+  {/* CMP Filter */}
+  <select
+   className="h-9 w-full rounded-xl border border-slate-300 px-4 text-sm font-medium"
+
+  >
+    <option value="">Select CMP</option>
+
+    {/* Delhi */}
+    <option>Delhi-1 (West)</option>
+    <option>Delhi-2 (South)</option>
+    <option>Delhi-3 (Central-East)</option>
+    <option>Delhi-4 (North)</option>
+    <option>Faridabad (NCR)</option>
+    <option>Ghaziabad (NCR)</option>
+    <option>Gurgaon (NCR)</option>
+    <option>Noida (NCR)</option>
+
+    {/* Haryana */}
+    <option>Ambala</option>
+    <option>Hissar</option>
+    <option>Karnal</option>
+    <option>Panipat</option>
+    <option>Rewari</option>
+    <option>Rohtak</option>
+
+    {/* Punjab */}
+    <option>Amritsar</option>
+    <option>Bhatinda</option>
+    <option>Chandigarh</option>
+    <option>Jalandhar</option>
+    <option>Ludhiana-1</option>
+    <option>Ludhiana-2</option>
+    <option>Pathankot</option>
+    <option>Patiala</option>
+    <option>Sangrur</option>
+  </select>
+
+  {/* Week Filter */}
+  <select
+    className="h-9 w-full rounded-xl border border-slate-300 bg-white px-4 text-sm"
+  >
+    <option value="">Select Week</option>
+    <option>WK-19'26</option>
+    <option>WK-20'26</option>
+    <option>WK-21'26</option>
+    <option>WK-22'26</option>
+  </select>
+
+  {/* Month Filter */}
+  <select
+    className="h-9 w-full rounded-xl border border-slate-300 bg-white px-4 text-sm"
+  >
+    <option value="">Select Month</option>
+    <option>January</option>
+    <option>February</option>
+    <option>March</option>
+    <option>April</option>
+    <option>May</option>
+    <option>June</option>
+    <option>July</option>
+    <option>August</option>
+    <option>September</option>
+    <option>October</option>
+    <option>November</option>
+    <option>December</option>
+  </select>
+
+  {/* Reset */}
+  <button
+   className="h-9 w-full rounded-xl bg-red-500 text-sm font-semibold text-white shadow-sm hover:bg-red-600"
+  >
+    Reset
+  </button>
+
+  {/* Download Report */}
+  <button
+ className="h-9 w-full rounded-xl bg-blue-900 px-6 text-sm font-semibold text-white shadow-sm hover:bg-blue-800"
+  >
+    Download Report
+  </button>
+</div>
+</div>
+</div>
+
+{/* Table Section */}
+<div className="mb-4 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-md">
+
+
+</div>
+
 
       {/* Empty State */}
       {!loading && towerCards.length === 0 && !error && (

@@ -125,7 +125,7 @@ function DashboardLayout() {
           </div>
         </header>
 
-        <main className="p-3 md:p-4 lg:p-5 max-w-[1320px] mx-auto">
+        <main className="p-3 md:p-4 lg:p-5 w-full">
           <Outlet />
         </main>
       </div>

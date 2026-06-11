@@ -84,16 +84,15 @@ function TowerReports() {
     );
 
   const siteTypeMeta = {
-    AG2: { label: "AG2", bg: "from-sky-100 to-sky-50", icon: BarChart3 },
-    ILA: { label: "ILA", bg: "from-fuchsia-100 to-fuchsia-50", icon: Activity },
-    AG1: { label: "AG1", bg: "from-cyan-100 to-cyan-50", icon: ShieldCheck },
-    ENB: { label: "ENB", bg: "from-indigo-100 to-indigo-50", icon: Sparkles, highlight: true },
-    GNB: { label: "GNB", bg: "from-emerald-100 to-emerald-50", icon: TrendingUp },
-    ESC: { label: "ESC", bg: "from-amber-100 to-amber-50", icon: Layers },
-    HPODSC: { label: "HPODSC", bg: "from-rose-100 to-rose-50", icon: Activity },
-    OSC: { label: "OSC", bg: "from-lime-100 to-lime-50", icon: BarChart3 },
-     GSC: { label: "GSC", bg: "from-slate-100 to-slate-50", icon: Layers },
-    
+    AG2: { label: "AG2", bg: "from-sky-100 to-sky-50", icon: BarChart3, highlight: true },
+ILA: { label: "ILA", bg: "from-fuchsia-100 to-fuchsia-50", icon: Activity, highlight: true },
+AG1: { label: "AG1", bg: "from-cyan-100 to-cyan-50", icon: ShieldCheck, highlight: true },
+ENB: { label: "ENB", bg: "from-indigo-100 to-indigo-50", icon: Sparkles, highlight: true },
+GNB: { label: "GNB", bg: "from-emerald-100 to-emerald-50", icon: TrendingUp, highlight: true },
+ESC: { label: "ESC", bg: "from-amber-100 to-amber-50", icon: Layers, highlight: true },
+HPODSC: { label: "HPODSC", bg: "from-rose-100 to-rose-50", icon: Activity, highlight: true },
+OSC: { label: "OSC", bg: "from-lime-100 to-lime-50", icon: BarChart3, highlight: true },
+GSC: { label: "GSC", bg: "from-slate-100 to-slate-50", icon: Layers, highlight: true },
   };
 
   const today = useMemo(() => {
@@ -371,17 +370,49 @@ finally {
 }
 };
 
-  const handleDownload = (id, fileName) => {
-    if (!id || !fileName) return;
+ const handleDownload = async (id, fileName) => {
+  try {
+    const token = localStorage.getItem("token");
 
-    const url = buildApiUrl(`/api/reports/download/${id}`);
+    const response = await axios.get(
+      buildApiUrl(`/api/reports/download/${id}`),
+      {
+        responseType: "blob",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+
+    console.log(response.headers["content-type"]);
+
+const blob = new Blob(
+  [response.data],
+  {
+    type: response.headers["content-type"],
+  }
+);
+
+    const url = window.URL.createObjectURL(blob);
+
     const link = document.createElement("a");
     link.href = url;
-    link.download = fileName;
+    link.download = fileName || "report.xlsx";
+
     document.body.appendChild(link);
     link.click();
-    document.body.removeChild(link);
-  };
+
+    link.remove();
+    window.URL.revokeObjectURL(url);
+
+  } catch (err) {
+    console.error(err);
+    alert(
+      err?.response?.data?.message ||
+      "Download failed"
+    );
+  }
+};
 
   const handleEdit = (row) => {
     const formatDate = (dateString) => {
@@ -434,13 +465,7 @@ formData.append("upload_type", uploadType);
 formData.append("uploadedBy", uploadedBy.trim());
 
 // ✅ FIX DATE
-const safeDate = (() => {
-  const d = new Date(date);
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  return `${yyyy}-${mm}-${dd}`;
-})();
+const safeDate = date;
 
 if (uploadType === "single") {
   formData.append("file", file);
@@ -631,18 +656,18 @@ const latestReportDate = useMemo(() => {
 {/* main return */}
 
     return (
-      <div className="min-h-screen w-full pb-28 text-slate-900 -mt-2">
-        <div className=" top-0 z-30 mb-4 overflow-hidden rounded-[22px] px-5 py-4 
+      <div className="min-h-screen w-full pb-20 text-slate-900 -mt-2">
+        <div className=" top-0 z-30 mb-2 overflow-hidden rounded-[22px] px-5 py-4 
         bg-[linear-gradient(135deg,rgba(219,234,254,0.82),rgba(255,255,255,0.9),rgba(237,233,254,0.9))] 
        backdrop-blur-xl">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between ">
-            <div className="min-w-0 space-y-3">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div className="min-w-0 space-y-2">
               <div className="space-y-0">
-                <h1 className="text-2xl font-semibold tracking-[-0.03em] text-slate-950">
-                  Tower Reports
+                <h1 className="text-xl font-semibold tracking-[-0.03em] text-slate-950">
+                  Tower Performance Dashboard
                 </h1>
-                <p className="text-sm pt-1 text-slate-500">
-                  Site Performance Insights
+                <p className="text-sm text-slate-500">
+                  Real-Time Performance Monitoring & Operational Insights
                 </p>
               </div>
             </div>
@@ -707,7 +732,7 @@ const latestReportDate = useMemo(() => {
                 return (
                   <div
                     key={item.type}
-                    className={`rounded-[20px] border border-white/85 bg-white/90 px-4 py-2 transition duration-200
+                    className={`rounded-[18px] border border-white/85 bg-white/90 px-4 py-2 transition duration-200
                     hover:-translate-y-0.5 hover:shadow-soft ${item.highlight ? "ring-1 ring-indigo-100" : ""}`}>
                     <div className="flex items-center justify-between gap-4">
                       <div className="">
@@ -728,14 +753,14 @@ const latestReportDate = useMemo(() => {
               })}
             </div>
 
-            <div className="rounded-[24px] border border-white/80 bg-white/85 p-4 backdrop-blur-xl">
+            <div className="rounded-[18px] border border-white/80 bg-white/85 p-4 backdrop-blur-xl">
              
               <div className="space-y-4">
                 <div>
                   <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.06em] text-slate-500">
                     Search Reports, Date, Reports, Site Types, Uploaded By... 
                   </label>
-                  <div className="flex h-10 items-center gap-3 overflow-hidden rounded-2xl border border-slate-200/70 bg-white px-3 text-sm text-slate-700 transition focus-within:ring-2 focus-within:ring-sky-200">
+                  <div className="flex h-10 items-center gap-3 overflow-hidden rounded-xl border border-slate-200/70 bg-white px-3 text-sm text-slate-700 transition focus-within:ring-2 focus-within:ring-sky-200">
                     <Search size={16} className="text-slate-400" />
                     <input
                       type="text"
@@ -759,13 +784,13 @@ const latestReportDate = useMemo(() => {
   </div>
 </div>
 
-                  <div className="space-y-2">
+ <div className="space-y-2">
                     
-               <Listbox value={filterSiteType} onChange={setFilterSiteType}>
-               <div className="relative">
+   <Listbox value={filterSiteType} onChange={setFilterSiteType}>
+    <div className="relative">
 
     {/* Button */}
-    <Listbox.Button className="w-full h-11 rounded-2xl border border-slate-200 bg-white px-4
+    <Listbox.Button className="w-full h-11 rounded-xl border border-slate-200 bg-white px-4
      text-sm text-left flex items-center justify-between hover:border-sky-300 focus:ring-2 focus:ring-sky-100 transition">
       <span className="truncate">
         {filterSiteType
@@ -817,14 +842,14 @@ const latestReportDate = useMemo(() => {
     <div className="relative">
 
       <Listbox.Button
-        className="w-full h-11 rounded-2xl bg-white border border-slate-200 px-4 text-sm text-left flex items-center justify-between hover:border-sky-300 focus:ring-2 focus:ring-sky-100 transition"
+        className="w-full h-11 rounded-xl border border-slate-200 bg-white px-4 text-sm text-left flex items-center justify-between hover:border-sky-300 focus:ring-2 focus:ring-sky-100 transition"
       >
         {filterCircle || "All Circles"}
         <ChevronDown size={16} className="text-slate-400" />
       </Listbox.Button>
 
       <Listbox.Options
-        className="absolute z-50 mt-2 w-full rounded-2xl bg-white p-1 max-h-60 overflow-auto"
+        className="absolute z-50 mt-2 w-full rounded-xl bg-white p-1 max-h-60 overflow-auto"
       >
 
         <Listbox.Option
@@ -868,7 +893,7 @@ const latestReportDate = useMemo(() => {
   <div className="relative">
     
     {/* Button */}
-    <Listbox.Button className="w-full h-11 rounded-2xl bg-white border border-slate-200 px-4 text-sm text-left flex items-center
+    <Listbox.Button className="w-full h-11 rounded-xl bg-white border border-slate-200 px-4 text-sm text-left flex items-center
     justify-between hover:border-sky-300 focus:ring-2 focus:ring-sky-100 transition">
       {reportOptions.find(o => o.value === filterReportType)?.label || "All Report Types"}
       <ChevronDown size={16} className="text-slate-400" />
@@ -893,9 +918,9 @@ const latestReportDate = useMemo(() => {
 
   </div>
 </Listbox>
-                  </div>
+      </div>
 
-                  <div className="space-y-2">
+   <div className="space-y-2">
 
   <Listbox
     value={filterUploadedBy}
@@ -904,7 +929,7 @@ const latestReportDate = useMemo(() => {
     <div className="relative">
 
       <Listbox.Button
-        className="w-full h-11 rounded-2xl bg-white border border-slate-200 px-4 text-sm text-left shadow-sm flex items-center justify-between hover:border-sky-300 focus:ring-2 focus:ring-sky-100 transition"
+        className="w-full h-11 rounded-xl bg-white border border-slate-200 px-4 text-sm text-left shadow-sm flex items-center justify-between hover:border-sky-300 focus:ring-2 focus:ring-sky-100 transition"
       >
         {filterUploadedBy || " Uploaded By"}
 
@@ -915,7 +940,7 @@ const latestReportDate = useMemo(() => {
       </Listbox.Button>
 
       <Listbox.Options
-        className="absolute z-50 mt-2 w-full rounded-2xl bg-white p-1 max-h-60 overflow-auto"
+        className="absolute z-50 mt-2 w-full rounded-xl bg-white p-1 max-h-60 overflow-auto"
       >
 
         <Listbox.Option
@@ -989,7 +1014,7 @@ const latestReportDate = useMemo(() => {
                         type="checkbox"
                         onChange={handleSelectAll}
                         checked={allFilteredSelected}
-                        className="h-4 w-4 rounded border-slate-300"
+                        className="h-3 w-3 rounded border-slate-300"
                       />
                     </th>
                     <th className="px-4 py-3">Date</th>
@@ -1017,7 +1042,7 @@ const latestReportDate = useMemo(() => {
                             type="checkbox"
                             checked={selectedIds.includes(row.id)}
                             onChange={() => handleSelect(row.id)}
-                            className="h-4 w-4 rounded border-slate-300"
+                            className="h-3 w-3 rounded border-slate-300"
                           />
                         </td>
                         <td className="px-4 py-3 text-sm text-slate-700">

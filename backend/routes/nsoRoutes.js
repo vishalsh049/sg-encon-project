@@ -910,4 +910,42 @@ router.post("/bulk-delete", async (req, res) => {
   }
 });
 
+router.get("/kpi-dashboard", async (req, res) => {
+  try {
+
+    const rows = await query(`
+      SELECT
+        circle,
+        cmp,
+        week,
+
+        COUNT(ticket_no) AS cuts,
+
+        ROUND(AVG(mttr),2) AS mttr
+
+      FROM nso_reports
+
+      GROUP BY
+        circle,
+        cmp,
+        week
+
+      ORDER BY
+        year DESC,
+        week DESC
+    `);
+
+    res.json(rows);
+
+  } catch (error) {
+
+    console.error(error);
+
+    res.status(500).json({
+      message: "Failed to load KPI dashboard"
+    });
+
+  }
+});
+
 module.exports = router;

@@ -245,7 +245,11 @@ function Sidebar({ closeSidebar, collapsed, onExpandRequest }) {
   };
 
   return (
-    <aside className="flex w-56 h-full flex-col overflow-hidden border-r border-border-color bg-surface/95 backdrop-blur-xl">
+    <aside
+  className={`flex h-full flex-col overflow-hidden border-r border-border-color bg-surface/95 backdrop-blur-xl transition-all duration-300 ${
+    collapsed ? "w-20" : "w-56"
+  }`}
+>
       <div className="flex items-center justify-between gap-3 border-b border-border-color px-4 py-3">
         
         <div className="flex items-center justify-center w-full">
