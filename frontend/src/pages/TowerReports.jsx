@@ -313,6 +313,8 @@ const handleExportExcel = async () => {
     const token =
       localStorage.getItem("token");
 
+    console.log("[EXPORT REQUEST] siteType=", exportSiteType, "fromDate=", exportFromDate, "toDate=", exportToDate);
+
     const response = await axios.get(
       buildApiUrl("/api/reports/export-excel"),
       {

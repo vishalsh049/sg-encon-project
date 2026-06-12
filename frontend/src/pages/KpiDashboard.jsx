@@ -93,11 +93,13 @@ useEffect(() => {
 
   const fetchNsoData = async () => {
     try {
-      const res = await fetch(
-        buildApiUrl("/api/nso-kpi-dashboard")
-      );
+     const res = await fetch(
+      buildApiUrl("/api/nso/kpi-dashboard")
+    );
 
-      const data = await res.json();
+    const data = await res.json();
+
+console.log("NSO KPI DATA", data);
 
 setKpiData(data);
 setCircleData(data);
@@ -396,8 +398,157 @@ const handleDownloadReport = () => {
 </div>
 
 {/* Table Section */}
-<div className="mb-4 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-md">
+{/* Table Section */}
 
+<div className="mb-4 overflow-auto rounded-2xl border border-slate-200 bg-white shadow-md">
+
+<table className="min-w-full border-collapse text-sm">
+
+<thead>
+
+<tr className="bg-[#0b2f78] text-white">
+
+<th
+rowSpan="2"
+className="border border-slate-400 px-3 py-2"
+>
+CMP
+</th>
+
+<th
+rowSpan="2"
+className="border border-slate-400 px-3 py-2"
+>
+Scope
+</th>
+
+<th
+colSpan="3"
+className="border border-slate-400 px-3 py-2"
+>
+WK-19'26
+</th>
+
+<th
+colSpan="3"
+className="bg-cyan-500 border border-slate-400 px-3 py-2"
+>
+WK-20'26
+</th>
+
+<th
+colSpan="3"
+className="border border-slate-400 px-3 py-2"
+>
+WK-21'26
+</th>
+
+<th
+colSpan="3"
+className="bg-cyan-500 border border-slate-400 px-3 py-2"
+>
+WK-22'26
+</th>
+
+</tr>
+
+<tr className="bg-slate-100">
+
+<th className="border px-2 py-1">Cuts</th>
+<th className="border px-2 py-1">FTKM</th>
+<th className="border px-2 py-1">MTTR</th>
+
+<th className="border px-2 py-1">Cuts</th>
+<th className="border px-2 py-1">FTKM</th>
+<th className="border px-2 py-1">MTTR</th>
+
+<th className="border px-2 py-1">Cuts</th>
+<th className="border px-2 py-1">FTKM</th>
+<th className="border px-2 py-1">MTTR</th>
+
+<th className="border px-2 py-1">Cuts</th>
+<th className="border px-2 py-1">FTKM</th>
+<th className="border px-2 py-1">MTTR</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+<tr>
+<td className="border px-3 py-2">Delhi-1 (West)</td>
+<td className="border px-3 py-2">1965.94</td>
+
+<td className="border">12</td>
+<td className="border">27.03</td>
+<td className="border">7.94</td>
+
+<td className="border">10</td>
+<td className="border">22.53</td>
+<td className="border">8.98</td>
+
+<td className="border">16</td>
+<td className="border">36.04</td>
+<td className="border">10.58</td>
+
+<td className="border">13</td>
+<td className="border">29.28</td>
+<td className="border">8.49</td>
+</tr>
+
+<tr>
+<td className="border px-3 py-2">Delhi-2 (South)</td>
+<td className="border px-3 py-2">1499.29</td>
+
+<td className="border">14</td>
+<td className="border">41.35</td>
+<td className="border">6.87</td>
+
+<td className="border">13</td>
+<td className="border">38.40</td>
+<td className="border">6.18</td>
+
+<td className="border">3</td>
+<td className="border">8.86</td>
+<td className="border">4.85</td>
+
+<td className="border">8</td>
+<td className="border">23.63</td>
+<td className="border">5.62</td>
+</tr>
+
+<tr className="bg-[#0b2f78] text-white font-semibold">
+
+<td className="border px-3 py-2">
+Delhi Total
+</td>
+
+<td className="border px-3 py-2">
+13153.05
+</td>
+
+<td className="border">56</td>
+<td className="border">18.85</td>
+<td className="border">8.65</td>
+
+<td className="border">65</td>
+<td className="border">21.89</td>
+<td className="border">11.68</td>
+
+<td className="border">80</td>
+<td className="border">26.94</td>
+<td className="border">11.06</td>
+
+<td className="border">66</td>
+<td className="border">22.22</td>
+<td className="border">10.57</td>
+
+</tr>
+
+</tbody>
+
+</table>
 
 </div>
 

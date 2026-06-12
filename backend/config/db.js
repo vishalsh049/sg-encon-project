@@ -13,6 +13,7 @@ const db = mysql.createPool({
   queueLimit: 0,
 
   timezone: "+05:30",
+  dateStrings: true,
 });
 
 let connected = false;

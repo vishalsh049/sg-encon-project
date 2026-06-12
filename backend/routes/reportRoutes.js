@@ -2034,8 +2034,7 @@ router.get("/export-excel", async (req, res) => {
       toDate
     } = req.query;
 
-    console.log("FROM DATE:", fromDate);
-    console.log("TO DATE:", toDate);
+    console.log("[EXPORT QUERY] siteType:", siteType, "fromDate:", fromDate, "toDate:", toDate);
 
     if (!siteType || !fromDate || !toDate) {
       return res.status(400).json({
@@ -2071,7 +2070,11 @@ router.get("/export-excel", async (req, res) => {
     let columnsAdded = false;
 
     // Build SQL with optional circle restriction
-    let sql = `SELECT * FROM ${tableName} WHERE DATE(date) >= DATE(?) AND DATE(date) <= DATE(?)`;
+  let sql = `
+SELECT *
+FROM ${tableName}
+WHERE date BETWEEN ? AND ?
+`;
     const params = [fromDate, toDate];
     if (!isAllCircle(req.authUser)) {
       sql += ` AND LOWER(TRIM(circle)) = LOWER(TRIM(?))`;
@@ -2081,8 +2084,16 @@ router.get("/export-excel", async (req, res) => {
 
     const rows = streamBulkExportRows(sql, params);
 
+    let exportRowCount = 0;
+
     try {
       for await (const row of rows) {
+        exportRowCount += 1;
+
+        if (exportRowCount === 1) {
+          console.log("[EXPORT ROW SAMPLE] row.date:", row.date, "type:", typeof row.date, "isDate:", row.date instanceof Date, "toISOString:", row.date?.toISOString?.());
+        }
+
         if (res.destroyed) throw new Error("Client disconnected during export");
 
         if (!columnsAdded) {
@@ -2093,7 +2104,10 @@ router.get("/export-excel", async (req, res) => {
         // Replace null/undefined with empty string to avoid Excel repair warnings
         const cleanRow = {};
         Object.keys(row).forEach((key) => {
-          const val = row[key];
+          let val = row[key];
+          if (val instanceof Date) {
+            val = val.toISOString().slice(0, 10);
+          }
           cleanRow[key] = val === undefined || val === null ? "" : val;
         });
 
