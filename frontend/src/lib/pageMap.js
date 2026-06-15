@@ -23,6 +23,7 @@ export const PAGE_ID_MAP = {
   "tower-reports": "Tower Reports",
   "reports-dashboard": "KPI Dashboard",
   "kpi-dashboard": "KPI Dashboard",
+  "nso-fiber-dashboard": "NSO Fiber Performance",
   "nso-reports": "NSO Reports",
   "fiber-reports": "Fiber Reports",
 

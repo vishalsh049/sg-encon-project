@@ -171,6 +171,14 @@ function Sidebar({ closeSidebar, collapsed, onExpandRequest }) {
     section: "REPORTS",
   },
   {
+    key: "nso-fiber-dashboard",
+    label: "NSO Fiber Performance",
+    path: "/dashboard/reports/fiber/nso-dashboard",
+    icon: Database,
+    accessPage: "NSO Fiber Performance",
+    section: "REPORTS",
+  },
+  {
     key: "nso-reports",
     label: "NSO Reports",
     path: "/dashboard/reports/fiber/nso",

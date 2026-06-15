@@ -109,6 +109,8 @@ function UsersAccessPage() {
   const [loading, setLoading] =
     useState(false);
 
+   const [saving, setSaving] = useState(false);
+
   const [userModalOpen, setUserModalOpen] =
     useState(false);
 
@@ -281,20 +283,21 @@ const generatePassword = () => {
   };
 
   const saveUser = async () => {
+  setSaving(true);
+
+  try {
     if (
       !userForm.name.trim() ||
       !userForm.designation.trim() ||
       !userForm.username.trim() ||
-      !userForm.email.trim()||
+      !userForm.email.trim() ||
       !userForm.circle.trim() ||
       !userForm.domain.trim() ||
-      (!editingUser &&
-        !userForm.password.trim())
+      (!editingUser && !userForm.password.trim())
     ) {
       toast.error(
         "All required user fields must be filled"
       );
-
       return;
     }
 
@@ -303,147 +306,77 @@ const generatePassword = () => {
       designation: userForm.designation.trim(),
       username: userForm.username.trim(),
       email: userForm.email.trim().toLowerCase(),
-
       password: userForm.password,
-
       circle: userForm.circle,
-
       domain: userForm.domain,
-
       status: userForm.status,
-
       pagePermissions:
         userForm.pagePermissions || [],
     };
 
-    try {
-      if (editingUser) {
-        await axios.put(
-          buildApiUrl(
-            `/api/access/users/${editingUser.id}`
-          ),
-          payload,
-          { headers }
-        );
-
-        toast.success(
-          "User updated successfully"
-        );
-
-        // Refresh logged-in session if editing current user
-const sessionUser = JSON.parse(
-  localStorage.getItem("sessionUser")
-);
-
-if (sessionUser?.id === editingUser.id) {
-  localStorage.setItem(
-    "sessionUser",
-    JSON.stringify({
-      ...sessionUser,
-      pagePermissions: payload.pagePermissions,
-      pageAccess: payload.pagePermissions
-        .filter((p) => p.view)
-        .map((p) => p.page),
-    })
-  );
-}
-
-      } else {
-        await axios.post(
-          buildApiUrl(
-            "/api/access/users"
-          ),
-          payload,
-          { headers }
-        );
-
-        toast.success(
-          "User created successfully"
-        );
-      }
-
-      await loadAccessData();
-
-      setUserModalOpen(false);
-
-      setEditingUser(null);
-
-      setUserForm(initialUserForm);
-    } catch (error) {
-      toast.error(
-        error.response?.data?.message ||
-          "Failed to save user"
-      );
-    }
-  };
-
-  const deleteUser = async (userId) => {
-    if (
-      !window.confirm(
-        "Delete this user?"
-      )
-    )
-      return;
-
-    try {
-      await axios.delete(
-        buildApiUrl(
-          `/api/access/users/${userId}`
-        ),
-        { headers }
-      );
-
-      await loadAccessData();
-
-      toast.success(
-        "User deleted successfully"
-      );
-    } catch (error) {
-      toast.error(
-        error.response?.data?.message ||
-          "Failed to delete user"
-      );
-    }
-  };
-
-  const toggleUserStatus = async (
-    user
-  ) => {
-    const nextStatus =
-      user.status === "active"
-        ? "inactive"
-        : "active";
-
-    try {
+    if (editingUser) {
       await axios.put(
         buildApiUrl(
-          `/api/access/users/${user.id}/status`
+          `/api/access/users/${editingUser.id}`
         ),
-        { status: nextStatus },
+        payload,
         { headers }
       );
 
-      setUsers((prev) =>
-        prev.map((item) =>
-          item.id === user.id
-            ? {
-                ...item,
-                status: nextStatus,
-              }
-            : item
-        )
+      toast.success(
+        "User updated successfully"
+      );
+
+      // Refresh logged-in session if editing current user
+      const sessionUser = JSON.parse(
+        localStorage.getItem("sessionUser")
+      );
+
+      if (
+        sessionUser?.id === editingUser.id
+      ) {
+        localStorage.setItem(
+          "sessionUser",
+          JSON.stringify({
+            ...sessionUser,
+            pagePermissions:
+              payload.pagePermissions,
+            pageAccess:
+              payload.pagePermissions
+                .filter((p) => p.view)
+                .map((p) => p.page),
+          })
+        );
+      }
+    } else {
+      await axios.post(
+        buildApiUrl("/api/access/users"),
+        payload,
+        { headers }
       );
 
       toast.success(
-        "User status updated"
-      );
-    } catch (error) {
-      toast.error(
-        error.response?.data?.message ||
-          "Failed to update status"
+        "User created successfully"
       );
     }
-  };
+
+    // Close popup immediately
+    setUserModalOpen(false);
+    setEditingUser(null);
+    setUserForm(initialUserForm);
+
+    // Refresh users in background
+    loadAccessData();
+
+  } catch (error) {
+    toast.error(
+      error.response?.data?.message ||
+      "Failed to save user"
+    );
+  } finally {
+    setSaving(false);
+  }
+};
 
   return (
     <div className="mx-auto max-w-7xl">
@@ -1021,13 +954,14 @@ if (sessionUser?.id === editingUser.id) {
     >
       Cancel
     </button>
-    <button
-      type="button"
-      onClick={saveUser}
-      className=" rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 px-4 py-2 text-sm font-semibold text-white shadow-indigo-500/20 transition hover:shadow-xl"
-    >
-      Save User
-    </button>
+  <button
+  type="button"
+  onClick={saveUser}
+  disabled={saving}
+  className="rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 px-4 py-2 text-sm font-semibold text-white shadow-indigo-500/20 transition hover:shadow-xl disabled:opacity-50"
+>
+  {saving ? "Saving..." : "Save User"}
+</button>
   </div>
 </div>
 

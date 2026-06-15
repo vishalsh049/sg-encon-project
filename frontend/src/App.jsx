@@ -11,6 +11,7 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import { UserProvider } from "./context/UserContext";
 import KpiDashboard from "./pages/KpiDashboard";
 import NSOReports from "./pages/NsoReports";
+import NsoDashboard from "./pages/NsoDashboard";
 import FiberInventory from "./pages/FiberInventory";
 import Physical from "./pages/Physical";
 import Scrum from "./pages/Scrum";
@@ -66,6 +67,18 @@ function App() {
 
   <Route path="billing/penalties" element={
     <ProtectedRoute page={"KPIs Penalty"}>
+      <PlaceholderPage />
+    </ProtectedRoute>
+  } />
+
+  <Route path="billing/penalties/kpis" element={
+    <ProtectedRoute page={"KPIs Penalty"}>
+      <PlaceholderPage />
+    </ProtectedRoute>
+  } />
+
+  <Route path="billing/penalties/general" element={
+    <ProtectedRoute page={"General Penalties"}>
       <PlaceholderPage />
     </ProtectedRoute>
   } />
@@ -149,7 +162,13 @@ function App() {
   </ProtectedRoute>
 } />
 
-<Route path="reports/fiber/nso" element={
+<Route path="reports/fiber/nso-dashboard" element={
+    <ProtectedRoute page={"NSO Fiber Performance"}>
+      <NsoDashboard />
+    </ProtectedRoute>
+  } />
+
+  <Route path="reports/fiber/nso" element={
   <ProtectedRoute page={"NSO Reports"}>
     <NSOReports />
   </ProtectedRoute>

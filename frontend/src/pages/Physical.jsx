@@ -1677,7 +1677,7 @@ const endRecord =
 
   <div className="mx-auto mt-2 w-full max-w-7xl">
 
-    <div className="rounded-[22px] border border-white/70 bg-white/100 px-4 py-2 backdrop-blur-xl">
+    <div className="rounded-[18px] border border-white/70 bg-white/100 px-4 py-2 backdrop-blur-xl">
 
       <div className="mb-2 flex items-center justify-between">
 

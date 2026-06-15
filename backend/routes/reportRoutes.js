@@ -1188,7 +1188,7 @@ const parseGnbRows = (rows, fallbackDate, fileId) => {
               return insertRows.length;
             }
 
-            if (["ag1", "ag2", "ila", "gnb", "gsc", "wifi"].includes(normalizedSiteType)) {
+          if (["ag1", "ag2", "ila", "gsc", "wifi"].includes(normalizedSiteType)){
               const tableName = normalizedSiteType;
 
               await query(`

@@ -754,7 +754,7 @@
       const ag1CountSql = buildLatestKpiSumSql("ag1");
       const ag2CountSql = buildLatestKpiSumSql("ag2");
       const ilaCountSql = buildLatestKpiSumSql("ila");
-      const gnbCountSql = buildLatestKpiSumSql("gnb");
+      const gnbCountSql = buildLatestCountSql("gnb");
       const gscCountSql = buildLatestKpiSumSql("gsc");
       const wifiCountSql = buildLatestKpiSumSql("wifi");
 

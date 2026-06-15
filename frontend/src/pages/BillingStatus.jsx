@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { buildApiUrl } from "../lib/api";
+import { authFetch, buildApiUrl } from "../lib/api";
 import {
   AlertTriangle,
   ArrowRight,
@@ -285,7 +285,12 @@ export default function BillingStatus() {
   const fetchBillingStatus = async () => {
     setIsLoading(true);
     try {
-      const res = await fetch(buildApiUrl("/api/billing/status"));
+      const res = await authFetch(buildApiUrl("/api/billing/status"));
+      if (!res.ok) {
+        console.error("Error fetching billing status:", res.status, res.statusText);
+        setData([]);
+        return;
+      }
       let result;
       try {
         result = await res.json();
@@ -460,7 +465,7 @@ const pendingTasks = totalTasks - completedTasks;
       return;
     }
 
-    const res = await fetch(buildApiUrl("/api/billing/status"), {
+    const res = await authFetch(buildApiUrl("/api/billing/status"), {
       method: "POST",
       headers: {
         "Content-Type": "application/json"

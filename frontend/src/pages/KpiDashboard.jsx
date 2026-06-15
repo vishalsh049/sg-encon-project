@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import {
   Activity,
   CalendarDays,
@@ -8,7 +8,12 @@ import {
   Download,
 } from "lucide-react";
 
-import { buildApiUrl } from "../lib/api";
+import {
+  ChevronDown,
+  ChevronUp,
+} from "lucide-react";
+
+import { authFetch, buildApiUrl } from "../lib/api";
 
 const colorStyles = {
   blue: {
@@ -65,8 +70,40 @@ function KpiDashboard() {
   const [fiberCards, setFiberCards] = useState([]);
   const [circleData, setCircleData] = useState([]);
   const [kpiData, setKpiData] = useState([]);
+  const [selectedCircle, setSelectedCircle] = useState("");
+  const [selectedWeeks, setSelectedWeeks] = useState([]);
+  const [weekDropdownOpen, setWeekDropdownOpen] = useState(false);
+  const [weeks, setWeeks] = useState([]);
+  const [years, setYears] = useState([]);
+  const [selectedYear, setSelectedYear] = useState("");
+  const weekDropdownRef = useRef(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+
+  useEffect(() => {
+  const handleClickOutside = (event) => {
+
+    if (
+      weekDropdownRef.current &&
+      !weekDropdownRef.current.contains(event.target)
+    ) {
+      setWeekDropdownOpen(false);
+    }
+
+  };
+
+  document.addEventListener(
+    "mousedown",
+    handleClickOutside
+  );
+
+  return () => {
+    document.removeEventListener(
+      "mousedown",
+      handleClickOutside
+    );
+  };
+}, []);
 
 useEffect(() => {
   const fetchTowerData = async () => {
@@ -74,14 +111,14 @@ useEffect(() => {
       setLoading(true);
       setError(null);
 
-      const url = buildApiUrl("/api/tower-uptime");
-      const res = await fetch(url);
+      const res = await authFetch(buildApiUrl("/api/tower-uptime"));
 
       if (!res.ok) {
         throw new Error(`HTTP Error: ${res.status}`);
       }
 
       const data = await res.json();
+  
       setTowerCards(data);
     } catch (err) {
       console.error(err);
@@ -93,18 +130,59 @@ useEffect(() => {
 
   const fetchNsoData = async () => {
     try {
-     const res = await fetch(
-      buildApiUrl("/api/nso/kpi-dashboard")
-    );
+      const res = await authFetch(buildApiUrl("/api/nso/kpi-dashboard"));
+
+      if (!res.ok) {
+        throw new Error(`HTTP Error: ${res.status}`);
+      }
 
     const data = await res.json();
 
-console.log("NSO KPI DATA", data);
+console.log("NSO DATA =", data);
 
 setKpiData(data);
 setCircleData(data);
+const allWeeks = new Set();
+const allYears = new Set();
+
+data.forEach((item) => {
+
+  Object.keys(item.weeks || {}).forEach((week) => {
+
+    allWeeks.add(week);
+
+    const yearMatch = week.match(/'(\d+)/);
+
+    if (yearMatch) {
+      allYears.add(`20${yearMatch[1]}`);
+    }
+
+  });
+
+});
+
+const sortedWeeks = Array.from(allWeeks)
+  .sort((a, b) => {
+    const wa = parseInt(a.match(/\d+/)?.[0] || 0);
+    const wb = parseInt(b.match(/\d+/)?.[0] || 0);
+    return wb - wa;
+  });
+
+setWeeks(sortedWeeks);
+const sortedYears = Array.from(allYears)
+  .sort((a, b) => Number(b) - Number(a));
+
+setYears(sortedYears);
+
+// AUTO SELECT LATEST YEAR
+if (sortedYears.length > 0) {
+  setSelectedYear(sortedYears[0]);
+}
     } catch (err) {
       console.error(err);
+      if (!error) {
+        setError(err.message);
+      }
     }
   };
 
@@ -115,6 +193,39 @@ setCircleData(data);
 const handleDownloadReport = () => {
   alert("Download Report Clicked");
 };
+
+const filteredData = kpiData
+  .filter(
+    (item) =>
+      (!selectedCircle ||
+        item.circle === selectedCircle)
+  )
+  .sort((a, b) =>
+    (a.cmp || "").localeCompare(
+      b.cmp || ""
+    )
+  );
+
+const yearFilteredWeeks =
+  selectedYear
+    ? weeks.filter((week) => {
+
+        const match = week.match(/'(\d{2})$/);
+
+        if (!match) return false;
+
+        return `20${match[1]}` === selectedYear;
+
+      })
+    : weeks;
+
+const visibleWeeks =
+  selectedWeeks.length > 0
+    ? selectedWeeks
+    : yearFilteredWeeks.slice(0, 4);
+    console.log("Selected Year =", selectedYear);
+    console.log("Weeks =", weeks);
+    console.log("Year Weeks =", yearFilteredWeeks);
 
   return (
     <div className="min-h-screen">
@@ -276,7 +387,7 @@ const handleDownloadReport = () => {
 
 {/* NSO KPI Dashboard */}
 
-<div className="mb-1 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+<div className="mb-1 overflow-visible rounded-2xl border border-slate-200 bg-white shadow-sm">
 
 <div className="bg-gradient-to-r from-blue-900 to-blue-700 px-4 py-3 text-white">
 
@@ -300,66 +411,119 @@ const handleDownloadReport = () => {
 
 </div>
 
-<div className="p-1">
-<div className="grid grid-cols-6 gap-2">
+<div className="p-1 overflow-visible">
+<div className="grid grid-cols-7 gap-2 relative">
   {/* Circle Filter */}
-  <select
- className="h-9 w-full rounded-xl border border-slate-300 px-4 text-sm font-medium"
+<select
+  value={selectedCircle}
+  onChange={(e) => setSelectedCircle(e.target.value)}
+  className="h-9 w-full rounded-xl border border-slate-300 px-4 text-sm font-medium"
 >
-  <option>Select Circle</option>
-  <option>Delhi</option>
-  <option>Haryana</option>
-  <option>Punjab</option>
-  <option>UP East</option>
+  <option value="">All Circles</option>
+
+  {[...new Set(kpiData.map(item => item.circle))]
+    .filter(Boolean)
+    .map((circle) => (
+      <option key={circle} value={circle}>
+        {circle}
+      </option>
+    ))}
 </select>
 
   {/* CMP Filter */}
-  <select
-   className="h-9 w-full rounded-xl border border-slate-300 px-4 text-sm font-medium"
+ <select
+  className="h-9 w-full rounded-xl border border-slate-300 px-4 text-sm font-medium"
+>
+  <option value="">Select CMP</option>
 
-  >
-    <option value="">Select CMP</option>
-
-    {/* Delhi */}
-    <option>Delhi-1 (West)</option>
-    <option>Delhi-2 (South)</option>
-    <option>Delhi-3 (Central-East)</option>
-    <option>Delhi-4 (North)</option>
-    <option>Faridabad (NCR)</option>
-    <option>Ghaziabad (NCR)</option>
-    <option>Gurgaon (NCR)</option>
-    <option>Noida (NCR)</option>
-
-    {/* Haryana */}
-    <option>Ambala</option>
-    <option>Hissar</option>
-    <option>Karnal</option>
-    <option>Panipat</option>
-    <option>Rewari</option>
-    <option>Rohtak</option>
-
-    {/* Punjab */}
-    <option>Amritsar</option>
-    <option>Bhatinda</option>
-    <option>Chandigarh</option>
-    <option>Jalandhar</option>
-    <option>Ludhiana-1</option>
-    <option>Ludhiana-2</option>
-    <option>Pathankot</option>
-    <option>Patiala</option>
-    <option>Sangrur</option>
-  </select>
+  {[...new Set(kpiData.map(item => item.cmp))]
+    .filter(Boolean)
+    .map((cmp) => (
+      <option key={cmp} value={cmp}>
+        {cmp}
+      </option>
+    ))}
+</select>
 
   {/* Week Filter */}
-  <select
-    className="h-9 w-full rounded-xl border border-slate-300 bg-white px-4 text-sm"
-  >
-    <option value="">Select Week</option>
-    <option>WK-19'26</option>
-    <option>WK-20'26</option>
-    <option>WK-21'26</option>
-    <option>WK-22'26</option>
-  </select>
+  <div
+  ref={weekDropdownRef}
+  className="relative z-[9999]"
+>
+
+ <button
+  type="button"
+  onClick={() =>
+    setWeekDropdownOpen(prev => !prev)
+  }
+  className="flex h-9 w-full items-center justify-between rounded-xl border border-slate-300 bg-white px-4 text-sm font-medium"
+>
+ <span className="truncate">
+  {selectedWeeks.length > 0
+    ? selectedWeeks.join(", ")
+    : "Select Weeks"}
+</span>
+
+  {weekDropdownOpen ? (
+    <ChevronUp className="h-4 w-4" />
+  ) : (
+    <ChevronDown className="h-4 w-4" />
+  )}
+</button>
+
+  {weekDropdownOpen && (
+    <div className="absolute left-0 top-10 z-[99999] max-h-64 w-full overflow-auto rounded-xl border border-slate-300 bg-white shadow-xl">
+
+     {yearFilteredWeeks.map((week) => (
+
+        <label
+          key={week}
+          className="flex items-center gap-2 px-3 py-2 hover:bg-slate-100"
+        >
+
+          <input
+            type="checkbox"
+            checked={selectedWeeks.includes(week)}
+            onChange={(e) => {
+
+              if (e.target.checked) {
+
+              if (selectedWeeks.length < 4) {
+
+  const updated = [
+    ...selectedWeeks,
+    week
+  ];
+
+  setSelectedWeeks(updated);
+
+  if (updated.length === 4) {
+    setWeekDropdownOpen(false);
+  }
+
+}
+
+              } else {
+
+                setSelectedWeeks(prev =>
+                  prev.filter(w => w !== week)
+                );
+
+              }
+
+            }}
+          />
+
+          {week}
+
+        </label>
+
+      ))}
+
+    </div>
+  )}
+
+</div>
 
   {/* Month Filter */}
   <select
@@ -380,8 +544,38 @@ const handleDownloadReport = () => {
     <option>December</option>
   </select>
 
+<select
+  value={selectedYear}
+  onChange={(e) => {
+  setSelectedYear(e.target.value);
+  setSelectedWeeks([]);
+}}
+  className="h-9 w-full rounded-xl border border-slate-300 bg-white px-4 text-sm"
+>
+  <option value="">
+    Select Year
+  </option>
+
+  {years.map((year) => (
+    <option
+      key={year}
+      value={year}
+    >
+      {year}
+    </option>
+  ))}
+</select>
+
   {/* Reset */}
   <button
+onClick={() => {
+   setSelectedCircle("");
+   setSelectedWeeks([]);
+
+   if (years.length > 0) {
+      setSelectedYear(years[0]);
+   }
+}}
    className="h-9 w-full rounded-xl bg-red-500 text-sm font-semibold text-white shadow-sm hover:bg-red-600"
   >
     Reset
@@ -398,154 +592,91 @@ const handleDownloadReport = () => {
 </div>
 
 {/* Table Section */}
-{/* Table Section */}
+<div className="mb-4 rounded-2xl border border-slate-200 bg-white shadow-md overflow-auto max-h-[700px]">
 
-<div className="mb-4 overflow-auto rounded-2xl border border-slate-200 bg-white shadow-md">
+<table className="min-w-full text-sm border-collapse">
 
-<table className="min-w-full border-collapse text-sm">
+<thead className="sticky top-0 z-30">
 
-<thead>
-
-<tr className="bg-[#0b2f78] text-white">
+<tr className="sticky top-0 z-30 bg-[#0b2f78] text-white">
 
 <th
-rowSpan="2"
-className="border border-slate-400 px-3 py-2"
+  rowSpan="2"
+  className="sticky left-0 top-0 z-40 bg-[#0b2f78] px-4 py-3 text-left min-w-[220px]"
 >
-CMP
+  CMP
 </th>
 
 <th
-rowSpan="2"
-className="border border-slate-400 px-3 py-2"
+  rowSpan="2"
+  className="sticky top-0 z-30 bg-[#0b2f78] px-4 py-3 min-w-[100px]"
 >
-Scope
+  Scope
 </th>
 
-<th
-colSpan="3"
-className="border border-slate-400 px-3 py-2"
->
-WK-19'26
-</th>
-
-<th
-colSpan="3"
-className="bg-cyan-500 border border-slate-400 px-3 py-2"
->
-WK-20'26
-</th>
-
-<th
-colSpan="3"
-className="border border-slate-400 px-3 py-2"
->
-WK-21'26
-</th>
-
-<th
-colSpan="3"
-className="bg-cyan-500 border border-slate-400 px-3 py-2"
->
-WK-22'26
-</th>
+{visibleWeeks.map((week) => (
+  <th
+    key={week}
+    colSpan="3"
+    className="border border-slate-400 px-3 py-2"
+  >
+    {week}
+  </th>
+))}
 
 </tr>
 
-<tr className="bg-slate-100">
+<tr className="sticky top-[38px] z-20 bg-slate-100">
 
-<th className="border px-2 py-1">Cuts</th>
-<th className="border px-2 py-1">FTKM</th>
-<th className="border px-2 py-1">MTTR</th>
 
-<th className="border px-2 py-1">Cuts</th>
-<th className="border px-2 py-1">FTKM</th>
-<th className="border px-2 py-1">MTTR</th>
+  {visibleWeeks.map((week) => (
+    <React.Fragment key={week}>
+      <th className="border px-2 py-1">
+        Cuts
+      </th>
 
-<th className="border px-2 py-1">Cuts</th>
-<th className="border px-2 py-1">FTKM</th>
-<th className="border px-2 py-1">MTTR</th>
+      <th className="border px-2 py-1">
+        FTKM
+      </th>
 
-<th className="border px-2 py-1">Cuts</th>
-<th className="border px-2 py-1">FTKM</th>
-<th className="border px-2 py-1">MTTR</th>
+      <th className="border px-2 py-1"> 
+        MTTR
+      </th>
+    </React.Fragment>
+  ))}
 
 </tr>
 
 </thead>
 
 <tbody>
+  {filteredData.map((row, index) => (
+    <tr key={index}>
+     <td className="sticky left-0 z-10 border bg-white px-3 py-2 font-medium">
+      {row.cmp}
+     </td>
 
-<tr>
-<td className="border px-3 py-2">Delhi-1 (West)</td>
-<td className="border px-3 py-2">1965.94</td>
+      <td className="border px-3 py-2">
+        {row.scope}
+      </td>
 
-<td className="border">12</td>
-<td className="border">27.03</td>
-<td className="border">7.94</td>
+      {visibleWeeks.map((week) => (
+        <React.Fragment key={week}>
+          <td className="border px-2 py-2 text-center">
+            {row.weeks?.[week]?.cuts || 0}
+          </td>
 
-<td className="border">10</td>
-<td className="border">22.53</td>
-<td className="border">8.98</td>
+         <td className="border px-2 py-2 text-center">
+            {row.weeks?.[week]?.ftkm || 0}
+          </td>
 
-<td className="border">16</td>
-<td className="border">36.04</td>
-<td className="border">10.58</td>
-
-<td className="border">13</td>
-<td className="border">29.28</td>
-<td className="border">8.49</td>
-</tr>
-
-<tr>
-<td className="border px-3 py-2">Delhi-2 (South)</td>
-<td className="border px-3 py-2">1499.29</td>
-
-<td className="border">14</td>
-<td className="border">41.35</td>
-<td className="border">6.87</td>
-
-<td className="border">13</td>
-<td className="border">38.40</td>
-<td className="border">6.18</td>
-
-<td className="border">3</td>
-<td className="border">8.86</td>
-<td className="border">4.85</td>
-
-<td className="border">8</td>
-<td className="border">23.63</td>
-<td className="border">5.62</td>
-</tr>
-
-<tr className="bg-[#0b2f78] text-white font-semibold">
-
-<td className="border px-3 py-2">
-Delhi Total
-</td>
-
-<td className="border px-3 py-2">
-13153.05
-</td>
-
-<td className="border">56</td>
-<td className="border">18.85</td>
-<td className="border">8.65</td>
-
-<td className="border">65</td>
-<td className="border">21.89</td>
-<td className="border">11.68</td>
-
-<td className="border">80</td>
-<td className="border">26.94</td>
-<td className="border">11.06</td>
-
-<td className="border">66</td>
-<td className="border">22.22</td>
-<td className="border">10.57</td>
-
-</tr>
-
+          <td className="border px-2 py-2 text-center">
+            {row.weeks?.[week]?.mttr || 0}
+          </td>
+        </React.Fragment>
+      ))}
+    </tr>
+  ))}
 </tbody>
 
 </table>
