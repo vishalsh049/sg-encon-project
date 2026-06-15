@@ -3,6 +3,11 @@ const path = require("path");
 const multer = require("multer");
 const xlsx = require("xlsx");
 const { db } = require("../config/db");
+const {
+  addCircleFilter,
+  assertRowsAllowedCircle,
+  isAllCircle,
+} = require("../middleware/circleAccess");
 
 const query = (sql, params = []) => {
   return new Promise((resolve, reject) => {
@@ -26,6 +31,10 @@ const getConnection = () => {
     });
   });
 };
+
+function appendFiberCircleFilter(filters, params, authUser, column = "fi.circle") {
+  addCircleFilter(filters, params, authUser, column);
+}
 
 const uploadsDir = path.join(__dirname, "..", "uploads");
 const allowedExtensions = new Set(["xlsx", "csv"]);
@@ -589,7 +598,7 @@ parsedRows.push({
   return parsedRows;
 }
 
-async function createFiberUpload({ date, uploadedBy, fileName, rows }) {
+async function createFiberUpload({ date, uploadedBy, fileName, rows, authUser }) {
 
   const normalizedDate = normalizeDate(date);
   if (!normalizedDate) {
@@ -612,6 +621,7 @@ async function createFiberUpload({ date, uploadedBy, fileName, rows }) {
   }
 
   const parsedRows = parseFiberRows(rows);
+  assertRowsAllowedCircle(authUser, parsedRows, (row) => row.circle);
   const uploadScope = inferUploadScope(parsedRows);
 
  const conn = await getConnection();
@@ -710,21 +720,41 @@ VALUES ?`,
 
 }
 
-async function getLatestFiberUpload() {
+async function getLatestFiberUpload(authUser) {
+  const filters = [];
+  const params = [];
+  appendFiberCircleFilter(filters, params, authUser, "fi.circle");
+
   const rows = await query(
     `SELECT id, date, uploaded_by, upload_scope, file_name, uploaded_at
      FROM fiber_uploads
+     ${
+       filters.length
+         ? `WHERE EXISTS (SELECT 1 FROM fiber_inventory fi WHERE fi.upload_id = fiber_uploads.id AND ${filters.join(" AND ")})`
+         : ""
+     }
      ORDER BY date DESC, uploaded_at DESC, id DESC
-     LIMIT 1`
+     LIMIT 1`,
+    params
   );
   return rows[0] || null;
 }
 
-async function getAllFiberUploads() {
+async function getAllFiberUploads(authUser) {
+  const filters = [];
+  const params = [];
+  appendFiberCircleFilter(filters, params, authUser, "fi.circle");
+
   const rows = await query(
     `SELECT id, date, uploaded_by, upload_scope, file_name, uploaded_at
      FROM fiber_uploads
-     ORDER BY date DESC, uploaded_at DESC, id DESC`
+     ${
+       filters.length
+         ? `WHERE EXISTS (SELECT 1 FROM fiber_inventory fi WHERE fi.upload_id = fiber_uploads.id AND ${filters.join(" AND ")})`
+         : ""
+     }
+     ORDER BY date DESC, uploaded_at DESC, id DESC`,
+    params
   );
   return rows.map((row) => ({
     ...row,
@@ -732,17 +762,30 @@ async function getAllFiberUploads() {
   }));
 }
 
-async function getFiberUploadById(id) {
+async function getFiberUploadById(id, authUser) {
+  const filters = [];
+  const params = [id];
+  appendFiberCircleFilter(filters, params, authUser, "fi.circle");
+
   const rows = await query(
     `SELECT id, date, uploaded_by, upload_scope, file_name, uploaded_at
      FROM fiber_uploads
-     WHERE id = ?`,
-    [id]
+     WHERE id = ?
+     ${
+       filters.length
+         ? `AND EXISTS (SELECT 1 FROM fiber_inventory fi WHERE fi.upload_id = fiber_uploads.id AND ${filters.join(" AND ")})`
+         : ""
+     }`,
+    params
   );
   return rows[0] || null;
 }
 
-async function getFiberRowsByUploadId(uploadId) {
+async function getFiberRowsByUploadId(uploadId, authUser) {
+  const filters = ["upload_id = ?"];
+  const params = [uploadId];
+  appendFiberCircleFilter(filters, params, authUser, "circle");
+
   return await query(
     `SELECT
       fiber_type,
@@ -752,14 +795,18 @@ async function getFiberRowsByUploadId(uploadId) {
       aerial,
       source_row_number
      FROM fiber_inventory
-     WHERE upload_id = ?
+     WHERE ${filters.join(" AND ")}
      ORDER BY source_row_number ASC`,
-    [uploadId]
+    params
   );
 }
 
-async function getLatestFiberSummary() {
-  const latestUpload = await getLatestFiberUpload();
+async function getLatestFiberSummary(authUser) {
+  const latestUpload = await getLatestFiberUpload(authUser);
+  const filters = [];
+  const params = [];
+  appendFiberCircleFilter(filters, params, authUser, "fi.circle");
+  const scopedCircleSql = filters.length ? `AND ${filters.join(" AND ")}` : "";
 
   const rows = await query(
     `SELECT
@@ -775,11 +822,13 @@ async function getLatestFiberSummary() {
      FROM fiber_inventory fi
      INNER JOIN fiber_uploads fu ON fu.id = fi.upload_id
      WHERE fi.fiber_type IN ('Intercity', 'Intracity', 'FTTx')
+       ${scopedCircleSql}
        AND fi.upload_id = (
          SELECT fi2.upload_id
          FROM fiber_inventory fi2
          INNER JOIN fiber_uploads fu2 ON fu2.id = fi2.upload_id
          WHERE fi2.fiber_type = fi.fiber_type
+           ${isAllCircle(authUser) ? "" : "AND LOWER(TRIM(fi2.circle)) = LOWER(TRIM(?))"}
          ORDER BY fu2.date DESC, fu2.uploaded_at DESC, fi2.upload_id DESC
          LIMIT 1
        )
@@ -790,7 +839,8 @@ async function getLatestFiberSummary() {
        fu.uploaded_by,
        fu.upload_scope,
        fu.file_name,
-       fu.uploaded_at`
+       fu.uploaded_at`,
+    isAllCircle(authUser) ? params : [...params, authUser.circle]
   );
 
   const result = {
@@ -832,11 +882,15 @@ async function getLatestFiberSummary() {
   };
 }
 
-async function getLatestFiberInventoryRows() {
-  const latestUpload = await getLatestFiberUpload();
+async function getLatestFiberInventoryRows(authUser) {
+  const latestUpload = await getLatestFiberUpload(authUser);
   if (!latestUpload) {
     return [];
   }
+
+  const filters = ["fi.upload_id = ?"];
+  const params = [latestUpload.id];
+  appendFiberCircleFilter(filters, params, authUser, "fi.circle");
 
   return query(
     `SELECT
@@ -854,13 +908,20 @@ async function getLatestFiberInventoryRows() {
        fi.source_row_number AS sourceRowNumber
      FROM fiber_inventory fi
      INNER JOIN fiber_uploads fu ON fu.id = fi.upload_id
-     WHERE fi.upload_id = ?
+     WHERE ${filters.join(" AND ")}
      ORDER BY fi.source_row_number ASC, fi.id ASC`,
-    [latestUpload.id]
+    params
   );
 }
 
-async function updateFiberUpload(id, { date, uploadedBy }) {
+async function updateFiberUpload(id, { date, uploadedBy }, authUser) {
+  const upload = await getFiberUploadById(id, authUser);
+  if (!upload) {
+    const error = new Error("Upload not found.");
+    error.statusCode = 404;
+    throw error;
+  }
+
   const normalizedDate = normalizeDate(date);
   const cleanUploadedBy = String(uploadedBy || "").trim();
 
@@ -884,8 +945,8 @@ async function updateFiberUpload(id, { date, uploadedBy }) {
   );
 }
 
-async function deleteFiberUpload(id) {
-  const upload = await getFiberUploadById(id);
+async function deleteFiberUpload(id, authUser) {
+  const upload = await getFiberUploadById(id, authUser);
   if (!upload) {
     const error = new Error("Upload not found.");
     error.statusCode = 404;
@@ -927,8 +988,15 @@ async function downloadZip(req, res) {
 
     for (const id of ids) {
       const rows = await query(
-        `SELECT file_name FROM fiber_uploads WHERE id = ?`,
-        [id]
+        `SELECT file_name
+         FROM fiber_uploads fu
+         WHERE fu.id = ?
+         ${
+           isAllCircle(req.authUser)
+             ? ""
+             : "AND EXISTS (SELECT 1 FROM fiber_inventory fi WHERE fi.upload_id = fu.id AND LOWER(TRIM(fi.circle)) = LOWER(TRIM(?)))"
+         }`,
+        isAllCircle(req.authUser) ? [id] : [id, req.authUser.circle]
       );
 
       if (rows.length) {

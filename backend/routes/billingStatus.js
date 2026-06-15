@@ -1,10 +1,12 @@
 const express = require("express");
 const dbModule = require("../config/db");
 const db = dbModule.db;
+const { canAccessCircle, isAllCircle } = require("../middleware/circleAccess");
 
 const router = express.Router();
 
 router.get("/billing/status", (req, res) => {
+ const params = [];
  const query = `
   SELECT 
   id,
@@ -18,10 +20,15 @@ router.get("/billing/status", (req, res) => {
   kpi,
   kpi_note
 FROM billing_status
+${isAllCircle(req.authUser) ? "" : "WHERE LOWER(TRIM(circle)) = LOWER(TRIM(?))"}
 ORDER BY id DESC
 `;
 
-  db.query(query, (err, result) => {
+  if (!isAllCircle(req.authUser)) {
+    params.push(req.authUser.circle);
+  }
+
+  db.query(query, params, (err, result) => {
     if (err) {
       console.error(err);
       return res.status(500).json({ error: "DB Error" });
@@ -34,6 +41,10 @@ router.post("/billing/status", (req, res) => {
   const data = req.body;
 
   console.log("BODY:", data);
+
+  if (!canAccessCircle(req.authUser, data.circle)) {
+    return res.status(403).json({ error: "You cannot access another circle's data." });
+  }
 
  const query = `
   INSERT INTO billing_status 

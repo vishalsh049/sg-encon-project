@@ -4,9 +4,33 @@ const XLSX = require("xlsx");
 const multer = require("multer");
 const archiver = require("archiver");
 const { db } = require("../config/db");
+const {
+  addCircleFilter,
+  assertRowsAllowedCircle,
+  isAllCircle,
+} = require("../middleware/circleAccess");
 
 const router = express.Router();
 const upload = multer({ dest: "uploads/" });
+
+function applyRevenueCircleFilter(filters, params, authUser, column = "r.circle") {
+  addCircleFilter(filters, params, authUser, column);
+}
+
+async function assertRevenueFilesAllowed(fileIds, authUser) {
+  if (isAllCircle(authUser)) return;
+  if (!fileIds.length) return;
+
+  const placeholders = fileIds.map(() => "?").join(",");
+  const [rows] = await db.promise().query(
+    `SELECT DISTINCT circle
+     FROM revenue
+     WHERE file_id IN (${placeholders})`,
+    fileIds
+  );
+
+  assertRowsAllowedCircle(authUser, rows, (row) => row.circle);
+}
 
 const mapRevenueRowToExcel = (row) => ({
   Circle: row.circle,
@@ -236,6 +260,8 @@ router.post("/upload", upload.single("file"), async (req, res) => {
       });
     }
 
+    assertRowsAllowedCircle(req.authUser, data, (row) => row.circle);
+
     const [uploadResult] = await db.promise().query(
       `INSERT INTO revenue_upload
        (file_name, file_path, uploaded_by, upload_time, billing_month)
@@ -320,6 +346,8 @@ router.post("/delete-bulk", async (req, res) => {
       ids
     );
 
+    await assertRevenueFilesAllowed(ids, req.authUser);
+
     await db.promise().query(
       `DELETE FROM revenue WHERE file_id IN (${placeholders})`,
       ids
@@ -350,8 +378,16 @@ router.post("/delete-bulk", async (req, res) => {
 
 router.get("/upload-history", async (req, res) => {
   try {
+    const params = [];
+    const filters = [];
+    applyRevenueCircleFilter(filters, params, req.authUser, "r.circle");
+
     const [rows] = await db.promise().query(
-      "SELECT * FROM revenue_upload ORDER BY id DESC"
+      `SELECT ru.*
+       FROM revenue_upload ru
+       ${filters.length ? "WHERE EXISTS (SELECT 1 FROM revenue r WHERE r.file_id = ru.file_id AND " + filters.join(" AND ") + ")" : ""}
+       ORDER BY ru.id DESC`,
+      params
     );
     res.json(rows);
   } catch (err) {
@@ -378,6 +414,8 @@ router.post("/download-bulk", async (req, res) => {
       return res.status(404).send("No uploads found");
     }
 
+    await assertRevenueFilesAllowed(ids, req.authUser);
+
     res.setHeader("Content-Type", "application/zip");
     res.setHeader(
       "Content-Disposition",
@@ -397,8 +435,10 @@ router.post("/download-bulk", async (req, res) => {
 
     for (const fileId of ids) {
       const [rows] = await db.promise().query(
-        "SELECT * FROM revenue WHERE file_id = ?",
-        [fileId]
+        `SELECT *
+         FROM revenue r
+         WHERE r.file_id = ?${isAllCircle(req.authUser) ? "" : " AND LOWER(TRIM(r.circle)) = LOWER(TRIM(?))"}`,
+        isAllCircle(req.authUser) ? [fileId] : [fileId, req.authUser.circle]
       );
 
       if (!rows.length) {
@@ -456,6 +496,10 @@ router.post("/download-bulk", async (req, res) => {
 
 router.get("/data", async (req, res) => {
   try {
+    const params = [];
+    const filters = [];
+    applyRevenueCircleFilter(filters, params, req.authUser, "r.circle");
+
     const [rows] = await db.promise().query(`
       SELECT
         cm_rate,
@@ -466,8 +510,9 @@ router.get("/data", async (req, res) => {
         pm_amount,
         ideal_pm_amount,
         pm_loss
-      FROM revenue
-    `);
+      FROM revenue r
+      ${filters.length ? `WHERE ${filters.join(" AND ")}` : ""}
+    `, params);
 
     res.json(rows);
   } catch (err) {
@@ -489,6 +534,8 @@ router.get("/download/:fileId", async (req, res) => {
       return res.status(404).send("File not found");
     }
 
+    await assertRevenueFilesAllowed([fileId], req.authUser);
+
     const file = rows[0];
 
     if (!file.file_path || !fs.existsSync(file.file_path)) {
@@ -504,8 +551,6 @@ router.get("/download/:fileId", async (req, res) => {
 
 router.get("/kpi-data", async (req, res) => {
   try {
-    const { circle } = req.query;
-
   let query = `
   SELECT
 
@@ -551,13 +596,14 @@ router.get("/kpi-data", async (req, res) => {
 
     const params = [];
 
-  if (circle) {
-  query += " AND r.circle = ?";
-  params.push(circle);
-}
+    const filters = [];
+    applyRevenueCircleFilter(filters, params, req.authUser, "r.circle");
+    if (filters.length) {
+      query += ` AND ${filters.join(" AND ")}`;
+    }
 
     console.log("KPI query:", query);
-    console.log("KPI params:", { circle });
+    console.log("KPI params:", params);
 
     const [rows] = await db.promise().query(query, params);
     res.json(rows[0]);

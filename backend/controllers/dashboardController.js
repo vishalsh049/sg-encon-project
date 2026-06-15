@@ -1,5 +1,6 @@
 const util = require("util");
 const { db, isConnected } = require("../config/db");
+const { isAllCircle } = require("../middleware/circleAccess");
 
 const query = util.promisify(db.query).bind(db);
 
@@ -12,6 +13,30 @@ function normalizeDateLabel(value) {
   return String(value);
 }
 
+const towerTables = ["ag1", "ag2", "enb", "esc", "gnb", "hpodsc", "ila", "isc", "osc"];
+
+function towerUploadScopeSql(alias, authUser, params) {
+  if (isAllCircle(authUser)) return "";
+
+  const existsClauses = towerTables.map(
+    (table) =>
+      `(${alias}.site_type = '${table}' AND EXISTS (
+        SELECT 1 FROM ${table} scoped
+        WHERE scoped.file_id = ${alias}.file_id
+          AND LOWER(TRIM(scoped.circle)) = LOWER(TRIM(?))
+      ))`
+  );
+
+  params.push(...towerTables.map(() => authUser.circle));
+  return `AND (${existsClauses.join(" OR ")})`;
+}
+
+function simpleCircleSql(column, authUser, params, prefix = "AND") {
+  if (isAllCircle(authUser)) return "";
+  params.push(authUser.circle);
+  return `${prefix} LOWER(TRIM(${column})) = LOWER(TRIM(?))`;
+}
+
 async function getReportsSummary(req, res) {
   if (!isConnected()) {
     return res.status(503).json({
@@ -21,47 +46,70 @@ async function getReportsSummary(req, res) {
   }
 
   try {
+    const towerParams = [];
     const [towerRow] = await query(
-      "SELECT COUNT(*) AS count FROM report_uploads WHERE site_category = 'tower'"
+      `SELECT COUNT(*) AS count
+       FROM report_uploads ru
+       WHERE ru.site_category = 'tower'
+         ${towerUploadScopeSql("ru", req.authUser, towerParams)}`,
+      towerParams
     );
+    const nsoParams = [];
     const [nsoRow] = await query(
-      "SELECT COUNT(*) AS count FROM nso_report_files"
+      `SELECT COUNT(DISTINCT nrf.id) AS count
+       FROM nso_report_files nrf
+       LEFT JOIN nso_reports nr ON nr.file_id = nrf.id
+       WHERE 1=1 ${simpleCircleSql("nr.circle", req.authUser, nsoParams)}`,
+      nsoParams
     );
+    const fiberParams = [];
     const [fiberRow] = await query(
-      "SELECT COUNT(*) AS count FROM fiber_inventory"
+      `SELECT COUNT(*) AS count
+       FROM fiber_inventory fi
+       WHERE 1=1 ${simpleCircleSql("fi.circle", req.authUser, fiberParams)}`,
+      fiberParams
     );
 
+    const breakdownParams = [];
     const breakdownRows = await query(
       `SELECT
         COALESCE(site_type, 'Unknown') AS category,
         COUNT(*) AS count
-      FROM report_uploads
+      FROM report_uploads ru
       WHERE site_category = 'tower'
+        ${towerUploadScopeSql("ru", req.authUser, breakdownParams)}
       GROUP BY category
       ORDER BY count DESC
-      LIMIT 5`
+      LIMIT 5`,
+      breakdownParams
     );
 
+    const monthlyParams = [];
     const monthlyCounts = await query(
       `SELECT
         DATE_FORMAT(report_date, '%Y-%m') AS period,
         COUNT(*) AS count
-      FROM report_uploads
+      FROM report_uploads ru
       WHERE site_category = 'tower' AND report_date IS NOT NULL
+        ${towerUploadScopeSql("ru", req.authUser, monthlyParams)}
       GROUP BY period
       ORDER BY period ASC
-      LIMIT 12`
+      LIMIT 12`,
+      monthlyParams
     );
 
+    const weeklyParams = [];
     const weeklyTrend = await query(
       `SELECT
         DATE_FORMAT(report_date, '%Y-%m-%d') AS period,
         COUNT(*) AS count
-      FROM report_uploads
+      FROM report_uploads ru
       WHERE site_category = 'tower'
         AND report_date >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
+        ${towerUploadScopeSql("ru", req.authUser, weeklyParams)}
       GROUP BY period
-      ORDER BY period ASC`
+      ORDER BY period ASC`,
+      weeklyParams
     );
 
     const [latestRow] = await query(
@@ -114,6 +162,7 @@ async function getTowerRecent(req, res) {
   }
 
   try {
+    const params = [];
     const rows = await query(
       `SELECT
         id,
@@ -126,8 +175,10 @@ async function getTowerRecent(req, res) {
         uploaded_at
       FROM report_uploads
       WHERE site_category = 'tower'
+        ${towerUploadScopeSql("report_uploads", req.authUser, params)}
       ORDER BY uploaded_at DESC
-      LIMIT 8`
+      LIMIT 8`,
+      params
     );
 
     res.json(rows);
@@ -151,17 +202,22 @@ async function getNsoRecent(req, res) {
   }
 
   try {
+    const params = [];
     const rows = await query(
       `SELECT
-        id,
-        file_name,
-        report_date,
-        total_records,
-        uploaded_by,
-        uploaded_at
-      FROM nso_report_files
+        nrf.id,
+        nrf.file_name,
+        nrf.report_date,
+        nrf.total_records,
+        nrf.uploaded_by,
+        nrf.uploaded_at
+      FROM nso_report_files nrf
+      LEFT JOIN nso_reports nr ON nr.file_id = nrf.id
+      WHERE 1=1 ${simpleCircleSql("nr.circle", req.authUser, params)}
+      GROUP BY nrf.id, nrf.file_name, nrf.report_date, nrf.total_records, nrf.uploaded_by, nrf.uploaded_at
       ORDER BY uploaded_at DESC
-      LIMIT 8`
+      LIMIT 8`,
+      params
     );
 
     res.json(rows);
@@ -185,6 +241,7 @@ async function getFiberRecent(req, res) {
   }
 
   try {
+    const params = [];
     const rows = await query(
       `SELECT
         id,
@@ -196,8 +253,10 @@ async function getFiberRecent(req, res) {
         source_row_number,
         created_at
       FROM fiber_inventory
+      WHERE 1=1 ${simpleCircleSql("circle", req.authUser, params)}
       ORDER BY created_at DESC
-      LIMIT 8`
+      LIMIT 8`,
+      params
     );
 
     res.json(rows);
@@ -221,6 +280,9 @@ async function getMonthlyStats(req, res) {
   }
 
   try {
+    const towerParams = [];
+    const nsoParams = [];
+    const fiberParams = [];
     const rows = await query(
       `SELECT
         month,
@@ -235,6 +297,7 @@ async function getMonthlyStats(req, res) {
           0 AS fiberCount
         FROM report_uploads
         WHERE site_category = 'tower' AND report_date IS NOT NULL
+          ${towerUploadScopeSql("report_uploads", req.authUser, towerParams)}
         GROUP BY month
         UNION ALL
         SELECT
@@ -243,7 +306,11 @@ async function getMonthlyStats(req, res) {
           COUNT(*) AS nsoCount,
           0 AS fiberCount
         FROM nso_report_files
-        WHERE report_date IS NOT NULL
+        ${
+          isAllCircle(req.authUser)
+            ? "WHERE report_date IS NOT NULL"
+            : "INNER JOIN nso_reports nr ON nr.file_id = nso_report_files.id WHERE report_date IS NOT NULL AND LOWER(TRIM(nr.circle)) = LOWER(TRIM(?))"
+        }
         GROUP BY month
         UNION ALL
         SELECT
@@ -253,11 +320,18 @@ async function getMonthlyStats(req, res) {
           COUNT(*) AS fiberCount
         FROM fiber_inventory
         WHERE created_at IS NOT NULL
+          ${simpleCircleSql("circle", req.authUser, fiberParams)}
         GROUP BY month
       ) AS unioned
       GROUP BY month
       ORDER BY month ASC
-      LIMIT 12`
+      LIMIT 12`,
+      [
+        ...towerParams,
+        ...(isAllCircle(req.authUser) ? [] : [req.authUser.circle]),
+        ...nsoParams,
+        ...fiberParams,
+      ]
     );
 
     res.json(

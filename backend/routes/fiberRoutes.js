@@ -39,7 +39,7 @@ router.get("/summary", async (req, res) => {
 
   try {
     await ensureFiberTables();
-    const summary = await getLatestFiberSummary();
+    const summary = await getLatestFiberSummary(req.authUser);
     res.json(summary);
   } catch (err) {
     console.error("Fiber summary error:", err);
@@ -53,7 +53,7 @@ router.get("/uploads", async (req, res) => {
   if (!ensureDbConnection(res)) return;
 
   try {
-    const rows = await getAllFiberUploads();
+    const rows = await getAllFiberUploads(req.authUser);
     res.json(rows);
   } catch (err) {
     console.error("Fetch uploads error:", err);
@@ -68,7 +68,7 @@ router.get("/latest-upload", async (req, res) => {
 
   try {
     await ensureFiberTables();
-    const latestUpload = await getLatestFiberUpload();
+    const latestUpload = await getLatestFiberUpload(req.authUser);
     res.json(latestUpload || null);
   } catch (err) {
     console.error("Latest fiber upload error:", err);
@@ -83,7 +83,7 @@ router.get("/latest-dataset", async (req, res) => {
 
   try {
     await ensureFiberTables();
-    const rows = await getLatestFiberInventoryRows();
+    const rows = await getLatestFiberInventoryRows(req.authUser);
     res.json(rows);
   } catch (err) {
     console.error("Latest fiber dataset error:", err);
@@ -98,12 +98,12 @@ router.get("/uploads/:id/download", async (req, res) => {
 
   try {
     await ensureFiberTables();
-    const upload = await getFiberUploadById(req.params.id);
+    const upload = await getFiberUploadById(req.params.id, req.authUser);
 
     if (!upload) {
       return res.status(404).json({ message: "Upload not found." });
     }
-const rows = await getFiberRowsByUploadId(req.params.id);
+const rows = await getFiberRowsByUploadId(req.params.id, req.authUser);
 
 const workbook = xlsx.utils.book_new();
 
@@ -174,9 +174,10 @@ router.post("/uploads", (req, res) => {
         uploadedBy,
         fileName: file.filename,
         rows,
+        authUser: req.authUser,
       });
 
-      const latestUpload = await getFiberUploadById(uploadId);
+      const latestUpload = await getFiberUploadById(uploadId, req.authUser);
       res.status(201).json({
         message: "Fiber file uploaded successfully.",
         upload: latestUpload,
@@ -195,8 +196,8 @@ router.put("/uploads/:id", async (req, res) => {
 
   try {
     await ensureFiberTables();
-    await updateFiberUpload(req.params.id, req.body || {});
-    const updated = await getFiberUploadById(req.params.id);
+    await updateFiberUpload(req.params.id, req.body || {}, req.authUser);
+    const updated = await getFiberUploadById(req.params.id, req.authUser);
     res.json({
       message: "Fiber upload updated successfully.",
       upload: updated,
@@ -214,7 +215,7 @@ router.delete("/uploads/:id", async (req, res) => {
 
   try {
     await ensureFiberTables();
-    await deleteFiberUpload(req.params.id);
+    await deleteFiberUpload(req.params.id, req.authUser);
     res.json({ message: "Fiber upload deleted successfully." });
   } catch (err) {
     console.error("Fiber upload delete error:", err);
@@ -229,7 +230,7 @@ router.get("/", async (req, res) => {
 
   try {
     await ensureFiberTables();
-    const rows = await getLatestFiberInventoryRows();
+    const rows = await getLatestFiberInventoryRows(req.authUser);
     res.json(rows);
   } catch (err) {
     console.error("Fiber inventory fetch error:", err);

@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 
 const { db } = require("../config/db");
+const { addCircleFilter, isAllCircle } = require("../middleware/circleAccess");
 
 // ✅ GET Billing Summary
 router.get("/summary", async (req, res) => {
@@ -52,10 +53,16 @@ SUM(CASE WHEN LOWER(r.domain) = 'tower' THEN r.pm_loss ELSE 0 END) AS tower_loss
 
     const params = [];
 
-    // ✅ Circle Filter
-    if (circle) {
+    // Circle Filter
+    if (isAllCircle(req.authUser) && circle) {
       query += " AND r.circle = ?";
       params.push(circle);
+    } else {
+      const filters = [];
+      addCircleFilter(filters, params, req.authUser, "r.circle");
+      if (filters.length) {
+        query += ` AND ${filters.join(" AND ")}`;
+      }
     }
 
     // ✅ Billing Type Filter
@@ -129,6 +136,11 @@ router.get("/circle-ranking", async (req, res) => {
         )
 
         ${billing_type ? "AND r.co_type = ?" : ""}
+        ${
+          isAllCircle(req.authUser)
+            ? ""
+            : "AND LOWER(TRIM(r.circle)) = LOWER(TRIM(?))"
+        }
 
         GROUP BY r.circle
 
@@ -149,6 +161,12 @@ router.get("/circle-ranking", async (req, res) => {
 
         FROM billing_status bs
 
+        ${
+          isAllCircle(req.authUser)
+            ? ""
+            : "WHERE LOWER(TRIM(bs.circle)) = LOWER(TRIM(?))"
+        }
+
         GROUP BY bs.circle
 
       ) AS status_data
@@ -162,6 +180,9 @@ router.get("/circle-ranking", async (req, res) => {
 
     if (billing_type) {
       params.push(billing_type);
+    }
+    if (!isAllCircle(req.authUser)) {
+      params.push(req.authUser.circle, req.authUser.circle);
     }
 
     const [rows] = await db.promise().query(query, params);

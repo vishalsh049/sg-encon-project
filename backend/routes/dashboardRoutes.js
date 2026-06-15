@@ -7,6 +7,7 @@
     const util = require("util");
     const { getLatestFiberSummary } = require("../services/fiberInventoryService");
     const dashboardController = require("../controllers/dashboardController");
+    const { isAllCircle } = require("../middleware/circleAccess");
 
     const query = util.promisify(db.query).bind(db);
 
@@ -34,6 +35,11 @@
       params.push(...arr);
     };
 
+    const getRequestCircle = (req) =>
+      isAllCircle(req.authUser)
+        ? req.query.circle ? String(req.query.circle) : ""
+        : req.authUser.circle;
+
     const mockStats = {
       totalSites: 0,
       totalFiber: 0,
@@ -59,7 +65,7 @@
         });
       }
 
-      const circle = req.query.circle ? String(req.query.circle) : "";
+      const circle = getRequestCircle(req);
       const cmp = req.query.cmp ? String(req.query.cmp) : "";
       const domain = req.query.domain ? String(req.query.domain) : "";
 
@@ -130,7 +136,7 @@
         });
       }
 
-      const circle = req.query.circle ? String(req.query.circle) : "";
+      const circle = getRequestCircle(req);
       const cmp = req.query.cmp ? String(req.query.cmp) : "";
       const domain = req.query.domain ? String(req.query.domain) : "";
 
@@ -225,7 +231,7 @@
         });
       }
 
-      const circle = req.query.circle ? String(req.query.circle) : "";
+      const circle = getRequestCircle(req);
       const cmp = req.query.cmp ? String(req.query.cmp) : "";
 
       const filters = [];
@@ -323,7 +329,7 @@
         return res.status(503).json({ message: "Database not connected" });
       }
 
-      const circle = req.query.circle ? String(req.query.circle) : "";
+      const circle = getRequestCircle(req);
       const cmp = req.query.cmp ? String(req.query.cmp) : "";
       const domain = req.query.domain ? String(req.query.domain) : "";
 
@@ -399,7 +405,7 @@
         return res.status(503).json({ message: "Database not connected" });
       }
 
-      const circle = req.query.circle ? String(req.query.circle) : "";
+      const circle = getRequestCircle(req);
       const cmp = req.query.cmp ? String(req.query.cmp) : "";
       const domain = req.query.domain ? String(req.query.domain) : "";
 
@@ -475,7 +481,7 @@
         return res.status(503).json({ message: "Database not connected" });
       }
 
-      const circle = req.query.circle ? String(req.query.circle) : "";
+      const circle = getRequestCircle(req);
       const cmp = req.query.cmp ? String(req.query.cmp) : "";
       const domain = req.query.domain ? String(req.query.domain) : "";
 
@@ -541,7 +547,7 @@
         return res.status(503).json({ message: "Database not connected" });
       }
 
-      const circle = req.query.circle ? String(req.query.circle) : "";
+      const circle = getRequestCircle(req);
       const cmp = req.query.cmp ? String(req.query.cmp) : "";
       const domain = req.query.domain ? String(req.query.domain) : "";
 
@@ -607,7 +613,7 @@
         return res.status(503).json({ message: "Database not connected" });
       }
 
-      const circle = req.query.circle ? String(req.query.circle) : "";
+      const circle = getRequestCircle(req);
       const cmp = req.query.cmp ? String(req.query.cmp) : "";
       const domain = req.query.domain ? String(req.query.domain) : "";
 
@@ -677,7 +683,8 @@
         });
       }
 
-      const { circle, cmp, domain } = req.query;
+      const { cmp, domain } = req.query;
+      const circle = getRequestCircle(req);
       const siteFilters = [];
       const siteParams = [];
       const manpowerFilters = [];
@@ -1118,7 +1125,7 @@ FROM (
           query(distinctSiteTypesQueryV2),
           query(uptimeQuery),
           query(monthlyQuery),
-          getLatestFiberSummary(),
+          getLatestFiberSummary(req.authUser),
           query(domainQuery, manpowerParams),
           query(manpowerBreakdownQuery, manpowerParams)
     ]);
@@ -1208,7 +1215,7 @@ FROM (
     const filters = [];
     const params = [];
 
-    addInFilter(filters, params, "circle", req.query.circle);
+    addInFilter(filters, params, "circle", getRequestCircle(req));
     addInFilter(filters, params, "cmp", req.query.cmp);
 
     const whereClause = [

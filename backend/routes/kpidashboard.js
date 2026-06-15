@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 
 const { db } = require("../config/db");
+const { isAllCircle } = require("../middleware/circleAccess");
 
 const query = (sql, params = []) =>
   new Promise((resolve, reject) => {
@@ -170,6 +171,15 @@ router.get("/tower-uptime", async (req, res) => {
         }
 
         // MAIN QUERY
+        const hasCircleColumn = columnNames.includes("circle");
+        const circleFilter =
+          !isAllCircle(req.authUser) && hasCircleColumn
+            ? "AND LOWER(TRIM(circle)) = LOWER(TRIM(?))"
+            : "";
+        const params =
+          !isAllCircle(req.authUser) && hasCircleColumn
+            ? [req.authUser.circle, req.authUser.circle]
+            : [];
 
    const rows = await query(`
     SELECT
@@ -206,14 +216,17 @@ router.get("/tower-uptime", async (req, res) => {
               - INTERVAL 6 DAY
 
             FROM ${site.table}
+            WHERE 1=1
+              ${circleFilter}
 
           )
+          ${circleFilter}
 
           GROUP BY DATE(${dateColumn})
 
           ORDER BY DATE(${dateColumn}) ASC
 
-        `);
+        `, params);
 
         const normalizedRows = rows.map((row) => ({
           ...row,

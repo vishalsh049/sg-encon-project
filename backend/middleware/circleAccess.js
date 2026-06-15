@@ -13,7 +13,8 @@ function isAllCircle(userOrCircle) {
       ? userOrCircle?.circle
       : userOrCircle;
 
-  return normalizeCircle(circle).toUpperCase() === "ALL";
+  const normalized = normalizeCircle(circle).toUpperCase();
+  return ["ALL", "ALL CIRCLE", "ALL CIRCLES"].includes(normalized);
 }
 
 function canAccessCircle(authUser, circle) {
@@ -52,6 +53,10 @@ function forbid(res, message = "You cannot access another circle's data.") {
 
 async function authMiddleware(req, res, next) {
   try {
+    if (req.authUser) {
+      return next();
+    }
+
     const header = req.headers.authorization || "";
     if (!header.startsWith("Bearer ")) {
       return res.status(401).json({ message: "Authentication required" });

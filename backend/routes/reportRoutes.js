@@ -164,6 +164,72 @@
   `);
 };
 
+const ensureGnbTable = async () => {
+  try {
+    // Step 1: Check if table exists and what columns it has
+    const checkTableQuery = `
+      SELECT COLUMN_NAME 
+      FROM INFORMATION_SCHEMA.COLUMNS 
+      WHERE TABLE_NAME = 'gnb' 
+      AND TABLE_SCHEMA = DATABASE()
+    `;
+    const existingColumns = await query(checkTableQuery);
+    const existingColumnNames = existingColumns.map(col => col.COLUMN_NAME);
+    
+    console.log("✅ Checking GNB table structure...");
+    console.log("   Current columns:", existingColumnNames.join(", "));
+
+    const requiredColumns = [
+      "id", "file_id", "sap_id", "circle", "cmp", "jc", "city", "site_type", 
+      "device_type", "total_cnum_count", "total_outage", "total_availability", 
+      "cells_up", "cells_up_mod", "vendor", "availability", "air_fiber_sites", 
+      "updated_r4g", "date", "created_at"
+    ];
+
+    const missingColumns = requiredColumns.filter(col => !existingColumnNames.includes(col));
+
+    if (missingColumns.length > 0) {
+      console.warn("⚠️  Missing columns in GNB table:", missingColumns);
+      console.log("   Dropping and recreating GNB table...");
+      
+      // Drop existing table if it exists
+      await query("DROP TABLE IF EXISTS gnb");
+      
+      // Create new table with all columns
+      await query(`
+        CREATE TABLE gnb (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          file_id BIGINT,
+          sap_id VARCHAR(100),
+          circle VARCHAR(100),
+          cmp VARCHAR(150),
+          jc VARCHAR(150),
+          city VARCHAR(100),
+          site_type VARCHAR(50),
+          device_type VARCHAR(50),
+          total_cnum_count INT,
+          total_outage BIGINT,
+          total_availability DECIMAL(10,4),
+          cells_up INT,
+          cells_up_mod INT,
+          vendor VARCHAR(100),
+          availability DECIMAL(10,4),
+          air_fiber_sites VARCHAR(50),
+          updated_r4g VARCHAR(100),
+          date DATE,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+      console.log("✅ GNB table recreated with all required columns");
+    } else {
+      console.log("✅ GNB table has all required columns");
+    }
+  } catch (err) {
+    console.error("❌ Error checking/creating GNB table:", err.message);
+    throw err;
+  }
+};
+
           const ensureIscTable = async () => {
             await query(`
               CREATE TABLE IF NOT EXISTS isc (
@@ -263,8 +329,56 @@
             );
           };
 
-          const insertHpodscRows = async (rows) => {
-            if (!rows.length) return;
+const insertGnbRows = async (rows) => {
+
+  if (!rows.length) return;
+
+  try {
+    console.log("\n========== GNB INSERT DEBUG ==========");
+    console.log("📊 Inserting", rows.length, "GNB records");
+    console.log("🔍 First row data:", rows[0]);
+    console.log("📝 INSERT SQL structure:");
+    console.log("INSERT INTO gnb (file_id, sap_id, circle, cmp, jc, city, site_type, device_type, total_cnum_count, total_outage, total_availability, cells_up, cells_up_mod, vendor, availability, air_fiber_sites, updated_r4g, date) VALUES ?");
+    console.log("==========================================\n");
+
+    await query(`
+      INSERT INTO gnb (
+
+        file_id,
+        sap_id,
+        circle,
+        cmp,
+        jc,
+        city,
+        site_type,
+        device_type,
+        total_cnum_count,
+        total_outage,
+        total_availability,
+        cells_up,
+        cells_up_mod,
+        vendor,
+        availability,
+        air_fiber_sites,
+        updated_r4g,
+        date
+
+      ) VALUES ?
+    `,[rows]);
+    
+    console.log("✅ GNB records inserted successfully");
+  } catch (err) {
+    console.error("\n❌ GNB INSERT ERROR");
+    console.error("Error Code:", err.code);
+    console.error("Error Message:", err.message);
+    console.error("SQL:", err.sql);
+    console.error("Full Error:", err);
+    throw err;
+  }
+};
+
+   const insertHpodscRows = async (rows) => {
+    if (!rows.length) return;
 
           await query(
   `INSERT INTO hpodsc (
@@ -498,8 +612,7 @@ if (availability <= 1) {
       errors.push(index + 2);
       return;
     }
-
-   insertRows.push([
+insertRows.push([
 
   fileId,
 
@@ -555,6 +668,136 @@ if (availability <= 1) {
   });
 
   return { insertRows, errors };
+};
+
+// 🔥 SMART HEADER DETECTION - Handles various naming conventions
+const findHeaderValue = (cleanRow, possibleNames) => {
+  for (const name of possibleNames) {
+    if (cleanRow[name] !== undefined && cleanRow[name] !== null && cleanRow[name] !== "") {
+      return cleanRow[name];
+    }
+  }
+  return undefined;
+};
+
+// 🔥 NUMERIC CONVERSION - Safely convert values to numbers
+const toNumber = (value, defaultVal = 0) => {
+  if (value === null || value === undefined || value === "") return defaultVal;
+  const num = Number(value);
+  return isNaN(num) ? defaultVal : num;
+};
+
+const parseGnbRows = (rows, fallbackDate, fileId) => {
+  const insertRows = [];
+  let headerMappingIssuesDetected = false;
+
+  rows.forEach((rowIndex, idx) => {
+    const row = rows[idx];
+    const cleanRow = {};
+    const headerMapping = {}; // Track which Excel headers map to which normalized keys
+
+    // 🔥 NORMALIZE ALL HEADERS
+    Object.keys(row).forEach((key) => {
+      const normalizedKey = key
+        .toString()
+        .trim()
+        .toLowerCase()
+        .replace(/[\s_]+/g, " ");
+
+      cleanRow[normalizedKey] = row[key];
+      headerMapping[normalizedKey] = key; // Store original header name
+    });
+
+    // 🔥 DEBUG: Show EXACT headers on first row
+    if (idx === 0) {
+      console.log("\n========== GNB UPLOAD DEBUG ==========");
+      console.log("📋 ORIGINAL EXCEL HEADERS:", Object.keys(row));
+      console.log("📋 NORMALIZED HEADERS:", Object.keys(cleanRow));
+      console.log("✅ Expected headers: sap id, circle, cmp, jc, city, site type, device type, total cnum count, total outage, total availability, cells up, cells up mod, vendor, availability, air fiber sites, updated r4g");
+      console.log("========================================\n");
+    }
+
+    // 🔥 VERIFY CRITICAL HEADERS EXIST
+    const expectedHeaders = [
+      "sap_id", "circle", "cmp", "jc", "city", "site type", "device type",
+      "total cnum count", "total outage", "total availability",
+      "cells up", "cells up mod", "vendor", "availability", "air fiber sites", "updated r4g"
+    ];
+
+    const missingHeaders = expectedHeaders.filter(h => !Object.keys(cleanRow).includes(h) && !Object.keys(cleanRow).includes(h.replace(/ /g, "_")));
+    if (missingHeaders.length > 0 && idx === 0) {
+      console.log("⚠️  WARNING: Missing headers - might cause NULL values:", missingHeaders);
+      console.log("📌 Available keys:", Object.keys(cleanRow));
+      headerMappingIssuesDetected = true;
+    }
+
+    // 🔥 EXTRACT AND LOG EACH FIELD - Using helper for robustness
+    const sapId = findHeaderValue(cleanRow, ["sap id", "sap_id", "sap id", "sap"]) || null;
+    const circle = cleanRow["circle"] || cleanRow["circle name"] || null;
+    const cmp = cleanRow["cmp"] || cleanRow["cmp name"] || null;
+    const jc = findHeaderValue(cleanRow, ["jc", "jc name", "jc_name"]) || null;
+    const city = cleanRow["city"] || cleanRow["city name"] || null;
+    const siteType = findHeaderValue(cleanRow, ["site type", "site_type", "sitetype", "site_type_excel"]) || null;
+    const deviceType = findHeaderValue(cleanRow, ["device type", "device_type", "devicetype"]) || null;
+    
+    // 🔥 NUMERIC FIELDS - Convert safely
+    const totalCnumCount = toNumber(findHeaderValue(cleanRow, ["total cnum count", "total_cnum_count", "cnum count", "total cnum"]), 0);
+    const totalOutage = toNumber(findHeaderValue(cleanRow, ["total outage", "total_outage", "outage"]), 0);
+    const totalAvailability = toNumber(findHeaderValue(cleanRow, ["total availability", "total_availability"]), 0);
+    const cellsUp = toNumber(findHeaderValue(cleanRow, ["cells up", "cells_up"]), 0);
+    const cellsUpMod = toNumber(findHeaderValue(cleanRow, ["cells up mod", "cells_up_mod"]), 0);
+    const availability = toNumber(findHeaderValue(cleanRow, ["availability"]), 0);
+    
+    const vendor = findHeaderValue(cleanRow, ["vendor", "vendor name"]) || null;
+    const airFiberSites = findHeaderValue(cleanRow, ["air fiber sites", "air_fiber_sites", "air fiber"]) || null;
+    const updatedR4g = findHeaderValue(cleanRow, ["updated r4g", "updated_r4g", "r4g"]) || null;
+
+    // 🔥 LOG ROW DETAILS ON FIRST ROW ONLY
+    if (idx === 0) {
+      console.log("🔍 FIRST ROW DATA EXTRACTION:");
+      console.log("  sap_id =>", { raw: findHeaderValue(cleanRow, ["sap id", "sap_id"]), extracted: sapId });
+      console.log("  circle =>", { raw: cleanRow["circle"], extracted: circle });
+      console.log("  cmp =>", { raw: cleanRow["cmp"], extracted: cmp });
+      console.log("  site_type =>", { raw: findHeaderValue(cleanRow, ["site type", "site_type"]), extracted: siteType });
+      console.log("  device_type =>", { raw: findHeaderValue(cleanRow, ["device type", "device_type"]), extracted: deviceType });
+      console.log("  total_cnum_count =>", { raw: findHeaderValue(cleanRow, ["total cnum count", "total_cnum_count"]), extracted: totalCnumCount });
+      console.log("  total_outage =>", { raw: findHeaderValue(cleanRow, ["total outage", "total_outage"]), extracted: totalOutage });
+      console.log("  total_availability =>", { raw: findHeaderValue(cleanRow, ["total availability", "total_availability"]), extracted: totalAvailability });
+      console.log("  cells_up =>", { raw: findHeaderValue(cleanRow, ["cells up", "cells_up"]), extracted: cellsUp });
+      console.log("  vendor =>", { raw: findHeaderValue(cleanRow, ["vendor"]), extracted: vendor });
+      console.log("  availability =>", { raw: findHeaderValue(cleanRow, ["availability"]), extracted: availability });
+      console.log("  air_fiber_sites =>", { raw: findHeaderValue(cleanRow, ["air fiber sites", "air_fiber_sites"]), extracted: airFiberSites });
+      console.log("  updated_r4g =>", { raw: findHeaderValue(cleanRow, ["updated r4g", "updated_r4g"]), extracted: updatedR4g });
+      console.log("==========================================\n");
+
+      if (headerMappingIssuesDetected) {
+        console.log("⚠️  HEADER MAPPING ISSUES DETECTED - Check above for missing headers");
+      }
+    }
+
+    insertRows.push([
+      fileId,
+      sapId,
+      circle,
+      cmp,
+      jc,
+      city,
+      siteType,
+      deviceType,
+      totalCnumCount,
+      totalOutage,
+      totalAvailability,
+      cellsUp,
+      cellsUpMod,
+      vendor,
+      availability,
+      airFiberSites,
+      updatedR4g,
+      normalizeDate(fallbackDate)
+    ]);
+  });
+
+  return { insertRows };
 };
 
  function parseHpodscRows(rows, fallbackDate, fileId) {
@@ -1354,11 +1597,11 @@ const jcId =
   cleanRow["jc id"] ||
   cleanRow["jc_id"];
 
-            const dateValue = normalizeDate(date);
+  const dateValue = normalizeDate(date);
 
-              if (!circle || !cmp) return;
+    if (!circle || !cmp) return;
 
-              insertRows.push([
+  insertRows.push([
   fileId,
   String(circle).trim(),
   String(cmp).trim(),
@@ -1368,23 +1611,66 @@ const jcId =
   jcName || null,
   jcId || null
 ]);
-            });
+    });
 
-            if (!insertRows.length) {
-              return res.status(400).json({
-                message:
-                  "OSC upload failed: no rows contained valid Circle/CMP values. Please verify the file headers.",
-                detectedHeaders: Array.from(headerKeys).slice(0, 30),
-              });
-            }
+    if (!insertRows.length) {
+      return res.status(400).json({
+      message:
+      "OSC upload failed: no rows contained valid Circle/CMP values. Please verify the file headers.",
+      detectedHeaders: Array.from(headerKeys).slice(0, 30),
+     });
+  }
+       await insertOscRows(insertRows);
+   }
 
-            await insertOscRows(insertRows);
-          }
+   else if (normalizedSiteType === "gnb") {
+
+  await ensureGnbTable();
+
+  // 🔥 DIAGNOSTIC: Check database and table structure before INSERT
+  try {
+    const dbNameResult = await query("SELECT DATABASE();");
+    const dbName = dbNameResult[0]['DATABASE()'];
+    console.log("\n========== GNB TABLE DIAGNOSTIC ==========");
+    console.log("✅ Current Database:", dbName);
+
+    const describeResult = await query("DESCRIBE gnb;");
+    console.log("📋 GNB Table Columns:");
+    const columnNames = describeResult.map(col => col.Field);
+    console.log("Columns found:", columnNames);
+    
+    const missingColumns = [
+      "sap_id", "circle", "cmp", "jc", "city", "site_type", "device_type",
+      "total_cnum_count", "total_outage", "total_availability", "cells_up",
+      "cells_up_mod", "vendor", "availability", "air_fiber_sites", "updated_r4g"
+    ].filter(col => !columnNames.includes(col));
+    
+    if (missingColumns.length > 0) {
+      console.log("❌ MISSING COLUMNS:", missingColumns);
+      console.log("📌 Available columns:", columnNames.join(", "));
+    } else {
+      console.log("✅ All required columns present");
+    }
+    console.log("==========================================\n");
+  } catch (diagErr) {
+    console.log("⚠️ Diagnostic query failed:", diagErr.message);
+  }
+
+  const { insertRows } =
+    parseGnbRows(
+      rows,
+      finalDate,
+      fileId
+    );
+
+  await insertGnbRows(insertRows);
+}
 
           // 🔥 NEW SITE TYPES (AG1, AG2, ILA, GNB, GSC, WIFI)
           else if (
-            ["ag1", "ag2", "ila", "gnb", "gsc", "wifi"].includes(site_type.toLowerCase())
-          ) {
+            ["ag1", "ag2", "ila", "gsc", "wifi"]
+            .includes(site_type.toLowerCase())
+           ) {
             const tableName = site_type.toLowerCase();
 
             await query(`
@@ -1565,6 +1851,25 @@ const jcId =
     console.log("After delete HPODSC:", after[0].count);
   }
 
+  if (type === "gnb") {
+  await query(
+    "DELETE FROM gnb WHERE file_id = ?",
+    [file_id]
+  );
+
+  const after = await query(
+    `SELECT COUNT(*) as count
+     FROM gnb
+     WHERE file_id = ?`,
+    [file_id]
+  );
+
+  console.log(
+    "After delete GNB:",
+    after[0].count
+  );
+}
+
       }
 
       // 🔥 DELETE FROM uploads table (LAST)
@@ -1579,6 +1884,14 @@ const jcId =
       await query(`DELETE FROM isc WHERE file_id NOT IN (SELECT file_id FROM report_uploads)`);
       await query(`DELETE FROM osc WHERE file_id NOT IN (SELECT file_id FROM report_uploads)`);
       await query(`DELETE FROM hpodsc WHERE file_id NOT IN (SELECT file_id FROM report_uploads)`);
+
+      await query(`
+     DELETE FROM gnb
+     WHERE file_id NOT IN (
+     SELECT file_id
+     FROM report_uploads
+   )
+  `);
 
       res.json({ message: "Bulk delete successful (file + data)" });
 
@@ -2241,6 +2554,24 @@ WHERE date BETWEEN ? AND ?
       WHERE file_id NOT IN (SELECT file_id FROM report_uploads)
     `);
   }
+
+  {/* GNB */}
+
+  if (site_type.toLowerCase() === "gnb") {
+
+  await query(
+    "DELETE FROM gnb WHERE file_id = ?",
+    [file_id]
+  );
+
+  await query(`
+    DELETE FROM gnb
+    WHERE file_id NOT IN (
+      SELECT file_id
+      FROM report_uploads
+    )
+  `);
+}
 
       // delete from uploads table
       await query("DELETE FROM report_uploads WHERE id = ?", [id]);

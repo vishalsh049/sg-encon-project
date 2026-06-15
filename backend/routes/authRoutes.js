@@ -123,7 +123,13 @@ console.log("Searching loginId:", queryLoginId);
         console.log("Generating token...");
         
         const token = jwt.sign(
-          { id: user.id, email: user.email, roleId: user.role_id || 1 },
+          {
+            id: user.id,
+            email: user.email,
+            roleId: user.role_id || 1,
+            circle: user.circle || "",
+            domain: user.domain || "",
+          },
           JWT_SECRET || "fallback_secret_do_not_use_in_prod",
           { expiresIn: "1d" }
         );

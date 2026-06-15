@@ -5,6 +5,11 @@ const fs = require("fs");
 const path = require("path");
 const archiver = require("archiver");
 const { db } = require("../config/db");
+const {
+  addCircleFilter,
+  assertRowsAllowedCircle,
+  isAllCircle,
+} = require("../middleware/circleAccess");
 
 const router = express.Router();
 const uploadsDir = path.join(__dirname, "..", "uploads");
@@ -41,6 +46,21 @@ const query = (sql, params = []) =>
       resolve(rows);
     });
   });
+
+function appendNsoCircleFilter(filters, params, authUser, column = "nr.circle") {
+  addCircleFilter(filters, params, authUser, column);
+}
+
+function accessibleNsoFileExistsSql(authUser) {
+  return isAllCircle(authUser)
+    ? ""
+    : `AND EXISTS (
+        SELECT 1
+        FROM nso_reports nr
+        WHERE nr.file_id = nso_report_files.id
+          AND LOWER(TRIM(nr.circle)) = LOWER(TRIM(?))
+      )`;
+}
 
 async function ensureNsoTable() {
 
@@ -318,7 +338,7 @@ function sanitizeFileName(name) {
     .replace(/^_+|_+$/g, "") || "nso_report";
 }
 
-async function getRowsByIds(ids) {
+async function getRowsByIds(ids, authUser) {
 
   return query(
     `SELECT
@@ -331,8 +351,9 @@ async function getRowsByIds(ids) {
         total_records,
         uploaded_at
      FROM nso_report_files
-     WHERE id IN (?)`,
-    [ids]
+     WHERE id IN (?)
+       ${accessibleNsoFileExistsSql(authUser)}`,
+    isAllCircle(authUser) ? [ids] : [ids, authUser.circle]
   );
 
 }
@@ -351,7 +372,11 @@ router.get("/", async (req, res) => {
       total_records,
       uploaded_at
    FROM nso_report_files
+   WHERE 1=1
+     ${accessibleNsoFileExistsSql(req.authUser)}
    ORDER BY report_date DESC, uploaded_at DESC, id DESC`
+,
+isAllCircle(req.authUser) ? [] : [req.authUser.circle]
 );
     const rowsWithStatus = rows.map((row) => {
       const filePath = path.join(uploadsDir, row.file_name || "");
@@ -367,7 +392,7 @@ router.get("/", async (req, res) => {
   }
 });
 
-router.get("/summary", async (_req, res) => {
+router.get("/summary", async (req, res) => {
   try {
     await ensureNsoTable();
 
@@ -387,7 +412,10 @@ router.get("/summary", async (_req, res) => {
 
           MAX(report_date) AS latestUploadAt
 
-       FROM nso_report_files`
+       FROM nso_report_files
+       WHERE 1=1
+         ${accessibleNsoFileExistsSql(req.authUser)}`,
+      isAllCircle(req.authUser) ? [] : [req.authUser.circle]
     );
 
     res.json(rows[0] || {});
@@ -397,7 +425,7 @@ router.get("/summary", async (_req, res) => {
   }
 });
 
-router.get("/circle-count", async (_req, res) => {
+router.get("/circle-count", async (req, res) => {
 
   try {
     await ensureNsoTable();
@@ -411,10 +439,11 @@ router.get("/circle-count", async (_req, res) => {
         AND TRIM(circle) <> ''
         AND report_date >= DATE_FORMAT(CURDATE(), '%Y-%m-01')
         AND report_date <= CURDATE()
+        ${isAllCircle(req.authUser) ? "" : "AND LOWER(TRIM(circle)) = LOWER(TRIM(?))"}
 
       GROUP BY TRIM(circle)
       ORDER BY total DESC
-    `);
+    `, isAllCircle(req.authUser) ? [] : [req.authUser.circle]);
 
     res.json(rows);
 
@@ -430,7 +459,7 @@ router.get("/circle-count", async (_req, res) => {
 
 });
 
-router.get("/export", async (_req, res) => {
+router.get("/export", async (req, res) => {
   try {
     await ensureNsoTable();
    const rows = await query(
@@ -441,7 +470,11 @@ router.get("/export", async (_req, res) => {
       total_records,
       uploaded_at
    FROM nso_report_files
+   WHERE 1=1
+     ${accessibleNsoFileExistsSql(req.authUser)}
    ORDER BY report_date DESC, uploaded_at DESC, id DESC`
+,
+isAllCircle(req.authUser) ? [] : [req.authUser.circle]
 );
 
    const header = [
@@ -482,8 +515,9 @@ router.get("/download/:id", async (req, res) => {
     const metadata = await query(
       `SELECT original_name, original_file_name
        FROM nso_report_files
-       WHERE id = ?`,
-      [fileId]
+       WHERE id = ?
+         ${accessibleNsoFileExistsSql(req.authUser)}`,
+      isAllCircle(req.authUser) ? [fileId] : [fileId, req.authUser.circle]
     );
 
     if (!metadata.length) {
@@ -535,8 +569,9 @@ router.get("/download/:id", async (req, res) => {
          ttr_percentage,
          report_date
        FROM nso_reports
-       WHERE file_id = ?`,
-      [fileId]
+       WHERE file_id = ?
+         ${isAllCircle(req.authUser) ? "" : "AND LOWER(TRIM(circle)) = LOWER(TRIM(?))"}`,
+      isAllCircle(req.authUser) ? [fileId] : [fileId, req.authUser.circle]
     );
 
     if (!rows.length) {
@@ -573,7 +608,7 @@ router.post("/bulk-download", async (req, res) => {
     }
 
     await ensureNsoTable();
-    const files = await getRowsByIds(ids);
+    const files = await getRowsByIds(ids, req.authUser);
 
     res.setHeader("Content-Type", "application/zip");
     res.setHeader("Content-Disposition", 'attachment; filename="nso-reports.zip"');
@@ -627,8 +662,9 @@ router.post("/bulk-download", async (req, res) => {
            ttr_percentage,
            report_date
          FROM nso_reports
-         WHERE file_id = ?`,
-        [file.id]
+         WHERE file_id = ?
+           ${isAllCircle(req.authUser) ? "" : "AND LOWER(TRIM(circle)) = LOWER(TRIM(?))"}`,
+        isAllCircle(req.authUser) ? [file.id] : [file.id, req.authUser.circle]
       );
 
       const cleanedRows = cleanNsoRows(rows);
@@ -677,6 +713,7 @@ router.post("/upload", (req, res) => {
         uploadedBy: req.body.uploadedBy,
       });
       const resolvedReportDate = defaults.reportDate || req.body.date || null;
+      assertRowsAllowedCircle(req.authUser, workbookRows, (row) => getValue(row, ["circle"]));
 
 const fileResult = await query(
   `INSERT INTO nso_report_files
@@ -864,7 +901,7 @@ await query(
 router.delete("/:id", async (req, res) => {
   try {
     await ensureNsoTable();
-    const rows = await getRowsByIds([req.params.id]);
+    const rows = await getRowsByIds([req.params.id], req.authUser);
     const row = rows[0];
 
     if (!row) {
@@ -893,7 +930,7 @@ router.post("/bulk-delete", async (req, res) => {
       return res.status(400).json({ message: "No reports selected" });
     }
 
-    const rows = await getRowsByIds(ids);
+    const rows = await getRowsByIds(ids, req.authUser);
     rows.forEach((row) => {
       const filePath = path.join(uploadsDir, row.file_name);
       if (fs.existsSync(filePath)) {
@@ -914,32 +951,69 @@ router.get("/kpi-dashboard", async (req, res) => {
   try {
 
     const rows = await query(`
-      SELECT
-        circle,
-        cmp,
-        week,
+     SELECT
+  circle,
+  cmp,
+  year,
+  week,
 
         COUNT(ticket_no) AS cuts,
 
-        ROUND(AVG(mttr),2) AS mttr
+        0 AS ftkm,
+
+        ROUND(AVG(CAST(mttr AS DECIMAL(10,2))), 2) AS mttr
 
       FROM nso_reports
 
-      GROUP BY
-        circle,
-        cmp,
-        week
+      WHERE 1=1
+      ${isAllCircle(req.authUser)
+        ? ""
+        : "AND LOWER(TRIM(circle)) = LOWER(TRIM(?))"}
+
+     GROUP BY
+      circle,
+      cmp,
+      year,
+      week
 
       ORDER BY
         year DESC,
         week DESC
-    `);
 
-    res.json(rows);
+    `, isAllCircle(req.authUser)
+      ? []
+      : [req.authUser.circle]);
+
+    const groupedData = {};
+
+    rows.forEach((row) => {
+
+      if (!groupedData[row.cmp]) {
+
+        groupedData[row.cmp] = {
+          circle: row.circle,
+          cmp: row.cmp,
+          scope: 0,
+          weeks: {}
+        };
+
+      }
+
+      const weekKey = `${row.week}'${String(row.year).slice(-2)}`;
+
+groupedData[row.cmp].weeks[weekKey] = {
+        cuts: Number(row.cuts || 0),
+        ftkm: Number(row.ftkm || 0),
+        mttr: Number(row.mttr || 0)
+      };
+
+    });
+
+    res.json(Object.values(groupedData));
 
   } catch (error) {
 
-    console.error(error);
+    console.error("KPI Dashboard Error:", error);
 
     res.status(500).json({
       message: "Failed to load KPI dashboard"

@@ -30,6 +30,7 @@ console.log("Using ENV file:", envPath || "(process env only)");
 
 const express = require("express");
 const cors = require("cors");
+const { authMiddleware } = require("./middleware/circleAccess");
 
 require("./config/db");
 
@@ -62,10 +63,15 @@ app.use(
 app.use(express.json());
 
 // ✅ Serve uploads folder (direct access if needed)
-app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+app.use("/uploads", authMiddleware, (_req, res) => {
+  res.status(403).json({
+    message: "Direct upload file access is disabled. Use the filtered download APIs.",
+  });
+});
 
 // ✅ ALL ROUTES
 registerRoute("./routes/authRoutes", "/api/auth");
+app.use("/api", authMiddleware);
 registerRoute("./routes/dashboardRoutes", "/api/dashboard");
 registerRoute("./routes/siteRoutes", "/api/sites");
 registerRoute("./routes/manpowerRoutes", "/api/manpower");
@@ -76,6 +82,7 @@ registerRoute("./routes/reportRoutes", "/api/reports");
 registerRoute("./routes/accessRoutes", "/api/access");
 registerRoute("./routes/signoff", "/api/signoff");
 registerRoute("./routes/nsoRoutes", "/api/nso"); 
+registerRoute("./routes/nsoDashboardRoutes", "/api/nso/dashboard");
 registerRoute("./routes/fiberRoutes", "/api/fiber");
 registerRoute("./routes/revenue", "/api/revenue");
 registerRoute("./routes/kpidashboard", "/api");

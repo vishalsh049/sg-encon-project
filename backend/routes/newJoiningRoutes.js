@@ -24,11 +24,21 @@ router.use(authMiddleware);
 
 router.get("/", async (req, res) => {
 
+  console.time("TOTAL_API");
+
   try {
 
     const filters = [];
     const params = [];
+
+    console.time("ADD_CIRCLE_FILTER");
+
     addCircleFilter(filters, params, req.authUser);
+
+    console.timeEnd("ADD_CIRCLE_FILTER");
+
+    console.time("DB_QUERY");
+
     const rows = await query(
       `SELECT * FROM new_joining
        ${filters.length ? `WHERE ${filters.join(" AND ")}` : ""}
@@ -36,12 +46,18 @@ router.get("/", async (req, res) => {
       params
     );
 
+    console.timeEnd("DB_QUERY");
+
+    console.timeEnd("TOTAL_API");
+
     res.json({
       success: true,
       data: rows,
     });
 
   } catch (error) {
+
+    console.log(error);
 
     res.status(500).json({
       success: false,
