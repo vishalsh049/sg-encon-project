@@ -398,40 +398,121 @@ AND upload_batch_id = (
     });
 
   router.get("/download/:fileName", (req, res) => {
-    const decodedName = decodeURIComponent(req.params.fileName);
-    const filePath = path.join(__dirname, "../uploads", decodedName);
 
-    if (!isAllCircle(req.authUser)) {
-      return db.query(
-        `SELECT * FROM scrum_manpower
-         WHERE file_name = ?
-           AND LOWER(TRIM(state)) = LOWER(TRIM(?))
-         ORDER BY uploaded_at DESC`,
-        [decodedName, req.authUser.circle],
-        (err, rows) => {
-          if (err) return res.status(500).json({ message: "Download failed" });
-          if (!rows.length) return res.status(404).json({ message: "File not found" });
+  const decodedName = decodeURIComponent(req.params.fileName);
 
-          const workbook = xlsx.utils.book_new();
-          xlsx.utils.book_append_sheet(workbook, xlsx.utils.json_to_sheet(rows), "Scrum");
-          const buffer = xlsx.write(workbook, { type: "buffer", bookType: "xlsx" });
-          res.attachment(`${req.authUser.circle}_${decodedName.replace(/\.[^.]+$/, "")}.xlsx`);
-          return res.send(buffer);
-        }
-      );
+  let sql = `
+  SELECT *
+  FROM scrum_manpower
+  WHERE file_name = ?
+  ORDER BY uploaded_at ASC
+`;
+
+  let params = [decodedName];
+
+  if (!isAllCircle(req.authUser)) {
+
+  sql = `
+  SELECT *
+  FROM scrum_manpower
+  WHERE file_name = ?
+  AND LOWER(TRIM(state)) = LOWER(TRIM(?))
+  ORDER BY uploaded_at ASC
+`;
+    params.push(req.authUser.circle);
+  }
+
+  db.query(sql, params, (err, rows) => {
+
+    if (err) {
+      console.log(err);
+      return res.status(500).json({
+        message: "Download failed"
+      });
     }
 
-    if (!fs.existsSync(filePath)) {
-      return res.status(404).json({ message: "File not found" });
+    if (!rows.length) {
+      return res.status(404).json({
+        message: "No data found"
+      });
     }
 
-    res.download(filePath, decodedName, (err) => {
-      if (err && !res.headersSent) {
-        console.log("DOWNLOAD ERROR:", err);
-        res.status(500).json({ message: "File not found" });
-      }
-    });
+  const workbook = xlsx.utils.book_new();
+
+const exportRows = rows.map(
+  ({
+    uploaded_at,
+    upload_batch_id,
+    uploaded_by,
+    upload_type,
+    file_name,
+    manual_date,
+    ...rest
+  }) => rest
+);
+
+const worksheet =
+  xlsx.utils.json_to_sheet(exportRows);
+
+    xlsx.utils.book_append_sheet(
+      workbook,
+      worksheet,
+      "Scrum Data"
+    );
+
+  const ext = path.extname(decodedName).toLowerCase();
+
+let bookType = "xlsx";
+
+if (ext === ".xls") {
+  bookType = "xls";
+}
+
+if (ext === ".csv") {
+  bookType = "csv";
+}
+
+const buffer = xlsx.write(
+  workbook,
+  {
+    type: "buffer",
+    bookType
+  }
+);
+
+  if (ext === ".xls") {
+
+  res.setHeader(
+    "Content-Type",
+    "application/vnd.ms-excel"
+  );
+
+} else if (ext === ".csv") {
+
+  res.setHeader(
+    "Content-Type",
+    "text/csv"
+  );
+
+} else {
+
+  res.setHeader(
+    "Content-Type",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+  );
+
+}
+
+   res.setHeader(
+  "Content-Disposition",
+  `attachment; filename="${decodedName}"`
+);
+
+    return res.send(buffer);
+
   });
+
+});
 
     router.get("/scrum/uploads", (req, res) => {
     const circleSql = isAllCircle(req.authUser)

@@ -12,6 +12,11 @@
   const [uploading, setUploading] = useState(false);
   const [jobRoleSearch, setJobRoleSearch] = useState("");
   const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [viewEmployee, setViewEmployee] = useState(null);
+
+const handleView = (item) => {
+  setViewEmployee(item);
+};
 
   const [showEmployeeModal, setShowEmployeeModal] = useState(false);
 
@@ -65,12 +70,12 @@
 
   const [reportDate, setReportDate] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
+  const [pageSize, setPageSize] = useState(50);
   const [search, setSearch] = useState("");
 
   const [circleFilter, setCircleFilter] = useState("");
-
   const [cmpFilter, setCmpFilter] = useState("");
+  const [jobRoleFilter, setJobRoleFilter] = useState("");
 
     const loadPhysicalData = async () => {
       try {
@@ -368,15 +373,27 @@
 
     return data.filter((item) => {
 
-  const matchesSearch =
+ const matchesSearch =
+  !search ||
+  String(item.employee_name || "")
+    .toLowerCase()
+    .includes(search.toLowerCase()) ||
 
-    !search ||
+  String(item.employee_code || "")
+    .toLowerCase()
+    .includes(search.toLowerCase()) ||
 
-    Object.values(item).some((value) =>
-      String(value || "")
-        .toLowerCase()
-        .includes(search.toLowerCase())
-    );
+  String(item.mobile_number || "")
+    .toLowerCase()
+    .includes(search.toLowerCase()) ||
+
+  String(item.aadhaar_no || "")
+    .toLowerCase()
+    .includes(search.toLowerCase()) ||
+
+  String(item.cmp || "")
+    .toLowerCase()
+    .includes(search.toLowerCase());
 
   const matchesCircle =
 
@@ -387,15 +404,25 @@
 
     !cmpFilter ||
     item.cmp === cmpFilter;
-      return (
-        matchesSearch &&
-        matchesCircle &&
-        matchesCmp
-      );
+    const matchesJobRole =
+  !jobRoleFilter ||
+  item.job_role === jobRoleFilter;
+    return (
+     matchesSearch &&
+     matchesCircle &&
+     matchesCmp &&
+     matchesJobRole
+   );
 
     });
 
-  }, [data, search, circleFilter, cmpFilter]);
+  }, [
+  data,
+  search,
+  circleFilter,
+  cmpFilter,
+  jobRoleFilter
+]);
 
 
   const totalPages = useMemo(() => {
@@ -1343,6 +1370,22 @@ const cmpFilterOptions = [
     }))
 ];
 
+const jobRoleFilterOptions = [
+  { value: "", label: "All Roles" },
+
+  ...[
+    ...new Set(
+      data.map(item => item.job_role)
+    )
+  ]
+    .filter(Boolean)
+    .sort()
+    .map(role => ({
+      value: role,
+      label: role
+    }))
+];
+
 const startRecord =
   filteredData.length === 0
     ? 0
@@ -1433,6 +1476,24 @@ const endRecord =
     />
   </div>
 
+  <div className="w-52">
+  <Select
+    styles={selectStyles}
+    placeholder="All Roles"
+    options={jobRoleFilterOptions}
+    value={
+      jobRoleFilterOptions.find(
+        item => item.value === jobRoleFilter
+      ) || null
+    }
+    onChange={(selected) =>
+      setJobRoleFilter(
+        selected?.value || ""
+      )
+    }
+  />
+</div>
+
   {/* Export */}
   <button
     onClick={handleExportExcel}
@@ -1458,6 +1519,7 @@ const endRecord =
       setSearch("");
       setCircleFilter("");
       setCmpFilter("");
+      setJobRoleFilter("");
       setCurrentPage(1);
     }}
     className="h-8 rounded-xl bg-slate-700 px-4 text-[13px] font-semibold text-white"
@@ -1691,9 +1753,9 @@ const endRecord =
 
       </div>
 
-    <div className="h-[110px] overflow-y-scroll pr-2 custom-scrollbar">
+    <div className="h-auto pr-2 custom-scrollbar">
 
-    <div className="grid grid-cols-2 gap-2 md:grid-cols-5 xl:grid-cols-9">
+    <div className="grid grid-cols-2 md:grid-cols-6 xl:grid-cols-8">
 
         {jobRoles.map((role, index) => (
 
@@ -1730,7 +1792,7 @@ const endRecord =
          <div className="flex items-center justify-between border-b border-slate-100 px-4 py-2">
            <h2 className="text-md font-semibold text-slate-900">
                     Employee Records</h2>
-                  <div className="text-sm text-slate-600/80">
+  <div className="text-sm text-slate-600/80">
           
  <span className="font-semibold text-slate-900">
   Total: {filteredData.length}</span>
@@ -1740,8 +1802,10 @@ const endRecord =
   <div className="relative mt-2 overflow-x-auto overflow-y-auto custom-scrollbar">
   <div>
   <table className="w-max min-w-full border-separate border border-spacing-0">
+ 
  <thead className="sticky top-0 z-20 bg-white">
     <tr>
+
     <th className="px-3 py-2">
     <input
       type="checkbox"
@@ -1752,70 +1816,45 @@ const endRecord =
       onChange={handleSelectAll}
     />
   </th>
-<th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-700 whitespace-nowrap">
-  Circle</th>
 
-  <th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-700 whitespace-nowrap">CMP</th>
+   <th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-left text-xs font-bold 
+                  uppercase tracking-wider text-slate-700 whitespace-nowrap">
+        Circle</th>
 
-  <th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-700 whitespace-nowrap">PPRJ Status</th>
+  <th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-left text-xs font-bold
+   uppercase tracking-wider text-slate-700 whitespace-nowrap">CMP</th>
 
-  <th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-700 whitespace-nowrap">PPRJ Code</th>
 
-  <th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-700 whitespace-nowrap">Employee Code</th>
+  <th className="sticky left-0 z-30 border-b border-r border-slate-200 bg-white px-4 py-3 text-left text-xs font-bold 
+  uppercase tracking-wider text-slate-700 whitespace-nowrap">Employee Code</th>
       
-  <th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-700 whitespace-nowrap">Employee Name</th>
+  <th className="sticky left-[140px] z-30 border-b border-r border-slate-200 bg-white px-4 py-3 text-left text-xs font-bold 
+  uppercase tracking-wider text-slate-700 whitespace-nowrap">Employee Name</th>
 
-  <th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-700 whitespace-nowrap">Father Name</th>
+  <th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-left text-xs font-bold
+   uppercase tracking-wider text-slate-700 whitespace-nowrap">Function</th>
 
-  <th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-700 whitespace-nowrap">Function</th>
+  <th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-left text-xs font-bold
+   uppercase tracking-wider text-slate-700 whitespace-nowrap">Job Role</th>
+
+  <th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-left text-xs font-bold
+   uppercase tracking-wider text-slate-700 whitespace-nowrap">Scrum Job Role</th>
+
+  <th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-left text-xs font-bold
+   uppercase tracking-wider text-slate-700 whitespace-nowrap">Mobile Number</th>
+
+  <th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-left text-xs font-bold
+   uppercase tracking-wider text-slate-700 whitespace-nowrap">Date Of Joining</th>
+
+  <th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-left text-xs font-bold
+   uppercase tracking-wider text-slate-700 whitespace-nowrap">Employment Status</th>
+
+  <th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-left text-xs font-bold
+   uppercase tracking-wider text-slate-700 whitespace-nowrap">NTH Salary</th>
 
 
-  <th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-700 whitespace-nowrap">Job Role</th>
-
-  <th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-700 whitespace-nowrap">Manpower SignOff Scope</th>
-
-  <th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-700 whitespace-nowrap">Scrum Job Role</th>
-
-
-  <th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-700 whitespace-nowrap">Mobile Number</th>
-
-  <th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-700 whitespace-nowrap">DOB</th>
-
-  <th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-700 whitespace-nowrap">Age</th>
-
-  <th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-700 whitespace-nowrap">Date Of Joining</th>
-
-  <th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-700 whitespace-nowrap">Employment Status</th>
-
-  <th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-700 whitespace-nowrap">Resigned Date</th>
-
-  <th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-700 whitespace-nowrap">Last Working Date</th>
-
-  <th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-700 whitespace-nowrap">RM Code</th>
-
-  <th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-700 whitespace-nowrap">Reporting Manager</th>
-
-  <th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-700 whitespace-nowrap">Company Email</th>
-
-  <th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-700 whitespace-nowrap">Laptop Status</th>
-
-  <th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-700 whitespace-nowrap">IFSC Code</th>
-
-  <th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-700 whitespace-nowrap">Bank Account No</th>
-
-  <th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-700 whitespace-nowrap">PAN No</th>
-
-  <th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-700 whitespace-nowrap">AADHAAR No</th>
-
-  <th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-700 whitespace-nowrap">UAN No</th>
-
-  <th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-700 whitespace-nowrap">ESIC IP No</th>
-
-  <th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-700 whitespace-nowrap">NTH Salary</th>
-
-  <th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-700 whitespace-nowrap">Remarks</th>
-
-  <th className="border-b border-r border-slate-200 bg-slate-100/90 px-4 py-2  text-left text-sm font-semibold text-slate-700 whitespace-nowrap backdrop-blur-xl">
+  <th className="border-b border-r border-slate-200 bg-slate-100/90 px-4 py-2  text-left text-sm
+   font-semibold text-slate-700 whitespace-nowrap backdrop-blur-xl">
         Action
       </th>
     </tr>
@@ -1869,27 +1908,13 @@ const endRecord =
     />
   </td>
 
-  <td className="border-b border-r border-slate-200 px-4 py-2 text-sm text-slate-700 whitespace-nowrap">{item.circle || "-"}</td>
-  <td className="border-b border-r border-slate-200 px-4 py-2 text-sm text-slate-700 whitespace-nowrap">{item.cmp || "-"}</td>
-  <td className="border-b border-slate-100 px-4 py-2 whitespace-nowrap">
-  <span
-    className={`px-3 py-1 rounded-full text-xs font-semibold ${
-      item.pprj_status === "Active"
-        ? "bg-emerald-100 text-emerald-700"
-        : item.pprj_status === "Pending"
-        ? "bg-orange-100 text-orange-700"
-        : item.pprj_status === "Inactive"
-        ? "bg-red-100 text-red-700"
-        : "bg-slate-100 text-slate-600"
-    }`}
-  >
-    {item.pprj_status || "-"}
-  </span>
-</td>
-  <td className="border-b border-r border-slate-200 px-4 py-2 text-sm text-slate-700 whitespace-nowrap">{item.pprj_code || "-"}</td>
-  <td className="border-b border-r border-slate-200 px-4 py-2 text-sm text-slate-700 whitespace-nowrap">{item.employee_code || "-"}</td>
-  <td className="border-b border-r border-slate-200 px-4 py-2 text-sm text-slate-700 whitespace-nowrap">{item.employee_name || "-"}</td>
-  <td className="border-b border-r border-slate-200 px-4 py-2 text-sm text-slate-700 whitespace-nowrap">{item.father_name || "-"}</td>
+  <td className="border-b border-r border-slate-200 px-4 py-2 text-sm text-slate-700 whitespace-nowrap">
+    {item.circle || "-"}</td>
+  <td className="border-b border-r border-slate-200 px-4 py-2 text-sm text-slate-700 whitespace-nowrap">
+    {item.cmp || "-"}</td>
+
+  <td className="sticky left-0 z-10 border-b border-r border-slate-200 px-4 py-2 text-sm text-slate-700 whitespace-nowrap">{item.employee_code || "-"}</td>
+  <td className="sticky left-[140px] z-10 border-b border-r border-slate-200 px-4 py-2 text-sm text-slate-700 whitespace-nowrap">{item.employee_name || "-"}</td>
  <td className="border-b border-slate-100 px-4 py-2 whitespace-nowrap">
   <span className="px-3 py-1 rounded-lg bg-blue-50 text-blue-700 text-xs font-semibold">
     {item.function_name || "-"}
@@ -1897,40 +1922,36 @@ const endRecord =
 </td>
   
   <td className="border-b border-r border-slate-200 px-4 py-2 text-sm text-slate-700 whitespace-nowrap">{item.job_role || "-"}</td>
-  <td className="border-b border-r border-slate-200 px-4 py-2 text-sm text-slate-700 whitespace-nowrap">{item.manpower_signoff_scope || "-"}</td>
   <td className="border-b border-r border-slate-200 px-4 py-2 text-sm text-slate-700 whitespace-nowrap">{item.scrum_job_role || "-"}</td>
  
   <td className="border-b border-r border-slate-200 px-4 py-2 text-sm text-slate-700 whitespace-nowrap">{item.mobile_number || "-"}</td>
-  <td className="border-b border-r border-slate-200 px-4 py-2 text-sm text-slate-700 whitespace-nowrap">{item.dob ? new Date(item.dob) .toLocaleDateString("en-GB") : "-"}</td>
-  <td className="border-b border-r border-slate-200 px-4 py-2 text-sm text-slate-700 whitespace-nowrap">{item.age || "-"}</td>
+  
   <td className="border-b border-r border-slate-200 px-4 py-2 text-sm text-slate-700 whitespace-nowrap">{item.date_of_joining
     ? new Date(item.date_of_joining)
         .toLocaleDateString("en-GB")
     : "-"}</td>
-  <td className="border-b border-r border-slate-200 px-4 py-2 text-sm text-slate-700 whitespace-nowrap">{item.employment_status || "-"}</td>
-  <td className="border-b border-r border-slate-200 px-4 py-2 text-sm text-slate-700 whitespace-nowrap">{item.resigned_date
-    ? new Date(item.resigned_date)
-        .toLocaleDateString("en-GB")
-    : "-"}</td>
-  <td className="border-b border-r border-slate-200 px-4 py-2 text-sm text-slate-700 whitespace-nowrap">{item.last_working_date
-    ? new Date(item.last_working_date)
-        .toLocaleDateString("en-GB")
-    : "-"}</td>
-  <td className="border-b border-r border-slate-200 px-4 py-2 text-sm text-slate-700 whitespace-nowrap">{item.rm_code || "-"}</td>
-  <td className="border-b border-r border-slate-200 px-4 py-2 text-sm text-slate-700 whitespace-nowrap">{item.reporting_manager || "-"}</td>
-  <td className="border-b border-r border-slate-200 px-4 py-2 text-sm text-slate-700 whitespace-nowrap">{item.company_email_id || "-"}</td>
-  <td className="border-b border-r border-slate-200 px-4 py-2 text-sm text-slate-700 whitespace-nowrap">{item.laptop_status || "-"}</td>
-  <td className="border-b border-r border-slate-200 px-4 py-2 text-sm text-slate-700 whitespace-nowrap">{item.ifsc_code || "-"}</td>
-  <td className="border-b border-r border-slate-200 px-4 py-2 text-sm text-slate-700 whitespace-nowrap">{item.bank_account_no || "-"}</td>
-  <td className="border-b border-r border-slate-200 px-4 py-2 text-sm text-slate-700 whitespace-nowrap">{item.pan_no || "-"}</td>
-  <td className="border-b border-r border-slate-200 px-4 py-2 text-sm text-slate-700 whitespace-nowrap">{item.aadhaar_no || "-"}</td>
-  <td className="border-b border-r border-slate-200 px-4 py-2 text-sm text-slate-700 whitespace-nowrap">{item.uan_no || "-"}</td>
-  <td className="border-b border-r border-slate-200 px-4 py-2 text-sm text-slate-700 whitespace-nowrap">{item.esic_ip_no || "-"}</td>
+<td>
+  <span
+    className={`px-3 py-1 rounded-full text-xs font-semibold ${
+      item.employment_status === "Active"
+        ? "bg-green-100 text-green-700"
+        : "bg-red-100 text-red-700"
+    }`}
+  >
+    {item.employment_status || "-"}
+  </span>
+</td>  
   <td className="border-b border-r border-slate-200 px-4 py-2 text-sm text-slate-700 whitespace-nowrap">{item.nth_salary || "-"}</td>
-  <td className="border-b border-r border-slate-200 px-4 py-2 text-sm text-slate-700 whitespace-nowrap">{item.remarks || "-"}</td>
 
         <td className="px-3 py-2">
    <div className="flex items-center gap-2">
+
+      <button
+    onClick={() => handleView(item)}
+    className="rounded-lg bg-slate-600 px-3 py-1 text-xs font-semibold text-white"
+  >
+    View
+  </button>
 
   <button
     disabled={deletingId === item.id}

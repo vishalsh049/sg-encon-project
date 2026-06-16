@@ -41,6 +41,8 @@ export default function Scrum() {
   const [vendorFilter, setVendorFilter] = useState("");
   const [file, setFile] = useState(null);
   const [uploading, setUploading] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+  const [bulkDownloading, setBulkDownloading] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [uploadDate, setUploadDate] = useState("");
   const [uploadedBy, setUploadedBy] = useState("");
@@ -236,39 +238,58 @@ const handleBulkDelete = async () => {
 };
 
 const handleBulkDownload = async () => {
+
   if (selected.length === 0) {
     alert("No items selected");
     return;
   }
 
+  setBulkDownloading(true);
+
   try {
-    const res = await authFetch(buildApiUrl("/api/manpower/download/bulk"), {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        batchIds: selected,
-      }),
-    });
+
+    const res = await authFetch(
+      buildApiUrl("/api/manpower/download/bulk"),
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          batchIds: selected,
+        }),
+      }
+    );
 
     if (!res.ok) {
-      const errorData = await res.json().catch(() => ({}));
-      throw new Error(errorData.message || "Download failed");
+      throw new Error("Download failed");
     }
 
     const blob = await res.blob();
 
     const url = window.URL.createObjectURL(blob);
+
     const a = document.createElement("a");
+
     a.href = url;
     a.download = "scrum_files.zip";
+
     a.click();
 
     window.URL.revokeObjectURL(url);
+
+    alert("Bulk download completed successfully");
+
   } catch (err) {
+
     console.error(err);
-    alert(err.message || "Download failed");
+
+    alert("Bulk download failed");
+
+  } finally {
+
+    setBulkDownloading(false);
+
   }
 };
 
@@ -294,6 +315,54 @@ const latestDate = uploads[0]?.manual_date;
 const latestUploads = uploads.filter(
   (item) => item.manual_date === latestDate
 );
+
+const handleDownload = async (fileName) => {
+
+  setDownloading(true);
+
+  try {
+
+    const response = await authFetch(
+      buildApiUrl(
+        `/api/manpower/download/${encodeURIComponent(fileName)}`
+      )
+    );
+
+    if (!response.ok) {
+      throw new Error("Download failed");
+    }
+
+    const blob = await response.blob();
+
+    const url = window.URL.createObjectURL(blob);
+
+    const a = document.createElement("a");
+
+    a.href = url;
+    a.download = fileName;
+
+    document.body.appendChild(a);
+
+    a.click();
+
+    document.body.removeChild(a);
+
+    window.URL.revokeObjectURL(url);
+
+    alert("File downloaded successfully");
+
+  } catch (error) {
+
+    console.error(error);
+
+    alert("Download failed");
+
+  } finally {
+
+    setDownloading(false);
+
+  }
+};
 
   return (
     <div className="min-h-screen text-slate-900">
@@ -468,7 +537,13 @@ const latestUploads = uploads.filter(
               </div>
             </div>
           </div>
-          
+
+   {bulkDownloading && (
+  <div className="mb-3 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-medium text-blue-700">
+    Downloading selected files...
+  </div>
+)}
+
 {selected.length > 0 && (
   <div className="mb-3 flex flex-col gap-3 rounded-xl border border-slate-200 bg-slate-100 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
 
@@ -481,12 +556,15 @@ const latestUploads = uploads.filter(
     <div className="flex flex-col gap-2 sm:flex-row">
 
       {/* DOWNLOAD BUTTON */}
-      <button
-        onClick={handleBulkDownload}
-        className="w-full rounded-xl bg-blue-500 px-4 py-2 text-white sm:w-auto"
-      >
-        Download
-      </button>
+     <button
+  onClick={handleBulkDownload}
+  disabled={bulkDownloading}
+  className="w-full rounded-xl bg-blue-500 px-4 py-2 text-white sm:w-auto"
+>
+  {bulkDownloading
+    ? "Downloading..."
+    : "Download"}
+</button>
 
       {/* DELETE BUTTON */}
       <button
@@ -505,6 +583,11 @@ const latestUploads = uploads.filter(
             
             <div className="overflow-x-auto pb-2">
               <div className="mb-3 text-xs text-slate-400 sm:hidden">Swipe sideways to view the full table.</div>
+              {downloading && (
+  <div className="mb-3 rounded-lg bg-blue-100 p-3 text-blue-700">
+    Downloading file...
+  </div>
+)}
               <table className="min-w-[860px] w-full">
                <thead>
   <tr className="border-b border-slate-200 bg-slate-50/80 text-left text-xs uppercase tracking-[0.22em] text-slate-500">
@@ -599,17 +682,17 @@ setSelected(prev => [...new Set([...prev, id])]);
                        <div className="flex justify-end gap-2">
 
   {/* DOWNLOAD */}
-  <button
-    onClick={() =>
-      window.open(
-        buildApiUrl(`/api/manpower/download/${encodeURIComponent(item.file_name)}`),
-        "_blank"
-      )
-    }
-    className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-200 text-slate-500 hover:border-cyan-300 hover:bg-cyan-50 hover:text-cyan-700"
-  >
+ <button
+  onClick={() => handleDownload(item.file_name)}
+  disabled={downloading}
+  className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-200 text-slate-500 hover:border-cyan-300 hover:bg-cyan-50 hover:text-cyan-700"
+>
+  {downloading ? (
+    <span className="text-[10px]">...</span>
+  ) : (
     <ArrowDownToLine size={16} />
-  </button>
+  )}
+</button>
 
   {/* DELETE */}
   <button

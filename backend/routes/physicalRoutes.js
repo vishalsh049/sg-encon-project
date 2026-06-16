@@ -599,18 +599,31 @@ if (!allowedExtensions.includes(fileExtension)) {
 );
 for (const row of rows) {
 
- const circle = String(
+const circle = String(
   row["Circle"] ||
   row["circle"] ||
   ""
-).trim();
+)
+.replace(/\s+/g, " ")
+.trim();
 
- const cmp = String(
+console.log(
+  "Circle=>",
+  JSON.stringify(circle),
+  "Length=>",
+  circle.length
+);
+
+const cmp = String(
   row["CMP"] ||
   row["Cmp"] ||
   row["cmp"] ||
+  row["Cluster"] ||
+  row["cluster"] ||
   ""
-).trim();
+)
+.replace(/\s+/g, " ")
+.trim();
   // CHECK CIRCLE
 
   if (!circleCmpMap[circle]) {
@@ -624,9 +637,13 @@ for (const row of rows) {
 
   // CHECK CMP
 
-  if (
-    !circleCmpMap[circle].includes(cmp)
-  ) {
+ const validCmp = circleCmpMap[circle].some(
+  item =>
+    item.trim().toLowerCase() ===
+    cmp.trim().toLowerCase()
+);
+
+if (!validCmp) {
 
     return res.status(400).json({
       success: false,

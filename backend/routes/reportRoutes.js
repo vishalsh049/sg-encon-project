@@ -2134,6 +2134,21 @@ const jcId =
             }
           });
 
+          function parseFileName(fileName) {
+  const match = fileName.match(
+    /^([A-Za-z0-9]+)_(\d{4}-\d{2}-\d{2})\.(xlsx|xls|xlsb|csv)$/i
+  );
+
+  if (!match) {
+    return null;
+  }
+
+  return {
+    site_type: match[1].toUpperCase(),
+    report_date: match[2]
+  };
+}
+
           // ✅ Manual bulk upload (multi-row form with multiple files)
           router.post("/upload-bulk", (req, res) => {
             
@@ -2161,45 +2176,73 @@ const jcId =
                 const errors = [];
                 const invalidFiles = [];
 
-                for (const [index, row] of rawRows.entries()) {
-                  const { date, site_type, report_type, fileIndex } = row || {};
-                  const file = files[fileIndex];
+           for (const [index, row] of rawRows.entries()) {
 
-                  if (!date || !site_type || !report_type || !file) {
-                    errors.push(index + 1);
-                    continue;
-                  }
+  const { report_type, fileIndex } = row || {};
 
-                  const ext = file.originalname.split(".").pop().toLowerCase();
-                  if (!allowedExtensions.has(ext)) {
-                    invalidFiles.push(index + 1);
-                    continue;
-                  }
+  const file = files[fileIndex];
 
-                  const worksheetRows = readWorksheetRows(file.buffer);
-                  assertRowsAllowedCircle(req.authUser, worksheetRows, getRawCircle);
-                  const fileId = Date.now() + index;
+  if (!report_type || !file) {
+    errors.push(index + 1);
+    continue;
+  }
 
-                  const totalRecords = await processSiteUploadRows({
-                    siteType: site_type,
-                    rows: worksheetRows,
-                    date,
-                    fileId,
-                  });
+  const parsed = parseFileName(file.originalname);
 
-                insertRows.push([
-                  site_category, 
-                  date,
-                  site_type,
-                  report_type,
-                  "bulk",
-                  uploadedBy,
-                  file.originalname,
-                  fileId,      
-                  totalRecords,
-                  new Date()  
-                  ]);
-                }
+  if (!parsed) {
+    return res.status(400).json({
+      message:
+        `Invalid filename: ${file.originalname}
+Use format:
+GNB_2026-06-15.xlsx`
+    });
+  }
+
+  const date = parsed.report_date;
+  const site_type = parsed.site_type.toLowerCase();
+
+  const ext = file.originalname
+    .split(".")
+    .pop()
+    .toLowerCase();
+
+  if (!allowedExtensions.has(ext)) {
+    invalidFiles.push(index + 1);
+    continue;
+  }
+
+  const worksheetRows =
+    readWorksheetRows(file.buffer);
+
+  assertRowsAllowedCircle(
+    req.authUser,
+    worksheetRows,
+    getRawCircle
+  );
+
+  const fileId = Date.now() + index;
+
+  const totalRecords =
+    await processSiteUploadRows({
+      siteType: site_type,
+      rows: worksheetRows,
+      date,
+      fileId,
+    });
+
+  insertRows.push([
+    site_category,
+    date,
+    site_type,
+    report_type,
+    "bulk",
+    uploadedBy,
+    file.originalname,
+    fileId,
+    totalRecords,
+    new Date()
+  ]);
+} 
 
                 if (errors.length) {
                   return res.status(400).json({

@@ -1226,7 +1226,33 @@ const latestReportDate = useMemo(() => {
                 ) : null}
 
                 <section className={formFieldClass}>
-                  
+                  <div className="mb-4 flex gap-2">
+
+  <button
+    type="button"
+    onClick={() => setUploadType("single")}
+    className={`flex-1 rounded-xl py-2 text-sm font-medium transition ${
+      uploadType === "single"
+        ? "bg-blue-600 text-white"
+        : "bg-slate-100 text-slate-700"
+    }`}
+  >
+    Single Upload
+  </button>
+
+  <button
+    type="button"
+    onClick={() => setUploadType("bulk")}
+    className={`flex-1 rounded-xl py-2 text-sm font-medium transition ${
+      uploadType === "bulk"
+        ? "bg-green-600 text-white"
+        : "bg-slate-100 text-slate-700"
+    }`}
+  >
+    Bulk Upload
+  </button>
+
+</div>
 {/* ===== 2 COLUMN GRID (FIXED ORDER) ===== */}
 <div className="grid gap-3 md:grid-cols-2 items-end">
 
