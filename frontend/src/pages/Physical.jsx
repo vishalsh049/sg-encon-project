@@ -1,5 +1,15 @@
   import React, { useEffect, useMemo, useState } from "react";
-  import { UserPlus } from "lucide-react";
+ import {
+  UserPlus,
+  Upload,
+  Eye,
+  Pencil,
+   Download,
+  Trash2,
+  RotateCcw
+} from "lucide-react";
+import Swal from "sweetalert2";
+
   import Select from "react-select";
   import * as XLSX from "xlsx";
   import { saveAs } from "file-saver";
@@ -13,10 +23,23 @@
   const [jobRoleSearch, setJobRoleSearch] = useState("");
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [viewEmployee, setViewEmployee] = useState(null);
+  const [saving, setSaving] = useState(false);
 
 const handleView = (item) => {
   setViewEmployee(item);
 };
+
+const Field = ({ label, value }) => (
+  <div className="rounded-lg bg-white border border-slate-100 p-3">
+    <div className="text-xs uppercase tracking-wide text-slate-500">
+      {label}
+    </div>
+
+    <div className="mt-1 text-sm font-semibold text-slate-900">
+      {value || "-"}
+    </div>
+  </div>
+);
 
   const [showEmployeeModal, setShowEmployeeModal] = useState(false);
 
@@ -57,6 +80,7 @@ const handleView = (item) => {
   });
 
     const [data, setData] = useState([]);
+    const [totalRecords, setTotalRecords] = useState(0);
     const [tableLoading, setTableLoading] = useState(true);
     const [jobRoles, setJobRoles] = useState([]);
     const [jobRoleAverage, setJobRoleAverage] = useState([]);
@@ -76,14 +100,17 @@ const handleView = (item) => {
   const [circleFilter, setCircleFilter] = useState("");
   const [cmpFilter, setCmpFilter] = useState("");
   const [jobRoleFilter, setJobRoleFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
 
     const loadPhysicalData = async () => {
       try {
         setTableLoading(true);
     
-        const response = await authFetch(
-    buildApiUrl("/api/physical")
-  );
+   const response = await authFetch(
+  buildApiUrl(
+    `/api/physical`
+  )
+);
 
           const result = await response.json();
 
@@ -91,12 +118,15 @@ const handleView = (item) => {
           throw new Error(result.message || "Failed to load physical data");
         }
 
-      const formattedData = (result.data || []).map((item, index) => ({
+    const formattedData = (result.data || [])
+  .sort((a, b) => b.id - a.id)
+  .map((item, index) => ({
     ...item,
     srNo: index + 1,
   }));
 
   setData(formattedData);
+  setTotalRecords(result.total || 0);
       } catch (error) {
         console.error(error);
       }
@@ -203,58 +233,44 @@ const handleView = (item) => {
 
   };
 
-  useEffect(() => {
+ useEffect(() => {
+  loadPhysicalData();
+}, [currentPage, pageSize]);
 
-    // FAST TABLE LOAD
-    loadPhysicalData();
+useEffect(() => {
+  setTimeout(() => {
+    loadJobRoles();
+    loadJobRoleAverage();
+    loadCircles();
+    loadEmploymentStatus();
 
-    // LOAD OTHER DATA IN BACKGROUND
-    setTimeout(() => {
-      loadJobRoles();
-      loadJobRoleAverage();
-      loadCircles();
-      loadEmploymentStatus();
+    const newJoiningEmployee =
+      localStorage.getItem("newJoiningEmployee");
 
-      const newJoiningEmployee =
-    localStorage.getItem(
-      "newJoiningEmployee"
-    );
+    if (newJoiningEmployee) {
+      const parsedEmployee =
+        JSON.parse(newJoiningEmployee);
 
-  if (newJoiningEmployee) {
+      setEmployeeForm((prev) => ({
+        ...prev,
+        circle: parsedEmployee.circle || "",
+        cmp: parsedEmployee.cmp || "",
+        employee_code:
+          parsedEmployee.employee_code || "",
+        employee_name:
+          parsedEmployee.employee_name || "",
+        aadhaar_no:
+          parsedEmployee.aadhaar_no || "",
+        nth_salary:
+          parsedEmployee.nth_salary || "",
+        job_role:
+          parsedEmployee.designation || "",
+      }));
 
-    const parsedEmployee =
-      JSON.parse(newJoiningEmployee);
-
-    setEmployeeForm((prev) => ({
-      ...prev,
-
-      circle:
-        parsedEmployee.circle || "",
-
-      cmp:
-        parsedEmployee.cmp || "",
-
-      employee_code:
-        parsedEmployee.employee_code || "",
-
-      employee_name:
-        parsedEmployee.employee_name || "",
-
-      aadhaar_no:
-        parsedEmployee.aadhaar_no || "",
-
-        nth_salary: parsedEmployee.nth_salary || "",
-
-      job_role:
-        parsedEmployee.designation || "",
-    }));
-
-    setShowEmployeeModal(true);
-
-  }
-    }, 100);
-
-  }, []);
+      setShowEmployeeModal(true);
+    }
+  }, 100);
+}, []);
 
   const handleSelectAll = (e) => {
 
@@ -332,10 +348,88 @@ const handleView = (item) => {
 
       const result = await response.json();
 
-      if (!response.ok || !result.success) {
-        alert(result.message);
-        return;
-      }
+ if (!response.ok || !result.success) {
+
+  Swal.fire({
+  icon: "warning",
+  title: "Validation Error",
+
+  width: "900px",
+
+ 
+html: `
+<div style="text-align:left">
+
+<div style="
+background:#FEF3C7;
+border:1px solid #FCD34D;
+padding:16px;
+border-radius:12px;
+margin-bottom:15px;
+">
+
+<div style="
+font-size:18px;
+font-weight:700;
+color:#92400E;
+margin-bottom:10px;
+">
+❌ Upload Failed
+</div>
+
+<div style="font-size:14px;color:#475569">
+Employment Status accepts only:
+
+<br>✅ Active
+<br>✅ Inactive
+</div>
+
+</div>
+
+<div style="
+max-height:300px;
+overflow-y:auto;
+background:#F8FAFC;
+border:1px solid #E2E8F0;
+border-radius:12px;
+padding:15px;
+">
+
+${
+result.message
+.replace(/Upload Failed/gi,"")
+.split("\n")
+.filter(line => line.trim() !== "")
+.map(line=>`
+<div style="
+background:white;
+border-left:5px solid #EF4444;
+padding:12px;
+margin-bottom:10px;
+border-radius:8px;
+font-size:14px;
+color:#334155;
+line-height:1.8;
+">
+❌ ${line}
+</div>
+`).join("")
+}
+
+</div>
+
+</div>
+`,
+  confirmButtonColor: "#2563EB",
+
+  customClass: {
+    popup: "rounded-3xl",
+    title: "text-base"
+  }
+});
+
+  return;
+}
 
       alert("Report Uploaded Successfully");
 
@@ -404,42 +498,44 @@ const handleView = (item) => {
 
     !cmpFilter ||
     item.cmp === cmpFilter;
+  
     const matchesJobRole =
   !jobRoleFilter ||
   item.job_role === jobRoleFilter;
-    return (
-     matchesSearch &&
-     matchesCircle &&
-     matchesCmp &&
-     matchesJobRole
-   );
+  
+  const matchesStatus =
+  !statusFilter ||
+  item.employment_status === statusFilter;
+
+  return (
+  matchesSearch &&
+  matchesCircle &&
+  matchesCmp &&
+  matchesJobRole &&
+  matchesStatus
+  );
 
     });
 
-  }, [
+  },
+   [
   data,
   search,
   circleFilter,
   cmpFilter,
-  jobRoleFilter
+  jobRoleFilter,
+  statusFilter
 ]);
 
+const totalPages = Math.max(
+  1,
+  Math.ceil(filteredData.length / pageSize)
+);
 
-  const totalPages = useMemo(() => {
-
-  return Math.max(
-    1,
-    Math.ceil(filteredData.length / pageSize)
-  );
-
-  }, [filteredData, pageSize]);
-
-  const paginatedData = useMemo(() => {
-    return filteredData.slice(
-      (currentPage - 1) * pageSize,
-      currentPage * pageSize
-    );
-  }, [filteredData, currentPage, pageSize]);
+const paginatedData = filteredData.slice(
+  (currentPage - 1) * pageSize,
+  currentPage * pageSize
+);
 
 const handleEdit = (item) => {
 
@@ -853,10 +949,136 @@ if (
 }
   };
 
- 
+  const d = [
+  [0,1,2,3,4,5,6,7,8,9],
+  [1,2,3,4,0,6,7,8,9,5],
+  [2,3,4,0,1,7,8,9,5,6],
+  [3,4,0,1,2,8,9,5,6,7],
+  [4,0,1,2,3,9,5,6,7,8],
+  [5,9,8,7,6,0,4,3,2,1],
+  [6,5,9,8,7,1,0,4,3,2],
+  [7,6,5,9,8,2,1,0,4,3],
+  [8,7,6,5,9,3,2,1,0,4],
+  [9,8,7,6,5,4,3,2,1,0]
+];
 
-  const handleAddEmployee = async () => {
-    try {
+const p = [
+  [0,1,2,3,4,5,6,7,8,9],
+  [1,5,7,6,2,8,3,0,9,4],
+  [5,8,0,3,7,9,6,1,4,2],
+  [8,9,1,6,0,4,3,5,2,7],
+  [9,4,5,3,1,2,6,8,7,0],
+  [4,2,8,6,5,7,3,9,0,1],
+  [2,7,9,3,8,0,6,4,1,5],
+  [7,0,4,6,9,1,3,2,5,8]
+];
+
+const isValidAadhaar = (aadhaar) => {
+  let c = 0;
+
+  const reversed = aadhaar
+    .split("")
+    .reverse()
+    .map(Number);
+
+  for (let i = 0; i < reversed.length; i++) {
+    c = d[c][p[i % 8][reversed[i]]];
+  }
+
+  return c === 0;
+};
+
+ const validateEmployeeForm = () => {
+
+  // Mobile
+  if (
+    employeeForm.mobile_number &&
+    !/^[6-9]\d{9}$/.test(employeeForm.mobile_number)
+  ) {
+    alert("Invalid Mobile Number");
+    return false;
+  }
+
+  // PAN
+  if (
+    employeeForm.pan_no &&
+    !/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(
+      employeeForm.pan_no.toUpperCase()
+    )
+  ) {
+    alert("Invalid PAN Number");
+    return false;
+  }
+
+ // Aadhaar
+if (!employeeForm.aadhaar_no) {
+  alert("Aadhaar Number is required");
+  return false;
+}
+
+const aadhaar = employeeForm.aadhaar_no.trim();
+
+if (!/^\d{12}$/.test(aadhaar)) {
+  alert("Aadhaar must be exactly 12 digits");
+  return false;
+}
+
+if (!isValidAadhaar(aadhaar)) {
+  alert("Invalid Aadhaar Number");
+  return false;
+}
+
+  // UAN
+  if (
+    employeeForm.uan_no &&
+    !/^\d{12}$/.test(employeeForm.uan_no)
+  ) {
+    alert("UAN must be 12 digits");
+    return false;
+  }
+
+  // ESIC
+  if (
+    employeeForm.esic_ip_no &&
+    !/^\d{10,17}$/.test(employeeForm.esic_ip_no)
+  ) {
+    alert("Invalid ESIC IP Number");
+    return false;
+  }
+
+  // IFSC
+  if (
+    employeeForm.ifsc_code &&
+    !/^[A-Z]{4}0[A-Z0-9]{6}$/.test(
+      employeeForm.ifsc_code.toUpperCase()
+    )
+  ) {
+    alert("Invalid IFSC Code");
+    return false;
+  }
+
+  // Bank Account
+  if (
+    employeeForm.bank_account_no &&
+    employeeForm.bank_account_no.length < 9
+  ) {
+    alert("Invalid Bank Account Number");
+    return false;
+  }
+
+  return true;
+};
+
+ const handleAddEmployee = async () => {
+
+ 
+  if (!validateEmployeeForm()) {
+    return;
+  }
+
+  try {
+
+    setSaving(true);
       if (
     !employeeForm.circle ||
     !employeeForm.cmp
@@ -923,16 +1145,19 @@ if (
       }
 
     alert(
-    employeeForm.id
-      ? "Employee Updated Successfully"
-      : "Employee Added Successfully"
-  );
+  employeeForm.id
+    ? "Employee Updated Successfully"
+    : "Employee Added Successfully"
+);
 
-      setShowEmployeeModal(false);
-      setIsEditMode(false);
-      setEditingId(null);
+await loadPhysicalData();
 
-      setEmployeeForm({
+setShowEmployeeModal(false);
+
+setIsEditMode(false);
+setEditingId(null);
+
+setEmployeeForm({
         circle: "",
         cmp: "",
         pprj_status: "",
@@ -965,12 +1190,14 @@ if (
         remarks: "",
       });
 
-      loadPhysicalData();
+     await loadPhysicalData();
 
     } catch (error) {
       console.log(error);
       alert("Failed");
-    }
+    }finally {
+  setSaving(false);
+}
   };
 
   const handleExcelUpload = async () => {
@@ -1038,9 +1265,26 @@ if (
 
 };
 
-  const handleExportExcel = () => {
+  const handleExportExcel = async () => {
 
-    const exportData = filteredData.map((item) => ({
+  try {
+
+    const response = await authFetch(
+      buildApiUrl("/api/physical/export")
+    );
+
+    const result = await response.json();
+
+    if (!response.ok || !result.success) {
+
+      alert("Export Failed");
+
+      return;
+
+    }
+
+    const exportData = result.data.map((item) => ({
+
       Circle: item.circle,
       CMP: item.cmp,
       "PPRJ Status": item.pprj_status,
@@ -1052,26 +1296,44 @@ if (
       "Job Role": item.job_role,
       "Manpower SignOff Scope":
         item.manpower_signoff_scope,
-      "Scrum Job Role": item.scrum_job_role,
-      "Mobile Number": item.mobile_number,
+      "Scrum Job Role":
+        item.scrum_job_role,
+      "Mobile Number":
+        item.mobile_number,
       DOB: item.dob,
       Age: item.age,
-      "Date Of Joining": item.date_of_joining,
-      "Employment Status": item.employment_status,
-      "Resigned Date": item.resigned_date,
-      "Last Working Date": item.last_working_date,
+      "Date Of Joining":
+        item.date_of_joining,
+      "Employment Status":
+        item.employment_status,
+      "Resigned Date":
+        item.resigned_date,
+      "Last Working Date":
+        item.last_working_date,
       "RM Code": item.rm_code,
-      "Reporting Manager": item.reporting_manager,
-      "Company Email": item.company_email_id,
-      "Laptop Status": item.laptop_status,
-      "IFSC Code": item.ifsc_code,
-      "Bank Account No": item.bank_account_no,
-      "PAN No": item.pan_no,
-      "AADHAAR No": item.aadhaar_no,
-      "UAN No": item.uan_no,
-      "ESIC IP No": item.esic_ip_no,
-      "NTH Salary": item.nth_salary,
-      Remarks: item.remarks,
+      "Reporting Manager":
+        item.reporting_manager,
+      "Company Email":
+        item.company_email_id,
+      "Laptop Status":
+        item.laptop_status,
+      "IFSC Code":
+        item.ifsc_code,
+      "Bank Account No":
+        item.bank_account_no,
+      "PAN No":
+        item.pan_no,
+      "AADHAAR No":
+        item.aadhaar_no,
+      "UAN No":
+        item.uan_no,
+      "ESIC IP No":
+        item.esic_ip_no,
+      "NTH Salary":
+        item.nth_salary,
+      Remarks:
+        item.remarks,
+
     }));
 
     const worksheet =
@@ -1086,28 +1348,26 @@ if (
       "Physical Data"
     );
 
-    const excelBuffer = XLSX.write(
-      workbook,
-      {
+    const excelBuffer =
+      XLSX.write(workbook, {
         bookType: "xlsx",
         type: "array",
-      }
-    );
-
-    const fileData = new Blob(
-      [excelBuffer],
-      {
-        type:
-          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;charset=UTF-8",
-      }
-    );
+      });
 
     saveAs(
-      fileData,
-      `Physical_Data_${new Date().getTime()}.xlsx`
+      new Blob([excelBuffer]),
+      `Physical_Data_${Date.now()}.xlsx`
     );
 
-  };
+  } catch (error) {
+
+    console.log(error);
+
+    alert("Export Failed");
+
+  }
+
+};
 
   const handleDownload = async (item) => {
     setDownloadingId(item.id);
@@ -1341,7 +1601,7 @@ const CustomMenuList = (props) => {
 };
 
 const circleFilterOptions = [
-  { value: "", label: "All Circles" },
+  { value: "", label: "Select Circles" },
 
   ...[...new Set(data.map(item => item.circle))]
     .filter(Boolean)
@@ -1352,7 +1612,7 @@ const circleFilterOptions = [
 ];  
 
 const cmpFilterOptions = [
-  { value: "", label: "All CMP" },
+  { value: "", label: "Select CMP" },
 
   ...[...new Set(
     data
@@ -1371,7 +1631,7 @@ const cmpFilterOptions = [
 ];
 
 const jobRoleFilterOptions = [
-  { value: "", label: "All Roles" },
+  { value: "", label: "Select Job Roles" },
 
   ...[
     ...new Set(
@@ -1386,6 +1646,12 @@ const jobRoleFilterOptions = [
     }))
 ];
 
+const statusFilterOptions = [
+  { value: "", label: "Select Status" },
+  { value: "Active", label: "Active" },
+  { value: "Inactive", label: "Inactive" },
+];
+
 const startRecord =
   filteredData.length === 0
     ? 0
@@ -1397,6 +1663,25 @@ const endRecord =
     filteredData.length
   );
 
+  const resetFilters = () => {
+  setSearch("");
+  setCircleFilter("");
+  setCmpFilter("");
+  setJobRoleFilter("");
+  setStatusFilter("");
+  setCurrentPage(1);
+};
+
+const activeCount =
+  employmentStatus.find(
+    item => item.employment_status === "active"
+  )?.total || 0;
+
+const inactiveCount =
+  employmentStatus.find(
+    item => item.employment_status === "inactive"
+  )?.total || 0;
+
     return (
       <div className="min-h-screen">
         <div className="relative min-h-screen overflow-hidden">
@@ -1405,29 +1690,58 @@ const endRecord =
             {/* Header */}
             <div className="mx-auto flex w-full max-w-7xl items-center justify-between gap-4">
               <div>
-                <h1 className="text-lg font-semibold tracking-tight text-slate-900">Manpower - Physical</h1>
-                <div className=" text-sm text-slate-500">Enterprise employee registry with secure, premium UI.</div>
+             <h1 className="text-lg font-semibold tracking-tight text-slate-900">
+  Manpower - Physical
+</h1>
+
+<p className=" text-sm text-slate-500">
+  Enterprise employee registry with secure premium experience
+</p>
           
               </div>
+<div className="flex items-center gap-4">
 
-  <div className="flex items-center gap-3">
+  <button
+    onClick={() => setShowEmployeeModal(true)}
+    className="
+      group
+      flex items-center gap-2
+      rounded-lg
+      bg-gradient-to-r
+      from-indigo-600
+      to-violet-600
+      px-4
+      py-2
+      text-[13px]
+      font-semibold
+      text-white
+    "
+  >
+    <UserPlus size={16} />
+    Add Employee
+  </button>
 
-    <button
-      onClick={() => setShowEmployeeModal(true)}
-      className="rounded-xl bg-blue-600 px-4 py-2 text-xs font-semibold text-white transition hover:bg-blue-700"
-    >
-     Add Employee
-    </button>
+  <button
+    onClick={() => setShowUploadModal(true)}
+    className="
+      group
+      flex items-center gap-2
+      rounded-lg
+      bg-gradient-to-r
+      from-emerald-500
+      to-green-600
+      px-4
+      py-2
+      text-[13px]
+      font-semibold
+      text-white  
+    "
+  >
+    <Upload size={16} />
+    Upload Report
+  </button>
 
-    <button
-      onClick={() => setShowUploadModal(true)}
-      className="rounded-xl bg-green-600 px-4 py-2 text-xs font-semibold text-white transition hover:bg-green-700"
-    >
-      Upload Report
-    </button>
-
-  </div>
-
+</div>
             </div>
 
 {/* Filters and Actions Row */ }
@@ -1438,7 +1752,10 @@ const endRecord =
     type="text"
     placeholder="Search by Employee Name, Employee Code, Aadhaar No, Mobile Number, CMP, Circle..."
     value={search}
-    onChange={(e) => setSearch(e.target.value)}
+    onChange={(e) => {
+  setSearch(e.target.value);
+  setCurrentPage(1);
+}}  
     className="h-9 flex-1 rounded-lg border border-slate-200 px-4 text-[13px] outline-none focus:border-blue-500"
   />
 
@@ -1453,9 +1770,10 @@ const endRecord =
           item => item.value === circleFilter
         ) || null
       }
-      onChange={(selected) =>
-        setCircleFilter(selected?.value || "")
-      }
+    onChange={(selected) => {
+  setCircleFilter(selected?.value || "");
+  setCurrentPage(1);
+}}
     />
   </div>
 
@@ -1470,16 +1788,17 @@ const endRecord =
           item => item.value === cmpFilter
         ) || null
       }
-      onChange={(selected) =>
-        setCmpFilter(selected?.value || "")
-      }
+     onChange={(selected) => {
+  setCmpFilter(selected?.value || "");
+  setCurrentPage(1);
+}}
     />
   </div>
 
   <div className="w-52">
   <Select
     styles={selectStyles}
-    placeholder="All Roles"
+    placeholder="Select Roles"
     options={jobRoleFilterOptions}
     value={
       jobRoleFilterOptions.find(
@@ -1494,38 +1813,32 @@ const endRecord =
   />
 </div>
 
-  {/* Export */}
-  <button
-    onClick={handleExportExcel}
-    className="h-8 rounded-xl bg-emerald-600 px-4 text-[13px] font-semibold text-white"
-  >
-    Export
-  </button>
-
-  {/* Delete */}
- <button
-  onClick={handleBulkDelete}
-  disabled={bulkDeleting}
-  className="h-8 rounded-xl bg-red-600 px-4 text-[13px] font-semibold text-white disabled:opacity-60"
->
-  {bulkDeleting
-    ? `Deleting ${selectedRows.length}...`
-    : `Delete (${selectedRows.length})`}
-</button>
+  {/* Status */}
+  <div className="w-52">
+    <Select
+      styles={selectStyles}
+      placeholder="Select Status"
+      options={statusFilterOptions}
+      value={
+        statusFilterOptions.find(
+          item => item.value === statusFilter
+        ) || null
+      }
+      onChange={(selected) =>
+        setStatusFilter(selected?.value || "")
+      }
+    />
+  </div>
 
   {/* Reset */}
+
   <button
-    onClick={() => {
-      setSearch("");
-      setCircleFilter("");
-      setCmpFilter("");
-      setJobRoleFilter("");
-      setCurrentPage(1);
-    }}
-    className="h-8 rounded-xl bg-slate-700 px-4 text-[13px] font-semibold text-white"
-  >
-    Reset
-  </button>
+  onClick={resetFilters}
+  className="flex items-center gap-2 h-9 rounded-lg border border-slate-400 bg-white px-3 text-sm font-semibold text-slate-700 transition-all hover:bg-slate-700 hover:text-white"
+>
+  <RotateCcw size={16} />
+  Reset
+</button>
 
 </div>
 
@@ -1567,16 +1880,9 @@ const endRecord =
       Active:
     </span>
 
-    <span className="text-sm font-semibold text-emerald-600">
-      {
-        data.filter(
-          item =>
-            String(item.employment_status || "")
-              .trim()
-              .toLowerCase() === "active"
-        ).length
-      }
-    </span>
+  <span className="text-sm font-semibold text-emerald-600">
+  {activeCount}
+</span>
   </div>
 
   <div className="h-4 w-px bg-slate-200" />
@@ -1586,16 +1892,9 @@ const endRecord =
       Inactive:
     </span>
 
-    <span className="text-sm font-semibold text-red-600">
-      {
-        data.filter(
-          item =>
-            String(item.employment_status || "")
-              .trim()
-              .toLowerCase() === "inactive"
-        ).length
-      }
-    </span>
+  <span className="text-sm font-semibold text-red-600">
+  {inactiveCount}
+</span>
   </div>
 
 </div>
@@ -1789,21 +2088,53 @@ const endRecord =
       <div className="mx-auto mt-2 w-full max-w-7xl">
        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
         
-         <div className="flex items-center justify-between border-b border-slate-100 px-4 py-2">
-           <h2 className="text-md font-semibold text-slate-900">
-                    Employee Records</h2>
-  <div className="text-sm text-slate-600/80">
-          
- <span className="font-semibold text-slate-900">
-  Total: {filteredData.length}</span>
-                  </div>
-                </div>
+  <div className="flex items-center justify-between border-b border-slate-100 px-4 py-2">
+
+  {/* Left Side */}
+  <div className="flex items-center gap-3">
+
+  <h2 className="text-md font-semibold text-slate-900">
+    Employee Records
+  </h2>
+
+  <span className="rounded-md bg-blue-50 px-2 py-1.5 text-xs font-semibold text-blue-700">
+    {totalRecords} Records
+  </span>
+
+</div>
+
+  {/* Right Side */}
+  <div className="flex items-center gap-2">
+
+    <button
+      onClick={handleExportExcel}
+      className="h-8 flex items-center gap-2 rounded-lg border border-emerald-500 bg-white px-3 text-[14px] font-semibold text-emerald-600 hover:bg-emerald-600 hover:text-white"
+    >
+      <Download size={14} />
+      Export
+    </button>
+
+    <button
+      onClick={handleBulkDelete}
+      disabled={
+        selectedRows.length === 0 ||
+        bulkDeleting
+      }
+      className="h-8 flex items-center gap-2 rounded-lg border border-red-500 bg-white px-3 text-[14px] font-semibold text-red-600 hover:bg-red-600 hover:text-white disabled:opacity-50"
+    >
+      <Trash2 size={14} />
+      Delete ({selectedRows.length})
+    </button>
+
+  </div>
+
+</div>
 
   <div className="relative mt-2 overflow-x-auto overflow-y-auto custom-scrollbar">
   <div>
   <table className="w-max min-w-full border-separate border border-spacing-0">
  
- <thead className="sticky top-0 z-20 bg-white">
+ <thead className=" bg-white">
     <tr>
 
     <th className="px-3 py-2">
@@ -1817,46 +2148,52 @@ const endRecord =
     />
   </th>
 
-   <th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-left text-xs font-bold 
+   <th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-center text-xs font-bold 
                   uppercase tracking-wider text-slate-700 whitespace-nowrap">
         Circle</th>
 
-  <th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-left text-xs font-bold
+  <th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-center text-xs font-bold
    uppercase tracking-wider text-slate-700 whitespace-nowrap">CMP</th>
 
 
-  <th className="sticky left-0 z-30 border-b border-r border-slate-200 bg-white px-4 py-3 text-left text-xs font-bold 
+  <th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-center text-xs font-bold 
   uppercase tracking-wider text-slate-700 whitespace-nowrap">Employee Code</th>
       
-  <th className="sticky left-[140px] z-30 border-b border-r border-slate-200 bg-white px-4 py-3 text-left text-xs font-bold 
+  <th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-center text-xs font-bold 
   uppercase tracking-wider text-slate-700 whitespace-nowrap">Employee Name</th>
 
-  <th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-left text-xs font-bold
+  <th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-center text-xs font-bold
    uppercase tracking-wider text-slate-700 whitespace-nowrap">Function</th>
 
-  <th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-left text-xs font-bold
+  <th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-center text-xs font-bold
    uppercase tracking-wider text-slate-700 whitespace-nowrap">Job Role</th>
 
-  <th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-left text-xs font-bold
+  <th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-center text-xs font-bold
    uppercase tracking-wider text-slate-700 whitespace-nowrap">Scrum Job Role</th>
 
-  <th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-left text-xs font-bold
+  <th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-center text-xs font-bold
    uppercase tracking-wider text-slate-700 whitespace-nowrap">Mobile Number</th>
 
-  <th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-left text-xs font-bold
+  <th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-center text-xs font-bold
    uppercase tracking-wider text-slate-700 whitespace-nowrap">Date Of Joining</th>
 
-  <th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-left text-xs font-bold
+  <th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-center text-xs font-bold
    uppercase tracking-wider text-slate-700 whitespace-nowrap">Employment Status</th>
 
-  <th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-left text-xs font-bold
-   uppercase tracking-wider text-slate-700 whitespace-nowrap">NTH Salary</th>
+ <th
+  className="
+    sticky right-0 z-20
+    border-b border-l border-slate-200
+    bg-white
+    px-4 py-3
+    text-center
+    text-xs font-bold uppercase
+    tracking-wider text-slate-700
+  "
+>
+  Actions
+</th>
 
-
-  <th className="border-b border-r border-slate-200 bg-slate-100/90 px-4 py-2  text-left text-sm
-   font-semibold text-slate-700 whitespace-nowrap backdrop-blur-xl">
-        Action
-      </th>
     </tr>
   </thead>
 
@@ -1913,8 +2250,8 @@ const endRecord =
   <td className="border-b border-r border-slate-200 px-4 py-2 text-sm text-slate-700 whitespace-nowrap">
     {item.cmp || "-"}</td>
 
-  <td className="sticky left-0 z-10 border-b border-r border-slate-200 px-4 py-2 text-sm text-slate-700 whitespace-nowrap">{item.employee_code || "-"}</td>
-  <td className="sticky left-[140px] z-10 border-b border-r border-slate-200 px-4 py-2 text-sm text-slate-700 whitespace-nowrap">{item.employee_name || "-"}</td>
+  <td className="border-b border-r border-slate-200 px-4 py-2 text-sm text-slate-700 whitespace-nowrap">{item.employee_code || "-"}</td>
+  <td className="border-b border-r border-slate-200 px-4 py-2 text-sm text-slate-700 whitespace-nowrap">{item.employee_name || "-"}</td>
  <td className="border-b border-slate-100 px-4 py-2 whitespace-nowrap">
   <span className="px-3 py-1 rounded-lg bg-blue-50 text-blue-700 text-xs font-semibold">
     {item.function_name || "-"}
@@ -1932,7 +2269,7 @@ const endRecord =
     : "-"}</td>
 <td>
   <span
-    className={`px-3 py-1 rounded-full text-xs font-semibold ${
+      className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${
       item.employment_status === "Active"
         ? "bg-green-100 text-green-700"
         : "bg-red-100 text-red-700"
@@ -1941,39 +2278,82 @@ const endRecord =
     {item.employment_status || "-"}
   </span>
 </td>  
-  <td className="border-b border-r border-slate-200 px-4 py-2 text-sm text-slate-700 whitespace-nowrap">{item.nth_salary || "-"}</td>
 
-        <td className="px-3 py-2">
-   <div className="flex items-center gap-2">
+   <td
+  className="
+    sticky right-0
+    border-b border-l border-slate-200
+    bg-white
+    px-4 py-2
+  "
+>
 
-      <button
-    onClick={() => handleView(item)}
-    className="rounded-lg bg-slate-600 px-3 py-1 text-xs font-semibold text-white"
-  >
-    View
-  </button>
+  <div className="flex items-center gap-2">
 
-  <button
-    disabled={deletingId === item.id}
-    onClick={() => handleDelete(item.id)}
-    className={`rounded-lg px-3 py-1 text-xs font-semibold text-white transition-all ${
-      deletingId === item.id
-        ? "bg-red-300 cursor-not-allowed"
-        : "bg-red-500 hover:bg-red-600"
-    }`}
-  >
-    {deletingId === item.id ? "Deleting..." : "Delete"}
-  </button>
+    {/* View */}
+    <button
+     title="View"
+      onClick={() => handleView(item)}
+      className="
+        group
+        flex h-9 w-9 items-center justify-center
+        rounded-xl
+        border border-slate-200
+        bg-white
+        text-slate-600
+        transition-all
+        hover:border-indigo-200
+        hover:bg-indigo-50
+        hover:text-indigo-600
+      "
+    >
+      <Eye size={16} />
+    </button>
 
-  <button
-    onClick={() => handleEdit(item)}
-    className="rounded-lg bg-blue-500 px-3 py-1 text-xs font-semibold text-white hover:bg-blue-600 transition-all"
-  >
-    Edit
-  </button>
+    {/* Edit */}
+    <button
+     title="Edit"
+      onClick={() => handleEdit(item)}
+      className="
+        group
+        flex h-9 w-9 items-center justify-center
+        rounded-xl
+        border border-slate-200
+        bg-white
+        text-slate-600
+        transition-all
+        hover:border-blue-200
+        hover:bg-blue-50
+        hover:text-blue-600
+      "
+    >
+      <Pencil size={16} />
+    </button>
 
-</div>
-  </td>
+    {/* Delete */}
+    <button
+    title="Delete"
+      disabled={deletingId === item.id}
+      onClick={() => handleDelete(item.id)}
+      className="
+        flex h-9 w-9 items-center justify-center
+        rounded-xl
+        border border-slate-200
+        bg-white
+        text-slate-600
+        transition-all
+        hover:border-red-200
+        hover:bg-red-50
+        hover:text-red-600
+        disabled:opacity-50
+      "
+    >
+      <Trash2 size={16} />
+    </button>
+
+  </div>
+
+</td>
         </tr>
       ))
     )}
@@ -1995,11 +2375,11 @@ const endRecord =
   <span className="mx-1 font-semibold text-slate-900">
     {endRecord}
   </span>
-  of
-  <span className="mx-1 font-semibold text-slate-900">
-    {filteredData.length}
-  </span>
-  records
+ of
+<span className="mx-1 font-semibold text-slate-900">
+  {totalRecords}
+</span>
+records
 </div>
 
     <div className="flex items-center gap-2">
@@ -2173,10 +2553,224 @@ const endRecord =
     </div>
   )}
 
+ {viewEmployee && (
+
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+   <div
+  className="
+    w-full
+    max-w-7xl
+    max-h-[90vh]
+    overflow-y-auto
+    rounded-2xl
+    bg-white
+    shadow-2xl
+    custom-scrollbar
+  "
+>
+
+  {/* Header */}
+  <div className="sticky top-0 z-10 flex items-center justify-between border-b bg-white px-6 py-3">
+    <div>
+  <h2 className="text-xl font-bold text-slate-900">
+    {viewEmployee.employee_name}
+  </h2>
+
+  <p className="text-sm text-slate-500">
+    {viewEmployee.employee_code} • {viewEmployee.job_role}
+  </p>
+</div>
+
+    <button
+      onClick={() => setViewEmployee(null)}
+      className="h-10 w-10 rounded-full bg-slate-100 text-xl hover:bg-red-100"
+    >
+      ×
+    </button>
+  </div>
+
+  <div className="space-y-2 p-4">
+
+{/* Top Quick Info Row 
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+
+  <div className="rounded-xl bg-blue-50 px-4 py-2">
+    <div className="text-xs text-slate-500">
+      Employee Code
+    </div>
+    <div className="text-md font-bold text-blue-700">
+      {viewEmployee.employee_code || "-"}
+    </div>
+  </div>
+
+  <div className="rounded-xl bg-green-50 px-4 py-2">
+    <div className="text-xs text-slate-500">
+      Employment Status
+    </div>
+    <div className="text-md font-bold text-green-700">
+      {viewEmployee.employment_status || "-"}
+    </div>
+  </div>
+
+  <div className="rounded-xl bg-violet-50 px-4 py-2">
+    <div className="text-xs text-slate-500">
+      Mobile Number
+    </div>
+    <div className="text-md font-bold text-violet-700">
+      {viewEmployee.mobile_number || "-"}
+    </div>
+  </div>
+
+
+</div> */}
+
+    {/* Organization Details */}
+    <div className="rounded-xl border border-violet-100 bg-violet-50/30 px-4 py-2">
+      <h3 className="mb-1 text-sm font-semibold text-violet-700">
+        Organization Details
+      </h3>
+
+      <div className="grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-6">
+        <Field label="Circle" value={viewEmployee.circle} />
+        <Field label="CMP" value={viewEmployee.cmp} />
+        <Field label="PPRJ Status" value={viewEmployee.pprj_status} />
+        <Field label="PPRJ Code" value={viewEmployee.pprj_code} />
+        <Field label="Employee Code" value={viewEmployee.employee_code} />
+        <Field label="Employee Name" value={viewEmployee.employee_name} />
+      </div>
+    </div>
+
+    {/* Personal & Role Information */}
+    <div className="rounded-xl border border-blue-100 bg-blue-50/30 px-4 py-2">
+      <h3 className="mb-1 text-sm font-semibold text-blue-700">
+        Personal & Role Information
+      </h3>
+
+      <div className="grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-5">
+        <Field label="Father Name" value={viewEmployee.father_name} />
+        <Field label="Function Name" value={viewEmployee.function_name} />
+        <Field label="Job Role" value={viewEmployee.job_role} />
+        <Field
+          label="Manpower Signoff Scope"
+          value={viewEmployee.manpower_signoff_scope}
+        />
+        <Field
+          label="Scrum Job Role"
+          value={viewEmployee.scrum_job_role}
+        />
+        <Field label="Mobile Number" value={viewEmployee.mobile_number} />
+        <Field
+           label="DOB"
+           value={
+           viewEmployee.dob
+            ? new Date(viewEmployee.dob)
+            .toLocaleDateString("en-GB")
+          : "-"
+        } 
+     />
+        <Field label="Age" value={viewEmployee.age} />
+       <Field
+  label="Date Of Joining"
+  value={
+    viewEmployee.date_of_joining
+      ? new Date(viewEmployee.date_of_joining)
+          .toLocaleDateString("en-GB")
+      : "-"
+  }
+/>  
+        <Field
+          label="Employment Status"
+          value={viewEmployee.employment_status}
+        />
+      </div>
+    </div>
+
+    {/* Work & Reporting Information */}
+    <div className="rounded-xl border border-indigo-100 bg-indigo-50/30 px-4 py-2">
+      <h3 className="mb-1 text-sm font-semibold text-indigo-700">
+        Work & Reporting Information
+      </h3>
+
+      <div className="grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-6">
+        <Field
+          label="Resigned Date"
+          value={viewEmployee.resigned_date}
+        />
+        <Field
+          label="Last Working Date"
+          value={viewEmployee.last_working_date}
+        />
+        <Field label="RM Code" value={viewEmployee.rm_code} />
+        <Field
+          label="Reporting Manager"
+          value={viewEmployee.reporting_manager}
+        />
+        <Field
+          label="Company Email"
+          value={viewEmployee.company_email_id}
+        />
+        <Field
+          label="Laptop Status"
+          value={viewEmployee.laptop_status}
+        />
+      </div>
+    </div>
+
+    {/* Additional Information */}
+    <div className="rounded-xl border border-emerald-100 bg-emerald-50/30 px-4 py-2">
+      <h3 className="mb-1 text-sm font-semibold text-emerald-700">
+        Additional Information
+      </h3>
+
+      <div className="grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-7">
+        <Field label="IFSC Code" value={viewEmployee.ifsc_code} />
+        <Field
+          label="Bank Account No"
+          value={viewEmployee.bank_account_no}
+        />
+        <Field label="PAN No" value={viewEmployee.pan_no} />
+        <Field label="Aadhaar No" value={viewEmployee.aadhaar_no} />
+        <Field label="UAN No" value={viewEmployee.uan_no} />
+        <Field label="ESIC IP No" value={viewEmployee.esic_ip_no} />
+        <Field label="NTH Salary" value={viewEmployee.nth_salary} />
+      </div>
+
+      <div className="mt-2">
+        <div className="mb-1 text-xs font-semibold text-slate-500">
+          Remarks
+        </div>
+
+        <div className="rounded-xl bg-white p-4 border">
+          {viewEmployee.remarks || "-"}
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+```
+
+  </div>
+)}
+
+
   {showEmployeeModal && (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 overflow-y-auto">
 
-      <div className="w-full max-w-7xl rounded-[28px] bg-white px-6 py-4 shadow-2xl max-h-[95vh] overflow-y-auto">
+      <div
+  className="
+    w-full
+    max-w-7xl
+    rounded-[18px]
+    bg-white
+    px-4
+    py-4
+    shadow-2xl
+    max-h-[95vh]
+    overflow-y-auto
+    custom-scrollbar
+  "
+>
 
         <div className="mb-6 flex items-start justify-between border-b border-slate-200 pb-4">
 
@@ -2906,12 +3500,17 @@ onChange={(selected) =>
       Cancel
     </button>
 
-    <button
-      onClick={handleAddEmployee}
-      className="rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 px-6 py-2.5 text-sm font-semibold text-white shadow-lg hover:opacity-90"
-    >
-      {isEditMode ? "Update Employee" : "Save Employee"}
-    </button>
+   <button
+  onClick={handleAddEmployee}
+  disabled={saving}
+  className="rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 px-6 py-2.5 text-sm font-semibold text-white shadow-lg hover:opacity-90 disabled:opacity-50"
+>
+  {saving
+    ? "Saving..."
+    : isEditMode
+    ? "Update Employee"
+    : "Save Employee"}
+</button>
 
   </div>
 
