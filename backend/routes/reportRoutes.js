@@ -1372,6 +1372,7 @@ const parseGnbRows = (rows, fallbackDate, fileId) => {
 
               try {
                 const { site_type, report_type, upload_type, date, uploadedBy } = req.body;
+                const duplicateAction = String(req.body.duplicateAction || "").toLowerCase();
                 const finalDate = normalizeDate(date);
                 console.log("DATE RECEIVED:", date);
                 console.log("FINAL DATE:", finalDate);
@@ -1380,23 +1381,77 @@ const parseGnbRows = (rows, fallbackDate, fileId) => {
                 const normalizedSiteType = normalizeSiteTypeValue(site_type);
 
                 if (uploadType === "single") {
-                  if (!site_type || !report_type || !upload_type || !date || !uploadedBy) {
-                    return res.status(400).json({ message: "All fields are required" });
+                  if (!date) {
+                    return res.status(400).json({ message: "Please select report date." });
+                  }
+                  if (!uploadedBy) {
+                    return res.status(400).json({ message: "Please enter Uploaded By." });
+                  }
+                  if (!site_type) {
+                    return res.status(400).json({ message: "Please select Site Type." });
+                  }
+                  if (!report_type) {
+                    return res.status(400).json({ message: "Please select Report Type." });
                   }
                 }
 
               const file = req.file;
 
           if (!file) {
-            return res.status(400).json({ message: "File required" });
+            return res.status(400).json({ message: "Please select a report file." });
           }
 
           const ext = file.originalname.split(".").pop().toLowerCase();
                 if (!allowedExtensions.has(ext)) {
-                  return res.status(400).json({ message: "Invalid file type" });
+                  return res.status(400).json({
+                    message: "Invalid file format.\n\nOnly .xlsx, .xls, .xlsb and .csv files are allowed.",
+                  });
                 }
 
                 await ensureUploadsTable();
+
+                const existingUploads = await query(
+                  `SELECT id, site_type, file_id, report_date
+                   FROM report_uploads
+                   WHERE site_category = ?
+                     AND LOWER(site_type) = LOWER(?)
+                     AND report_type = ?
+                     AND report_date = ?`,
+                  [site_category, normalizedSiteType, report_type, finalDate]
+                );
+                const accessibleExistingUploads = await filterAccessibleUploads(
+                  existingUploads,
+                  req.authUser
+                );
+
+                if (
+                  accessibleExistingUploads.length &&
+                  !["replace", "skip"].includes(duplicateAction)
+                ) {
+                  return res.status(409).json({
+                    success: false,
+                    duplicate: true,
+                    message: `Report already exists for ${finalDate}.\n\nDo you want to Replace or Skip?`,
+                    duplicates: accessibleExistingUploads.map((row) => ({
+                      ...row,
+                      report_date: finalDate,
+                    })),
+                  });
+                }
+
+                if (accessibleExistingUploads.length && duplicateAction === "skip") {
+                  return res.status(200).json({
+                    success: true,
+                    message: "0 reports uploaded successfully.",
+                    count: 0,
+                  });
+                }
+
+                if (accessibleExistingUploads.length && duplicateAction === "replace") {
+                  for (const duplicate of accessibleExistingUploads) {
+                    await deleteUploadData(duplicate);
+                  }
+                }
 
               const workbook = xlsx.read(file.buffer, {
   type: "buffer",
@@ -1762,9 +1817,12 @@ const jcId =
                 });
               } catch (error) {
                 console.error(error);
+                const isDatabaseError = error?.code && String(error.code).startsWith("ER_");
                 res.status(error.statusCode || 500).json({
                   success: false,
-                  message: error.message || "Upload failed",
+                  message: isDatabaseError
+                    ? "Unable to upload reports.\n\nPlease try again or contact administrator."
+                    : error.message || "Upload failed.\n\nPlease check your files and try again.",
                 });
               }
             });
@@ -2134,20 +2192,201 @@ const jcId =
             }
           });
 
-          function parseFileName(fileName) {
-  const match = fileName.match(
-    /^([A-Za-z0-9]+)_(\d{4}-\d{2}-\d{2})\.(xlsx|xls|xlsb|csv)$/i
+          function extractDateFromFileName(fileName = "") {
+  const match = String(fileName).match(
+    /(?:^|[_\-\s])(\d{4}-\d{2}-\d{2})(?=\.[^.]+$|[_\-\s])/
   );
 
-  if (!match) {
-    return null;
+  if (!match) return null;
+
+  const [year, month, day] = match[1].split("-").map(Number);
+  const parsed = new Date(year, month - 1, day);
+  const isValidDate =
+    parsed.getFullYear() === year &&
+    parsed.getMonth() === month - 1 &&
+    parsed.getDate() === day;
+
+  return isValidDate ? match[1] : null;
+}
+
+async function deleteUploadData(upload) {
+  const tableName = String(upload.site_type || "").toLowerCase();
+  const fileId = Number(upload.file_id);
+
+  if (reportDataTables.has(tableName) && Number.isFinite(fileId)) {
+    await query(`DELETE FROM ${tableName} WHERE file_id = ?`, [fileId]);
   }
 
-  return {
-    site_type: match[1].toUpperCase(),
-    report_date: match[2]
-  };
+  await query("DELETE FROM report_uploads WHERE id = ?", [upload.id]);
 }
+
+          router.post("/upload-bulk-enhanced", (req, res) => {
+            uploadMany.array("files")(req, res, async (err) => {
+              if (err) {
+                return res.status(400).json({
+                  message: "Upload failed.\n\nPlease check your files and try again.",
+                });
+              }
+
+              try {
+                const site_category = (req.body.siteCategory || "tower").toLowerCase();
+                const uploadedBy = req.body.uploadedBy || "Admin";
+                const siteType = req.body.site_type;
+                const reportType = req.body.report_type;
+                const duplicateAction = String(req.body.duplicateAction || "").toLowerCase();
+                const rawRows = req.body.rows ? JSON.parse(req.body.rows) : [];
+                const files = req.files || [];
+
+                if (!String(uploadedBy || "").trim()) {
+                  return res.status(400).json({ message: "Please enter Uploaded By." });
+                }
+
+                if (!siteType) {
+                  return res.status(400).json({ message: "Please select Site Type." });
+                }
+
+                if (!reportType) {
+                  return res.status(400).json({ message: "Please select Report Type." });
+                }
+
+                if (!files.length) {
+                  return res.status(400).json({
+                    message: "Please select at least one report file.",
+                  });
+                }
+
+                const normalizedSiteType = normalizeSiteTypeValue(siteType);
+                const invalidFile = files.find((file) => {
+                  const ext = file.originalname.split(".").pop().toLowerCase();
+                  return !allowedExtensions.has(ext);
+                });
+
+                if (invalidFile) {
+                  return res.status(400).json({
+                    message: "Invalid file format.\n\nOnly Excel and CSV files are allowed.",
+                  });
+                }
+
+                const filePlans = files.map((file, index) => {
+                  const row = Array.isArray(rawRows)
+                    ? rawRows.find((item) => Number(item?.fileIndex) === index)
+                    : null;
+                  const reportDate = row?.report_date || extractDateFromFileName(file.originalname);
+
+                  if (!reportDate) {
+                    const error = new Error(
+                      "Date not found in file name.\n\nPlease rename file using this format:\n\nTower_YYYY-MM-DD.xlsx\n\nExample:\n\nTower_2026-06-01.xlsx"
+                    );
+                    error.statusCode = 400;
+                    throw error;
+                  }
+
+                  return { file, reportDate };
+                });
+
+                await ensureUploadsTable();
+
+                const duplicateChecks = await Promise.all(
+                  filePlans.map(async (plan) => {
+                    const rows = await query(
+                      `SELECT id, site_type, file_id, report_date
+                       FROM report_uploads
+                       WHERE site_category = ?
+                         AND LOWER(site_type) = LOWER(?)
+                         AND report_type = ?
+                         AND report_date = ?`,
+                      [site_category, normalizedSiteType, reportType, plan.reportDate]
+                    );
+                    const accessibleRows = await filterAccessibleUploads(rows, req.authUser);
+                    return accessibleRows.map((row) => ({
+                      ...row,
+                      report_date: plan.reportDate,
+                    }));
+                  })
+                );
+
+                const duplicates = duplicateChecks.flat();
+                if (duplicates.length && !["replace", "skip"].includes(duplicateAction)) {
+                  return res.status(409).json({
+                    success: false,
+                    duplicate: true,
+                    message: `Report already exists for ${duplicates[0].report_date}.\n\nDo you want to Replace or Skip?`,
+                    duplicates,
+                  });
+                }
+
+                const duplicateDates = new Set(duplicates.map((item) => String(item.report_date)));
+
+                if (duplicateAction === "replace") {
+                  for (const duplicate of duplicates) {
+                    await deleteUploadData(duplicate);
+                  }
+                }
+
+                const insertRows = [];
+
+                for (const [index, plan] of filePlans.entries()) {
+                  if (duplicateAction === "skip" && duplicateDates.has(plan.reportDate)) {
+                    continue;
+                  }
+
+                  const worksheetRows = readWorksheetRows(plan.file.buffer);
+
+                  assertRowsAllowedCircle(
+                    req.authUser,
+                    worksheetRows,
+                    getRawCircle
+                  );
+
+                  const fileId = Date.now() + index;
+                  const totalRecords = await processSiteUploadRows({
+                    siteType: normalizedSiteType,
+                    rows: worksheetRows,
+                    date: plan.reportDate,
+                    fileId,
+                  });
+
+                  insertRows.push([
+                    site_category,
+                    plan.reportDate,
+                    siteType,
+                    reportType,
+                    "bulk",
+                    uploadedBy,
+                    plan.file.originalname,
+                    fileId,
+                    totalRecords,
+                    new Date(),
+                  ]);
+                }
+
+                if (insertRows.length) {
+                  await query(
+                    `INSERT INTO report_uploads
+                    (site_category, report_date, site_type, report_type, upload_type, uploaded_by, file_name, file_id, total_records, uploaded_at)
+                    VALUES ?`,
+                    [insertRows]
+                  );
+                }
+
+                res.status(200).json({
+                  success: true,
+                  message: `${insertRows.length} reports uploaded successfully.`,
+                  count: insertRows.length,
+                });
+              } catch (error) {
+                console.error(error);
+                const isDatabaseError = error?.code && String(error.code).startsWith("ER_");
+                res.status(error.statusCode || 500).json({
+                  success: false,
+                  message: isDatabaseError
+                    ? "Unable to upload reports.\n\nPlease try again or contact administrator."
+                    : error.message || "Upload failed.\n\nPlease check your files and try again.",
+                  ...(error.details || {}),
+                });
+              }
+            });
+          });
 
           // ✅ Manual bulk upload (multi-row form with multiple files)
           router.post("/upload-bulk", (req, res) => {

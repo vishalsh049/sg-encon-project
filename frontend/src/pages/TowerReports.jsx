@@ -118,6 +118,7 @@ GSC: { label: "GSC", bg: "from-slate-100 to-slate-50", icon: Layers, highlight: 
     const [modalMessage, setModalMessage] = useState("");
     const [modalMessageType, setModalMessageType] = useState("success");
     const [modalLoadingText, setModalLoadingText] = useState("");
+    const [duplicatePrompt, setDuplicatePrompt] = useState(null);
     const [date, setDate] = useState(today);
     const [siteType, setSiteType] = useState("");
     const [reportType, setReportType] = useState("");
@@ -132,6 +133,8 @@ GSC: { label: "GSC", bg: "from-slate-100 to-slate-50", icon: Layers, highlight: 
         ""
     );
     const [file, setFile] = useState(null);
+    const [bulkFiles, setBulkFiles] = useState([]);
+    const [bulkQueue, setBulkQueue] = useState([]);
     const [uploading, setUploading] = useState(false);
     const [downloading, setDownloading] = useState(false);
     const [exportPopupOpen, setExportPopupOpen] = useState(false);
@@ -205,6 +208,25 @@ GSC: { label: "GSC", bg: "from-slate-100 to-slate-50", icon: Layers, highlight: 
       const ext = f.name.split(".").pop().toLowerCase();
       return validExtensions.includes(ext);
     };
+    const extractReportDateFromFileName = (fileName = "") => {
+      const match = fileName.match(/(?:^|[_\-\s])(\d{4}-\d{2}-\d{2})(?=\.[^.]+$|[_\-\s])/);
+      if (!match) return null;
+      const [year, month, day] = match[1].split("-").map(Number);
+      const parsed = new Date(year, month - 1, day);
+      const isValidDate =
+        parsed.getFullYear() === year &&
+        parsed.getMonth() === month - 1 &&
+        parsed.getDate() === day;
+      return isValidDate ? match[1] : null;
+    };
+
+    const getInvalidFormatMessage = (specific = true) =>
+      specific
+        ? "Invalid file format.\n\nOnly .xlsx, .xls, .xlsb and .csv files are allowed."
+        : "Invalid file format.\n\nOnly Excel and CSV files are allowed.";
+
+    const getMissingDateMessage = () =>
+      "Date not found in file name.\n\nPlease rename file using this format:\n\nTower_YYYY-MM-DD.xlsx\n\nExample:\n\nTower_2026-06-01.xlsx";
 
     const fetchReports = async () => {
       setTableLoading(true);
@@ -231,12 +253,6 @@ GSC: { label: "GSC", bg: "from-slate-100 to-slate-50", icon: Layers, highlight: 
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [normalizedCategory]);
 
-    useEffect(() => {
-      if (uploadType === "bulk") {
-        setSiteType("");
-        setReportType("");
-      }
-    }, [uploadType, today]);
 
     const handleFileChange = (e) => {
       const picked = e.target.files?.[0] || null;
@@ -246,9 +262,7 @@ GSC: { label: "GSC", bg: "from-slate-100 to-slate-50", icon: Layers, highlight: 
       }
       if (!isValidFile(picked)) {
         setModalMessageType("error");
-        setModalMessage(
-          "Invalid file type. Please upload .xlsx, .xls, .xlsb, or .csv"
-        );
+        setModalMessage(getInvalidFormatMessage());
         setFile(null);
         e.target.value = "";
         return;
@@ -256,6 +270,46 @@ GSC: { label: "GSC", bg: "from-slate-100 to-slate-50", icon: Layers, highlight: 
       setModalMessage("");
       setFile(picked);
     };
+
+const handleBulkFilesChange = (e) => {
+  const files = Array.from(e.target.files || []);
+
+  if (files.length === 0) {
+    return;
+  }
+
+  const invalidFiles = files.filter((f) => !isValidFile(f));
+  if (invalidFiles.length > 0) {
+    setModalMessageType("error");
+    setModalMessage(getInvalidFormatMessage());
+    setBulkFiles([]);
+    setBulkQueue([]);
+    e.target.value = "";
+    return;
+  }
+
+  const queue = files.map((selectedFile) => ({
+    file: selectedFile,
+    name: selectedFile.name,
+    reportDate: extractReportDateFromFileName(selectedFile.name),
+    status: "Ready",
+  }));
+
+  const missingDateFile = queue.find((item) => !item.reportDate);
+  if (missingDateFile) {
+    setModalMessageType("error");
+    setModalMessage(getMissingDateMessage());
+    setBulkFiles([]);
+    setBulkQueue([]);
+    e.target.value = "";
+    return;
+  }
+
+  setModalMessage("");
+  setDuplicatePrompt(null);
+  setBulkFiles(files);
+  setBulkQueue(queue);
+};
 
     const handleDelete = async (id) => {
     if (!window.confirm("Are you sure to delete?")) return;
@@ -434,28 +488,58 @@ const blob = new Blob(
     setEditingId(row.id);
   };
 
-    const handleUpload = async () => {
+    const handleUpload = async (duplicateAction = "") => {
       setModalMessage("");
       setModalLoadingText("");
+      setDuplicatePrompt(null);
+
       if (uploadType === "single") {
-        if (!date || !siteType || !reportType || !uploadType) {
+        if (!date) {
           setModalMessageType("error");
-          setModalMessage("Please fill all required fields.");
-          setModalLoadingText("");
+          setModalMessage("Please select report date.");
           return;
         }
         if (!uploadedBy.trim()) {
           setModalMessageType("error");
           setModalMessage("Please enter Uploaded By.");
-          setModalLoadingText("");
+          return;
+        }
+        if (!siteType) {
+          setModalMessageType("error");
+          setModalMessage("Please select Site Type.");
+          return;
+        }
+        if (!reportType) {
+          setModalMessageType("error");
+          setModalMessage("Please select Report Type.");
+          return;
+        }
+        if (!file && !editingId) {
+          setModalMessageType("error");
+          setModalMessage("Please select a report file.");
           return;
         }
       }
 
-      if (uploadType === "single") {
-        if (!file && !editingId) {
+      if (uploadType === "bulk") {
+        if (!uploadedBy.trim()) {
           setModalMessageType("error");
-          setModalMessage("Please select a valid file to upload.");
+          setModalMessage("Please enter Uploaded By.");
+          return;
+        }
+        if (!siteType) {
+          setModalMessageType("error");
+          setModalMessage("Please select Site Type.");
+          return;
+        }
+        if (!reportType) {
+          setModalMessageType("error");
+          setModalMessage("Please select Report Type.");
+          return;
+        }
+        if (bulkFiles.length === 0) {
+          setModalMessageType("error");
+          setModalMessage("Please select at least one report file.");
           return;
         }
       }
@@ -465,8 +549,10 @@ const blob = new Blob(
 formData.append("siteCategory", normalizedCategory);
 formData.append("upload_type", uploadType);
 formData.append("uploadedBy", uploadedBy.trim());
+if (duplicateAction) {
+  formData.append("duplicateAction", duplicateAction);
+}
 
-// ✅ FIX DATE
 const safeDate = date;
 
 if (uploadType === "single") {
@@ -475,6 +561,28 @@ if (uploadType === "single") {
   formData.append("site_type", siteType);
   formData.append("report_type", reportType);
 } 
+
+if (uploadType === "bulk") {
+
+  const rows = [];
+
+  bulkFiles.forEach((f, index) => {
+
+    formData.append("files", f);
+
+    rows.push({
+      report_type: reportType,
+      report_date: extractReportDateFromFileName(f.name),
+      fileIndex: index
+    });
+
+  });
+
+  formData.append("site_type", siteType);
+  formData.append("report_type", reportType);
+  formData.append("rows", JSON.stringify(rows));
+
+}
 
       try {
         setUploading(true);
@@ -489,14 +597,57 @@ if (uploadType === "single") {
           });
         } 
         
-        else {
-          response = await axios.post(buildApiUrl("/api/reports/upload"), formData);
-        }
+     else {
+
+  if (uploadType === "bulk") {
+
+    response = await axios.post(
+      buildApiUrl("/api/reports/upload-bulk-enhanced"),
+      formData,
+      {
+        onUploadProgress: (progressEvent) => {
+          if (!progressEvent.total) return;
+          const percent = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+          const current = Math.min(
+            bulkFiles.length,
+            Math.max(1, Math.ceil((percent / 100) * bulkFiles.length))
+          );
+          setModalLoadingText(`Uploading ${current}/${bulkFiles.length}...`);
+          setBulkQueue((queue) =>
+            queue.map((item, index) => ({
+              ...item,
+              status:
+                index < current - 1
+                  ? "Uploaded"
+                  : index === current - 1
+                    ? "Uploading"
+                    : "Ready",
+            }))
+          );
+        },
+      }
+    );
+
+  } else {
+
+    response = await axios.post(
+      buildApiUrl("/api/reports/upload"),
+      formData
+    );
+
+  }
+
+}
         setModalMessageType("success");
         setModalMessage(
-          response?.data?.message || "Upload completed successfully."
+          response?.data?.message ||
+            (uploadType === "bulk"
+              ? `${response?.data?.count || bulkFiles.length} reports uploaded successfully.`
+              : "Upload completed successfully.")
         );
         setFile(null);
+        setBulkFiles([]);
+        setBulkQueue([]);
         await fetchReports();
         setTimeout(() => {
           setModalOpen(false);
@@ -504,7 +655,18 @@ if (uploadType === "single") {
         }, 1200);
       } catch (err) {
         setModalMessageType("error");
-        setModalMessage(err.response?.data?.message || "Upload failed");
+        const data = err.response?.data;
+        if (err.response?.status === 409 && data?.duplicate) {
+          const firstDate = data.duplicates?.[0]?.report_date || "";
+          setDuplicatePrompt({
+            dates: data.duplicates?.map((item) => item.report_date).filter(Boolean) || [],
+          });
+          setModalMessage(
+            `Report already exists for ${firstDate}.\n\nDo you want to Replace or Skip?`
+          );
+        } else {
+          setModalMessage(data?.message || "Upload failed.\n\nPlease check your files and try again.");
+        }
       } finally {
         setUploading(false);
         setModalLoadingText("");
@@ -1212,9 +1374,27 @@ const latestReportDate = useMemo(() => {
                       modalMessageType === "error"
                         ? "border-red-200 bg-red-50 text-red-700"
                         : "border-emerald-200 bg-emerald-50 text-emerald-700"
-                    }`}
+                    } whitespace-pre-line`}
                   >
                     {modalMessage}
+                    {duplicatePrompt ? (
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleUpload("replace")}
+                          className="rounded-xl bg-red-600 px-3 py-2 text-xs font-semibold text-white shadow-sm hover:bg-red-700"
+                        >
+                          Replace Existing File
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleUpload("skip")}
+                          className="rounded-xl border border-red-200 bg-white px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-50"
+                        >
+                          Skip Existing File
+                        </button>
+                      </div>
+                    ) : null}
                   </div>
                 ) : null}
 
@@ -1253,6 +1433,11 @@ const latestReportDate = useMemo(() => {
   </button>
 
 </div>
+
+{uploadType === "single" && (
+<>
+
+
 {/* ===== 2 COLUMN GRID (FIXED ORDER) ===== */}
 <div className="grid gap-3 md:grid-cols-2 items-end">
 
@@ -1461,7 +1646,214 @@ const latestReportDate = useMemo(() => {
   </div>
 
 </div>
-                </section> 
+</>
+)}
+
+{uploadType === "bulk" && (
+<>
+
+<div className="grid gap-3 md:grid-cols-2">
+
+{/* UPLOADED BY */}
+
+<div className="relative md:col-span-2">
+<span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
+<User size={18} />
+</span>
+
+<input
+type="text"
+value={uploadedBy}
+onChange={(e) => setUploadedBy(e.target.value)}
+placeholder="Enter uploader name"
+className="h-10 w-full rounded-2xl border border-slate-200 bg-white pl-12 pr-4 text-sm outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-100"
+/>
+</div>
+
+{/* SITE TYPE */}
+
+<div>
+<Listbox value={siteType} onChange={setSiteType}>
+<div className="relative">
+
+<Listbox.Button className="w-full h-10 rounded-2xl border border-slate-200 bg-white px-4 text-left flex items-center justify-between">
+<span>
+{siteType || "Select Site Type"}
+</span>
+
+<ChevronDown size={16}/>
+</Listbox.Button>
+
+<Listbox.Options className="absolute z-50 mt-2 w-full rounded-2xl bg-white border p-1">
+
+{allowedSiteTypes.map((site)=>(
+
+<Listbox.Option
+key={site.value}
+value={site.value}
+className="px-3 py-2 cursor-pointer hover:bg-slate-100"
+>
+
+{site.label}
+
+</Listbox.Option>
+
+))}
+
+</Listbox.Options>
+
+</div>
+</Listbox>
+</div>
+
+
+{/* REPORT TYPE */}
+
+<div>
+
+<Listbox value={reportType} onChange={setReportType}>
+
+<div className="relative">
+
+<Listbox.Button className="w-full h-10 rounded-2xl border border-slate-200 bg-white px-4 flex items-center justify-between">
+
+<span>
+
+{reportType || "Select Report Type"}
+
+</span>
+
+<ChevronDown size={16}/>
+
+</Listbox.Button>
+
+<Listbox.Options className="absolute z-50 mt-2 w-full rounded-2xl bg-white border p-1">
+
+<Listbox.Option
+value="Outage"
+className="px-3 py-2 cursor-pointer hover:bg-slate-100"
+>
+
+Outage
+
+</Listbox.Option>
+
+<Listbox.Option
+value="Performance"
+className="px-3 py-2 cursor-pointer hover:bg-slate-100"
+>
+
+Performance
+
+</Listbox.Option>
+
+</Listbox.Options>
+
+</div>
+
+</Listbox>
+
+</div>
+
+</div>
+
+{siteType && (
+  <div className="mt-3">
+    <button
+      type="button"
+      onClick={() => {
+        const link = document.createElement("a");
+        link.href = `/formats/${siteType.toLowerCase()}_format.xlsx`;
+        link.download = `${siteType}_Format.xlsx`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      }}
+      className="inline-flex items-center gap-2 rounded-xl border border-violet-200 bg-violet-50 px-4 py-2 text-sm font-medium text-violet-700 hover:bg-violet-100 transition"
+    >
+      <Download size={16} />
+      Download {siteType} Format
+    </button>
+  </div>
+)}
+
+<div className="space-y-4 mt-4">
+
+  <div className="flex items-center gap-4">
+    <div>
+      <div className="text-sm font-semibold text-slate-900">
+        Bulk File Upload
+      </div>
+
+      <p className="text-sm text-slate-500">
+        Select multiple Excel reports
+      </p>
+    </div>
+
+    <div className="h-px flex-1 bg-slate-200" />
+  </div>
+
+  <div className="relative rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center">
+
+    <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-gradient-to-br from-violet-100 to-indigo-100 text-violet-600">
+      <Upload size={26}/>
+    </div>
+
+    <div className="mt-4">
+      <p className="font-semibold">
+        Click or drag files to upload
+      </p>
+
+      <p className="text-xs text-slate-500">
+        Supported: .xlsx, .xls, .xlsb, .csv
+      </p>
+    </div>
+
+    <input
+      type="file"
+      multiple
+      accept=".xlsx,.xls,.xlsb,.csv"
+      onChange={handleBulkFilesChange}
+      className="absolute inset-0 opacity-0 cursor-pointer"
+    />
+
+  </div>
+
+  {bulkQueue.length > 0 && (
+    <div className="max-h-44 overflow-y-auto rounded-2xl border border-slate-200 bg-white p-3">
+      <div className="grid grid-cols-[1fr_120px_90px] gap-3 border-b border-slate-100 pb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+        <span>File Name</span>
+        <span>Report Date</span>
+        <span>Status</span>
+      </div>
+
+      {bulkQueue.map((item,index)=>(
+        <div
+          key={index}
+          className="grid grid-cols-[1fr_120px_90px] gap-3 border-b py-2 text-sm last:border-b-0"
+        >
+          <span className="truncate">{item.name}</span>
+
+          <span className="text-slate-600">{item.reportDate}</span>
+
+          <span className={item.status === "Uploading" ? "text-blue-600" : item.status === "Uploaded" ? "text-emerald-600" : "text-green-600"}>
+            {item.status}
+          </span>
+        </div>
+      ))}
+
+    </div>
+  )}
+
+
+</div>
+
+</>
+
+)}
+
+</section>
+
 <div className="sticky bottom-0 flex flex-col gap-3 border-t border-slate-200/70 bg-white px-4 py-4 sm:flex-row sm:items-center sm:justify-end">
 
   {!uploading && (
@@ -1474,8 +1866,10 @@ const latestReportDate = useMemo(() => {
   )}
 
   <button
-    onClick={handleUpload}
-    disabled={uploading}
+    onClick={() => handleUpload()}
+    disabled={
+  uploading
+}
     className={`${primaryButtonClass} min-w-[140px] bg-gradient-to-r from-violet-500 via-indigo-500 to-sky-500 shadow-[0_20px_60px_rgba(76,78,255,0.24)]`}
   >
     {uploading ? (
@@ -1486,7 +1880,7 @@ const latestReportDate = useMemo(() => {
     ) : (
       <>
         <Upload size={16} />
-        Upload
+        {uploadType === "bulk" ? "Upload All" : "Upload"}
       </>
     )}
   </button>

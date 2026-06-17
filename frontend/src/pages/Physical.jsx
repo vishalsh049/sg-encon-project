@@ -9,6 +9,7 @@
   RotateCcw
 } from "lucide-react";
 import Swal from "sweetalert2";
+import PremiumDatePicker from "../components/PremiumDatePicker";
 
   import Select from "react-select";
   import * as XLSX from "xlsx";
@@ -387,7 +388,7 @@ Employment Status accepts only:
 </div>
 
 <div style="
-max-height:300px;
+max-height:00px;
 overflow-y:auto;
 background:#F8FAFC;
 border:1px solid #E2E8F0;
@@ -431,22 +432,24 @@ line-height:1.8;
   return;
 }
 
-      alert("Report Uploaded Successfully");
+   Swal.fire({
+  icon: "success",
+  title: "Upload Successful",
+  text: "Physical report uploaded successfully.",
+  timer: 1800,
+  showConfirmButton: false
+});
 
-      await loadPhysicalData();
+     setShowUploadModal(false);
 
-      await loadJobRoles();
+setReportFile(null);
+setReportDate("");
+setUploadedBy("");
 
-      await loadCircles();
-
-      await loadEmploymentStatus();
-
-      setReportFile(null);
-
-      setReportDate("");
-
-      setUploadedBy("");
-  setShowUploadModal(false);
+loadPhysicalData();
+loadJobRoles();
+loadCircles();
+loadEmploymentStatus();
 
   } catch (error) {
 
@@ -2441,117 +2444,139 @@ records
 
             {/* Popup Modal */}
 
-            {showUploadModal && (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+    {showUploadModal && (
+<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md p-4">
 
-      <div className="w-full max-w-md rounded-[28px] bg-white p-6 shadow-2xl">
+  <div className="w-full max-w-lg overflow-visible rounded-3xl bg-white shadow-[0_20px_60px_rgba(0,0,0,0.15)]">
 
-        <div className="flex items-center justify-between mb-6">
+    {/* Header */}
+    <div className="flex items-center justify-between border-b px-7 py-5">
 
-          <div>
-            <h2 className="text-xl font-bold text-slate-900">
-              Upload Report
-            </h2>
+      <div>
+        <h2 className="text-2xl font-bold text-slate-900">
+          Upload Report
+        </h2>
 
-            <p className="text-sm text-slate-500 mt-1">
-              Upload manpower physical report
-            </p>
-          </div>
+        <p className="mt-1 text-sm text-slate-500">
+          Upload manpower physical report
+        </p>
+      </div>
 
-          <button
-            onClick={() => setShowUploadModal(false)}
-            className="h-10 w-10 rounded-full bg-slate-100 text-xl text-slate-600 hover:bg-red-100 hover:text-red-600"
+      <button
+        onClick={() => setShowUploadModal(false)}
+        className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-xl text-slate-500 hover:bg-red-50 hover:text-red-600"
+      >
+        ×
+      </button>
+
+    </div>
+
+    <div className="space-y-6 p-7 overflow-visible">
+
+      {/* Date */}
+      <div>
+        <label className="mb-2 block text-sm font-semibold text-slate-700">
+          Report Date
+        </label>
+
+      <PremiumDatePicker
+  value={reportDate}
+  onChange={setReportDate}
+  className="w-full"
+  isDateDisabled={(date) => {
+    const today = new Date();
+
+    today.setHours(0, 0, 0, 0);
+    date.setHours(0, 0, 0, 0);
+
+    return date >= today; // Disable today and future dates
+  }}
+/>
+      </div>
+
+      {/* Uploaded By */}
+      <div>
+        <label className="mb-2 block text-sm font-semibold text-slate-700">
+          Uploaded By
+        </label>
+
+        <input
+          type="text"
+          value={uploadedBy}
+          onChange={(e)=>setUploadedBy(e.target.value)}
+          placeholder="Enter uploaded by"
+          className="w-full rounded-2xl border border-slate-200 px-5 py-3 outline-none focus:border-indigo-500"
+        />
+      </div>
+
+      {/* File Upload */}
+      <div>
+
+        <div className="mb-3 flex items-center justify-between">
+
+          <label className="text-sm font-semibold text-slate-700">
+            Excel File
+          </label>
+
+          <a
+            href="/formats/physical_format.xlsx"
+            download
+            className="rounded-xl bg-blue-600 px-4 py-2 text-xs font-semibold text-white"
           >
-            ×
-          </button>
+            Download Format
+          </a>
 
         </div>
 
-        <div className="space-y-5">
+        <label className="flex cursor-pointer flex-col items-center justify-center rounded-3xl border-2 border-dashed border-slate-300 bg-slate-50 p-8 hover:border-indigo-500">
 
-          <div>
-            <label className="mb-2 block text-sm font-semibold text-slate-700">
-              Report Date
-            </label>
-
-            <input
-              type="date"
-              value={reportDate}
-              onChange={(e) =>
-                setReportDate(e.target.value)
-              }
-              className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:border-green-500"
-            />
+          <div className="text-sm font-semibold text-slate-700">
+            {reportFile
+              ? reportFile.name
+              : "Choose Excel File"}
           </div>
 
-          <div>
-            <label className="mb-2 block text-sm font-semibold text-slate-700">
-              Uploaded By
-            </label>
-
-            <input
-              type="text"
-              placeholder="Enter uploaded by"
-              value={uploadedBy}
-              onChange={(e) =>
-                setUploadedBy(e.target.value)
-              }
-              className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:border-green-500"
-            />
+          <div className="mt-1 text-xs text-slate-400">
+            XLSX / XLS / CSV
           </div>
 
-          <div>
-          <div className="mb-2 flex items-center justify-between">
+          <input
+            type="file"
+            accept=".xlsx,.xls,.csv"
+            className="hidden"
+            onChange={(e)=>setReportFile(e.target.files[0])}
+          />
 
-    <label className="block text-sm font-semibold text-slate-700">
-      Upload Excel File
-    </label>
-
-    <a
-      href="/formats/physical_format.xlsx"
-      download
-      className="rounded-xl bg-blue-600 px-3 py-1 text-xs font-semibold text-white hover:bg-blue-700"
-    >
-      Download Format
-    </a>
-
-  </div>
-
-            <input
-              type="file"
-              accept=".xlsx,.xls,.csv,.xlsb"
-              onChange={(e) =>
-                setReportFile(e.target.files[0])
-              }
-              className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm"
-            />
-          </div>
-
-          <div className="flex justify-end gap-3 pt-2">
-
-            <button
-              onClick={() => setShowUploadModal(false)}
-              className="rounded-2xl border border-slate-200 px-5 py-2 text-sm font-semibold text-slate-700"
-            >
-              Cancel
-            </button>
-
-            <button
-    onClick={handleReportUpload}
-    disabled={uploading}
-    className="rounded-2xl bg-green-600 px-5 py-2 text-sm font-semibold text-white shadow-lg hover:bg-green-700 disabled:opacity-60 disabled:cursor-not-allowed"
-  >
-    {uploading ? "Uploading..." : "Upload Report"}
-  </button>
-
-          </div>
-
-        </div>
+        </label>
 
       </div>
 
     </div>
-  )}
+
+    {/* Footer */}
+    <div className="flex justify-end gap-3 border-t bg-slate-50 px-7 py-5">
+
+      <button
+        onClick={()=>setShowUploadModal(false)}
+        className="rounded-2xl border border-slate-200 bg-white px-6 py-3 font-semibold text-slate-700"
+      >
+        Cancel
+      </button>
+
+      <button
+        onClick={handleReportUpload}
+        disabled={uploading}
+        className="rounded-2xl bg-gradient-to-r from-emerald-500 to-green-600 px-7 py-3 font-semibold text-white shadow-lg disabled:opacity-60"
+      >
+        {uploading ? "Uploading..." : "Upload Report"}
+      </button>
+
+    </div>
+
+  </div>
+
+</div>
+)}
 
  {viewEmployee && (
 
