@@ -1400,6 +1400,8 @@
 
                 try {
                   const { site_type, report_type, upload_type, date, uploadedBy } = req.body;
+                  console.log("site_type =", site_type);
+                  console.log("report_type =", report_type);
                   const duplicateAction = String(req.body.duplicateAction || "").toLowerCase();
                   const finalDate = normalizeDate(date);
                   console.log("DATE RECEIVED:", date);

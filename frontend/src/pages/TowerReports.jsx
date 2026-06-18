@@ -485,9 +485,6 @@ formData.append("siteCategory", normalizedCategory);
 formData.append("upload_type", uploadType);
 formData.append("uploadedBy", uploadedBy.trim());
 
-formData.append("site_type", siteType);
-formData.append("report_type", reportType);
-
 const safeDate = date;
 
 if (uploadType === "single") {
