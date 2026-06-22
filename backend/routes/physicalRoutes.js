@@ -264,6 +264,52 @@
 
   };
 
+  function normalizeJobRole(role) {
+
+  const normalized = String(role || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[-_]/g, " ")
+    .replace(/\s+/g, " ");
+
+  const roleMap = {
+
+    "wh incharge cum security": "WH Incharge cum Security",
+    "warehouse incharge cum security": "WH Incharge cum Security",
+
+    "fiber engineer": "Fiber Engineer",
+    "fibre engineer": "Fiber Engineer",
+
+    "fiber supervisor": "Fiber Supervisor",
+    "fibre supervisor": "Fiber Supervisor",
+
+    "fiber helper": "Fiber Helper",
+    "fibre helper": "Fiber Helper",
+
+    "fttx technician": "FTTX Technician",
+    "technician ftth": "FTTX Technician",
+
+    "fttx engineer": "FTTX Engineer",
+
+    "assistant splicer": "Assistant Splicer",
+    "splicer assistant": "Assistant Splicer",
+
+    "cmp lead": "CMP Lead",
+
+    "utility engineer": "Utility Engineer",
+    "utility supervisor": "Utility Supervisor",
+
+    "isp engineer": "ISP Engineer",
+
+    "noc executive": "NOC Executive",
+
+    "state operation head": "State Operation Head"
+
+  };
+
+  return roleMap[normalized] || role;
+}
+
   function mapPhysicalRow(row, reportId) {
 
     return [
@@ -298,24 +344,16 @@
     row["Job Role_Actual_CMP Verify"]
   ),
 
-    (() => {
+   // job_role
+normalizeJobRole(
+  row["Job Role"]
+),
 
-    const role = String(
-      row["Job Role"] || ""
-    ).trim().toLowerCase();
-
-    if (
-      role === "wh incharge cum security" ||
-      role === "warehouse incharge cum security" ||
-      role === "wh incharge cum security " ||
-      role === "warehouse incharge cum security "
-    ) {
-      return "WH Incharge cum Security";
-    }
-
-    return toText(row["Job Role"]);
-
-  })(),
+// manpower_signoff_scope
+toText(
+  row["Manpower SignOff Scope"] ||
+  row["Manpower Signoff Scope"]
+),
 
       // manpower_signoff_scope
       toText(

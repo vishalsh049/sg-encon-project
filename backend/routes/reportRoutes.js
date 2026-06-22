@@ -154,7 +154,7 @@
 
         total_cnum_count INT,
         total_outage BIGINT,
-        availability DECIMAL(10,4),
+        total_availability DECIMAL(10,4),
 
         cells_up INT,
 
@@ -305,11 +305,11 @@
               }
             };
 
-            const insertEscRows = async (rows) => {
-              if (!rows.length) return;
+    const insertEscRows = async (rows) => {
+     if (!rows.length) return;
 
-              await query(
-                `INSERT INTO esc (
+     await query(
+   `INSERT INTO esc (
     file_id,
     sap_id,
     circle,
@@ -322,7 +322,7 @@
     device_type,
     total_cnum_count,
     total_outage,
-    availability,
+    total_availability,
     cells_up,
     date
   ) VALUES ?`,
@@ -572,104 +572,122 @@
             };    
             // ✅ CLOSE forEach loop
 
-          const parseEscRows = (rows, fallbackDate, fileId) => {
-    const insertRows = [];
-    const errors = [];
+    const parseEscRows = (rows, fallbackDate, fileId) => {
+  const insertRows = [];
+  const errors = [];
 
-    rows.forEach((row, index) => {
-
-      const cleanRow = {};
+  rows.forEach((row, index) => {
+    const cleanRow = {};
 
     Object.keys(row).forEach((key) => {
+      const normalizedKey = key
+        .toString()
+        .trim()
+        .toLowerCase()
+        .replace(/[\s_]+/g, " ");
 
-    const normalizedKey = key
-      .toString()
-      .trim()
-      .toLowerCase()
-      .replace(/[\s_]+/g, " ");
-
-    cleanRow[normalizedKey] = row[key];
-  });
-
-      const circle =
-        cleanRow["circle"] ||
-        cleanRow["circle name"] ||
-        cleanRow["Circle"] ||
-        cleanRow["CIRCLE"];
-
-      const cmp =
-        cleanRow["cmp"] ||
-        cleanRow["cmp name"] ||
-        cleanRow["CMP"] ||
-        cleanRow["Cmp"];
-
-      const date = normalizeDate(fallbackDate);
-
-      console.log("ESC ROW:", cleanRow);
-      console.log("CIRCLE:", circle);
-      console.log("CMP:", cmp);
-
-      if (!circle || !cmp) {
-        errors.push(index + 2);
-        return;
-      }
-  insertRows.push([
-
-    fileId,
-
-    cleanRow["sap_id"] ||
-    cleanRow["sap id"] ||
-    null,
-
-    String(circle).trim(),
-
-    String(cmp).trim(),
-
-    cleanRow["jc_name"] ||
-    cleanRow["jc name"] ||
-    null,
-
-    cleanRow["jc code"] || 
-    cleanRow["jc_id"] ||
-    cleanRow["jc id"] ||
-    null,
-
-    cleanRow["jc_sap_id"] ||
-    cleanRow["jc sap id"] ||
-    null,
-
-    cleanRow["city"] || null,
-
-    cleanRow["site_type"] ||
-    cleanRow["site type"] ||
-    null,
-
-    cleanRow["device_type"] ||
-    cleanRow["device type"] ||
-    null,
-
-    cleanRow["total_cnum_count"] ||
-    cleanRow["total cnum count"] ||
-    null,
-
-    cleanRow["total_outage"] ||
-    cleanRow["total outage"] ||
-    null,
-
-    cleanRow["total_availability"] ||   
-    cleanRow["total availability"] ||
-    null,
-
-    cleanRow["cells_up"] ||
-    cleanRow["cells up"] ||
-    null,
-
-    date,
-  ]);
+      cleanRow[normalizedKey] = row[key];
     });
 
-    return { insertRows, errors };
-  };
+    const circle =
+      cleanRow["circle"] ||
+      cleanRow["circle name"] ||
+      cleanRow["Circle"] ||
+      cleanRow["CIRCLE"];
+
+    const cmp =
+      cleanRow["cmp"] ||
+      cleanRow["cmp name"] ||
+      cleanRow["CMP"] ||
+      cleanRow["Cmp"];
+
+    const date = normalizeDate(fallbackDate);
+
+    console.log("ESC ROW:", cleanRow);
+    console.log("CIRCLE:", circle);
+    console.log("CMP:", cmp);
+
+    if (!circle || !cmp) {
+      errors.push(index + 2);
+      return;
+    }
+
+    // ✅ Availability normalization
+    let availability =
+      cleanRow["availability"] ??
+      cleanRow["Availability"] ??
+      cleanRow["total_availability"] ??
+      cleanRow["total availability"] ??
+      0;
+
+    availability = Number(
+      String(availability).replace("%", "")
+    );
+
+    if (isNaN(availability)) {
+      availability = 0;
+    }
+
+    // If value is stored as 0.9017 convert to 90.17
+    if (availability > 0 && availability <= 1) {
+      availability *= 100;
+    }
+
+    insertRows.push([
+      fileId,
+
+      cleanRow["sap_id"] ||
+      cleanRow["sap id"] ||
+      null,
+
+      String(circle).trim(),
+
+      String(cmp).trim(),
+
+      cleanRow["jc_name"] ||
+      cleanRow["jc name"] ||
+      null,
+
+      cleanRow["jc code"] ||
+      cleanRow["jc_id"] ||
+      cleanRow["jc id"] ||
+      null,
+
+      cleanRow["jc_sap_id"] ||
+      cleanRow["jc sap id"] ||
+      null,
+
+      cleanRow["city"] ||
+      null,
+
+      cleanRow["site_type"] ||
+      cleanRow["site type"] ||
+      null,
+
+      cleanRow["device_type"] ||
+      cleanRow["device type"] ||
+      null,
+
+      cleanRow["total_cnum_count"] ||
+      cleanRow["total cnum count"] ||
+      null,
+
+      cleanRow["total_outage"] ||
+      cleanRow["total outage"] ||
+      null,
+
+      availability,
+
+      cleanRow["cells_up"] ||
+      cleanRow["cells up"] ||
+      null,
+
+      date
+    ]);
+  });
+
+  return { insertRows, errors };
+};
 
   // 🔥 SMART HEADER DETECTION - Handles various naming conventions
   const findHeaderValue = (cleanRow, possibleNames) => {
