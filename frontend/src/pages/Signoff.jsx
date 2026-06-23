@@ -596,14 +596,11 @@
 
     try {
 
-    for (const row of formattedData) {
-
-      await axios.post(
-        buildApiUrl("/api/signoff"),
-        row,
-        { headers }
-      );
-    }
+ await axios.post(
+  buildApiUrl("/api/signoff/bulk"),
+  formattedData,
+  { headers }
+);
 
   toast.success(
     "Excel uploaded successfully",

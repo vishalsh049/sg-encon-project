@@ -1,5 +1,4 @@
 const express = require("express");
-
 const router = express.Router();
 
 const { db } = require("../config/db");
@@ -10,7 +9,6 @@ const {
   forbid,
   isAllCircle,
 } = require("../middleware/circleAccess");
-
 
 const query = (sql, params = []) =>
   new Promise((resolve, reject) => {
@@ -194,31 +192,31 @@ router.post("/", async (req, res) => {
         WHERE circle=? AND cmp=?
         `,
         [
-  Number(state_leadership_team) || 0,
-  Number(noc_executive) || 0,
-  Number(analyst) || 0,
-  Number(cmp_lead) || 0,
-  Number(technician) || 0,
-  Number(rigger) || 0,
-  Number(utility_supervisor) || 0,
-  Number(utility_engineer) || 0,
-  Number(isp_engineer) || 0,
-  Number(wh_incharge_cum_security) || 0,
-  Number(splicer) || 0,
-  Number(assistant_splicer) || 0,
-  Number(fiber_helper) || 0,
-  Number(patroller) || 0,
-  Number(fiber_supervisor) || 0,
-  Number(fibre_engineer) || 0,
-  Number(fttx_splicer) || 0,
-  Number(fttx_assistant_splicer) || 0,
-  Number(fttx_supervisor) || 0,
-  Number(fttx_helper) || 0,
-  Number(fttx_engineer) || 0,
-  Number(fttx_technician) || 0,
-  circle,
-  cmp,
-]
+          Number(state_leadership_team) || 0,
+          Number(noc_executive) || 0,
+          Number(analyst) || 0,
+          Number(cmp_lead) || 0,
+          Number(technician) || 0,
+          Number(rigger) || 0,
+          Number(utility_supervisor) || 0,
+          Number(utility_engineer) || 0,
+          Number(isp_engineer) || 0,
+          Number(wh_incharge_cum_security) || 0,
+          Number(splicer) || 0,
+          Number(assistant_splicer) || 0,
+          Number(fiber_helper) || 0,
+          Number(patroller) || 0,
+          Number(fiber_supervisor) || 0,
+          Number(fibre_engineer) || 0,
+          Number(fttx_splicer) || 0,
+          Number(fttx_assistant_splicer) || 0,
+          Number(fttx_supervisor) || 0,
+          Number(fttx_helper) || 0,
+          Number(fttx_engineer) || 0,
+          Number(fttx_technician) || 0,
+          circle,
+          cmp,
+        ]
       );
 
       res.json({
@@ -259,32 +257,32 @@ router.post("/", async (req, res) => {
         VALUES
         (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `,
-       [
-  circle,
-  cmp,
-  Number(state_leadership_team) || 0,
-  Number(noc_executive) || 0,
-  Number(analyst) || 0,
-  Number(cmp_lead) || 0,
-  Number(technician) || 0,
-  Number(rigger) || 0,
-  Number(utility_supervisor) || 0,
-  Number(utility_engineer) || 0,
-  Number(isp_engineer) || 0,
-  Number(wh_incharge_cum_security) || 0,
-  Number(splicer) || 0,
-  Number(assistant_splicer) || 0,
-  Number(fiber_helper) || 0,
-  Number(patroller) || 0,
-  Number(fiber_supervisor) || 0,
-  Number(fibre_engineer) || 0,
-  Number(fttx_splicer) || 0,
-  Number(fttx_assistant_splicer) || 0,
-  Number(fttx_supervisor) || 0,
-  Number(fttx_helper) || 0,
-  Number(fttx_engineer) || 0,
-  Number(fttx_technician) || 0,
-]      );
+        [
+          circle,
+          cmp,
+          Number(state_leadership_team) || 0,
+          Number(noc_executive) || 0,
+          Number(analyst) || 0,
+          Number(cmp_lead) || 0,
+          Number(technician) || 0,
+          Number(rigger) || 0,
+          Number(utility_supervisor) || 0,
+          Number(utility_engineer) || 0,
+          Number(isp_engineer) || 0,
+          Number(wh_incharge_cum_security) || 0,
+          Number(splicer) || 0,
+          Number(assistant_splicer) || 0,
+          Number(fiber_helper) || 0,
+          Number(patroller) || 0,
+          Number(fiber_supervisor) || 0,
+          Number(fibre_engineer) || 0,
+          Number(fttx_splicer) || 0,
+          Number(fttx_assistant_splicer) || 0,
+          Number(fttx_supervisor) || 0,
+          Number(fttx_helper) || 0,
+          Number(fttx_engineer) || 0,
+          Number(fttx_technician) || 0,
+        ]);
 
       res.json({
         message: "Created successfully",
@@ -299,6 +297,127 @@ router.post("/", async (req, res) => {
       message: "Create failed",
     });
   }
+});
+
+router.post("/bulk", async (req, res) => {
+
+  try {
+
+    const rows = req.body;
+
+    if (!Array.isArray(rows)) {
+      return res.status(400).json({
+        message: "Invalid data"
+      });
+    }
+
+    for (const row of rows) {
+      if (!canAccessCircle(req.authUser, row.circle)) {
+        return forbid(res);
+      }
+    }
+
+    const values = rows.map(row => [
+
+      row.circle,
+      row.cmp,
+      Number(row.state_leadership_team) || 0,
+      Number(row.noc_executive) || 0,
+      Number(row.analyst) || 0,
+      Number(row.cmp_lead) || 0,
+      Number(row.technician) || 0,
+      Number(row.rigger) || 0,
+      Number(row.utility_supervisor) || 0,
+      Number(row.utility_engineer) || 0,
+      Number(row.isp_engineer) || 0,
+      Number(row.wh_incharge_cum_security) || 0,
+      Number(row.splicer) || 0,
+      Number(row.assistant_splicer) || 0,
+      Number(row.fiber_helper) || 0,
+      Number(row.patroller) || 0,
+      Number(row.fiber_supervisor) || 0,
+      Number(row.fibre_engineer) || 0,
+      Number(row.fttx_splicer) || 0,
+      Number(row.fttx_assistant_splicer) || 0,
+      Number(row.fttx_supervisor) || 0,
+      Number(row.fttx_helper) || 0,
+      Number(row.fttx_engineer) || 0,
+      Number(row.fttx_technician) || 0
+
+    ]);
+
+    await query(
+      `
+      INSERT INTO signoff
+      (
+      circle,
+      cmp,
+      state_leadership_team,
+      noc_executive,
+      analyst,
+      cmp_lead,
+      technician,
+      rigger,
+      utility_supervisor,
+      utility_engineer,
+      isp_engineer,
+      wh_incharge_cum_security,
+      splicer,
+      assistant_splicer,
+      fiber_helper,
+      patroller,
+      fiber_supervisor,
+      fibre_engineer,
+      fttx_splicer,
+      fttx_assistant_splicer,
+      fttx_supervisor,
+      fttx_helper,
+      fttx_engineer,
+      fttx_technician
+      )
+      VALUES ?
+      ON DUPLICATE KEY UPDATE
+
+      state_leadership_team=VALUES(state_leadership_team),
+      noc_executive=VALUES(noc_executive),
+      analyst=VALUES(analyst),
+      cmp_lead=VALUES(cmp_lead),
+      technician=VALUES(technician),
+      rigger=VALUES(rigger),
+      utility_supervisor=VALUES(utility_supervisor),
+      utility_engineer=VALUES(utility_engineer),
+      isp_engineer=VALUES(isp_engineer),
+      wh_incharge_cum_security=VALUES(wh_incharge_cum_security),
+      splicer=VALUES(splicer),
+      assistant_splicer=VALUES(assistant_splicer),
+      fiber_helper=VALUES(fiber_helper),
+      patroller=VALUES(patroller),
+      fiber_supervisor=VALUES(fiber_supervisor),
+      fibre_engineer=VALUES(fibre_engineer),
+      fttx_splicer=VALUES(fttx_splicer),
+      fttx_assistant_splicer=VALUES(fttx_assistant_splicer),
+      fttx_supervisor=VALUES(fttx_supervisor),
+      fttx_helper=VALUES(fttx_helper),
+      fttx_engineer=VALUES(fttx_engineer),
+      fttx_technician=VALUES(fttx_technician)
+      `,
+      [values]
+    );
+
+    res.json({
+      success: true
+    });
+
+  } catch (error) {
+
+    console.log(error);
+
+    res.status(500).json({
+      success: false
+    });
+
+  }
+
 });
 
 /* UPDATE */
@@ -502,8 +621,8 @@ router.post("/request", async (req, res) => {
     }
 
     console.log(
-  "INSERTING INTO signoff_requests"
-);
+      "INSERTING INTO signoff_requests"
+    );
     await query(`
       INSERT INTO signoff_requests
       (
@@ -593,17 +712,17 @@ router.post("/request", async (req, res) => {
 
   } catch (error) {
 
-  console.error(
-    "SIGNOFF REQUEST ERROR:",
-    error
-  );
+    console.error(
+      "SIGNOFF REQUEST ERROR:",
+      error
+    );
 
-  res.status(500).json({
-    success: false,
-    message: error.message
-  });
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
 
-}
+  }
 
 });
 

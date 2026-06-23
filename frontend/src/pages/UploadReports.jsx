@@ -35,11 +35,22 @@ function UploadReports() {
   const [date, setDate] = useState(today);
   const [siteType, setSiteType] = useState("");
   const [reportType, setReportType] = useState("");
-  const [uploadType, setUploadType] = useState("single");
-  const [file, setFile] = useState(null);
+  const [files, setFiles] = useState([]);
+  const [uploadedBy, setUploadedBy] = useState(
+    localStorage.getItem("userName") ||
+      localStorage.getItem("name") ||
+      localStorage.getItem("username") ||
+      ""
+  );
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [messageType, setMessageType] = useState("success");
+  const [duplicateDialog, setDuplicateDialog] = useState({
+    open: false,
+    mode: "single",
+    duplicates: [],
+  });
+  const uploadMode = files.length > 1 ? "bulk" : "single";
 
   const validExtensions = ["xlsx", "xls", "xlsb", "csv"];
   const isValidFile = (f) => {
@@ -49,50 +60,110 @@ function UploadReports() {
   };
 
   const handleFileChange = (e) => {
-    const picked = e.target.files?.[0] || null;
-    if (!picked) {
-      setFile(null);
+    const picked = Array.from(e.target.files || []);
+    if (!picked.length) {
+      setFiles([]);
       return;
     }
-    if (!isValidFile(picked)) {
+    const invalidFiles = picked.filter((item) => !isValidFile(item));
+    if (invalidFiles.length) {
       setMessageType("error");
       setMessage("Invalid file type. Please upload .xlsx, .xls, .xlsb, or .csv");
-      setFile(null);
+      setFiles([]);
       e.target.value = "";
       return;
     }
     setMessage("");
-    setFile(picked);
+    setFiles(picked);
   };
 
   const handleUpload = async () => {
     setMessage("");
-    if (!date || !siteType || !reportType || !uploadType) {
+    if (!siteType || !reportType) {
       setMessageType("error");
       setMessage("Please fill all required fields.");
       return;
     }
-    if (!file) {
+    if (uploadMode === "single" && !date) {
+      setMessageType("error");
+      setMessage("Please select report date.");
+      return;
+    }
+    if (!uploadedBy.trim()) {
+      setMessageType("error");
+      setMessage("Please enter Uploaded By.");
+      return;
+    }
+    if (!files.length) {
       setMessageType("error");
       setMessage("Please select a valid file to upload.");
       return;
     }
 
-    const formData = new FormData();
-    formData.append("file", file);
-    formData.append("siteCategory", normalizedCategory);
-    formData.append("date", date);
-    formData.append("site_type", siteType);
-    formData.append("report_type", reportType);
-    formData.append("upload_type", uploadType);
+    const submitUpload = async (duplicateAction = "") => {
+      const formData = new FormData();
+      formData.append("siteCategory", normalizedCategory);
+      if (uploadMode === "single") {
+        formData.append("date", date);
+      }
+      formData.append("site_type", siteType);
+      formData.append("report_type", reportType);
+      formData.append("uploadedBy", uploadedBy.trim());
+      if (duplicateAction) {
+        formData.append("duplicateAction", duplicateAction);
+      }
+      files.forEach((file, index) => {
+        formData.append(index === 0 && files.length === 1 ? "file" : "files", file);
+      });
 
+      return axios.post(buildApiUrl("/api/reports/upload"), formData);
+    };
     try {
       setLoading(true);
+      setDuplicateDialog({ open: false, mode: "single", duplicates: [] });
+      const res = await submitUpload();
+      setMessageType("success");
+      setMessage(res.data?.message || "Upload completed successfully.");
+      setFiles([]);
+    } catch (err) {
+      const duplicatePayload = err?.response?.data;
+      if (err?.response?.status === 409 && duplicatePayload?.duplicate) {
+        setDuplicateDialog({
+          open: true,
+          mode: duplicatePayload.mode || (files.length > 1 ? "bulk" : "single"),
+          duplicates: duplicatePayload.duplicates || [],
+        });
+        return;
+      }
+      setMessageType("error");
+      setMessage(err.response?.data?.message || "Upload failed");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDuplicateAction = async (duplicateAction) => {
+    try {
+      setLoading(true);
+      setMessage("");
+      const formData = new FormData();
+      formData.append("siteCategory", normalizedCategory);
+      if (uploadMode === "single") {
+        formData.append("date", date);
+      }
+      formData.append("site_type", siteType);
+      formData.append("report_type", reportType);
+      formData.append("uploadedBy", uploadedBy.trim());
+      formData.append("duplicateAction", duplicateAction);
+      files.forEach((fileItem, index) => {
+        formData.append(index === 0 && files.length === 1 ? "file" : "files", fileItem);
+      });
 
       const res = await axios.post(buildApiUrl("/api/reports/upload"), formData);
       setMessageType("success");
       setMessage(res.data?.message || "Upload completed successfully.");
-      setFile(null);
+      setFiles([]);
+      setDuplicateDialog({ open: false, mode: "single", duplicates: [] });
     } catch (err) {
       setMessageType("error");
       setMessage(err.response?.data?.message || "Upload failed");
@@ -120,15 +191,23 @@ function UploadReports() {
 
         <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-[0_8px_24px_rgba(15,23,42,0.06)]">
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            {/* Date */}
-            <div className="flex flex-col gap-1">
-              <label className="text-xs text-gray-600">Date</label>
-              <PremiumDatePicker
-                value={date}
-                onChange={setDate}
-                className="w-full"
-              />
-            </div>
+            {uploadMode === "single" ? (
+              <div className="flex flex-col gap-1">
+                <label className="text-xs text-gray-600">Date</label>
+                <PremiumDatePicker
+                  value={date}
+                  onChange={setDate}
+                  className="w-full"
+                />
+              </div>
+            ) : (
+              <div className="flex flex-col gap-1">
+                <label className="text-xs text-gray-600">Bulk Upload Date</label>
+                <div className="flex h-10 items-center rounded-lg border border-amber-200 bg-amber-50 px-3 text-sm text-amber-800">
+                  Date is taken from each file name. Date picker is not used for bulk upload.
+                </div>
+              </div>
+            )}
 
             {/* Site Type */}
             <div className="flex flex-col gap-1">
@@ -161,51 +240,38 @@ function UploadReports() {
               </select>
             </div>
 
-            {/* Upload Type */}
             <div className="flex flex-col gap-1">
-              <label className="text-xs text-gray-600">Upload Type</label>
-              <div className="flex items-center gap-4 rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700">
-                <label className="flex items-center gap-2">
-                  <input
-                    type="radio"
-                    name="uploadType"
-                    value="single"
-                    checked={uploadType === "single"}
-                    onChange={(e) => setUploadType(e.target.value)}
-                    className={normalizedCategory === "fiber" ? "text-emerald-600" : "text-indigo-600"}
-                  />
-                  Single Upload
-                </label>
-                <label className="flex items-center gap-2">
-                  <input
-                    type="radio"
-                    name="uploadType"
-                    value="bulk"
-                    checked={uploadType === "bulk"}
-                    onChange={(e) => setUploadType(e.target.value)}
-                    className={normalizedCategory === "fiber" ? "text-emerald-600" : "text-indigo-600"}
-                  />
-                  Bulk Upload
-                </label>
-              </div>
+              <label className="text-xs text-gray-600">Uploaded By</label>
+              <input
+                value={uploadedBy}
+                onChange={(e) => setUploadedBy(e.target.value)}
+                className={`h-10 rounded-lg border border-gray-200 px-3 text-sm text-gray-800 focus:outline-none ${accent.ring}`}
+                placeholder="Enter uploader name"
+              />
             </div>
 
             {/* File Upload */}
             <div className="flex flex-col gap-1 md:col-span-2">
-              <label className="text-xs text-gray-600">Excel File</label>
+              <label className="text-xs text-gray-600">Excel Files</label>
               <div className="flex items-center gap-3 rounded-lg border border-dashed border-gray-300 bg-gray-50 px-3 py-3">
                 <input
                   type="file"
+                  multiple
                   accept=".xlsx,.xls,.xlsb,.csv"
                   onChange={handleFileChange}
                   className={`block w-full text-sm text-gray-700 file:mr-4 file:rounded-md file:border-0 file:px-3 file:py-2 file:text-white ${accent.file}`}
                 />
-                {file ? (
+                {files.length ? (
                   <span className="text-xs text-gray-500 truncate">
-                    {file.name}
+                    {files.length === 1 ? files[0].name : `${files.length} files selected`}
                   </span>
                 ) : null}
               </div>
+              <p className="text-xs text-gray-500">
+                {uploadMode === "bulk"
+                  ? "Bulk upload requires each file name in the format reporttype_YYYY-MM-DD.ext."
+                  : "Single upload uses the selected date and does not read the date from the file name."}
+              </p>
             </div>
           </div>
 
@@ -231,6 +297,64 @@ function UploadReports() {
             </button>
           </div>
         </div>
+
+        {duplicateDialog.open ? (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+            <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl">
+              <h3 className="text-lg font-semibold text-gray-800">
+                {duplicateDialog.mode === "bulk"
+                  ? "Existing reports found"
+                  : "Report already exists for this date"}
+              </h3>
+              <p className="mt-2 text-sm text-gray-600">
+                {duplicateDialog.mode === "bulk"
+                  ? "The following reports already exist. Choose how you want to continue."
+                  : "A matching report already exists for the selected details."}
+              </p>
+
+              <div className="mt-4 space-y-3 rounded-xl border border-gray-200 bg-gray-50 p-4">
+                {duplicateDialog.duplicates.map((item, index) => (
+                  <div key={`${item.fileName}-${item.report_date}-${index}`} className="rounded-lg bg-white px-3 py-2 text-sm text-gray-700">
+                    <div className="font-medium text-gray-800">{item.fileName}</div>
+                    <div>Date: {item.report_date}</div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="mt-5 flex flex-wrap justify-end gap-2">
+                <button
+                  onClick={() => setDuplicateDialog({ open: false, mode: "single", duplicates: [] })}
+                  className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700"
+                >
+                  Cancel
+                </button>
+                {duplicateDialog.mode === "bulk" ? (
+                  <>
+                    <button
+                      onClick={() => handleDuplicateAction("skip")}
+                      className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-700"
+                    >
+                      Skip Existing
+                    </button>
+                    <button
+                      onClick={() => handleDuplicateAction("replace")}
+                      className={`rounded-lg px-4 py-2 text-sm text-white ${accent.button}`}
+                    >
+                      Replace All
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    onClick={() => handleDuplicateAction("replace")}
+                    className={`rounded-lg px-4 py-2 text-sm text-white ${accent.button}`}
+                  >
+                    Replace
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        ) : null}
       </div>
     </div>
   );

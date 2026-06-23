@@ -354,41 +354,13 @@ useEffect(() => {
   Swal.fire({
   icon: "warning",
   title: "Validation Error",
-
   width: "900px",
 
- 
 html: `
 <div style="text-align:left">
 
 <div style="
-background:#FEF3C7;
-border:1px solid #FCD34D;
-padding:16px;
-border-radius:12px;
-margin-bottom:15px;
-">
-
-<div style="
-font-size:18px;
-font-weight:700;
-color:#92400E;
-margin-bottom:10px;
-">
-❌ Upload Failed
-</div>
-
-<div style="font-size:14px;color:#475569">
-Employment Status accepts only:
-
-<br>✅ Active
-<br>✅ Inactive
-</div>
-
-</div>
-
-<div style="
-max-height:00px;
+max-height:400px;
 overflow-y:auto;
 background:#F8FAFC;
 border:1px solid #E2E8F0;
@@ -1424,7 +1396,7 @@ const circleCmpMap = {
 Haryana: [
   "Haryana SHQ",
   "Ambala",
-  "Hissar",
+  "Hisar",
   "Karnal",
   "Panipat",
   "Palwal",
@@ -1453,6 +1425,7 @@ Haryana: [
     "Gorakhpur",
     "Raibareilly",
     "Varanasi",
+    "Mohali"
   ],
 };
 
@@ -1460,11 +1433,11 @@ const jobRoleOptions = [
   "Admin Head",
   "Analyst - Fiber",
   "Analyst - Fttx",
-  "Analyst - Ipcolo",
+  "Analyst - IPCOLO",
   "Analyst - ISP",
   "Analyst - Material",
   "Analyst - Planning",
-  "Analyst - Pmo",
+  "Analyst - PMO",
   "Analyst - Power & Fuel",
   "Analyst - Utility",
   "Assistant Splicer",
@@ -1473,7 +1446,7 @@ const jobRoleOptions = [
   "Commercial Lead",
   "Energy Lead",
   "Estate Executive",
-  "Fiber Sme",
+  "Fiber SME",
   "Fibre Supervisor",
   "FRT Helper",
   "Fttx Assistant Splicer",
@@ -1483,13 +1456,13 @@ const jobRoleOptions = [
   "Fttx Splicer",
   "Fttx Supervisor",
   "Fttx Technician",
-  "Hr Executive",
+  "HR Executive",
   "ISP Engineer",
   "Legal Executive",
   "MIS Executive",
   "Office Helper",
-  "Omcr Lead",
-  "Omcr Resources",
+  "OMCR Lead",
+  "OMCR Resources",
   "Other Roles - Temporary Technician",
   "Patroller",
   "Project Technician",
@@ -1499,7 +1472,7 @@ const jobRoleOptions = [
   "State Fiber SME",
   "State HR Head",
   "State HSEF Officer",
-  "State Isp Sme",
+  "State ISP SME",
   "State Material Manager",
   "State Operation Head",
   "State Utility SME",
