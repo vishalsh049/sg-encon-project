@@ -1218,7 +1218,16 @@ const processSiteUploadRows = async ({ siteType, rows, date, fileId }) => {
 
       if (!circle || !cmp) return;
 
-      insertRows.push([fileId, String(circle).trim(), String(cmp).trim(), dateValue, 1]);
+     insertRows.push([
+  fileId,
+  String(circle).trim(),
+  String(cmp).trim(),
+  dateValue,
+  1,
+  cleanRow["sap id"] || null,
+  cleanRow["jc name"] || null,
+  cleanRow["jc id"] || null
+]);
     });
 
     if (!insertRows.length) {

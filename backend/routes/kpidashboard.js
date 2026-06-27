@@ -171,16 +171,50 @@ router.get("/tower-uptime", async (req, res) => {
         }
 
         // MAIN QUERY
-        const hasCircleColumn = columnNames.includes("circle");
-        const circleFilter =
-          !isAllCircle(req.authUser) && hasCircleColumn
-            ? "AND LOWER(TRIM(circle)) = LOWER(TRIM(?))"
-            : "";
-        const params =
-          !isAllCircle(req.authUser) && hasCircleColumn
-            ? [req.authUser.circle, req.authUser.circle]
-            : [];
+       const hasCircleColumn = columnNames.includes("circle");
+const hasCmpColumn = columnNames.includes("cmp");
 
+const selectedCircle = req.query.circle || "";
+const selectedCmp = req.query.cmp || "";
+
+console.log("Circle =", selectedCircle);
+console.log("CMP =", selectedCmp);
+
+let whereConditions = [];
+let params = [];
+
+// User access restriction
+if (!isAllCircle(req.authUser) && hasCircleColumn) {
+  whereConditions.push(
+    "LOWER(TRIM(circle)) = LOWER(TRIM(?))"
+  );
+  params.push(req.authUser.circle);
+}
+
+// Circle dropdown filter
+if (selectedCircle && hasCircleColumn) {
+  whereConditions.push(
+    "LOWER(TRIM(circle)) = LOWER(TRIM(?))"
+  );
+  params.push(selectedCircle);
+}
+
+// CMP dropdown filter
+if (selectedCmp && hasCmpColumn) {
+  whereConditions.push(
+    "LOWER(TRIM(cmp)) = LOWER(TRIM(?))"
+  );
+  params.push(selectedCmp);
+}
+
+const whereClause =
+  whereConditions.length > 0
+    ? "AND " + whereConditions.join(" AND ")
+    : "";
+
+    console.log(site.table);
+console.log(whereClause);
+console.log(params);
    const rows = await query(`
     SELECT
     DATE_FORMAT(${dateColumn}, '%Y-%m-%d') as report_date,
@@ -217,16 +251,16 @@ router.get("/tower-uptime", async (req, res) => {
 
             FROM ${site.table}
             WHERE 1=1
-              ${circleFilter}
+           ${whereClause}
 
           )
-          ${circleFilter}
+            ${whereClause}
 
-          GROUP BY DATE(${dateColumn})
+            GROUP BY DATE(${dateColumn})
 
           ORDER BY DATE(${dateColumn}) ASC
 
-        `, params);
+        `, [...params, ...params]);
 
         const normalizedRows = rows.map((row) => ({
           ...row,
@@ -296,10 +330,10 @@ router.get("/tower-uptime", async (req, res) => {
             (d) => d.uptime
           );
 
-        const validBars =
-          normalizedRows.map((r) =>
-            Number(r.uptime || 0)
-          );
+       const validBars =
+  last7Days.map((r) =>
+    Number(r.uptime || 0)
+  );
 
         const avg =
 
