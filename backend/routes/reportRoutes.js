@@ -541,24 +541,20 @@ const parseEnbRows = (rows, fallbackDate, fileId) => {
 
     let availability = cleanRow["overall cell availability"];
 
-    // ✅ FIX
-    if (
-      availability === undefined ||
-      availability === null ||
-      availability === ""
-    ) {
-      availability = 0;
-    }
+// Keep blank as blank
+if (
+  availability === undefined ||
+  availability === null ||
+  availability === ""
+) {
+  availability = null;
+} else {
+  availability = Number(availability);
 
-    availability = Number(availability);
-
-    if (isNaN(availability)) {
-      availability = 0;
-    }
-
-    if (availability <= 1) {
-      availability = availability * 100;
-    }
+  if (isNaN(availability)) {
+    availability = null;
+  }
+}
 
     insertRows.push([
       fileId,
@@ -627,26 +623,25 @@ const parseEscRows = (rows, fallbackDate, fileId) => {
       return;
     }
 
-    // ✅ Availability normalization
-    let availability =
-      cleanRow["availability"] ??
-      cleanRow["Availability"] ??
-      cleanRow["total_availability"] ??
-      cleanRow["total availability"] ??
-      0;
+   let availability =
+  cleanRow["availability"] ??
+  cleanRow["Availability"] ??
+  cleanRow["total_availability"] ??
+  cleanRow["total availability"];
 
-    availability = Number(
-      String(availability).replace("%", "")
-    );
+if (
+  availability === undefined ||
+  availability === null ||
+  availability === ""
+) {
+  availability = null;
+} else {
+  availability = Number(String(availability).replace("%", ""));
 
-    if (isNaN(availability)) {
-      availability = 0;
-    }
-
-    // If value is stored as 0.9017 convert to 90.17
-    if (availability > 0 && availability <= 1) {
-      availability *= 100;
-    }
+  if (isNaN(availability)) {
+    availability = null;
+  }
+}
 
     insertRows.push([
       fileId,
@@ -715,10 +710,19 @@ const findHeaderValue = (cleanRow, possibleNames) => {
 };
 
 // 🔥 NUMERIC CONVERSION - Safely convert values to numbers
-const toNumber = (value, defaultVal = 0) => {
-  if (value === null || value === undefined || value === "") return defaultVal;
-  const num = Number(value);
-  return isNaN(num) ? defaultVal : num;
+const toNumber = (value) => {
+
+    if (
+        value === null ||
+        value === undefined ||
+        value === ""
+    ) {
+        return null;
+    }
+
+    const num = Number(value);
+
+    return isNaN(num) ? null : num;
 };
 
 const parseGnbRows = (rows, fallbackDate, fileId) => {
@@ -775,8 +779,8 @@ const parseGnbRows = (rows, fallbackDate, fileId) => {
     const deviceType = findHeaderValue(cleanRow, ["device type", "device_type", "devicetype"]) || null;
 
     // 🔥 NUMERIC FIELDS - Convert safely
-    const totalCnumCount = toNumber(findHeaderValue(cleanRow, ["total cnum count", "total_cnum_count", "cnum count", "total cnum"]), 0);
-    const totalOutage = toNumber(findHeaderValue(cleanRow, ["total outage", "total_outage", "outage"]), 0);
+    const totalCnumCount = toNumber(findHeaderValue(cleanRow, ["total cnum count", "total_cnum_count", "cnum count", "total cnum"]));
+    const totalOutage = toNumber(findHeaderValue(cleanRow, ["total outage", "total_outage", "outage"]));
     const availability = toNumber(
       findHeaderValue(
         cleanRow,
@@ -784,8 +788,8 @@ const parseGnbRows = (rows, fallbackDate, fileId) => {
       ),
       0
     );
-    const cellsUp = toNumber(findHeaderValue(cleanRow, ["cells up", "cells_up"]), 0);
-    const cellsUpMod = toNumber(findHeaderValue(cleanRow, ["cells up mod", "cells_up_mod"]), 0);
+    const cellsUp = toNumber(findHeaderValue(cleanRow, ["cells up", "cells_up"]));
+    const cellsUpMod = toNumber(findHeaderValue(cleanRow, ["cells up mod", "cells_up_mod"]));
     const r4gAvailability = toNumber(
       findHeaderValue(
         cleanRow,
@@ -911,7 +915,7 @@ function parseHpodscRows(rows, fallbackDate, fileId) {
 
       cleanRow["total availability"] || null,
 
-      cleanRow["cells up"] || null,
+      cleanRow["cells up"] ?? null,
 
       date
     ]);
@@ -2101,11 +2105,14 @@ router.get("/download/:id", async (req, res) => {
 
     const buffer = xlsx.write(workbook, {
       type: "buffer",
-      bookType: "xlsx",
+      bookType: "xlsb",
     });
 
     console.log("BUFFER SIZE:", buffer.length);
     console.log("ROWS EXPORTED:", rows.length);
+
+    console.log("CONTENT TYPE:", res.getHeader("Content-Type"));
+    console.log("FILE NAME:", `${siteType}_report.xlsx`);
 
 
     res.setHeader(

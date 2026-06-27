@@ -435,6 +435,8 @@ setTimeout(() => {
   };
 
   const handleDownload = async (id, fileName) => {
+    setModalMessageType("success");
+    setModalMessage("Downloading file...");
     try {
       const token = localStorage.getItem("token");
 
@@ -468,14 +470,24 @@ setTimeout(() => {
 
       link.remove();
       window.URL.revokeObjectURL(url);
+      setModalMessage("File downloaded successfully");
 
-    } catch (err) {
-      console.error(err);
-      alert(
-        err?.response?.data?.message ||
-        "Download failed"
-      );
-    }
+setTimeout(() => {
+  setModalMessage("");
+}, 2000);
+
+    }catch (err) {
+  console.error(err);
+
+  setModalMessageType("error");
+  setModalMessage(
+    err?.response?.data?.message || "Download failed"
+  );
+
+  setTimeout(() => {
+    setModalMessage("");
+  }, 2000);
+}
   };
 
   const handleEdit = (row) => {
