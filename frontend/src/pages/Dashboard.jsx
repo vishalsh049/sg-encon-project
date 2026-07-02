@@ -10,7 +10,7 @@ import { ChevronDown, Filter as FilterIcon, RefreshCcw, Sparkles, ChevronUp, Loa
 
 import {
   LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer,
-  Legend, CartesianGrid, AreaChart, Area,
+  Legend, CartesianGrid, BarChart, Bar,
 } from "recharts";
 
 import { PieChart as PieIcon, TrendingUp } from "lucide-react";
@@ -268,6 +268,7 @@ useEffect(() => {
   const [errorMessage, setErrorMessage] = useState("");
   const [stats, setStats] = useState(initialStats);
   const [uptimeTrend, setUptimeTrend] = useState([]);
+  const [trendDays, setTrendDays] = useState([]);
   const [trendFilter, setTrendFilter] = useState("last7");
   const [isTrendMobile, setIsTrendMobile] = useState(() =>
     typeof window !== "undefined" ? window.innerWidth < 640 : false
@@ -682,21 +683,39 @@ const summary =
 const fetchUptimeTrend = async (type) => {
   try {
     const res = await axios.get(buildApiUrl("/api/dashboard/uptime-trend"), {
+      
       params: {
         type,
         circle: filterParams.circle,
         cmp: filterParams.cmp,
       },
     });
+    console.log("Uptime API Response:", res.data);
 
-  setUptimeTrend(
-  (res.data || [])
-    .slice(-7)   // ✅ KEEP ONLY LAST 7 RECORDS
-    .map((item) => ({
-      label: formatDisplayDate(item.date),
-      uptime: truncateTo2(item.uptime),  
-    }))
-);
+const grouped = {};
+const days = [];
+
+(res.data || []).forEach((item) => {
+  const circle = item.circle.trim();
+
+  const day = new Date(item.date).toLocaleDateString("en-GB", {
+    day: "2-digit",
+    month: "short",
+  });
+
+  if (!days.includes(day)) {
+    days.push(day);
+  }
+
+  if (!grouped[circle]) {
+    grouped[circle] = { circle };
+  }
+
+  grouped[circle][day] = truncateTo2(item.uptime);
+});
+
+setUptimeTrend(Object.values(grouped));
+setTrendDays(days);
 
   } catch (err) {
     console.log("Uptime error:", err);
@@ -1294,7 +1313,7 @@ const trendColor = getTrendColor(uptimeTrend);
   <div className="overflow-x-auto overflow-y-hidden pb-2 sm:overflow-visible sm:pb-0">
   <div className="h-[260px] w-[640px] min-w-full sm:h-[365px] sm:w-full">
   <ResponsiveContainer width="100%" height="100%">
-           <AreaChart
+           <BarChart
              data={uptimeTrend}
              margin={
                isTrendMobile
@@ -1313,14 +1332,9 @@ const trendColor = getTrendColor(uptimeTrend);
 
   <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" opacity={0.4} />
 
-  <XAxis
-  dataKey="label"
-  type="category"
-  interval={0}
-  tick={{ fontSize: isTrendMobile ? 10 : 12, fill: "#6b7280" }}
-  axisLine={false}
-  tickLine={false}
-  padding={isTrendMobile ? { left: 8, right: 8 } : { left: 30, right: 20 }}
+<XAxis
+  dataKey="circle"
+  tick={{ fontSize: 12 }}
 />
 
   <YAxis
@@ -1352,54 +1366,32 @@ const trendColor = getTrendColor(uptimeTrend);
     }}
   />
 
-  <Area
-  type="monotone"
-  dataKey="uptime"
-  stroke={trendColor}
-  strokeWidth={3.5}
-  fill="url(#colorUptime)"
-  dot={(props) => {
-    const { cx, cy, index } = props;
-    const lastIndex = uptimeTrend.length - 1;
+ <Legend />
 
-    if (index === lastIndex) {
-      return (
-        <circle
-          cx={cx}
-          cy={cy}
-          r={isTrendMobile ? 5 : 6}
-          fill={trendColor}
-          stroke="#fff"
-          strokeWidth={2}
-        />
-      );
-    }
-
-    return <circle cx={cx} cy={cy} r={isTrendMobile ? 2.5 : 3} fill={trendColor} />;
-  }}
-  activeDot={{
-    r: isTrendMobile ? 6 : 7,
-    stroke: trendColor,
-    strokeWidth: 2,
-    fill: "#fff",
-  }}
->
-
-  {/* ✅ MUST BE INSIDE */}
- <LabelList
-  dataKey="uptime"
+{trendDays.map((day, index) => (
+  <Bar
+    key={day}
+    dataKey={day}
+    fill={COLORS[index % COLORS.length]}
+    name={day}
+  >
+  <LabelList
+  dataKey={day}
   position="top"
-  offset={isTrendMobile ? 6 : 10}
-  formatter={(value) => `${truncateTo2(value)}%`}
+  angle={-90}
+  offset={10}
+  formatter={(value) =>
+    value != null ? Number(value).toFixed(2) : ""
+  }
   style={{
-    fontSize: isTrendMobile ? "10px" : "11px",
-    fill: "#2563eb",
-    fontWeight: 600,
+    fontSize: 11,
+    fontWeight: "bold",
+    fill: "#374151",
   }}
 />
-
-</Area>
- </AreaChart>
+  </Bar>
+))}
+ </BarChart>
           </ResponsiveContainer>
           </div>
           </div>

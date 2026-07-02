@@ -65,6 +65,23 @@ const reportDataTables = new Set([
   "hpodsc", "ila", "isc", "osc", "wifi",
 ]);
 
+const VALID_CIRCLES = [
+  "Delhi",
+  "Haryana",
+  "Punjab",
+  "Uttar Pradesh (East)",
+];
+
+const isValidCircle = (circle) => {
+  if (!circle) return false;
+
+  return VALID_CIRCLES.some(
+    (c) =>
+      c.toLowerCase().trim() ===
+      String(circle).toLowerCase().trim()
+  );
+};
+
 const getRawCircle = (row = {}) => {
   const normalized = {};
   Object.keys(row).forEach((key) => {
@@ -261,21 +278,60 @@ const ensureIscTable = async () => {
 
 const ensureOscTable = async () => {
   await query(`
-              CREATE TABLE IF NOT EXISTS osc (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    file_id BIGINT,
-    circle VARCHAR(50),
-    cmp VARCHAR(100),
-    date DATE,
-    kpi_value DECIMAL(12,4),
+    CREATE TABLE IF NOT EXISTS osc (
+      id INT AUTO_INCREMENT PRIMARY KEY,
 
-    sap_id VARCHAR(100),
-    jc_name VARCHAR(150),
-    jc_id VARCHAR(100),
+      file_id BIGINT,
 
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  )
-              `);
+      date DATE,
+
+      sap_id VARCHAR(100),
+
+      circle VARCHAR(100),
+
+      cmp VARCHAR(100),
+
+      region VARCHAR(100),
+
+      ems_alias VARCHAR(255),
+
+      city VARCHAR(100),
+
+      jc_code VARCHAR(100),
+
+      jc_sap_id VARCHAR(100),
+
+      lsm_name VARCHAR(255),
+
+      sys_alias VARCHAR(255),
+
+      ip_addr_1 VARCHAR(100),
+
+      activeversion VARCHAR(100),
+
+      site_type VARCHAR(100),
+
+      outage_12am_12pm DECIMAL(12,2),
+
+      outage_12pm_12am DECIMAL(12,2),
+
+      total_enb_down_sec BIGINT,
+
+      cmp_code VARCHAR(100),
+
+      availability DECIMAL(10,4),
+
+      equipment_vendor VARCHAR(255),
+
+      jc_name VARCHAR(150),
+
+      jc_id VARCHAR(100),
+
+      kpi_value DECIMAL(12,4),
+
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
 };
 
 const ensureColumn = async (table, column, definition) => {
@@ -440,19 +496,35 @@ const insertOscRows = async (rows) => {
   const batchSize = 1000;
   for (let i = 0; i < rows.length; i += batchSize) {
     const batch = rows.slice(i, i + batchSize);
-    await query(
-      `INSERT INTO osc (
-    file_id,
-    circle,
-    cmp,
-    date,
-    kpi_value,
-    sap_id,
-    jc_name,
-    jc_id
-  ) VALUES ?`,
-      [batch]
-    );
+  await query(
+  `INSERT INTO osc (
+      file_id,
+      date,
+      sap_id,
+      circle,
+      cmp,
+      region,
+      ems_alias,
+      city,
+      jc_code,
+      jc_sap_id,
+      lsm_name,
+      sys_alias,
+      ip_addr_1,
+      activeversion,
+      site_type,
+      outage_12am_12pm,
+      outage_12pm_12am,
+      total_enb_down_sec,
+      cmp_code,
+      availability,
+      equipment_vendor,
+      jc_name,
+      jc_id,
+      kpi_value
+    ) VALUES ?`,
+  [batch]
+);
   }
 };
 
@@ -532,10 +604,23 @@ const parseEnbRows = (rows, fallbackDate, fileId) => {
 
     const normalizedDate = normalizeDate(fallbackDate);
 
-    if (!circle || !cmp) {
-      errors.push(index + 2);
-      return;
-    }
+   if (!circle || !cmp) {
+  errors.push(`Row ${index + 2}: Circle or CMP is missing.`);
+  return;
+}
+
+if (!isValidCircle(circle)) {
+  errors.push(
+    `Row ${index + 2}: Invalid Circle "${circle}".\n\n` +
+    `Allowed Circle Names:\n` +
+    `• Delhi\n` +
+    `• Haryana\n` +
+    `• Punjab\n` +
+    `• Uttar Pradesh (East)\n\n` +
+    `Please correct the Circle name in the Excel file and upload it again.`
+  );
+  return;
+}
 
     console.log("Availability Value:", cleanRow["overall cell availability"]);
 
@@ -1085,11 +1170,11 @@ const processSiteUploadRows = async ({ siteType, rows, date, fileId }) => {
     await ensureEnbTable();
     const { insertRows, errors } = parseEnbRows(rows, date, fileId);
 
-    if (errors.length) {
-      const error = new Error(`Missing required fields in rows: ${errors.join(", ")}`);
-      error.statusCode = 400;
-      throw error;
-    }
+  if (errors.length) {
+  const error = new Error(errors.join("\n\n"));
+  error.statusCode = 400;
+  throw error;
+}
 
     await insertEnbRows(insertRows);
     return insertRows.length;
@@ -1099,11 +1184,11 @@ const processSiteUploadRows = async ({ siteType, rows, date, fileId }) => {
     await ensureEscTable();
     const { insertRows, errors } = parseEscRows(rows, date, fileId);
 
-    if (errors.length) {
-      const error = new Error(`Missing required fields in rows: ${errors.join(", ")}`);
-      error.statusCode = 400;
-      throw error;
-    }
+ if (errors.length) {
+  const error = new Error(errors.join("\n\n"));
+  error.statusCode = 400;
+  throw error;
+} 
 
     await insertEscRows(insertRows);
     return insertRows.length;
@@ -1154,10 +1239,23 @@ const processSiteUploadRows = async ({ siteType, rows, date, fileId }) => {
 
       const dateValue = normalizeDate(date);
 
-      if (!circle || !cmp) {
-        errors.push(index + 2);
-        return;
-      }
+    if (!circle || !cmp) {
+  errors.push(`Row ${index + 2}: Circle or CMP is missing.`);
+  return;
+}
+
+if (!isValidCircle(circle)) {
+  errors.push(
+    `Row ${index + 2}: Invalid Circle "${circle}".\n\n` +
+    `Allowed Circle Names:\n` +
+    `• Delhi\n` +
+    `• Haryana\n` +
+    `• Punjab\n` +
+    `• Uttar Pradesh (East)\n\n` +
+    `Please correct the Circle name in the Excel file and upload it again.`
+  );
+  return;
+}
 
       insertRows.push([fileId, String(circle).trim(), String(cmp).trim(), dateValue, 1]);
     });
@@ -1171,12 +1269,12 @@ const processSiteUploadRows = async ({ siteType, rows, date, fileId }) => {
       throw error;
     }
 
-    if (errors.length) {
-      const error = new Error(`Missing required fields in rows: ${errors.join(", ")}`);
-      error.statusCode = 400;
-      error.details = { detectedHeaders: Array.from(headerKeys).slice(0, 30) };
-      throw error;
-    }
+  if (errors.length) {
+  const error = new Error(errors.join("\n\n"));
+  error.statusCode = 400;
+  error.details = { detectedHeaders: Array.from(headerKeys).slice(0, 30) };
+  throw error;
+}
 
     await query(`INSERT INTO isc (file_id, circle, cmp, date, kpi_value) VALUES ?`, [insertRows]);
     return insertRows.length;
@@ -1191,6 +1289,19 @@ const processSiteUploadRows = async ({ siteType, rows, date, fileId }) => {
 
     const normalizeKey = (key) =>
       key.toString().trim().toLowerCase().replace(/[\s_]+/g, " ");
+
+    const getValue = (obj, keys) => {
+  for (const key of keys) {
+    if (
+      obj[key] !== undefined &&
+      obj[key] !== null &&
+      obj[key] !== ""
+    ) {
+      return obj[key];
+    }
+  }
+  return null;
+};
 
     const pickByPrefix = (obj, prefix) => {
       const key = Object.keys(obj).find(
@@ -1222,15 +1333,104 @@ const processSiteUploadRows = async ({ siteType, rows, date, fileId }) => {
 
       if (!circle || !cmp) return;
 
-     insertRows.push([
+ insertRows.push([
   fileId,
+  dateValue,
+  getValue(cleanRow, ["sap id", "sap_id"]),
   String(circle).trim(),
   String(cmp).trim(),
-  dateValue,
-  1,
-  cleanRow["sap id"] || null,
-  cleanRow["jc name"] || null,
-  cleanRow["jc id"] || null
+
+  getValue(cleanRow, ["region", "REGION"]),
+
+  getValue(cleanRow, [
+    "ems alias",
+    "ems_alias",
+    "EMS_ALIAS"
+  ]),
+
+  getValue(cleanRow, ["city"]),
+
+  getValue(cleanRow, [
+    "jc code",
+    "jc_code",
+    "JC_CODE"
+  ]),
+
+  getValue(cleanRow, [
+    "jc sap id",
+    "jc_sap_id",
+    "JC_SAP_ID"
+  ]),
+
+  getValue(cleanRow, [
+    "lsm name",
+    "lsm_name",
+    "LSM_NAME"
+  ]),
+
+  getValue(cleanRow, [
+    "sys alias",
+    "sys_alias",
+    "SYS_ALIAS"
+  ]),
+
+  getValue(cleanRow, [
+    "ip addr 1",
+    "ip_addr_1",
+    "IP_ADDR_1"
+  ]),
+
+  getValue(cleanRow, [
+    "activeversion",
+    "active version",
+    "ActiveVersion"
+  ]),
+
+  getValue(cleanRow, [
+    "site type",
+    "site_type",
+    "SITE_TYPE"
+  ]),
+
+  getValue(cleanRow, [
+    "outage 12am 12pm",
+    "outage_12am_12pm",
+    "OUTAGE_12AM_12PM"
+  ]),
+
+  getValue(cleanRow, [
+    "outage 12pm 12am",
+    "outage_12pm_12am",
+    "OUTAGE_12PM_12AM"
+  ]),
+
+  getValue(cleanRow, [
+    "total enb down sec",
+    "total_enb_down_sec",
+    "TOTAL_ENB_DOWN_SEC"
+  ]),
+
+  getValue(cleanRow, [
+    "cmp code",
+    "cmp_code",
+    "CMP_CODE"
+  ]),
+
+  getValue(cleanRow, [
+    "availability",
+    "Availability"
+  ]),
+
+  getValue(cleanRow, [
+    "equipment vendor",
+    "equipment_vendor",
+    "Equipment Vendor"
+  ]),
+
+  getValue(cleanRow, ["jc name", "jc_name"]),
+  getValue(cleanRow, ["jc id", "jc_id"]),
+
+  1
 ]);
     });
 
@@ -1335,24 +1535,68 @@ const processSiteUploadRows = async ({ siteType, rows, date, fileId }) => {
 router.get("/", async (req, res) => {
   try {
     const siteCategory = req.query.siteCategory || "tower";
+    const circleFilter = (req.query.circle || "").trim();
     await ensureUploadsTable();
+
     const allRows = await query(
       `SELECT id, site_category, report_date, site_type,
-    report_type, upload_type, uploaded_by,
-    file_name, total_records, file_id, uploaded_at
-    FROM report_uploads
-    WHERE site_category = ?
-    ORDER BY uploaded_at DESC`,
+              report_type, upload_type, uploaded_by,
+              file_name, total_records, file_id, uploaded_at
+       FROM report_uploads
+       WHERE site_category = ?
+       ORDER BY uploaded_at DESC`,
       [siteCategory]
     );
-    const rows = await filterAccessibleUploads(allRows, req.authUser);
 
-    const rowsWithStatus = rows.map((row) => ({
+    let rows = await filterAccessibleUploads(allRows, req.authUser);
+
+    // Group file_ids by site_type so we can fetch circles in one query per table
+    const siteTypeGroups = {};
+    rows.forEach((row) => {
+      if (!row.file_id || !row.site_type) return;
+      const tableName = String(row.site_type).toLowerCase();
+      if (!reportDataTables.has(tableName)) return;
+      if (!siteTypeGroups[tableName]) siteTypeGroups[tableName] = [];
+      siteTypeGroups[tableName].push(Number(row.file_id));
+    });
+
+    // One query per site type table to get circle for each file_id
+    const circleMap = {};
+    for (const [tableName, fileIds] of Object.entries(siteTypeGroups)) {
+      try {
+        const placeholders = fileIds.map(() => "?").join(",");
+        const circleRows = await query(
+          `SELECT file_id, TRIM(circle) AS circle
+           FROM ${tableName}
+           WHERE file_id IN (${placeholders})
+             AND circle IS NOT NULL AND TRIM(circle) != ''
+           GROUP BY file_id`,
+          fileIds
+        );
+        circleRows.forEach(({ file_id, circle }) => {
+          if (circle) circleMap[Number(file_id)] = circle.trim();
+        });
+      } catch {
+        // table may not exist yet — skip
+      }
+    }
+
+    // Attach circle to each row, then apply circle filter
+    let rowsWithCircle = rows.map((row) => ({
       ...row,
+      circle: circleMap[Number(row.file_id)] || null,
       file_missing: false,
     }));
 
-    res.json({ rows: rowsWithStatus });
+    if (circleFilter) {
+      rowsWithCircle = rowsWithCircle.filter(
+        (row) =>
+          String(row.circle || "").trim().toLowerCase() ===
+          circleFilter.trim().toLowerCase()
+      );
+    }
+
+    res.json({ rows: rowsWithCircle });
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: "Server error" });
@@ -2137,6 +2381,29 @@ router.get("/download/:id", async (req, res) => {
 
   }
 
+});
+
+router.get("/circles", async (req, res) => {
+  try {
+    const tables = [...reportDataTables];
+    const circleSet = new Set();
+
+    for (const table of tables) {
+      try {
+        const rows = await query(
+          `SELECT DISTINCT TRIM(circle) AS circle FROM ${table} WHERE circle IS NOT NULL AND TRIM(circle) != ''`
+        );
+        rows.forEach((r) => { if (r.circle) circleSet.add(r.circle.trim()); });
+      } catch {
+        // table may not exist yet — skip
+      }
+    }
+
+    res.json({ circles: [...circleSet].sort() });
+  } catch (err) {
+    console.error("Circles error:", err);
+    res.json({ circles: [] });
+  }
 });
 
 router.get("/export-excel", async (req, res) => {

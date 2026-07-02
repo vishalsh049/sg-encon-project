@@ -10,6 +10,7 @@
 } from "lucide-react";
 import Swal from "sweetalert2";
 import PremiumDatePicker from "../components/PremiumDatePicker";
+import ValidationErrorModal from "../components/ValidationErrorModal";
 
   import Select from "react-select";
   import * as XLSX from "xlsx";
@@ -21,10 +22,18 @@ import PremiumDatePicker from "../components/PremiumDatePicker";
     const [uploadedBy, setUploadedBy] = useState("");
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [validationError, setValidationError] = useState(null);
   const [jobRoleSearch, setJobRoleSearch] = useState("");
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [viewEmployee, setViewEmployee] = useState(null);
   const [saving, setSaving] = useState(false);
+
+  // Prevent background scroll while any modal is open
+  useEffect(() => {
+    const anyOpen = showUploadModal || validationError !== null;
+    document.body.style.overflow = anyOpen ? "hidden" : "";
+    return () => { document.body.style.overflow = ""; };
+  }, [showUploadModal, validationError]);
 
 const handleView = (item) => {
   setViewEmployee(item);
@@ -350,57 +359,9 @@ useEffect(() => {
       const result = await response.json();
 
  if (!response.ok || !result.success) {
-
-  Swal.fire({
-  icon: "warning",
-  title: "Validation Error",
-  width: "900px",
-
-html: `
-<div style="text-align:left">
-
-<div style="
-max-height:400px;
-overflow-y:auto;
-background:#F8FAFC;
-border:1px solid #E2E8F0;
-border-radius:12px;
-padding:15px;
-">
-
-${
-result.message
-.replace(/Upload Failed/gi,"")
-.split("\n")
-.filter(line => line.trim() !== "")
-.map(line=>`
-<div style="
-background:white;
-border-left:5px solid #EF4444;
-padding:12px;
-margin-bottom:10px;
-border-radius:8px;
-font-size:14px;
-color:#334155;
-line-height:1.8;
-">
-❌ ${line}
-</div>
-`).join("")
-}
-
-</div>
-
-</div>
-`,
-  confirmButtonColor: "#2563EB",
-
-  customClass: {
-    popup: "rounded-3xl",
-    title: "text-base"
-  }
-});
-
+  setShowUploadModal(false);
+  // Wait for upload modal to unmount, then open validation modal
+  setTimeout(() => setValidationError(result), 150);
   return;
 }
 
@@ -1431,15 +1392,15 @@ Haryana: [
 
 const jobRoleOptions = [
   "Admin Head",
-  "Analyst - Fiber",
-  "Analyst - Fttx",
-  "Analyst - IPCOLO",
-  "Analyst - ISP",
-  "Analyst - Material",
-  "Analyst - Planning",
-  "Analyst - PMO",
-  "Analyst - Power & Fuel",
-  "Analyst - Utility",
+  "Analyst-Fiber",
+  "Analyst-Fttx",
+  "Analyst-IPCOLO",
+  "Analyst-ISP",
+  "Analyst-Material",
+  "Analyst-Planning",
+  "Analyst-PMO",
+  "Analyst-Power & Fuel",
+  "Analyst-Utility",
   "Assistant Splicer",
   "CMP LEAD",
   "Commercial Executive",
@@ -2414,6 +2375,13 @@ records
   </div>
 
             </div>
+
+            {/* Validation Error Modal */}
+            <ValidationErrorModal
+              isOpen={validationError !== null}
+              onClose={() => setValidationError(null)}
+              errorData={validationError}
+            />
 
             {/* Popup Modal */}
 

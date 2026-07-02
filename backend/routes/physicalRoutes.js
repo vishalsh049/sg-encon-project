@@ -274,8 +274,41 @@
   "Quality Lead",
   "State Fiber Head",
   "State HSEF Officer",
-  "State FTTx SME"
+  "State FTTx SME",
+  "Warehouse Incharge Cum Security",
+  "Warehouse Helper",
+  "MIS Executive",
+  "OMCR Resources",
+  "Analyst - Material",
+  "Analyst - Utility",
+  "Analyst - Planning",
+  "Analyst - Power & Fuel",
+  "Analyst - Ipcolo",
+  "Analyst - ISP",
+  "Analyst - PMO",
+  "Analyst - Fttx",
+  "Analyst - Fiber",
+  "Analyst - D2D",
+  "Asst Fiber SME",
+  "Utility SME",
+  "Utility MIS Coordinator",
+  "MIS Coordinator",
+  "Legal Executive",
+  "Legal Advisor",
+  "Project Head",
+  "Other Roles - Temporary Technician",
+  "Material Helper",
+  "Material Cordinator",
+  "Analyst MIS",
+  "Zonal Fiber SME"
 ];
+
+const allowedJobRoleMap = new Map(
+  allowedJobRoles.map(role => [
+    normalizeJobRole(role),
+    role
+  ])
+);
 
     const circleCmpMap = {
 
@@ -329,47 +362,76 @@
 
     };
 
-    function normalizeJobRole(role) {
+ function normalizeJobRole(role = "") {
 
-    const normalized = String(role || "")
+  // Plain normalization: lowercase, collapse hyphen/underscore/space
+  // variations into a single space. Applied both to the raw input and
+  // (again, defensively) to whatever the synonym map resolves to, so the
+  // returned key is always comparable to itself regardless of case or
+  // hyphenation — this keeps allowedJobRoleMap lookups (built the same way)
+  // consistent instead of mismatching on casing.
+  const normalizeText = (value) =>
+    String(value)
       .trim()
       .toLowerCase()
       .replace(/[-_]/g, " ")
-      .replace(/\s+/g, " ");
+      .replace(/\s+/g, " ")
+      .trim();
 
+  const normalized = normalizeText(role);
+
+  // Keys and values here must both be in the same plain-normalized form
+  // (lowercase, no hyphens) — values point at the normalized form of the
+  // canonical entry in allowedJobRoles, not its display casing.
   const roleMap = {
-  "commercial lead": "Commercial Lead",
-"hsef lead": "HSEF LEAD",
-"circle head": "Circle Head",
-"warehouse security guard": "WAREHOUSE SECURITY GUARD",
-"office helper": "Office Helper",
-"commercial executive": "Commercial Executive",
-"project technician": "Project technician",
-"route guard": "Route Guard",
-"fttx lead": "FTTx Lead",
-"admin lead": "ADMIN LEAD",
-"odsc supevisor": "ODSC Supevisor",
-"noc lead": "NOC LEAD",
-"quality & planing head": "QUALITY & PLANING HEAD",
-"utility co-orodinator": "UTILITY CO-ORODINATOR",
-"office boy": "OFFICE BOY",
-"hr head": "HR HEAD",
-"project lead": "PROJECT LEAD",
-"fttx sme": "FTTX SME",
-"assistant hr manager": "ASSISTANT HR MANAGER",
-"material lead": "MATERIAL LEAD",
-"hr manager": "HR MANAGER",
-"o & m head": "O & M HEAD",
-"fiber engineer": "Fiber Engineer",
-"utility engineer": "Utility Engineer",
-"state planning manager": "State Planning Manager",
-"warehouse incharge": "Warehouse Incharge",
-"state operation head": "State Operation Head",
-"state material manager": "State Material Manager",
-"state energy manager": "State Energy Manager"
+  "commercial lead": "commercial lead",
+"hsef lead": "hsef lead",
+"cmp lead": "cmp lead",
+"fibre supervisor": "fiber supervisor",
+"mis executive": "mis executive",
+"fttx engineer": "fttx engineer",
+"circle head": "circle head",
+"warehouse security guard": "warehouse security guard",
+"office helper": "office helper",
+"commercial executive": "commercial executive",
+"project technician": "project technician",
+"route guard": "route guard",
+"fttx lead": "fttx lead",
+"admin lead": "admin lead",
+"odsc supevisor": "odsc supevisor",
+"noc lead": "noc lead",
+"quality & planing head": "quality & planing head",
+"utility co orodinator": "utility co orodinator",
+"office boy": "office boy",
+"hr head": "hr head",
+"project lead": "project lead",
+"fttx sme": "fttx sme",
+"assistant hr manager": "assistant hr manager",
+"material lead": "material lead",
+"hr manager": "hr manager",
+"o & m head": "o & m head",
+"fiber engineer": "fiber engineer",
+"utility engineer": "utility engineer",
+"state planning manager": "state planning manager",
+"warehouse incharge": "warehouse incharge",
+"state operation head": "state operation head",
+"state material manager": "state material manager",
+"state energy manager": "state energy manager",
+
+// --- Warehouse ---
+"wh incharge cum security": "warehouse incharge cum security",
+
+// --- Analyst spelling variant ---
+"anlayst mis": "analyst mis",
+
+// --- Material spelling variant ---
+"material coordinator": "material cordinator"
+
 };
 
-    return roleMap[normalized] || role;
+    const mapped = roleMap[normalized] || normalized;
+
+    return normalizeText(mapped);
   }
 
     function mapPhysicalRow(row, reportId) {
@@ -806,9 +868,7 @@
 
     // Job Role Validation
 
-const jobRole = String(
-  row["Job Role"] ?? ""
-).trim();
+const jobRole = String(row["Job Role"] ?? "").trim();
 
 if (!jobRole) {
 
@@ -818,15 +878,11 @@ if (!jobRole) {
 
 } else {
 
-  const normalizedRole = normalizeJobRole(jobRole);
-
-  const validRole = allowedJobRoles.some(
-    role =>
-      role.toLowerCase() ===
-      normalizedRole.toLowerCase()
+  const matchedRole = allowedJobRoleMap.get(
+    normalizeJobRole(jobRole)
   );
 
-  if (!validRole) {
+  if (!matchedRole) {
 
     validationErrors.push(
       `❌ Row ${excelRowNumber} - ${employeeName} (${employeeCode}) : Invalid Job Role "${jobRole}"`
@@ -834,7 +890,7 @@ if (!jobRole) {
 
   } else {
 
-    row["Job Role"] = normalizedRole;
+    row["Job Role"] = matchedRole;
 
   }
 
@@ -936,6 +992,7 @@ if (!jobRole) {
     success: false,
     errors: validationErrors,
     totalErrors: validationErrors.length,
+    totalRecords: rows.length,
     message: validationErrors.join("\n")
   });
 

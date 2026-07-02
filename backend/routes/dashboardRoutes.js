@@ -1223,7 +1223,7 @@ FROM (
       ...(filters.length ? [filters.join(" AND ")] : []),
     ].join(" AND ");
 
-    const sql = `
+    /* const sql = `
     SELECT 
       date,
       AVG(availability) AS uptime
@@ -1241,6 +1241,38 @@ FROM (
       console.error("Uptime trend error:", err);
       res.status(500).json({ error: "Server error" });
     }
+      */
+
+     const sql = `
+      SELECT
+          DATE(date) AS date,
+          circle,
+          ROUND(AVG(availability),2) AS uptime
+      FROM enb
+      WHERE availability IS NOT NULL
+      AND circle IN (
+          'Punjab',
+          'Haryana',
+          'Delhi',
+          'Uttar Pradesh (East)'
+      )
+     AND DATE(date) >= (
+    SELECT DATE(MAX(date)) - INTERVAL 6 DAY
+    FROM enb
+)
+
+GROUP BY DATE(date), circle
+ORDER BY DATE(date), circle;
+    `;
+
+    const rows = await query(sql);
+
+    res.json(rows);
+
+  } catch (err) {
+    console.error("Uptime trend error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
   });
 
   router.get("/reports-summary", dashboardController.getReportsSummary);
