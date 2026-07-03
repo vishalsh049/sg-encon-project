@@ -3,6 +3,7 @@ const router = express.Router();
 
 const { db } = require("../config/db");
 const { isAllCircle } = require("../middleware/circleAccess");
+const { buildCircleCmpFilter, buildRangeSql } = require("../utils/uptimeDateRange");
 
 const query = (sql, params = []) =>
   new Promise((resolve, reject) => {
@@ -176,31 +177,34 @@ router.get("/tower-uptime", async (req, res) => {
 
         const selectedCircle = req.query.circle || "";
         const selectedCmp    = req.query.cmp    || "";
+        const selectedRange  = req.query.range  || "last7";
+        const rangeFrom      = req.query.from   || "";
+        const rangeTo        = req.query.to     || "";
 
         // Switch to CMP-wise grouping when a specific circle is selected and cmp column exists
         const groupByCmp = selectedCircle !== "" && hasCmpColumn;
 
-        const whereConditions = [];
-        const params          = [];
-
-        if (!isAllCircle(req.authUser) && hasCircleColumn) {
-          whereConditions.push("LOWER(TRIM(circle)) = LOWER(TRIM(?))");
-          params.push(req.authUser.circle);
-        }
-
-        if (selectedCircle && hasCircleColumn) {
-          whereConditions.push("LOWER(TRIM(circle)) = LOWER(TRIM(?))");
-          params.push(selectedCircle);
-        }
-
-        if (selectedCmp && hasCmpColumn) {
-          whereConditions.push("LOWER(TRIM(cmp)) = LOWER(TRIM(?))");
-          params.push(selectedCmp);
-        }
+        const { conditions: whereConditions, params } = buildCircleCmpFilter({
+          authUser: req.authUser,
+          hasCircleCol: hasCircleColumn,
+          hasCmpCol: hasCmpColumn,
+          selectedCircle,
+          selectedCmp,
+        });
 
         const whereClause = whereConditions.length > 0
           ? "AND " + whereConditions.join(" AND ")
           : "";
+
+        const { sql: rangeSql, params: rangeParams } = buildRangeSql({
+          range: selectedRange,
+          table: site.table,
+          dateColumn,
+          filterWhereSql: whereClause,
+          filterParams: params,
+          from: rangeFrom,
+          to: rangeTo,
+        });
 
         // Build entity SELECT / GROUP expressions based on grouping mode
         let entitySelectSql, entityGroupSql;
@@ -223,15 +227,11 @@ router.get("/tower-uptime", async (req, res) => {
             ${entitySelectSql}
             ROUND(AVG(CAST(REPLACE(${kpiColumn}, '%', '') AS DECIMAL(10,2))), 2) AS uptime
           FROM ${site.table}
-          WHERE DATE(${dateColumn}) >= (
-            SELECT DATE(MAX(${dateColumn})) - INTERVAL 6 DAY
-            FROM ${site.table}
-            WHERE 1=1 ${whereClause}
-          )
+          WHERE ${rangeSql}
           ${whereClause}
           GROUP BY DATE(${dateColumn})${entityGroupSql}
           ORDER BY DATE(${dateColumn}) ASC${orderEntitySql}
-        `, [...params, ...params]);
+        `, [...rangeParams, ...params]);
 
         const normalizedRows = rows.map((row) => ({
           ...row,
@@ -248,19 +248,15 @@ router.get("/tower-uptime", async (req, res) => {
         }
 
         const allDateKeys = Object.keys(rawGrouped).sort();
-        const latestDate  = allDateKeys.length > 0
-          ? new Date(allDateKeys[allDateKeys.length - 1] + "T00:00:00")
-          : new Date();
 
-        // Build last-7-days array: [{ date, <entity1>, <entity2>, … }, …]
-        const chartData = [];
-        for (let i = 6; i >= 0; i--) {
-          const d = new Date(latestDate);
-          d.setDate(latestDate.getDate() - i);
-          const formatted = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+        // Build chart data from dates that actually have records — no
+        // zero-filled gap days, since `range` now spans anywhere from a
+        // single day (today) to 30 days or an arbitrary custom span.
+        const chartData = allDateKeys.map((dateKey) => {
+          const d = new Date(`${dateKey}T00:00:00`);
           const label = d.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
-          chartData.push({ date: label, ...(rawGrouped[formatted] || {}) });
-        }
+          return { date: label, ...rawGrouped[dateKey] };
+        });
 
         const entities = Array.from(entitySet).sort();
                 let cmps = [];
@@ -449,21 +445,13 @@ router.get("/tower-uptime/analytics", async (req, res) => {
     }
 
     // Build access + filter conditions
-    const filterConds  = [];
-    const filterParams = [];
-
-    if (!isAllCircle(req.authUser) && hasCircleCol) {
-      filterConds.push("LOWER(TRIM(circle)) = LOWER(TRIM(?))");
-      filterParams.push(req.authUser.circle);
-    }
-    if (circle && hasCircleCol) {
-      filterConds.push("LOWER(TRIM(circle)) = LOWER(TRIM(?))");
-      filterParams.push(circle);
-    }
-    if (cmp && hasCmpCol) {
-      filterConds.push("LOWER(TRIM(cmp)) = LOWER(TRIM(?))");
-      filterParams.push(cmp);
-    }
+    const { conditions: filterConds, params: filterParams } = buildCircleCmpFilter({
+      authUser: req.authUser,
+      hasCircleCol,
+      hasCmpCol,
+      selectedCircle: circle,
+      selectedCmp: cmp,
+    });
 
     const allConds = [periodSql, ...filterConds].filter(Boolean);
     const whereClause = `WHERE ${allConds.join(" AND ")}`;

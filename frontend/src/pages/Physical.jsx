@@ -85,6 +85,7 @@ const Field = ({ label, value }) => (
     aadhaar_no: "",
     uan_no: "",
     esic_ip_no: "",
+    pf_no: "",
     nth_salary: "",
     remarks: "",
   });
@@ -417,6 +418,10 @@ loadEmploymentStatus();
     .toLowerCase()
     .includes(search.toLowerCase()) ||
 
+String(item.pf_no || "")
+  .toLowerCase()
+  .includes(search.toLowerCase())
+
   String(item.aadhaar_no || "")
     .toLowerCase()
     .includes(search.toLowerCase()) ||
@@ -741,9 +746,13 @@ if (
         esic_ip_no:
           result.data.esic_ip_no || "",
 
-          nth_salary:
+        pf_no:
+          result.data.pf_no || "",
+
+        nth_salary:
           result.data.nth_salary || "",
-        remarks:
+        
+          remarks:
           result.data.remarks || "",
 
       }));
@@ -865,6 +874,9 @@ if (
 
   esic_ip_no:
     result.data.esic_ip_no || "",
+
+    pf_no:
+  result.data.pf_no || "",
 
   nth_salary:
     result.data.nth_salary || "",
@@ -1122,6 +1134,7 @@ setEmployeeForm({
         aadhaar_no: "",
         uan_no: "",
         esic_ip_no: "",
+        pf_no: "",
         nth_salary: "",
         remarks: "",
       });
@@ -1265,6 +1278,8 @@ setEmployeeForm({
         item.uan_no,
       "ESIC IP No":
         item.esic_ip_no,
+      "PF No":
+       item.pf_no,
       "NTH Salary":
         item.nth_salary,
       Remarks:
@@ -1357,7 +1372,7 @@ const circleCmpMap = {
 Haryana: [
   "Haryana SHQ",
   "Ambala",
-  "Hisar",
+  "Hissar",
   "Karnal",
   "Panipat",
   "Palwal",
@@ -1687,7 +1702,7 @@ const inactiveCount =
   {/* Search */}
   <input
     type="text"
-    placeholder="Search by Employee Name, Employee Code, Aadhaar No, Mobile Number, CMP, Circle..."
+    placeholder="Search by Employee Name, Employee Code, PF No, Aadhaar No, Mobile Number, CMP, Circle..."
     value={search}
     onChange={(e) => {
   setSearch(e.target.value);
@@ -1800,7 +1815,7 @@ const inactiveCount =
 
     {/* Employment Status */}
 
- <div className="lg:col-span-4 rounded-xl border border-slate-100 bg-white px-4 py-2 shadow-sm hover:shadow-lg transition-all">
+ <div className="lg:col-span-3 rounded-xl border border-slate-100 bg-white px-4 py-2 shadow-sm hover:shadow-lg transition-all">
 
     <div className="mb-1 flex items-center justify-between">
 
@@ -1810,7 +1825,7 @@ const inactiveCount =
 
     </div>
 
-  <div className="flex flex-wrap items-center justify-between rounded-xl bg-slate-50 px-4 py-2 gap-3">
+  <div className="flex flex-wrap items-center justify-between rounded-lg bg-slate-50 px-4 py-1 gap-3">
 
   <div className="flex items-center gap-2">
     <span className="text-sm font-medium text-slate-600">
@@ -1841,7 +1856,7 @@ const inactiveCount =
 
     {/* Circle Wise Count */}
 
-  <div className="lg:col-span-6 rounded-xl border border-slate-100 bg-white px-4 py-2 shadow-sm hover:shadow-lg transition-all">
+  <div className="lg:col-span-7 rounded-xl border border-slate-100 bg-white px-4 py-2 shadow-sm hover:shadow-lg transition-all">
       <div className="mb-1 flex items-center justify-between">
 
         <h2 className="text-[13px] font-semibold text-slate-800">
@@ -1972,6 +1987,7 @@ const inactiveCount =
 
 
   {/* Job Roles Section */}
+  {/* 
 
   <div className="mx-auto mt-2 w-full max-w-7xl">
 
@@ -2019,7 +2035,7 @@ const inactiveCount =
     </div>
 
   </div>
-
+*/}
 
      {/* Table Section */}
       <div className="mx-auto mt-2 w-full max-w-7xl">
@@ -2111,6 +2127,11 @@ const inactiveCount =
   <th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-center text-xs font-bold
    uppercase tracking-wider text-slate-700 whitespace-nowrap">Mobile Number</th>
 
+   <th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-center text-xs font-bold
+    uppercase tracking-wider text-slate-700 whitespace-nowrap">
+   PF No
+   </th>
+
   <th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-center text-xs font-bold
    uppercase tracking-wider text-slate-700 whitespace-nowrap">Date Of Joining</th>
 
@@ -2199,7 +2220,7 @@ const inactiveCount =
   <td className="border-b border-r border-slate-200 px-4 py-2 text-sm text-slate-700 whitespace-nowrap">{item.scrum_job_role || "-"}</td>
  
   <td className="border-b border-r border-slate-200 px-4 py-2 text-sm text-slate-700 whitespace-nowrap">{item.mobile_number || "-"}</td>
-  
+  <td className="border-b border-r border-slate-200 px-4 py-2 text-sm text-slate-700 whitespace-nowrap">{item.pf_no || "-"}</td>
   <td className="border-b border-r border-slate-200 px-4 py-2 text-sm text-slate-700 whitespace-nowrap">{item.date_of_joining
     ? new Date(item.date_of_joining)
         .toLocaleDateString("en-GB")
@@ -2265,27 +2286,6 @@ const inactiveCount =
       "
     >
       <Pencil size={16} />
-    </button>
-
-    {/* Delete */}
-    <button
-    title="Delete"
-      disabled={deletingId === item.id}
-      onClick={() => handleDelete(item.id)}
-      className="
-        flex h-9 w-9 items-center justify-center
-        rounded-xl
-        border border-slate-200
-        bg-white
-        text-slate-600
-        transition-all
-        hover:border-red-200
-        hover:bg-red-50
-        hover:text-red-600
-        disabled:opacity-50
-      "
-    >
-      <Trash2 size={16} />
     </button>
 
   </div>
@@ -2698,6 +2698,7 @@ records
         <Field label="Aadhaar No" value={viewEmployee.aadhaar_no} />
         <Field label="UAN No" value={viewEmployee.uan_no} />
         <Field label="ESIC IP No" value={viewEmployee.esic_ip_no} />
+        <Field label="PF No" value={viewEmployee.pf_no} />
         <Field label="NTH Salary" value={viewEmployee.nth_salary} />
       </div>
 
@@ -3387,6 +3388,21 @@ onChange={(selected) =>
         className="w-full rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs outline-none focus:border-violet-500"
       />
     </div>
+
+<div>
+  <label className="mb-1 block text-xs px-1 font-semibold text-slate-700">
+    PF No
+  </label>
+
+  <input
+    type="text"
+    name="pf_no"
+    value={employeeForm.pf_no}
+    onChange={handleEmployeeChange}
+    placeholder="Enter PF No"
+    className="w-full rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs outline-none focus:border-violet-500"
+  />
+</div>
 
     {/* ESIC IP No */}
     <div>

@@ -12,6 +12,7 @@ const {
   authMiddleware,
   canAccessCircle,
   forbid,
+  isAllCircle,
 } = require("../middleware/circleAccess");
 
 const storage = multer.memoryStorage();
@@ -74,16 +75,18 @@ router.post("/add-employee", async (req, res) => {
 
     console.log("FULL BODY =", req.body);
     console.log("NTH SALARY =", req.body.nth_salary);
-    const {
-      employee_code,
-      employee_name,
-      circle,
-      cmp,
-      designation,
-      aadhaar_no,
-      nth_salary,
-      l2_status,
-    } = req.body || {};
+ const {
+  employee_code,
+  employee_name,
+  circle,
+  cmp,
+  designation,
+  aadhaar_no,
+  nth_salary,
+  joining_status,
+  l2_approval,
+  employee_status,
+} = req.body || {};
 
     if (!canAccessCircle(req.authUser, circle)) {
       return forbid(res);
@@ -99,9 +102,11 @@ router.post("/add-employee", async (req, res) => {
         designation,
         aadhaar_no,
          nth_salary,
-        l2_status
+         joining_status,
+        l2_approval,
+        employee_status
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `,
       [
         employee_code || "",
@@ -111,7 +116,9 @@ router.post("/add-employee", async (req, res) => {
         designation || "",
         aadhaar_no || "",
          nth_salary || 0,
-        l2_status || "",
+        joining_status || "Pending",
+        l2_approval || "Pending",
+        employee_status || "Active",
       ]
     );
 
@@ -161,17 +168,21 @@ router.put("/update-status/:id", async (req, res) => {
 
   try {
 
-    const { status, employee_status } = req.body;
+  const { joining_status, employee_status } = req.body;
 
    const filters = ["id = ?"];
-   const params = [status, employee_status, req.params.id];
+   const params = [
+  joining_status,
+  employee_status,
+  req.params.id,
+];
    addCircleFilter(filters, params, req.authUser);
    const result = await query(
   `
-  UPDATE new_joining
-  SET l2_status = ?,
-      employee_status = ?
-  WHERE ${filters.join(" AND ")}
+ UPDATE new_joining
+SET joining_status = ?,
+    employee_status = ?
+WHERE ${filters.join(" AND ")}
   `,
   params
 );
@@ -180,6 +191,55 @@ router.put("/update-status/:id", async (req, res) => {
     res.json({
       success: true,
       message: "Status Updated",
+    });
+
+  } catch (error) {
+
+    console.log(error);
+
+    res.status(500).json({
+      success: false,
+      message: "Failed",
+    });
+
+  }
+
+});
+
+router.put("/l2-approval/:id", async (req, res) => {
+
+  try {
+
+    if (!isAllCircle(req.authUser)) {
+      return res.status(403).json({
+        success: false,
+        message: "Only ALL Circle users can update L2 Approval.",
+      });
+    }
+
+    const { l2_approval } = req.body;
+
+    const filters = ["id = ?"];
+    const params = [l2_approval, req.params.id];
+
+    addCircleFilter(filters, params, req.authUser);
+
+    const result = await query(
+      `
+      UPDATE new_joining
+      SET l2_approval = ?
+      WHERE ${filters.join(" AND ")}
+      `,
+      params
+    );
+
+    if (!result.affectedRows) {
+      return forbid(res);
+    }
+
+    res.json({
+      success: true,
+      message: "L2 Approval Updated",
     });
 
   } catch (error) {
@@ -286,37 +346,41 @@ for (const row of rows) {
     row["Nth Salary"] ||
     0;
 
-  const l2_status =
-    row.l2_status ||
-    row["L2 status"] ||
-    "Pending";
+  const joining_status =
+  row.joining_status ||
+  row["Joining Status"] ||
+  "Pending";
 
-  values.push([
-    employee_code,
-    employee_name,
-    circle,
-    cmp,
-    designation,
-    aadhaar_no,
-    nth_salary,
-    l2_status,
-    "Active",
-  ]);
+values.push([
+  employee_code,
+  employee_name,
+  circle,
+  cmp,
+  designation,
+  aadhaar_no,
+  nth_salary,
+  joining_status,
+  "Pending",
+  "Active",
+]);
 }
 
 await query(
   `
-  INSERT INTO new_joining (
-    employee_code,
-    employee_name,
-    circle,
-    cmp,
-    designation,
-    aadhaar_no,
-    nth_salary,
-    l2_status,
-    employee_status
-  )
+ INSERT INTO new_joining (
+
+employee_code,
+employee_name,
+circle,
+cmp,
+designation,
+aadhaar_no,
+nth_salary,
+joining_status,
+l2_approval,
+employee_status
+
+)
   VALUES ?
   `,
   [values]

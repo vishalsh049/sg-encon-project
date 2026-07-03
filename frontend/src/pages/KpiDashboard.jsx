@@ -1,63 +1,72 @@
-import React, { useEffect, useState, useRef, useMemo } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity,
   BarChart2,
   CalendarDays,
   ChevronDown,
   ChevronUp,
-  Download,
   Eye,
-  Filter,
+  FileSpreadsheet,
+  Image as ImageIcon,
   Maximize2,
   Minimize2,
   Minus,
   MoreVertical,
+  Printer,
   TrendingDown,
   TrendingUp,
   X,
 } from "lucide-react";
 
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  LabelList,
-  Legend,
-  ReferenceLine,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
-
 import { authFetch, buildApiUrl } from "../lib/api";
+import { useDashboardPreferences } from "../hooks/useDashboardPreferences";
+import { useIsDarkMode } from "../hooks/useIsDarkMode";
+import { orderEntities } from "../utils/chartMath";
+import { getHealthStatus } from "../utils/kpiHealth";
+import { exportChartAsCsv, exportChartAsPng } from "../utils/chartExport";
+
+import ChartRenderer from "../components/dashboard/ChartRenderer";
+import ChartToolbar from "../components/dashboard/ChartToolbar";
+import SummaryRow from "../components/dashboard/SummaryRow";
+import KPIComparisonView from "../components/dashboard/KPIComparisonView";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
-const CHART_COLORS = [
-  "#3b82f6", "#22c55e", "#f59e0b", "#ef4444",
-  "#8b5cf6", "#06b6d4", "#f97316", "#64748b",
+const colorStyles = {
+  blue:    { bg: "bg-blue-50 dark:bg-blue-500/10",       text: "text-blue-600 dark:text-blue-400",       border: "border-blue-100 dark:border-blue-500/20",       dot: "bg-blue-500",    accent: "from-blue-500 to-indigo-500" },
+  emerald: { bg: "bg-emerald-50 dark:bg-emerald-500/10", text: "text-emerald-600 dark:text-emerald-400", border: "border-emerald-100 dark:border-emerald-500/20", dot: "bg-emerald-500", accent: "from-emerald-500 to-teal-500" },
+  violet:  { bg: "bg-violet-50 dark:bg-violet-500/10",   text: "text-violet-600 dark:text-violet-400",   border: "border-violet-100 dark:border-violet-500/20",   dot: "bg-violet-500",  accent: "from-violet-500 to-purple-500" },
+  orange:  { bg: "bg-orange-50 dark:bg-orange-500/10",   text: "text-orange-600 dark:text-orange-400",   border: "border-orange-100 dark:border-orange-500/20",   dot: "bg-orange-500",  accent: "from-orange-500 to-amber-500" },
+  cyan:    { bg: "bg-cyan-50 dark:bg-cyan-500/10",       text: "text-cyan-600 dark:text-cyan-400",       border: "border-cyan-100 dark:border-cyan-500/20",       dot: "bg-cyan-500",    accent: "from-cyan-500 to-sky-500" },
+  rose:    { bg: "bg-rose-50 dark:bg-rose-500/10",       text: "text-rose-600 dark:text-rose-400",       border: "border-rose-100 dark:border-rose-500/20",       dot: "bg-rose-500",    accent: "from-rose-500 to-pink-500" },
+};
+
+const CHART_TYPE_OPTIONS = [
+  { key: "line",           label: "Line Chart" },
+  { key: "bar",            label: "Bar Chart" },
+  { key: "area",           label: "Area Chart" },
+  { key: "stacked",        label: "Stacked Bar" },
+  { key: "heatmap",        label: "Heat Map" },
+  { key: "table",          label: "Table View" },
+  { key: "combo",          label: "Combo Chart" },
+  { key: "sparkline",      label: "Sparkline Cards" },
+  { key: "kpi-comparison", label: "KPI Comparison" },
 ];
 
-const CIRCLE_COLORS_MAP = {
-  "Punjab":  "#3b82f6",
-  "Delhi":   "#22c55e",
-  "Haryana": "#f59e0b",
-  "UP East": "#8b5cf6",
-};
-
-function getCircleColor(name, index) {
-  return CIRCLE_COLORS_MAP[name] || CHART_COLORS[index % CHART_COLORS.length];
-}
-
-const colorStyles = {
-  blue:    { bg: "bg-blue-50",    text: "text-blue-600",    border: "border-blue-100",    dot: "bg-blue-500",    accent: "from-blue-500 to-indigo-500" },
-  emerald: { bg: "bg-emerald-50", text: "text-emerald-600", border: "border-emerald-100", dot: "bg-emerald-500", accent: "from-emerald-500 to-teal-500" },
-  violet:  { bg: "bg-violet-50",  text: "text-violet-600",  border: "border-violet-100",  dot: "bg-violet-500",  accent: "from-violet-500 to-purple-500" },
-  orange:  { bg: "bg-orange-50",  text: "text-orange-600",  border: "border-orange-100",  dot: "bg-orange-500",  accent: "from-orange-500 to-amber-500" },
-  cyan:    { bg: "bg-cyan-50",    text: "text-cyan-600",    border: "border-cyan-100",    dot: "bg-cyan-500",    accent: "from-cyan-500 to-sky-500" },
-  rose:    { bg: "bg-rose-50",    text: "text-rose-600",    border: "border-rose-100",    dot: "bg-rose-500",    accent: "from-rose-500 to-pink-500" },
-};
+// Page-level date range for the compact KPI cards. Separate from the
+// analytics popup's own 9-option `period` filter (last7/last30/current_month/
+// prev_month/custom_month/yearly/month_range/date_range/quarterly) — the two
+// are not unified in this phase, only the chart *rendering* is shared.
+const RANGE_OPTIONS = [
+  { key: "today",      label: "Today" },
+  { key: "yesterday",  label: "Yesterday" },
+  { key: "this_week",  label: "This Week" },
+  { key: "this_month", label: "This Month" },
+  { key: "last7",      label: "Last 7 Days" },
+  { key: "last15",     label: "Last 15 Days" },
+  { key: "last30",     label: "Last 30 Days" },
+  { key: "custom",     label: "Custom Range" },
+];
 
 const PERIOD_OPTIONS = [
   { key: "last7",         label: "Last 7 Days" },
@@ -103,206 +112,17 @@ const formatChartDate = (dateStr, period) => {
   return d.toLocaleDateString("en-GB", { day: "2-digit", month: "short" });
 };
 
-// Compute a fully dynamic Y-axis: nice round tick positions that zoom in on
-// the actual data range so small differences between bars are clearly visible.
-function calcYAxis(vals, targetTickCount = 7) {
-  const min = Math.min(...vals);
-  const max = Math.max(...vals);
-  const range = max - min || 1;
-
-  // Pad 20 % above and below (minimum 0.05 absolute so a flat line still shows)
-  const pad   = Math.max(range * 0.2, 0.05);
-  const rawLo = min - pad;
-  const rawHi = max + pad;
-
-  // Pick a "nice" step size (1, 2, or 5 × a power of 10)
-  const rawStep = (rawHi - rawLo) / (targetTickCount - 1);
-  const exp     = Math.floor(Math.log10(rawStep));
-  const mag     = Math.pow(10, exp);
-  const norm    = rawStep / mag;
-  const niceStep =
-    norm <= 1 ? mag :
-    norm <= 2 ? 2 * mag :
-    norm <= 5 ? 5 * mag : 10 * mag;
-
-  // Snap domain boundaries to the step grid
-  const lo = Math.floor(rawLo / niceStep) * niceStep;
-  const hi = Math.ceil(rawHi  / niceStep) * niceStep;
-
-  // Decimal places to show on tick labels
-  const dp    = niceStep < 1 ? Math.max(0, -Math.floor(Math.log10(niceStep))) : 0;
-  const count = Math.round((hi - lo) / niceStep);
-
-  const ticks = Array.from({ length: count + 1 }, (_, i) =>
-    parseFloat((lo + i * niceStep).toFixed(dp + 2))
-  ).filter(t => t >= 0 && t <= 100);
-
-  return {
-    domain:        [Math.max(0, parseFloat(lo.toFixed(dp + 2))), Math.min(100, parseFloat(hi.toFixed(dp + 2)))],
-    ticks,
-    tickFormatter: v => `${Number(v).toFixed(dp)}%`,
-  };
+function getCardLatestAvg(card) {
+  const last = (card.chartData || [])[card.chartData.length - 1];
+  if (!last) return null;
+  const vals = (card.entities || []).map(e => Number(last[e])).filter(v => v > 0);
+  if (!vals.length) return null;
+  return vals.reduce((a, b) => a + b, 0) / vals.length;
 }
 
-// Fixed X-axis order for circles
-const CIRCLE_ORDER = ["Delhi", "Haryana", "Punjab", "UP East"];
+// ─── Analytics Popup (drill-down) ────────────────────────────────────────────
 
-// ─── Mini Grouped Bar Chart ───────────────────────────────────────────────────
-// X-axis = Circles, one Bar per date (last 7 days), legend shows date labels.
-
-function MiniGroupedChart({ chartData, circles, groupBy }) {
-  // Dates in chronological order as they appear in chartData
-  const dates = useMemo(() =>
-    (chartData || []).map(row => row.date).filter(Boolean),
-    [chartData]
-  );
-
-  // When grouping by circle: respect fixed display order; extras appended alphabetically.
-  // When grouping by CMP: none match CIRCLE_ORDER so all sort alphabetically — correct.
-  const orderedCircles = useMemo(() => {
-    const known = CIRCLE_ORDER.filter(c => (circles || []).includes(c));
-    const extra = (circles || []).filter(c => !CIRCLE_ORDER.includes(c)).sort();
-    return [...known, ...extra];
-  }, [circles]);
-
-  // Transpose: rows keyed by circle, columns keyed by date
-  // [{ circle: "Delhi", "22 Jun": 98.91, "23 Jun": 99.12, … }, …]
-  const transposed = useMemo(() =>
-    orderedCircles.map(circle => {
-      const obj = { circle };
-      dates.forEach(date => {
-        const row = (chartData || []).find(r => r.date === date);
-        const v = row ? Number(row[circle] || 0) : 0;
-        obj[date] = v > 0 ? v : null;
-      });
-      return obj;
-    }),
-    [orderedCircles, dates, chartData]
-  );
-
-  const allVals = useMemo(() =>
-    transposed.flatMap(row => dates.map(d => Number(row[d] || 0)).filter(v => v > 0)),
-    [transposed, dates]
-  );
-
-  const { domain, ticks } = useMemo(() => {
-    if (!allVals.length) return { domain: [0, 100], ticks: undefined };
-    const result = calcYAxis(allVals);
-    return { domain: result.domain, ticks: result.ticks };
-  }, [allVals]);
-
-  if (!transposed.length || !dates.length) {
-    return (
-      <div className="flex h-44 items-center justify-center rounded-2xl bg-slate-50">
-        <p className="text-[10px] text-slate-400">
-          {groupBy === "cmp" ? "No CMP data" : "No circle data"}
-        </p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="rounded-2xl bg-slate-50/80 px-1 pt-2 pb-1">
-      {/* Legend – date labels with per-day colors */}
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-2 pb-2">
-        {dates.map((date, i) => (
-          <div key={date} className="flex items-center gap-1">
-            <div
-              className="h-2 w-2 flex-shrink-0 rounded-full"
-              style={{ backgroundColor: CHART_COLORS[i % CHART_COLORS.length] }}
-            />
-            <span className="text-[9px] font-medium text-slate-500">{date}</span>
-          </div>
-        ))}
-      </div>
-
-      {/* Chart: X-axis = circles, one bar per date */}
-      <div className="h-40 w-full">
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart
-            data={transposed}
-            margin={{ top: 16, right: 4, left: -28, bottom: 0 }}
-            barCategoryGap="5%"
-            barGap={0}
-          >
-            <defs>
-              {dates.map((date, i) => {
-                const color = CHART_COLORS[i % CHART_COLORS.length];
-                return (
-                  <linearGradient key={`mg${i}`} id={`mg${i}`} x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%"   stopColor={color} stopOpacity={0.92} />
-                    <stop offset="100%" stopColor={color} stopOpacity={0.52} />
-                  </linearGradient>
-                );
-              })}
-            </defs>
-
-            <CartesianGrid strokeDasharray="2 2" stroke="#f1f5f9" vertical={false} />
-
-            <XAxis
-              dataKey="circle"
-              tick={{ fontSize: 8, fill: "#94a3b8" }}
-              axisLine={false}
-              tickLine={false}
-            />
-
-            <YAxis
-              domain={domain}
-              ticks={ticks}
-              tick={{ fontSize: 7.5, fill: "#cbd5e1" }}
-              axisLine={false}
-              tickLine={false}
-              width={28}
-              tickFormatter={v => `${Number(v).toFixed(0)}%`}
-            />
-
-            <Tooltip
-              formatter={(val, name) => [`${Number(val).toFixed(2)}%`, name]}
-              contentStyle={{
-                borderRadius: "10px",
-                border: "none",
-                boxShadow: "0 8px 25px rgba(15,23,42,0.12)",
-                fontSize: "11px",
-                padding: "8px 12px",
-                backgroundColor: "rgba(255,255,255,0.97)",
-              }}
-              cursor={{ fill: "rgba(148,163,184,0.06)" }}
-            />
-
-            {dates.map((date, i) => (
-              <Bar
-                key={date}
-                dataKey={date}
-                name={date}
-                fill={`url(#mg${i})`}
-                radius={[3, 3, 0, 0]}
-                maxBarSize={10}
-              >
-              <LabelList
-  dataKey={date}
-  position="top"
-  angle={-90}
-  offset={12}
-  formatter={v => v != null && v > 0 ? `${Number(v).toFixed(2)}` : ""}
-  style={{
-    fontSize: 7,
-    fontWeight: "700",
-    fill: "#475569",
-    textAnchor: "middle"
-  }}
-/>
-              </Bar>
-            ))}
-          </BarChart>
-        </ResponsiveContainer>
-      </div>
-    </div>
-  );
-}
-
-// ─── Analytics Popup ─────────────────────────────────────────────────────────
-
-function UptimeAnalyticsPopup({ kpiName, kpiColor, onClose, initialCircle, initialCmp }) {
+function UptimeAnalyticsPopup({ kpiName, kpiColor, chartType, onClose, initialCircle, initialCmp }) {
   const style = colorStyles[kpiColor] || colorStyles.blue;
 
   const _now = new Date();
@@ -325,6 +145,7 @@ function UptimeAnalyticsPopup({ kpiName, kpiColor, onClose, initialCircle, initi
   const [data,       setData]       = useState(null);
   const [loading,    setLoading]    = useState(true);
   const [fullscreen, setFullscreen] = useState(false);
+  const [refreshTick, setRefreshTick] = useState(0);
   const chartRef = useRef(null);
 
   // Lock body scroll
@@ -340,7 +161,7 @@ function UptimeAnalyticsPopup({ kpiName, kpiColor, onClose, initialCircle, initi
     return () => document.removeEventListener("keydown", fn);
   }, [onClose]);
 
-  // Fetch whenever filters change
+  // Fetch whenever filters change (or a manual refresh is requested)
   useEffect(() => {
     let cancelled = false;
     const fetchData = async () => {
@@ -374,72 +195,45 @@ function UptimeAnalyticsPopup({ kpiName, kpiColor, onClose, initialCircle, initi
     };
     fetchData();
     return () => { cancelled = true; };
-  }, [kpiName, filters]);
+  }, [kpiName, filters, refreshTick]);
 
-  // Transform flat rows → transposed grouped bar format
-  // X-axis = entities (circles or CMPs), bar series = dates (last 7 days)
-  const { chartData: transformedData, chartDates, chartEntities } = useMemo(() => {
-    if (!data?.chartData?.length) return { chartData: [], chartDates: [], chartEntities: [] };
+  // Regroup flat rows -> { date: label, <entity1>: value, ... } so it matches
+  // the same X-axis=date/series=entity orientation every chart view expects.
+  const { chartData: transformedData, chartEntities } = useMemo(() => {
+    if (!data?.chartData?.length) return { chartData: [], chartEntities: [] };
 
-    // Collect dates (Map preserves insertion/chronological order from backend)
-    const dateMap   = new Map();
-    const entitySet = new Set();
+    const dateLabels = new Map(); // rawDate -> label
+    const entitySet  = new Set();
 
     data.chartData.forEach(row => {
-      const label = formatChartDate(row.date, filters.period);
-      if (!dateMap.has(row.date)) dateMap.set(row.date, label);
+      if (!dateLabels.has(row.date)) dateLabels.set(row.date, formatChartDate(row.date, filters.period));
       entitySet.add(row.entity || row.circle || "Overall");
     });
 
-    const dates    = Array.from(dateMap.values());
-    const entities = Array.from(entitySet);
-
-    // For circle mode keep fixed display order; CMP mode sorts alphabetically
     const groupBy = data.groupBy || (filters.circle ? "cmp" : "circle");
-    let orderedEntities;
-    if (groupBy === "circle") {
-      const known = CIRCLE_ORDER.filter(c => entities.includes(c));
-      const extra = entities.filter(c => !CIRCLE_ORDER.includes(c)).sort();
-      orderedEntities = [...known, ...extra];
-    } else {
-      orderedEntities = [...entities].sort();
-    }
+    const orderedEntities = groupBy === "circle"
+      ? orderEntities(Array.from(entitySet))
+      : Array.from(entitySet).sort();
 
-    // Build entity → { dateLabel → uptime }
-    const entityDateMap = {};
+    const rowsByRawDate = {};
     data.chartData.forEach(row => {
-      const label = dateMap.get(row.date);
-      const e     = row.entity || row.circle || "Overall";
-      if (!entityDateMap[e]) entityDateMap[e] = {};
-      entityDateMap[e][label] = Number(row.uptime || 0);
+      if (!rowsByRawDate[row.date]) rowsByRawDate[row.date] = {};
+      const e = row.entity || row.circle || "Overall";
+      rowsByRawDate[row.date][e] = Number(row.uptime || 0);
     });
 
-    // One row per entity, columns = date labels
-    const chartData = orderedEntities.map(entity => {
-      const obj = { entity };
-      dates.forEach(date => {
-        const v = entityDateMap[entity]?.[date] || 0;
-        obj[date] = v > 0 ? v : null;
+    const sortedRawDates = Array.from(dateLabels.keys()).sort();
+    const chartData = sortedRawDates.map(rawDate => {
+      const obj = { date: dateLabels.get(rawDate) };
+      orderedEntities.forEach(e => {
+        const v = rowsByRawDate[rawDate]?.[e];
+        obj[e] = v > 0 ? v : null;
       });
       return obj;
     });
 
-    return { chartData, chartDates: dates, chartEntities: orderedEntities };
+    return { chartData, chartEntities: orderedEntities };
   }, [data, filters.period, filters.circle]);
-
-  // Dynamic Y-axis: domain + explicit tick array so recharts cannot override
-  const { yDomain, yTicks, yTickFormatter } = useMemo(() => {
-    const fallback = { yDomain: [0, 100], yTicks: undefined, yTickFormatter: v => `${v}%` };
-    if (!transformedData.length) return fallback;
-
-    const vals = transformedData.flatMap(row =>
-      chartDates.map(d => Number(row[d] || 0)).filter(v => v > 0)
-    );
-    if (!vals.length) return fallback;
-
-    const { domain, ticks, tickFormatter } = calcYAxis(vals);
-    return { yDomain: domain, yTicks: ticks, yTickFormatter: tickFormatter };
-  }, [transformedData, chartDates]);
 
   const handleFilterChange = (key, value) => {
     setFilters(prev => {
@@ -449,25 +243,21 @@ function UptimeAnalyticsPopup({ kpiName, kpiColor, onClose, initialCircle, initi
     });
   };
 
-  // Download chart as SVG
-  const handleDownloadSvg = () => {
+  const handleExportPng = () => {
     const svg = chartRef.current?.querySelector("svg");
-    if (!svg) return;
-    const blob = new Blob([new XMLSerializer().serializeToString(svg)], { type: "image/svg+xml" });
-    const url  = URL.createObjectURL(blob);
-    const a    = Object.assign(document.createElement("a"), { href: url, download: `${kpiName}_uptime.svg` });
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    if (svg) exportChartAsPng(svg, `${kpiName}_uptime.png`);
   };
 
-  const summary  = data?.summary || {}; 
+  const handleExportCsv = () => {
+    exportChartAsCsv(transformedData, chartEntities, `${kpiName}_uptime.csv`);
+  };
+
+  const summary  = data?.summary || {};
   const trend    = summary.trend || "stable";
   const TrendIcon  = trend === "up" ? TrendingUp : trend === "down" ? TrendingDown : Minus;
   const trendText  = trend === "up" ? "Improving" : trend === "down" ? "Declining" : "Stable";
-  const trendColor = trend === "up" ? "text-green-600" : trend === "down" ? "text-red-600" : "text-slate-500";
-  const trendBg    = trend === "up" ? "bg-green-50 border-green-100" : trend === "down" ? "bg-red-50 border-red-100" : "bg-slate-50 border-slate-200";
+  const trendColor = trend === "up" ? "text-green-600 dark:text-green-400" : trend === "down" ? "text-red-600 dark:text-red-400" : "text-text-muted";
+  const trendBg    = trend === "up" ? "bg-green-50 dark:bg-green-500/10 border-green-100 dark:border-green-500/20" : trend === "down" ? "bg-red-50 dark:bg-red-500/10 border-red-100 dark:border-red-500/20" : "bg-surface-muted border-border-color";
 
   const showMonthPicker = filters.period === "custom_month";
   const showYearPicker  = filters.period === "yearly" || filters.period === "custom_month";
@@ -481,9 +271,9 @@ function UptimeAnalyticsPopup({ kpiName, kpiColor, onClose, initialCircle, initi
       <div
         onClick={e => e.stopPropagation()}
         className={`
-          relative flex flex-col bg-white
+          relative flex flex-col bg-surface
           shadow-[0_40px_100px_rgba(15,23,42,0.22)]
-          border border-slate-100/80
+          border border-border-color/80
           overflow-hidden animate-modal-enter
           ${fullscreen
             ? "w-full h-full max-w-none max-h-none rounded-none"
@@ -492,16 +282,16 @@ function UptimeAnalyticsPopup({ kpiName, kpiColor, onClose, initialCircle, initi
       >
 
         {/* ── Header ── */}
-        <div className="flex items-start justify-between gap-4 px-6 py-5 border-b border-slate-100 bg-gradient-to-r from-slate-50/70 to-white flex-shrink-0">
+        <div className="flex items-start justify-between gap-4 px-6 py-5 border-b border-border-color bg-gradient-to-r from-surface-muted/70 to-surface flex-shrink-0">
           <div className="flex items-center gap-3 min-w-0">
             <div className={`flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br ${style.accent} flex-shrink-0 shadow-sm`}>
               <Activity className="h-5 w-5 text-white" />
             </div>
             <div className="min-w-0">
-              <h2 className="text-lg font-semibold text-slate-900 tracking-tight leading-snug">
+              <h2 className="text-lg font-semibold text-text-primary tracking-tight leading-snug">
                 {kpiName} Uptime Analytics
               </h2>
-              <p className="text-xs text-slate-400 mt-0.5">
+              <p className="text-xs text-text-muted mt-0.5">
                 Detailed uptime analysis &amp; historical performance
               </p>
             </div>
@@ -512,7 +302,7 @@ function UptimeAnalyticsPopup({ kpiName, kpiColor, onClose, initialCircle, initi
             <select
               value={filters.circle}
               onChange={e => handleFilterChange("circle", e.target.value)}
-              className="h-8 rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-700 shadow-sm outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300 transition"
+              className="h-8 rounded-xl border border-border-color bg-surface px-3 text-xs text-text-secondary shadow-sm outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300 transition"
             >
               <option value="">All Circles</option>
               {(data?.circles || []).map(c => <option key={c} value={c}>{c}</option>)}
@@ -521,7 +311,7 @@ function UptimeAnalyticsPopup({ kpiName, kpiColor, onClose, initialCircle, initi
             <select
               value={filters.cmp}
               onChange={e => handleFilterChange("cmp", e.target.value)}
-              className="h-8 rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-700 shadow-sm outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300 transition"
+              className="h-8 rounded-xl border border-border-color bg-surface px-3 text-xs text-text-secondary shadow-sm outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300 transition"
             >
               <option value="">All CMP</option>
               {(data?.cmps || []).map(c => <option key={c} value={c}>{c}</option>)}
@@ -529,7 +319,7 @@ function UptimeAnalyticsPopup({ kpiName, kpiColor, onClose, initialCircle, initi
 
             <button
               onClick={onClose}
-              className="flex h-8 w-8 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 shadow-sm hover:bg-slate-50 hover:text-slate-800 transition"
+              className="flex h-8 w-8 items-center justify-center rounded-xl border border-border-color bg-surface text-text-muted shadow-sm hover:bg-surface-muted hover:text-text-primary transition"
               title="Close (Esc)"
             >
               <X className="h-4 w-4" />
@@ -538,8 +328,8 @@ function UptimeAnalyticsPopup({ kpiName, kpiColor, onClose, initialCircle, initi
         </div>
 
         {/* ── Period filter bar ── */}
-        <div className="flex items-center gap-2 px-6 py-3 border-b border-slate-100 bg-slate-50/60 flex-wrap flex-shrink-0 overflow-x-auto">
-          <span className="text-[10px] font-semibold uppercase tracking-[0.20em] text-slate-400 whitespace-nowrap mr-1">
+        <div className="flex items-center gap-2 px-6 py-3 border-b border-border-color bg-surface-muted/60 flex-wrap flex-shrink-0 overflow-x-auto">
+          <span className="text-[10px] font-semibold uppercase tracking-[0.20em] text-text-muted whitespace-nowrap mr-1">
             Period
           </span>
 
@@ -551,7 +341,7 @@ function UptimeAnalyticsPopup({ kpiName, kpiColor, onClose, initialCircle, initi
                 whitespace-nowrap rounded-xl px-3 py-1.5 text-xs font-medium transition-all
                 ${filters.period === opt.key
                   ? `${style.bg} ${style.text} ring-1 ring-current/40 shadow-sm font-semibold`
-                  : "bg-white border border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-50"}
+                  : "bg-surface border border-border-color text-text-secondary hover:border-border-strong hover:bg-surface-muted"}
               `}
             >
               {opt.label}
@@ -562,7 +352,7 @@ function UptimeAnalyticsPopup({ kpiName, kpiColor, onClose, initialCircle, initi
             <select
               value={filters.month}
               onChange={e => handleFilterChange("month", e.target.value)}
-              className="h-7 rounded-xl border border-slate-200 bg-white px-2 text-xs text-slate-700 outline-none focus:ring-2 focus:ring-blue-100"
+              className="h-7 rounded-xl border border-border-color bg-surface px-2 text-xs text-text-secondary outline-none focus:ring-2 focus:ring-blue-100"
             >
               {MONTH_OPTIONS.map(m => <option key={m.v} value={m.v}>{m.l}</option>)}
             </select>
@@ -572,7 +362,7 @@ function UptimeAnalyticsPopup({ kpiName, kpiColor, onClose, initialCircle, initi
             <select
               value={filters.year}
               onChange={e => handleFilterChange("year", e.target.value)}
-              className="h-7 rounded-xl border border-slate-200 bg-white px-2 text-xs text-slate-700 outline-none focus:ring-2 focus:ring-blue-100"
+              className="h-7 rounded-xl border border-border-color bg-surface px-2 text-xs text-text-secondary outline-none focus:ring-2 focus:ring-blue-100"
             >
               {YEAR_OPTIONS.map(y => <option key={y} value={String(y)}>{y}</option>)}
             </select>
@@ -581,33 +371,33 @@ function UptimeAnalyticsPopup({ kpiName, kpiColor, onClose, initialCircle, initi
           {/* Month to Month pickers */}
           {filters.period === "month_range" && (
             <>
-              <span className="text-[10px] font-medium text-slate-500 whitespace-nowrap">From</span>
+              <span className="text-[10px] font-medium text-text-muted whitespace-nowrap">From</span>
               <select
                 value={filters.fromMonth}
                 onChange={e => handleFilterChange("fromMonth", e.target.value)}
-                className="h-7 rounded-xl border border-slate-200 bg-white px-2 text-xs text-slate-700 outline-none focus:ring-2 focus:ring-blue-100"
+                className="h-7 rounded-xl border border-border-color bg-surface px-2 text-xs text-text-secondary outline-none focus:ring-2 focus:ring-blue-100"
               >
                 {MONTH_OPTIONS.map(m => <option key={m.v} value={m.v}>{m.l}</option>)}
               </select>
               <select
                 value={filters.fromMonthYear}
                 onChange={e => handleFilterChange("fromMonthYear", e.target.value)}
-                className="h-7 rounded-xl border border-slate-200 bg-white px-2 text-xs text-slate-700 outline-none focus:ring-2 focus:ring-blue-100"
+                className="h-7 rounded-xl border border-border-color bg-surface px-2 text-xs text-text-secondary outline-none focus:ring-2 focus:ring-blue-100"
               >
                 {YEAR_OPTIONS.map(y => <option key={y} value={String(y)}>{y}</option>)}
               </select>
-              <span className="text-[10px] font-medium text-slate-500 whitespace-nowrap">To</span>
+              <span className="text-[10px] font-medium text-text-muted whitespace-nowrap">To</span>
               <select
                 value={filters.toMonth}
                 onChange={e => handleFilterChange("toMonth", e.target.value)}
-                className="h-7 rounded-xl border border-slate-200 bg-white px-2 text-xs text-slate-700 outline-none focus:ring-2 focus:ring-blue-100"
+                className="h-7 rounded-xl border border-border-color bg-surface px-2 text-xs text-text-secondary outline-none focus:ring-2 focus:ring-blue-100"
               >
                 {MONTH_OPTIONS.map(m => <option key={m.v} value={m.v}>{m.l}</option>)}
               </select>
               <select
                 value={filters.toMonthYear}
                 onChange={e => handleFilterChange("toMonthYear", e.target.value)}
-                className="h-7 rounded-xl border border-slate-200 bg-white px-2 text-xs text-slate-700 outline-none focus:ring-2 focus:ring-blue-100"
+                className="h-7 rounded-xl border border-border-color bg-surface px-2 text-xs text-text-secondary outline-none focus:ring-2 focus:ring-blue-100"
               >
                 {YEAR_OPTIONS.map(y => <option key={y} value={String(y)}>{y}</option>)}
               </select>
@@ -617,19 +407,19 @@ function UptimeAnalyticsPopup({ kpiName, kpiColor, onClose, initialCircle, initi
           {/* Date to Date pickers */}
           {filters.period === "date_range" && (
             <>
-              <span className="text-[10px] font-medium text-slate-500 whitespace-nowrap">From</span>
+              <span className="text-[10px] font-medium text-text-muted whitespace-nowrap">From</span>
               <input
                 type="date"
                 value={filters.fromDate}
                 onChange={e => handleFilterChange("fromDate", e.target.value)}
-                className="h-7 rounded-xl border border-slate-200 bg-white px-2 text-xs text-slate-700 outline-none focus:ring-2 focus:ring-blue-100"
+                className="h-7 rounded-xl border border-border-color bg-surface px-2 text-xs text-text-secondary outline-none focus:ring-2 focus:ring-blue-100"
               />
-              <span className="text-[10px] font-medium text-slate-500 whitespace-nowrap">To</span>
+              <span className="text-[10px] font-medium text-text-muted whitespace-nowrap">To</span>
               <input
                 type="date"
                 value={filters.toDate}
                 onChange={e => handleFilterChange("toDate", e.target.value)}
-                className="h-7 rounded-xl border border-slate-200 bg-white px-2 text-xs text-slate-700 outline-none focus:ring-2 focus:ring-blue-100"
+                className="h-7 rounded-xl border border-border-color bg-surface px-2 text-xs text-text-secondary outline-none focus:ring-2 focus:ring-blue-100"
               />
             </>
           )}
@@ -640,7 +430,7 @@ function UptimeAnalyticsPopup({ kpiName, kpiColor, onClose, initialCircle, initi
               <select
                 value={filters.quarterYear}
                 onChange={e => handleFilterChange("quarterYear", e.target.value)}
-                className="h-7 rounded-xl border border-slate-200 bg-white px-2 text-xs text-slate-700 outline-none focus:ring-2 focus:ring-blue-100"
+                className="h-7 rounded-xl border border-border-color bg-surface px-2 text-xs text-text-secondary outline-none focus:ring-2 focus:ring-blue-100"
               >
                 {YEAR_OPTIONS.map(y => <option key={y} value={String(y)}>{y}</option>)}
               </select>
@@ -653,7 +443,7 @@ function UptimeAnalyticsPopup({ kpiName, kpiColor, onClose, initialCircle, initi
                     whitespace-nowrap rounded-xl px-3 py-1.5 text-xs font-medium transition-all
                     ${filters.quarter === q.key
                       ? `${style.bg} ${style.text} ring-1 ring-current/40 shadow-sm font-semibold`
-                      : "bg-white border border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-50"}
+                      : "bg-surface border border-border-color text-text-secondary hover:border-border-strong hover:bg-surface-muted"}
                   `}
                 >
                   {q.label}
@@ -667,17 +457,17 @@ function UptimeAnalyticsPopup({ kpiName, kpiColor, onClose, initialCircle, initi
         <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
 
           {/* Chart card */}
-          <div className="rounded-2xl border border-slate-100 bg-white shadow-sm overflow-hidden">
+          <div className="rounded-2xl border border-border-color bg-surface shadow-sm overflow-hidden">
 
             {/* Chart toolbar */}
-            <div className="flex items-center justify-between px-5 py-3 border-b border-slate-50 bg-slate-50/40">
+            <div className="flex items-center justify-between px-5 py-3 border-b border-border-color bg-surface-muted/40">
               <div className="flex items-center gap-2">
                 <BarChart2 className={`h-4 w-4 ${style.text}`} />
-                <span className="text-sm font-semibold text-slate-800">
+                <span className="text-sm font-semibold text-text-primary">
                   {kpiName} Uptime Trend
                 </span>
                 {!loading && transformedData.length > 0 && (
-                  <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-500">
+                  <span className="rounded-full bg-surface-muted px-2 py-0.5 text-[10px] font-semibold text-text-muted">
                     {transformedData.length} data points
                   </span>
                 )}
@@ -685,16 +475,39 @@ function UptimeAnalyticsPopup({ kpiName, kpiColor, onClose, initialCircle, initi
 
               <div className="flex items-center gap-2">
                 <button
-                  onClick={handleDownloadSvg}
+                  onClick={handleExportPng}
                   disabled={loading || !transformedData.length}
-                  className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 shadow-sm transition disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="flex items-center gap-1.5 rounded-xl border border-border-color bg-surface px-3 py-1.5 text-xs font-medium text-text-secondary hover:bg-surface-muted shadow-sm transition disabled:opacity-40 disabled:cursor-not-allowed"
                 >
-                  <Download className="h-3 w-3" />
-                  Export SVG
+                  <ImageIcon className="h-3 w-3" />
+                  Export PNG
+                </button>
+                <button
+                  onClick={handleExportCsv}
+                  disabled={loading || !transformedData.length}
+                  className="flex items-center gap-1.5 rounded-xl border border-border-color bg-surface px-3 py-1.5 text-xs font-medium text-text-secondary hover:bg-surface-muted shadow-sm transition disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <FileSpreadsheet className="h-3 w-3" />
+                  Export CSV
+                </button>
+                <button
+                  onClick={() => window.print()}
+                  disabled={loading || !transformedData.length}
+                  title="Print or save this analytics view as PDF"
+                  className="flex items-center gap-1.5 rounded-xl border border-border-color bg-surface px-3 py-1.5 text-xs font-medium text-text-secondary hover:bg-surface-muted shadow-sm transition disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <Printer className="h-3 w-3" />
+                  Download PDF
+                </button>
+                <button
+                  onClick={() => setRefreshTick(t => t + 1)}
+                  className="flex items-center gap-1.5 rounded-xl border border-border-color bg-surface px-3 py-1.5 text-xs font-medium text-text-secondary hover:bg-surface-muted shadow-sm transition"
+                >
+                  Refresh
                 </button>
                 <button
                   onClick={() => setFullscreen(f => !f)}
-                  className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 shadow-sm transition"
+                  className="flex items-center gap-1.5 rounded-xl border border-border-color bg-surface px-3 py-1.5 text-xs font-medium text-text-secondary hover:bg-surface-muted shadow-sm transition"
                 >
                   {fullscreen
                     ? <><Minimize2 className="h-3 w-3" /> Exit</>
@@ -709,118 +522,30 @@ function UptimeAnalyticsPopup({ kpiName, kpiColor, onClose, initialCircle, initi
               {loading ? (
                 <div className="flex h-72 items-center justify-center">
                   <div className="flex flex-col items-center gap-3">
-                    <div className={`h-9 w-9 animate-spin rounded-full border-[3px] border-slate-100 border-t-current ${style.text}`} />
-                    <p className="text-sm text-slate-400 animate-pulse">Loading analytics data…</p>
+                    <div className={`h-9 w-9 animate-spin rounded-full border-[3px] border-border-color border-t-current ${style.text}`} />
+                    <p className="text-sm text-text-muted animate-pulse">Loading analytics data…</p>
                   </div>
                 </div>
               ) : !transformedData.length ? (
                 <div className="flex h-72 flex-col items-center justify-center gap-3">
-                  <div className="flex h-16 w-16 items-center justify-center rounded-3xl bg-slate-100">
-                    <BarChart2 className="h-7 w-7 text-slate-300" />
+                  <div className="flex h-16 w-16 items-center justify-center rounded-3xl bg-surface-muted">
+                    <BarChart2 className="h-7 w-7 text-text-muted" />
                   </div>
                   <div className="text-center">
-                    <p className="text-sm font-semibold text-slate-600">No Data Available</p>
-                    <p className="text-xs text-slate-400 mt-1">
+                    <p className="text-sm font-semibold text-text-secondary">No Data Available</p>
+                    <p className="text-xs text-text-muted mt-1">
                       No uptime records found for the selected filters and period.
                     </p>
                   </div>
                 </div>
               ) : (
-                <div ref={chartRef} className="h-[320px] w-full">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart
-                      data={transformedData}
-                      margin={{ top: 22, right: 18, left: -8, bottom: 0 }}
-                      barCategoryGap="10%"
-                      barGap={1}
-                    >
-                      <defs>
-                        {chartDates.map((date, i) => (
-                          <linearGradient key={`grad-${i}`} id={`popGrad${i}`} x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="0%"   stopColor={CHART_COLORS[i % CHART_COLORS.length]} stopOpacity={0.92} />
-                            <stop offset="100%" stopColor={CHART_COLORS[i % CHART_COLORS.length]} stopOpacity={0.55} />
-                          </linearGradient>
-                        ))}
-                      </defs>
-
-                      <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-
-                      <XAxis
-                        dataKey="entity"
-                        tick={{ fontSize: 11, fill: "#94a3b8" }}
-                        axisLine={false}
-                        tickLine={false}
-                      />
-                      <YAxis
-                        domain={yDomain}
-                        ticks={yTicks}
-                        tick={{ fontSize: 11, fill: "#94a3b8" }}
-                        axisLine={false}
-                        tickLine={false}
-                        width={52}
-                        tickFormatter={yTickFormatter}
-                      />
-
-                      <ReferenceLine
-                        y={99.5}
-                        stroke="#10b981"
-                        strokeDasharray="4 4"
-                        strokeWidth={1.5}
-                        label={{ value: "99.5% target", position: "insideTopRight", fontSize: 10, fill: "#10b981" }}
-                      />
-
-                      <Tooltip
-                        formatter={(val, name) => [`${Number(val).toFixed(2)}%`, name]}
-                        contentStyle={{
-                          borderRadius: "14px",
-                          border: "none",
-                          boxShadow: "0 10px_35px_rgba(15,23,42,0.14)",
-                          fontSize: "12px",
-                          padding: "10px 14px",
-                          backgroundColor: "rgba(255,255,255,0.97)",
-                        }}
-                        cursor={{ fill: "rgba(148,163,184,0.07)" }}
-                      />
-
-                      <Legend
-                        wrapperStyle={{ fontSize: "12px", paddingTop: "10px" }}
-                        iconType="circle"
-                      />
-
-                      {chartDates.map((date, i) => (
-                        <Bar
-                          key={date}
-                          dataKey={date}
-                          name={date}
-                          fill={`url(#popGrad${i})`}
-                          radius={[5, 5, 0, 0]}
-                          maxBarSize={52}
-                        >
-  <LabelList
-  dataKey={date}
-  content={({ x, y, width, value }) => {
-    if (value == null) return null;
-
-    return (
-      <text
-        x={x + width / 2}
-        y={y - 26}
-        transform={`rotate(-90 ${x + width / 2} ${y - 26})`}
-        textAnchor="end"
-        dominantBaseline="middle"
-        fontSize="10"
-        fontWeight="700"
-        fill="#475569"
-      >
-        {Number(value).toFixed(2)}
-      </text>
-    );
-  }}
-/>
-                        </Bar>
-                      ))}
-                    </BarChart>
-                  </ResponsiveContainer>
+                <div ref={chartRef}>
+                  <ChartRenderer
+                    chartData={transformedData}
+                    entities={chartEntities}
+                    chartType={chartType}
+                    variant="full"
+                  />
                 </div>
               )}
             </div>
@@ -831,49 +556,49 @@ function UptimeAnalyticsPopup({ kpiName, kpiColor, onClose, initialCircle, initi
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
 
               {/* Average */}
-              <div className="rounded-2xl border border-blue-100 bg-gradient-to-br from-blue-50/70 to-white p-4 shadow-sm hover:shadow-md transition">
+              <div className="rounded-2xl border border-blue-100 dark:border-blue-500/20 bg-gradient-to-br from-blue-50/70 to-surface dark:from-blue-500/10 dark:to-surface p-4 shadow-sm hover:shadow-md transition">
                 <p className="text-[10px] font-bold uppercase tracking-[0.20em] text-blue-400">Average</p>
-                <p className="mt-2 text-2xl font-bold tracking-tight text-slate-900">
+                <p className="mt-2 text-2xl font-bold tracking-tight text-text-primary">
                   {Number(summary.avg || 0).toFixed(2)}%
                 </p>
-                <p className="mt-0.5 text-xs text-slate-400">Avg uptime</p>
+                <p className="mt-0.5 text-xs text-text-muted">Avg uptime</p>
               </div>
 
               {/* Highest */}
-              <div className="rounded-2xl border border-emerald-100 bg-gradient-to-br from-emerald-50/70 to-white p-4 shadow-sm hover:shadow-md transition">
+              <div className="rounded-2xl border border-emerald-100 dark:border-emerald-500/20 bg-gradient-to-br from-emerald-50/70 to-surface dark:from-emerald-500/10 dark:to-surface p-4 shadow-sm hover:shadow-md transition">
                 <p className="text-[10px] font-bold uppercase tracking-[0.20em] text-emerald-500">Highest</p>
-                <p className="mt-2 text-2xl font-bold tracking-tight text-emerald-700">
+                <p className="mt-2 text-2xl font-bold tracking-tight text-emerald-700 dark:text-emerald-400">
                   {Number(summary.highest || 0).toFixed(2)}%
                 </p>
-                <p className="mt-0.5 text-xs text-slate-400">Peak uptime</p>
+                <p className="mt-0.5 text-xs text-text-muted">Peak uptime</p>
               </div>
 
               {/* Lowest */}
-              <div className="rounded-2xl border border-rose-100 bg-gradient-to-br from-rose-50/70 to-white p-4 shadow-sm hover:shadow-md transition">
+              <div className="rounded-2xl border border-rose-100 dark:border-rose-500/20 bg-gradient-to-br from-rose-50/70 to-surface dark:from-rose-500/10 dark:to-surface p-4 shadow-sm hover:shadow-md transition">
                 <p className="text-[10px] font-bold uppercase tracking-[0.20em] text-rose-400">Lowest</p>
-                <p className="mt-2 text-2xl font-bold tracking-tight text-rose-600">
+                <p className="mt-2 text-2xl font-bold tracking-tight text-rose-600 dark:text-rose-400">
                   {Number(summary.lowest || 0).toFixed(2)}%
                 </p>
-                <p className="mt-0.5 text-xs text-slate-400">Min uptime</p>
+                <p className="mt-0.5 text-xs text-text-muted">Min uptime</p>
               </div>
 
               {/* Trend */}
               <div className={`rounded-2xl border p-4 shadow-sm hover:shadow-md transition ${trendBg}`}>
-                <p className="text-[10px] font-bold uppercase tracking-[0.20em] text-slate-400">Trend</p>
+                <p className="text-[10px] font-bold uppercase tracking-[0.20em] text-text-muted">Trend</p>
                 <div className={`mt-2 flex items-center gap-1.5 ${trendColor}`}>
                   <TrendIcon className="h-5 w-5 flex-shrink-0" />
                   <span className="text-xl font-bold tracking-tight">{trendText}</span>
                 </div>
-                <p className="mt-0.5 text-xs text-slate-400">Overall direction</p>
+                <p className="mt-0.5 text-xs text-text-muted">Overall direction</p>
               </div>
 
               {/* Total Records */}
-              <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50/70 to-white p-4 shadow-sm hover:shadow-md transition">
-                <p className="text-[10px] font-bold uppercase tracking-[0.20em] text-slate-400">Records</p>
-                <p className="mt-2 text-2xl font-bold tracking-tight text-slate-900">
+              <div className="rounded-2xl border border-border-color bg-gradient-to-br from-surface-muted/70 to-surface p-4 shadow-sm hover:shadow-md transition">
+                <p className="text-[10px] font-bold uppercase tracking-[0.20em] text-text-muted">Records</p>
+                <p className="mt-2 text-2xl font-bold tracking-tight text-text-primary">
                   {Number(summary.total || 0).toLocaleString()}
                 </p>
-                <p className="mt-0.5 text-xs text-slate-400">Total data points</p>
+                <p className="mt-0.5 text-xs text-text-muted">Total data points</p>
               </div>
 
             </div>
@@ -885,63 +610,204 @@ function UptimeAnalyticsPopup({ kpiName, kpiColor, onClose, initialCircle, initi
   );
 }
 
+// ─── KPI Card ────────────────────────────────────────────────────────────────
+// Memoized so switching the global chart type / date range only re-renders
+// cards whose data actually changed, and each card's own menu/legend state
+// stays local instead of living in an index-keyed map on the parent.
+
+const KpiCard = React.memo(function KpiCard({ card, chartType, collapsed, onToggleCollapse, onOpenAnalytics, onRefresh }) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef(null);
+  const containerRef = useRef(null);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const fn = (e) => { if (menuRef.current && !menuRef.current.contains(e.target)) setMenuOpen(false); };
+    document.addEventListener("mousedown", fn);
+    return () => document.removeEventListener("mousedown", fn);
+  }, [menuOpen]);
+
+  const style = colorStyles[card.color] || colorStyles.blue;
+  const orderedEntities = useMemo(() => orderEntities(card.entities || card.circles || []), [card.entities, card.circles]);
+  const health = useMemo(() => getHealthStatus(parseFloat(card.uptime)), [card.uptime]);
+  const latestAvg = useMemo(() => getCardLatestAvg(card), [card]);
+  const lastDateLabel = card.chartData?.[card.chartData.length - 1]?.date;
+
+  return (
+    <div className={`relative rounded-[18px] border ${style.border} bg-surface p-4 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-xl`}>
+      {/* Card header row */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className={`flex h-10 w-10 items-center justify-center rounded-2xl ${style.bg}`}>
+            <Activity className={`h-4 w-4 ${style.text}`} />
+          </div>
+          <div>
+            <div className="flex items-center gap-1.5">
+              <h2 className="text-sm font-semibold text-text-primary">{card.name}</h2>
+              <span title={health.label}>{health.emoji}</span>
+            </div>
+            <p className="text-[10px] uppercase tracking-[0.22em] text-text-muted">UPTIME</p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-1">
+          <ChartToolbar
+            kpiName={card.name}
+            chartData={card.chartData}
+            entities={orderedEntities}
+            containerRef={containerRef}
+            onFullscreen={() => onOpenAnalytics(card)}
+            onRefresh={onRefresh}
+          />
+
+          <button
+            onClick={onToggleCollapse}
+            className="flex h-8 w-8 items-center justify-center rounded-xl text-text-muted hover:bg-surface-muted hover:text-text-secondary transition"
+            title={collapsed ? "Expand card" : "Collapse card"}
+          >
+            {collapsed ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
+          </button>
+
+          {/* Three-dot menu (drill-down) */}
+          <div className="relative" ref={menuRef}>
+            <button
+              onClick={() => setMenuOpen(o => !o)}
+              className="flex h-8 w-8 items-center justify-center rounded-xl text-text-muted hover:bg-surface-muted hover:text-text-secondary transition"
+              title="Options"
+            >
+              <MoreVertical className="h-4 w-4" />
+            </button>
+
+            {menuOpen && (
+              <div className="absolute right-0 top-9 z-50 min-w-[160px] rounded-2xl border border-border-color bg-surface p-1.5 shadow-[0_10px_40px_rgba(15,23,42,0.14)]">
+                <button
+                  onClick={() => { setMenuOpen(false); onOpenAnalytics(card); }}
+                  className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-text-secondary hover:bg-blue-50 hover:text-blue-700 transition"
+                >
+                  <Eye className="h-4 w-4 text-blue-400 flex-shrink-0" />
+                  View Analytics
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {collapsed ? (
+        <p className="mt-2 text-lg font-semibold text-text-primary">{card.uptime}</p>
+      ) : (
+        <>
+          {/* Stats row */}
+          <div className="mt-2 flex items-center justify-between">
+            <p className="text-lg font-semibold text-text-primary">{card.uptime}</p>
+            <div className="flex items-center gap-1 rounded-full bg-green-50 dark:bg-green-500/10 px-2 py-1">
+              <TrendingUp className="h-3 w-3 text-green-600 dark:text-green-400" />
+              <span className="text-xs font-semibold text-green-600 dark:text-green-400">{card.increase}</span>
+            </div>
+          </div>
+
+          {/* Latest data point + health label */}
+          <div className="mt-1 flex items-center justify-between text-[10px] text-text-muted">
+            <span>{lastDateLabel ? `Last data: ${lastDateLabel}` : ""}</span>
+            <span>{latestAvg != null ? `Latest avg: ${latestAvg.toFixed(2)}%` : ""}</span>
+          </div>
+
+          {/* Chart */}
+          <div className="mt-3" ref={containerRef}>
+            <ChartRenderer
+              chartData={card.chartData || []}
+              entities={orderedEntities}
+              chartType={chartType}
+              variant="compact"
+            />
+          </div>
+        </>
+      )}
+    </div>
+  );
+});
+
 // ─── Main Dashboard ───────────────────────────────────────────────────────────
 
 function KpiDashboard() {
+  const [prefs, updatePrefs] = useDashboardPreferences();
+  const { chartType, selectedCircle, selectedCmp, dateRange, customFrom, customTo, collapsedCards } = prefs;
+  const isDark = useIsDarkMode();
+
+  const toggleCardCollapsed = (kpiName) => {
+    const set = new Set(collapsedCards);
+    if (set.has(kpiName)) set.delete(kpiName);
+    else set.add(kpiName);
+    updatePrefs({ collapsedCards: Array.from(set) });
+  };
+
   const [towerCards, setTowerCards] = useState([]);
-  const [selectedCircle, setSelectedCircle] = useState("");
-  const [selectedCmp, setSelectedCmp] = useState("");
   const [circleList, setCircleList] = useState([]);
-  const [cmpList, setCmpList] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [activeCardMenu, setActiveCardMenu] = useState(null); // index of open three-dot menu
-  const [analyticsPopup, setAnalyticsPopup] = useState(null); // { name, color }
+  const [cmpList, setCmpList]       = useState([]);
+  const [loading, setLoading]       = useState(true);
+  const [error, setError]           = useState(null);
+  const [analyticsPopup, setAnalyticsPopup] = useState(null);
+  const [chartTypeMenuOpen, setChartTypeMenuOpen] = useState(false);
+  const [rangeMenuOpen, setRangeMenuOpen] = useState(false);
 
-  const menuRefs = useRef({});
+  const chartTypeMenuRef = useRef(null);
+  const rangeMenuRef = useRef(null);
 
-  // Close three-dot menu on outside click
+  // Close chart-type / range dropdowns on outside click
   useEffect(() => {
     const fn = (e) => {
-      if (activeCardMenu === null) return;
-      const el = menuRefs.current[activeCardMenu];
-      if (el && !el.contains(e.target)) setActiveCardMenu(null);
+      if (chartTypeMenuOpen && chartTypeMenuRef.current && !chartTypeMenuRef.current.contains(e.target)) {
+        setChartTypeMenuOpen(false);
+      }
+      if (rangeMenuOpen && rangeMenuRef.current && !rangeMenuRef.current.contains(e.target)) {
+        setRangeMenuOpen(false);
+      }
     };
     document.addEventListener("mousedown", fn);
     return () => document.removeEventListener("mousedown", fn);
-  }, [activeCardMenu]);
+  }, [chartTypeMenuOpen, rangeMenuOpen]);
 
   // Fetch tower cards
-  useEffect(() => {
-    const fetchTower = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        const res  = await authFetch(buildApiUrl(`/api/tower-uptime?circle=${selectedCircle}&cmp=${selectedCmp}`));
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = await res.json();
-        setTowerCards(data);
-
-        // Extract unique circle names from entities when no circle filter is active
-        if (!selectedCircle) {
-          const circles = new Set();
-          data.forEach(card => {
-            if (card.groupBy === "circle") {
-              (card.entities || card.circles || []).forEach(c => { if (c) circles.add(c); });
-            }
-          });
-          const sorted = Array.from(circles).sort();
-          if (sorted.length > 0) setCircleList(sorted);
-        }
-      } catch (err) {
-        console.error(err);
-        setError(err.message);
-      } finally {
-        setLoading(false);
+  const fetchTower = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const params = new URLSearchParams({
+        circle: selectedCircle,
+        cmp:    selectedCmp,
+        range:  dateRange,
+      });
+      if (dateRange === "custom") {
+        params.set("from", customFrom || "");
+        params.set("to",   customTo   || "");
       }
-    };
+      const res  = await authFetch(buildApiUrl(`/api/tower-uptime?${params}`));
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      setTowerCards(data);
+
+      if (!selectedCircle) {
+        const circles = new Set();
+        data.forEach(card => {
+          if (card.groupBy === "circle") {
+            (card.entities || card.circles || []).forEach(c => { if (c) circles.add(c); });
+          }
+        });
+        const sorted = Array.from(circles).sort();
+        if (sorted.length > 0) setCircleList(sorted);
+      }
+    } catch (err) {
+      console.error(err);
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
     fetchTower();
-  }, [selectedCircle, selectedCmp]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedCircle, selectedCmp, dateRange, customFrom, customTo]);
 
   // Fetch CMP list from dedicated endpoint whenever circle selection changes
   useEffect(() => {
@@ -960,30 +826,32 @@ function KpiDashboard() {
   }, [selectedCircle]);
 
   const openAnalytics = (card) => {
-    setActiveCardMenu(null);
     setAnalyticsPopup({ name: card.name, color: card.color });
   };
+
+  const activeRangeLabel = RANGE_OPTIONS.find(r => r.key === dateRange)?.label || "Last 7 Days";
+  const activeChartLabel = CHART_TYPE_OPTIONS.find(c => c.key === chartType)?.label || "Line Chart";
 
   return (
     <div className="min-h-screen">
 
       {/* ── Page header ── */}
-      <div className="mb-5 flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-        <div className="flex items-start gap-4">
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-600 shadow-lg">
-            <Activity className="h-5 w-5 text-white" />
+      <div className="mb-2 flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+        <div className="flex items-start gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600">
+            <Activity className="h-4 w-4 text-white" />
           </div>
           <div>
-            <h1 className="text-lg font-semibold text-slate-900">Uptime Overview</h1>
-            <p className="text-sm text-slate-500">Real-time uptime trend of all monitored tower systems.</p>
+            <h1 className="text-md font-semibold text-text-primary">Uptime Overview</h1>
+            <p className="text-sm text-text-muted">Real-time uptime trend of all monitored tower systems.</p>
           </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
           <select
             value={selectedCircle}
-            onChange={e => { setSelectedCircle(e.target.value); setSelectedCmp(""); }}
-            className="h-9 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 shadow-sm outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300 transition"
+            onChange={e => updatePrefs({ selectedCircle: e.target.value, selectedCmp: "" })}
+            className="h-9 rounded-xl border border-border-color bg-surface px-3 text-sm text-text-secondary shadow-sm outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300 transition"
           >
             <option value="">All Circles</option>
             {circleList.map(c => <option key={c} value={c}>{c}</option>)}
@@ -991,33 +859,84 @@ function KpiDashboard() {
 
           <select
             value={selectedCmp}
-            onChange={e => setSelectedCmp(e.target.value)}
-            className="h-9 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 shadow-sm outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300 transition"
+            onChange={e => updatePrefs({ selectedCmp: e.target.value })}
+            className="h-9 rounded-xl border border-border-color bg-surface px-3 text-sm text-text-secondary shadow-sm outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300 transition"
           >
             <option value="">All CMP</option>
-
-{cmpList.map(cmp => (
-    <option key={cmp} value={cmp}>
-        {cmp}
-    </option>
-))}
+            {cmpList.map(cmp => <option key={cmp} value={cmp}>{cmp}</option>)}
           </select>
 
-          <button className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 transition">
-            <CalendarDays className="h-4 w-4" />
-            Last 7 Days
-          </button>
+          {/* Date Range control */}
+          <div className="relative" ref={rangeMenuRef}>
+            <button
+              onClick={() => setRangeMenuOpen(o => !o)}
+              className="flex items-center gap-2 rounded-xl border border-border-color bg-surface px-4 py-2 text-sm font-medium text-text-secondary shadow-sm hover:bg-surface-muted transition"
+            >
+              <CalendarDays className="h-4 w-4" />
+              {activeRangeLabel}
+              <ChevronDown className="h-3.5 w-3.5 text-text-muted" />
+            </button>
+            {rangeMenuOpen && (
+              <div className="absolute right-0 top-11 z-50 min-w-[190px] rounded-2xl border border-border-color bg-surface p-1.5 shadow-[0_10px_40px_rgba(15,23,42,0.14)]">
+                {RANGE_OPTIONS.map(opt => (
+                  <button
+                    key={opt.key}
+                    onClick={() => { updatePrefs({ dateRange: opt.key }); if (opt.key !== "custom") setRangeMenuOpen(false); }}
+                    className={`flex w-full items-center rounded-xl px-3 py-2 text-left text-sm font-medium transition ${dateRange === opt.key ? "bg-blue-50 text-blue-700" : "text-text-secondary hover:bg-surface-muted"}`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+                {dateRange === "custom" && (
+                  <div className="mt-1 space-y-1.5 border-t border-border-color px-2 pt-2">
+                    <input
+                      type="date"
+                      value={customFrom}
+                      onChange={e => updatePrefs({ customFrom: e.target.value })}
+                      className="h-8 w-full rounded-lg border border-border-color px-2 text-xs text-text-secondary outline-none focus:ring-2 focus:ring-blue-100"
+                    />
+                    <input
+                      type="date"
+                      value={customTo}
+                      onChange={e => updatePrefs({ customTo: e.target.value })}
+                      className="h-8 w-full rounded-lg border border-border-color px-2 text-xs text-text-secondary outline-none focus:ring-2 focus:ring-blue-100"
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
 
-          <button className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 transition">
-            <Filter className="h-4 w-4" />
-            Filter
-          </button>
+          {/* Dashboard View (global chart type) selector */}
+          <div className="relative" ref={chartTypeMenuRef}>
+            <button
+              onClick={() => setChartTypeMenuOpen(o => !o)}
+              className="flex items-center gap-2 rounded-xl border border-border-color bg-surface px-4 py-2 text-sm font-medium text-text-secondary shadow-sm hover:bg-surface-muted transition"
+            >
+              <BarChart2 className="h-4 w-4" />
+              {activeChartLabel}
+              <ChevronDown className="h-3.5 w-3.5 text-text-muted" />
+            </button>
+            {chartTypeMenuOpen && (
+              <div className="absolute right-0 top-11 z-50 min-w-[160px] rounded-2xl border border-border-color bg-surface p-1.5 shadow-[0_10px_40px_rgba(15,23,42,0.14)]">
+                {CHART_TYPE_OPTIONS.map(opt => (
+                  <button
+                    key={opt.key}
+                    onClick={() => { updatePrefs({ chartType: opt.key }); setChartTypeMenuOpen(false); }}
+                    className={`flex w-full items-center rounded-xl px-3 py-2 text-left text-sm font-medium transition ${chartType === opt.key ? "bg-blue-50 text-blue-700" : "text-text-secondary hover:bg-surface-muted"}`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
       {/* Error */}
       {error && (
-        <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
+        <div className="mb-4 rounded-xl border border-red-200 dark:border-red-500/20 bg-red-50 dark:bg-red-500/10 px-4 py-3 text-sm text-red-600 dark:text-red-400">
           <strong>Error loading data:</strong> {error}
         </div>
       )}
@@ -1026,98 +945,51 @@ function KpiDashboard() {
       {loading && (
         <div className="flex items-center justify-center py-16">
           <div className="flex flex-col items-center gap-3">
-            <div className="h-8 w-8 animate-spin rounded-full border-[3px] border-slate-200 border-t-blue-500" />
-            <p className="text-sm text-slate-400">Loading tower uptime data…</p>
+            <div className="h-8 w-8 animate-spin rounded-full border-[3px] border-border-color border-t-blue-500" />
+            <p className="text-sm text-text-muted">Loading tower uptime data…</p>
           </div>
         </div>
       )}
 
+      {/* ── Summary Row ── */}
+      {!loading && towerCards.length > 0 && <SummaryRow towerCards={towerCards} />}
+
+      {/* KPI Comparison replaces the per-KPI card grid entirely — it compares
+          KPIs against each other (AG1 vs ENB vs ESC ...), a different axis
+          than the per-circle breakdown every other chart type shows. */}
+      {!loading && chartType === "kpi-comparison" && (
+        <KPIComparisonView towerCards={towerCards} dark={isDark} />
+      )}
+
       {/* ── KPI Cards ── */}
-      {!loading && (
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {towerCards.map((card, index) => {
-            const style = colorStyles[card.color] || colorStyles.blue;
-
-            return (
-              <div
-                key={index}
-                className={`relative rounded-[18px] border ${style.border} bg-white p-4 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-xl`}
-              >
-                {/* Card header row */}
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className={`flex h-10 w-10 items-center justify-center rounded-2xl ${style.bg}`}>
-                      <Activity className={`h-4 w-4 ${style.text}`} />
-                    </div>
-                    <div>
-                      <h2 className="text-sm font-semibold text-slate-900">{card.name}</h2>
-                      <p className="text-[10px] uppercase tracking-[0.22em] text-slate-400">UPTIME</p>
-                    </div>
-                  </div>
-
-                  {/* Three-dot menu */}
-                  <div
-                    className="relative"
-                    ref={el => menuRefs.current[index] = el}
-                  >
-                    <button
-                      onClick={() => setActiveCardMenu(activeCardMenu === index ? null : index)}
-                      className="flex h-8 w-8 items-center justify-center rounded-xl text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition"
-                      title="Options"
-                    >
-                      <MoreVertical className="h-4 w-4" />
-                    </button>
-
-                    {activeCardMenu === index && (
-                      <div className="absolute right-0 top-9 z-50 min-w-[160px] rounded-2xl border border-slate-100 bg-white p-1.5 shadow-[0_10px_40px_rgba(15,23,42,0.14)]">
-                        <button
-                          onClick={() => openAnalytics(card)}
-                          className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-slate-700 hover:bg-blue-50 hover:text-blue-700 transition"
-                        >
-                          <Eye className="h-4 w-4 text-blue-400 flex-shrink-0" />
-                          View Analytics
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Stats row */}
-                <div className="mt-2 flex items-center justify-between">
-                  <p className="text-lg font-semibold text-slate-900">{card.uptime}</p>
-                  <div className="flex items-center gap-1 rounded-full bg-green-50 px-2 py-1">
-                    <TrendingUp className="h-3 w-3 text-green-600" />
-                    <span className="text-xs font-semibold text-green-600">{card.increase}</span>
-                  </div>
-                </div>
-
-                {/* Mini grouped bar chart – circle-wise or CMP-wise comparison */}
-                <div className="mt-3">
-                  <MiniGroupedChart
-                    chartData={card.chartData || []}
-                    circles={card.entities || card.circles || []}
-                    groupBy={card.groupBy || "circle"}
-                  />
-                </div>
-
-              </div>
-            );
-          })}
+      {!loading && chartType !== "kpi-comparison" && (
+        <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-2">
+          {towerCards.map((card, index) => (
+            <KpiCard
+              key={index}
+              card={card}
+              chartType={chartType}
+              collapsed={collapsedCards.includes(card.name)}
+              onToggleCollapse={() => toggleCardCollapsed(card.name)}
+              onOpenAnalytics={openAnalytics}
+              onRefresh={fetchTower}
+            />
+          ))}
         </div>
       )}
 
       {/* Empty state */}
       {!loading && !error && towerCards.length === 0 && (
         <div className="flex flex-col items-center justify-center py-16 gap-3">
-          <div className="flex h-16 w-16 items-center justify-center rounded-3xl bg-slate-100">
-            <BarChart2 className="h-7 w-7 text-slate-300" />
+          <div className="flex h-16 w-16 items-center justify-center rounded-3xl bg-surface-muted">
+            <BarChart2 className="h-7 w-7 text-text-muted" />
           </div>
-          <p className="text-slate-500 text-sm font-medium">No tower data available</p>
+          <p className="text-text-muted text-sm font-medium">No tower data available</p>
         </div>
       )}
 
       {/* Footer note */}
-      <div className="mt-10 flex items-center justify-center gap-2 text-xs text-slate-400">
+      <div className="mt-10 flex items-center justify-center gap-2 text-xs text-text-muted">
         <Activity className="h-3.5 w-3.5" />
         <p>Uptime percentage is calculated based on successful tower checks over the selected time period.</p>
       </div>
@@ -1127,6 +999,7 @@ function KpiDashboard() {
         <UptimeAnalyticsPopup
           kpiName={analyticsPopup.name}
           kpiColor={analyticsPopup.color}
+          chartType={chartType}
           initialCircle={selectedCircle}
           initialCmp={selectedCmp}
           onClose={() => setAnalyticsPopup(null)}

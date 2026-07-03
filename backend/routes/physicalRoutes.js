@@ -130,6 +130,7 @@
           aadhaar_no VARCHAR(50) DEFAULT NULL,
           uan_no VARCHAR(50) DEFAULT NULL,
           esic_ip_no VARCHAR(50) DEFAULT NULL,
+          pf_no VARCHAR(50) DEFAULT NULL,
           nth_salary DECIMAL(12,2) DEFAULT 0,
           remarks TEXT DEFAULT NULL,
           created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
@@ -170,6 +171,7 @@
         ["aadhaar_no", "VARCHAR(50) DEFAULT NULL"],
         ["uan_no", "VARCHAR(50) DEFAULT NULL"],
         ["esic_ip_no", "VARCHAR(50) DEFAULT NULL"],
+        ["pf_no", "VARCHAR(50) DEFAULT NULL"],
         ["nth_salary", "DECIMAL(12,2) DEFAULT 0"],
         ["remarks", "TEXT DEFAULT NULL"],
       ];
@@ -327,7 +329,7 @@ const allowedJobRoleMap = new Map(
     Haryana: [
       "Haryana SHQ",
       "Ambala",
-      "Hisar",
+      "Hissar",
       "Karnal",
       "Panipat",
       "Palwal",
@@ -565,6 +567,13 @@ const allowedJobRoleMap = new Map(
           row["ESIC IP No "] ||
           row["ESIC IP No"]
         ),
+// pf_no
+toText(
+  row["PF No"] ||
+  row["PF NO"] ||
+  row["PF Number"]
+),
+
 
         // nth_salary
     toNullableInt(
@@ -618,6 +627,7 @@ const allowedJobRoleMap = new Map(
           aadhaar_no,
           uan_no,
           esic_ip_no,
+          pf_no,
           nth_salary,
           remarks,
           cmp
@@ -1159,6 +1169,7 @@ if (!jobRole) {
             aadhaar_no,
             uan_no,
             esic_ip_no,
+            pf_no,
             nth_salary,
             remarks
 
@@ -1169,7 +1180,7 @@ if (!jobRole) {
     ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
     ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
     ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-    ?, ?
+    ?, ?, ?
 
     )
           `,
@@ -1205,6 +1216,7 @@ if (!jobRole) {
             data.aadhaar_no || "",
             data.uan_no || "",
             data.esic_ip_no || "",
+            data.pf_no || "",
             data.nth_salary || 0,
             data.remarks || ""
 
@@ -2050,6 +2062,7 @@ if (!jobRole) {
         aadhaar_no = ?,
         uan_no = ?,
         esic_ip_no = ?,
+        pf_no = ?,
         nth_salary = ?,
         remarks = ?
 
@@ -2087,6 +2100,7 @@ if (!jobRole) {
         data.aadhaar_no || "",
         data.uan_no || "",
         data.esic_ip_no || "",
+        data.pf_no || "",
         data.nth_salary || 0,
         data.remarks || "",
 

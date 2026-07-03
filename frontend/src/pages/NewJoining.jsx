@@ -26,6 +26,13 @@ import {
   Upload,
 } from "lucide-react";
 import { authFetch, buildApiUrl } from "../lib/api";
+import { getStoredSession } from "../lib/session";
+
+const ALL_CIRCLE_VALUES = new Set(["ALL", "ALL CIRCLE", "ALL CIRCLES"]);
+
+function isAllCircleAccess(circle) {
+  return ALL_CIRCLE_VALUES.has(String(circle || "").trim().toUpperCase());
+}
 
 function formatDateTime(d) {
   try {
@@ -175,7 +182,13 @@ export default function NewJoining() {
   const [showModal, setShowModal] = useState(false);
   const [excelFile, setExcelFile] = useState(null);
   const [uploadingExcel, setUploadingExcel] = useState(false);
+  const [savingEmployee, setSavingEmployee] = useState(false);
   const [now, setNow] = useState(() => new Date());
+
+  const isAllCircleUser = useMemo(
+    () => isAllCircleAccess(getStoredSession()?.circle),
+    []
+  );
 
   const circleCmpData = {
     Delhi: [
@@ -230,7 +243,9 @@ export default function NewJoining() {
   designation: "",
   aadhaar_no: "",
   nth_salary: "",
-  l2_status: "",
+  joining_status: "Pending",
+  l2_approval: "Pending",
+  employee_status: "Active",
 });
 
   useEffect(() => {
@@ -275,10 +290,14 @@ export default function NewJoining() {
     currentPage * pageSize
   );
 
-  const joinedCount = data.filter((item) => item.l2_status === "Joined").length;
-  const pendingCount = data.filter((item) =>
-    String(item.l2_status || "").toLowerCase().includes("pending")
-  ).length;
+  const joinedCount = data.filter(
+  (item) => item.joining_status === "Joined"
+).length;
+const pendingCount = data.filter((item) =>
+  String(item.l2_approval || "")
+    .toLowerCase()
+    .includes("pending")
+).length;
   const activeCount = data.filter(
     (item) => String(item.employee_status || "Active") !== "Inactive"
   ).length;
@@ -370,8 +389,8 @@ const handleBulkDelete = async () => {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            status,
-            employee_status,
+            joining_status: status === "Joined" ? "Joined" : "Not Joined",
+              employee_status,
           }),
         }
       );
@@ -401,26 +420,68 @@ const handleBulkDelete = async () => {
     }
   };
 
-  const handleAddEmployee = async () => {
-    try {
-      const response = await authFetch(buildApiUrl("/api/new-joining/add-employee"), {
+  const handleL2Approval = async (id, status) => {
+    const confirmUpdate = window.confirm(
+  `Are you sure you want to ${status} this employee?`
+);
+
+if (!confirmUpdate) return;
+  try {
+    const response = await authFetch(
+      buildApiUrl(`/api/new-joining/l2-approval/${id}`),
+      {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          l2_approval: status,
+        }),
+      }
+    );
+
+    const result = await response.json();
+
+    if (!response.ok || !result.success) {
+      alert(result.message || "Failed");
+      return;
+    }
+
+    loadData();
+
+  } catch (error) {
+    console.log(error);
+    alert("Something went wrong");
+  }
+};
+
+ const handleAddEmployee = async () => {
+  try {
+    setSavingEmployee(true);
+
+    const response = await authFetch(
+      buildApiUrl("/api/new-joining/add-employee"),
+      {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify(employeeForm),
-      });
-
-      const result = await response.json();
-
-      if (!result.success) {
-        alert("Failed");
-        return;
       }
+    );
 
-      alert("Employee Added");
-      setShowModal(false);
-     setEmployeeForm({
+    const result = await response.json();
+
+    if (!result.success) {
+      alert("Failed");
+      return;
+    }
+
+    alert("Employee Added Successfully");
+
+    setShowModal(false);
+
+   setEmployeeForm({
   employee_code: "",
   employee_name: "",
   circle: "",
@@ -428,13 +489,19 @@ const handleBulkDelete = async () => {
   designation: "",
   aadhaar_no: "",
   nth_salary: "",
-  l2_status: "",
+  joining_status: "Pending",
+  l2_approval: "Pending",
+  employee_status: "Active",
 });
-      loadData();
-    } catch (error) {
-      console.log(error);
-    }
-  };
+
+    loadData();
+  } catch (error) {
+    console.log(error);
+    alert("Something went wrong");
+  } finally {
+    setSavingEmployee(false);
+  }
+};
 
   const handleExcelUpload = async () => {
     if (!excelFile) {
@@ -617,17 +684,6 @@ loadData();
               </label>
 
                 <div className="flex flex-wrap items-center gap-3">
-             
-{selectedRows.length > 0 && (
-  <button
-    type="button"
-    onClick={handleBulkDelete}
-    className="inline-flex h-10 items-center gap-2 rounded-[14px] border border-red-100 bg-red-50 px-4 py-2 text-sm font-semibold text-red-700 transition hover:bg-red-100"
-  >
-    <Trash2 className="h-4 w-4" />
-    Delete Selected ({selectedRows.length})
-  </button>
-)}
 
               <button
                 type="button"
@@ -640,7 +696,8 @@ loadData();
                     "Designation",
                     "Aadhaar Number",
                     "NTH Salary",
-                    "L2 Status",
+                    "L2 Approval",
+                    "Joining Status",
                     "Employee Status",
                   ];
                   const csv = [
@@ -654,7 +711,8 @@ loadData();
                         row.designation || "",
                         row.aadhaar_no || "",
                         row.nth_salary || "",
-                        row.l2_status || "",
+                        row.l2_approval || "",
+                        row.joining_status || "",
                         row.employee_status || "",
                       ]
                         .map((value) => `"${String(value).replaceAll('"', '""')}"`)
@@ -688,7 +746,7 @@ loadData();
           
         </div>
 
-        <div className="overflow-hidden rounded-[18px] border border-white/70 bg-white/85 backdrop-blur-2xl">
+        <div className="overflow-visible rounded-[18px] border border-white/70 bg-white/85 backdrop-blur-2xl">
           <div className="flex flex-col gap-4 border-b border-slate-100 px-5 py-2 sm:flex-row sm:items-center sm:justify-between sm:px-4">
             <div className="flex items-center gap-3">
               <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-blue-50 text-blue-600">
@@ -712,7 +770,10 @@ loadData();
             </div>
           </div>
 
-  <div className="overflow-x-auto">
+  <div
+  className="overflow-x-auto"
+  style={{ overflowY: "visible" }}
+>
    <table className="min-w-full border-collapse">
      <thead>
       <tr className="bg-slate-50/90">
@@ -737,7 +798,9 @@ loadData();
                     "Designation",
                     "Aadhaar Number",
                     "NTH Salary",
-                    "L2 Status",
+                    
+                    "L2 Approval",
+                     "Joining Status",
                     "Employee Status",
                     "Action",
                   ].map((heading) => (
@@ -757,7 +820,7 @@ loadData();
                 ) : filteredData.length === 0 ? (
                   <tr>
                     <td
-                      colSpan="10"
+                      colSpan="11"
                       className="px-4 py-20 text-center text-sm font-medium text-slate-400"
                     >
                       No Records Found
@@ -798,15 +861,54 @@ loadData();
                       <td className="border-b border-slate-100 px-4 py-2 text-sm text-slate-600">
   ₹ {Number(item.nth_salary || 0).toLocaleString("en-IN")}
 </td>
-                      <td className="border-b border-slate-100 px-4 py-2 text-sm">
-                        <StatusPill
-                          variant={
-                            item.l2_status === "Joined" ? "joined" : "pending"
-                          }
-                        >
-                          {item.l2_status || "-"}
-                        </StatusPill>
-                      </td>
+                    
+ <td className="relative border-b border-slate-100 px-4 py-2 overflow-visible">
+
+  <div className="flex flex-col gap-2">
+
+    <StatusPill
+      variant={
+        item.l2_approval === "Approved"
+          ? "active"
+          : item.l2_approval === "Rejected"
+          ? "not_joined"
+          : "pending"
+      }
+    >
+      {item.l2_approval || "Pending"}
+    </StatusPill>
+
+    {isAllCircleUser && (
+      <select
+        value={item.l2_approval || "Pending"}
+        onChange={(e) => handleL2Approval(item.id, e.target.value)}
+        className="h-8 w-32 rounded-lg border border-slate-200 bg-slate-50 px-2 text-xs font-medium text-slate-700 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
+      >
+        <option value="Pending">🟡 Pending</option>
+        <option value="Approved">🟢 Approved</option>
+        <option value="Rejected">🔴 Rejected</option>
+      </select>
+    )}
+
+  </div>
+
+</td>
+
+<td className="border-b border-slate-100 px-4 py-2 text-sm">
+
+  <StatusPill
+    variant={
+      item.joining_status === "Joined"
+        ? "joined"
+        : item.joining_status === "Not Joined"
+        ? "not_joined"
+        : "pending"
+    }
+  >
+    {item.joining_status || "Pending"}
+  </StatusPill>
+
+</td>
                       <td className="border-b border-slate-100 px-4 py-2 text-sm">
                         <StatusPill
                           variant={
@@ -820,10 +922,11 @@ loadData();
                       </td>
                       <td className="border-b border-slate-100 px-4 py-2">
                        <div className="flex items-center gap-2 whitespace-nowrap">
-                          <TableActionButton
-                            onClick={() =>
-                              handleStatusUpdate(item.id, "Joined", item)
-                            }
+                         <TableActionButton
+                         disabled={item.l2_approval !== "Approved"}
+                         onClick={() =>
+                           handleStatusUpdate(item.id, "Joined", item)
+                         }
                             className="bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
                           >
                             Joined
@@ -836,14 +939,7 @@ loadData();
                           >
                             Not Joined
                           </TableActionButton>
-                          <TableActionButton
-                            disabled={deletingId === item.id}
-                            onClick={() => handleDelete(item.id)}
-                            icon={Trash2}
-                            className="bg-slate-900 text-white hover:bg-slate-800"
-                          >
                           
-                          </TableActionButton>
                         </div>
                       </td>
                     </tr>
@@ -1319,12 +1415,17 @@ loadData();
         Cancel
       </button>
 
-      <button
-        onClick={handleAddEmployee}
-        className="rounded-2xl bg-gradient-to-r from-indigo-600 to-blue-500 px-4 py-2 text-sm font-semibold text-white shadow-xl transition hover:opacity-90"
-      >
-        Save Employee
-      </button>
+  <button
+  onClick={handleAddEmployee}
+  disabled={savingEmployee}
+  className="flex items-center gap-2 rounded-2xl bg-gradient-to-r from-indigo-600 to-blue-500 px-4 py-2 text-sm font-semibold text-white shadow-xl transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+>
+  {savingEmployee && (
+    <RefreshCw className="h-4 w-4 animate-spin" />
+  )}
+
+  {savingEmployee ? "Saving..." : "Save Employee"}
+</button>
 
     </div>
 

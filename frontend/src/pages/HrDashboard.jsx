@@ -13,9 +13,13 @@ import {
   BadgeCheck,
   Lightbulb,
   BarChart3,
+  Download,
 } from "lucide-react";
 
+import toast from "react-hot-toast";
+
 import { authFetch, buildApiUrl } from "../lib/api";
+import { getStoredSession } from "../lib/session";
 
 const physicalDesignationColumns = [
   { key: "state_leadership_team", label: "State Leadership Team" },
@@ -160,6 +164,28 @@ const normalizeCircle = (value = "") =>
 const normalizeCmpName = (value = "") =>
   value.replace("Bhatinda", "Bathinda").trim().toLowerCase();
 
+// Circle label derived straight from the cmpGroups titles, so adding a new
+// circle group above automatically makes it a selectable circle everywhere
+// on this page — no separate circle list to keep in sync.
+const circleLabelFromTitle = (title = "") => title.replace(/\s*SHQ\s*$/i, "").trim();
+
+const allCircleLabels = cmpGroups.map((group) => circleLabelFromTitle(group.title));
+
+// A couple of circle names are stored inconsistently across the app
+// ("UP East" vs "Uttar Pradesh (East)" / "Uttar Pradesh East"). Strip
+// spaces/parens and fold known aliases so every spelling of the same
+// circle resolves to the same key.
+const CIRCLE_KEY_ALIASES = {
+  uttarpradesheast: "upeast",
+};
+
+const canonicalCircleKey = (value = "") => {
+  const key = normalizeCircle(String(value).replace(/[()]/g, ""));
+  return CIRCLE_KEY_ALIASES[key] || key;
+};
+
+const ALL_CIRCLE_KEYS = new Set(["", "all", "allcircle", "allcircles"]);
+
 function HrDashboard() {
   const [jobRoles, setJobRoles] = useState([]);
   const [circles, setCircles] = useState([]);
@@ -175,6 +201,35 @@ function HrDashboard() {
     active: 0,
     inactive: 0,
   });
+  const [exportingPhysical, setExportingPhysical] = useState(false);
+  const [exportingScrum, setExportingScrum] = useState(false);
+
+  // Logged-in user's circle permission — drives which circle sections,
+  // filters, totals, and exports are visible on this page.
+  const sessionUser = useMemo(() => getStoredSession(), []);
+  const rawUserCircle = sessionUser?.circle || "";
+  const isAllCircleUser = ALL_CIRCLE_KEYS.has(canonicalCircleKey(rawUserCircle));
+
+  const userCircleLabel = useMemo(() => {
+    if (isAllCircleUser) return null;
+    const userKey = canonicalCircleKey(rawUserCircle);
+    return (
+      allCircleLabels.find((label) => canonicalCircleKey(label) === userKey) || null
+    );
+  }, [rawUserCircle, isAllCircleUser]);
+
+  const allowedCircleLabels = useMemo(() => {
+    if (isAllCircleUser) return allCircleLabels;
+    return userCircleLabel ? [userCircleLabel] : [];
+  }, [isAllCircleUser, userCircleLabel]);
+
+  const visibleCmpGroups = useMemo(
+    () =>
+      cmpGroups.filter((group) =>
+        allowedCircleLabels.includes(circleLabelFromTitle(group.title))
+      ),
+    [allowedCircleLabels]
+  );
 
   useEffect(() => {
     loadJobRoles();
@@ -185,6 +240,14 @@ function HrDashboard() {
     loadActiveData();
     loadScrumActiveData();
   }, []);
+
+  // Single-circle users only ever have one valid circle — lock the filter
+  // to it so every section (including Export Excel) scopes to it by default.
+  useEffect(() => {
+    if (!isAllCircleUser && userCircleLabel) {
+      setSelectedCircle(userCircleLabel);
+    }
+  }, [isAllCircleUser, userCircleLabel]);
 
   useEffect(() => {
     const physical = document.getElementById("physicalScroll");
@@ -352,7 +415,7 @@ function HrDashboard() {
   }, [scrumActiveData]);
 
   const filteredGroups = useMemo(() => {
-    return cmpGroups
+    return visibleCmpGroups
       .map((group) => ({
         ...group,
         items: group.items.filter((cmp) => {
@@ -371,7 +434,7 @@ function HrDashboard() {
         }),
       }))
       .filter((group) => group.items.length > 0);
-  }, [searchText, selectedCircle, selectedCmp]);
+  }, [visibleCmpGroups, searchText, selectedCircle, selectedCmp]);
 
   const categoryTotals = useMemo(() => {
     const filteredData = signoffData.filter((row) => {
@@ -470,25 +533,94 @@ function HrDashboard() {
   }, [employmentStatus]);
 
   const filteredCmpOptions = useMemo(() => {
-    return cmpGroups
+    return visibleCmpGroups
       .filter((group) => {
         if (selectedCircle === "") return true;
         return group.title.toLowerCase().includes(selectedCircle.toLowerCase());
       })
       .flatMap((group) => group.items);
-  }, [selectedCircle]);
+  }, [visibleCmpGroups, selectedCircle]);
 
   const getSignoffRow = (cmpName) => signoffLookup[normalizeCmpName(cmpName)];
 
   const resetFilters = () => {
     setSearchText("");
-    setSelectedCircle("");
+    setSelectedCircle(isAllCircleUser ? "" : userCircleLabel || "");
     setSelectedCmp("");
   };
 
+  const XLSX_CONTENT_TYPE =
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+
+  const downloadExport = async (endpoint, fallbackFileName, setLoading) => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (searchText) params.set("search", searchText);
+      // Single-circle users can only ever export their own circle, even if
+      // selectedCircle hasn't caught up to the lock effect yet.
+      const effectiveCircle = isAllCircleUser
+        ? selectedCircle
+        : userCircleLabel || selectedCircle;
+      if (effectiveCircle) params.set("circle", effectiveCircle);
+      if (selectedCmp) params.set("cmp", selectedCmp);
+
+      const response = await authFetch(
+        buildApiUrl(`${endpoint}?${params.toString()}`)
+      );
+
+      const contentType = response.headers.get("content-type") || "";
+
+      // A failed request, or a 200 that isn't actually an xlsx (e.g. an
+      // unmatched route falling through to an HTML page, or a JSON error
+      // body), must never be downloaded as-is — surface a real error instead.
+      if (!response.ok || !contentType.includes(XLSX_CONTENT_TYPE)) {
+        let message = "Export failed. Please try again.";
+        try {
+          if (contentType.includes("application/json")) {
+            const body = await response.json();
+            message = body?.message || message;
+          }
+        } catch {
+          // response body wasn't JSON — keep the generic message
+        }
+        throw new Error(message);
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = fallbackFileName;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.log(error);
+      toast.error(error.message || "Export failed. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const exportPhysicalRag = () =>
+    downloadExport(
+      "/api/hr-dashboard/export/physical",
+      "Physical_RAG_Export.xlsx",
+      setExportingPhysical
+    );
+
+  const exportScrumRag = () =>
+    downloadExport(
+      "/api/hr-dashboard/export/scrum",
+      "Scrum_RAG_Export.xlsx",
+      setExportingScrum
+    );
+
   const topMeta = [
     { label: "Total Employees", value: totalEmployees || employmentTotals.total },
-    { label: "Circle Coverage", value: circles.length || cmpGroups.length },
+    { label: "Circle Coverage", value: circles.length || visibleCmpGroups.length },
     { label: "Role Buckets", value: jobRoles.length || physicalDesignationColumns.length },
     { label: "Scrum Active", value: scrumCount.active || 0 },
   ];
@@ -535,7 +667,7 @@ function HrDashboard() {
 
 
       <div className="rounded-[12px] border border-slate-200/70 bg-white/90 p-1 mt-1 backdrop-blur-xl">
-        <div className="grid grid-cols-4 gap-2 xl:grid-cols-[1.15fr_1fr_1fr_0.9fr]">
+        <div className="grid grid-cols-2 gap-2 md:grid-cols-4 xl:grid-cols-[1.15fr_1fr_1fr_0.9fr_0.9fr_0.9fr]">
           <div className="relative">
             <Search className="pointer-events-none absolute left-5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             <input
@@ -550,13 +682,15 @@ function HrDashboard() {
           <select
             value={selectedCircle}
             onChange={(event) => setSelectedCircle(event.target.value)}
-            className="h-8 w-full rounded-[12px] border border-slate-200 bg-[linear-gradient(180deg,_#ffffff_0%,_#f8fafc_100%)] px-4 text-[13px] text-slate-700 outline-none transition focus:border-indigo-300 focus:ring-4 focus:ring-indigo-50"
+            disabled={!isAllCircleUser}
+            className="h-8 w-full rounded-[12px] border border-slate-200 bg-[linear-gradient(180deg,_#ffffff_0%,_#f8fafc_100%)] px-4 text-[13px] text-slate-700 outline-none transition focus:border-indigo-300 focus:ring-4 focus:ring-indigo-50 disabled:cursor-not-allowed disabled:opacity-70"
           >
-            <option value="">Select Circle</option>
-            <option value="Punjab">Punjab</option>
-            <option value="Haryana">Haryana</option>
-            <option value="Delhi">Delhi</option>
-            <option value="UP East">UP East</option>
+            {isAllCircleUser && <option value="">Select Circle</option>}
+            {allowedCircleLabels.map((circleLabel) => (
+              <option key={circleLabel} value={circleLabel}>
+                {circleLabel}
+              </option>
+            ))}
           </select>
 
           <select
@@ -580,15 +714,19 @@ function HrDashboard() {
             <RefreshCcw className="h-4 w-4" />
             Reset
           </button>
+        
         </div>
       </div>
 
       <div className="mt-1 grid grid-cols-1 gap-1 xl:grid-cols-1">
         <TablePanel
           panelId="physicalScroll"
-           showJoining={true}
+          showJoining={true}
           icon={BriefcaseBusiness}
           title="PHYSICAL RAG"
+          onExport={exportPhysicalRag}
+          exporting={exportingPhysical}
+          exportLabel="Export Physical RAG"
           subtitle="Requirement vs Available Manpower"
           description="Real-time view of physical workforce requirements, availability, and deployment gaps."
           gradient="from-sky-500 via-cyan-500 to-teal-400"
@@ -603,6 +741,9 @@ function HrDashboard() {
           panelId="scrumScroll"
           icon={Layers3}
           title="SCRUM RAG"
+          onExport={exportScrumRag}
+          exporting={exportingScrum}
+          exportLabel="Export Scrum RAG"
           subtitle="Overview Scrum Manpower"
           description="Real-time view of scrum workforce requirements, availability, and deployment gaps."
           gradient="from-violet-600 via-fuchsia-500 to-pink-500"
@@ -652,7 +793,7 @@ function HrDashboard() {
           accent="text-slate-900"
           iconBg="bg-slate-100 text-slate-700"
           description="Field staff required for execution, installation and maintenance activities."
-          subText={`Active manpower tracked across ${circles.length || cmpGroups.length} circle groups.`}
+          subText={`Active manpower tracked across ${circles.length || visibleCmpGroups.length} circle groups.`}
         />
 
         <InfoCard
@@ -690,23 +831,41 @@ function TablePanel({
   countLookup,
   getSignoffRow,
   showJoining = false,
+  onExport,
+  exporting,
+  exportLabel,
 })
  {
   
   return (
-    <div className="overflow-hidden rounded-[12px] border border-slate-200/70 bg-white/92">
+    <div className="relative overflow-hidden rounded-[12px] border border-slate-200/70 bg-white/92">
       <div className={`bg-gradient-to-r ${gradient} px-4 py-2 text-white md:px-4 md:py-2`}>
+        <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[12px] border border-white/20 bg-white/14 backdrop-blur-xl">
-            <Icon className="h-4 w-4" />
-          </div>
 
-          <div>
-            <p className="text-[0.72rem] font-semibold uppercase tracking-[0.14em] text-white/95">
-              {title}
-            </p>
-            <p className=" text-xs text-white">{subtitle}</p>
-          </div>
+    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[12px] border border-white/20 bg-white/14 backdrop-blur-xl">
+        <Icon className="h-4 w-4" />
+    </div>
+
+    <div>
+        <p className="text-[0.72rem] font-semibold uppercase tracking-[0.14em] text-white/95">
+            {title}
+        </p>
+
+        <p className="text-xs text-white">
+            {subtitle}
+        </p>
+    </div>
+
+</div>
+
+<button
+    onClick={onExport}
+    disabled={exporting}
+    className="rounded-lg bg-white/20 px-4 py-2 text-sm font-semibold text-white hover:bg-white/30"
+>
+    {exporting ? "Exporting..." : exportLabel}
+</button>
         </div>
       </div>
 
@@ -875,12 +1034,16 @@ if (card.key === "fttxPo") {
 
 </div>
 
-      <div
-        id={panelId}
-        className="custom-scrollbar overflow-x-auto overflow-y-auto bg-[linear-gradient(180deg,_#ffffff_0%,_#fbfdff_100%)]"
-        style={{ maxHeight: "55vh", minHeight: "240px" }}
-      >
-      <table className="min-w-max whitespace-nowrap text-sm border-collapse w-full">
+  <div
+    id={panelId}
+    className="relative overflow-auto custom-scrollbar"
+    style={{
+        maxHeight: "55vh",
+        minHeight: "240px",
+        isolation: "isolate",
+    }}
+>
+      <table  className="relative z-0 min-w-max w-full whitespace-nowrap border-collapse text-sm">
           <thead>
 
             <tr className="sticky top-0 z-[100] bg-slate-100 text-[13px] font-bold">
