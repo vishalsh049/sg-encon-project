@@ -6,7 +6,8 @@
   Pencil,
    Download,
   Trash2,
-  RotateCcw
+  RotateCcw,
+  Clock
 } from "lucide-react";
 import Swal from "sweetalert2";
 import PremiumDatePicker from "../components/PremiumDatePicker";
@@ -16,6 +17,29 @@ import ValidationErrorModal from "../components/ValidationErrorModal";
   import * as XLSX from "xlsx";
   import { saveAs } from "file-saver";
   import { authFetch, buildApiUrl } from "../lib/api";
+
+  function formatCircleTimestamp(value) {
+    if (!value) return "Never Uploaded";
+
+    const date = new Date(value);
+    if (Number.isNaN(date.valueOf())) return "Never Uploaded";
+
+    const datePart = date.toLocaleDateString("en-GB", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    });
+
+    const timePart = date
+      .toLocaleTimeString("en-US", {
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: true,
+      })
+      .toUpperCase();
+
+    return `${datePart}, ${timePart}`;
+  }
 
   export default function Physical() {
     const [showModal, setShowModal] = useState(false);
@@ -96,6 +120,7 @@ const Field = ({ label, value }) => (
     const [jobRoles, setJobRoles] = useState([]);
     const [jobRoleAverage, setJobRoleAverage] = useState([]);
     const [circles, setCircles] = useState([]);
+    const [circleLastUpdated, setCircleLastUpdated] = useState([]);
     const [employmentStatus, setEmploymentStatus] = useState([]);
     const [selectedRows, setSelectedRows] = useState([]);
     const [reportFile, setReportFile] = useState(null);
@@ -220,6 +245,30 @@ const Field = ({ label, value }) => (
 
   };
 
+  const loadCircleLastUpdated = async () => {
+
+    try {
+
+      const response = await authFetch(
+        buildApiUrl("/api/physical/circle-last-updated")
+      );
+
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        throw new Error("Failed to load circle last-updated info");
+      }
+
+      setCircleLastUpdated(result.data || []);
+
+    } catch (error) {
+
+      console.log(error);
+
+    }
+
+  };
+
   const loadEmploymentStatus = async () => {
 
     try {
@@ -253,6 +302,7 @@ useEffect(() => {
     loadJobRoles();
     loadJobRoleAverage();
     loadCircles();
+    loadCircleLastUpdated();
     loadEmploymentStatus();
 
     const newJoiningEmployee =
@@ -366,12 +416,27 @@ useEffect(() => {
   return;
 }
 
-   Swal.fire({
-  icon: "success",
-  title: "Upload Successful",
-  text: "Physical report uploaded successfully.",
-  timer: 1800,
-  showConfirmButton: false
+  Swal.fire({
+    icon: "success",
+    title: "Upload Completed",
+
+    html: `
+        <div style="text-align:left;font-size:16px">
+
+            <p><b>Total Employees :</b> ${response.totalEmployees}</p>
+
+            <p style="color:green">
+                <b>✅ Added Successfully :</b>
+                ${response.addedEmployees}
+            </p>
+
+            <p style="color:#d97706">
+                <b>⚠ Already Exists :</b>
+                ${response.duplicateEmployees}
+            </p>
+
+        </div>
+    `
 });
 
      setShowUploadModal(false);
@@ -383,6 +448,7 @@ setUploadedBy("");
 loadPhysicalData();
 loadJobRoles();
 loadCircles();
+loadCircleLastUpdated();
 loadEmploymentStatus();
 
   } catch (error) {
@@ -1894,9 +1960,55 @@ const inactiveCount =
 
   </div>
 
+  {/* Circle Wise Last Updated */}
+
+  <div className="mx-auto mt-2 w-full max-w-7xl">
+
+    <div className="rounded-[18px] border border-slate-100 bg-white px-4 py-3 shadow-sm hover:shadow-lg transition-all">
+
+      <div className="mb-2 flex items-center justify-between">
+
+        <h2 className="flex items-center gap-2 text-[13px] font-semibold text-slate-800">
+          <Clock size={15} className="text-indigo-500" />
+          Circle Wise Last Updated
+        </h2>
+
+      </div>
+
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
+
+        {circleLastUpdated.map((item, index) => (
+
+          <div
+            key={index}
+            className="flex items-center justify-between gap-2 rounded-xl border border-slate-100 bg-gradient-to-r from-slate-50 to-white px-3 py-2"
+          >
+
+            <span className="text-[13px] font-semibold text-slate-700">
+              {item.circle}
+            </span>
+
+            <span
+              className={`text-[12px] font-medium ${
+                item.lastUpdatedAt ? "text-emerald-600" : "text-amber-600"
+              }`}
+            >
+              {formatCircleTimestamp(item.lastUpdatedAt)}
+            </span>
+
+          </div>
+
+        ))}
+
+      </div>
+
+    </div>
+
+  </div>
 
 
-  {/* Job Role Document Average 
+
+  {/* Job Role Document Average
   <div className="mx-auto mt-3 w-full max-w-7xl">
 
     <div className="rounded-[22px] border border-white/70 bg-white/100 px-4 py-3 backdrop-blur-xl">

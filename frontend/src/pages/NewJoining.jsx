@@ -244,7 +244,7 @@ export default function NewJoining() {
   aadhaar_no: "",
   nth_salary: "",
   joining_status: "Pending",
-  l2_approval: "Pending",
+  l2_status: "Pending",
   employee_status: "Active",
 });
 
@@ -294,7 +294,7 @@ export default function NewJoining() {
   (item) => item.joining_status === "Joined"
 ).length;
 const pendingCount = data.filter((item) =>
-  String(item.l2_approval || "")
+  String(item.l2_status || "")
     .toLowerCase()
     .includes("pending")
 ).length;
@@ -428,14 +428,14 @@ const handleBulkDelete = async () => {
 if (!confirmUpdate) return;
   try {
     const response = await authFetch(
-      buildApiUrl(`/api/new-joining/l2-approval/${id}`),
+      buildApiUrl(`/api/new-joining/l2-status/${id}`),
       {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          l2_approval: status,
+          l2_status: status,
         }),
       }
     );
@@ -490,7 +490,7 @@ if (!confirmUpdate) return;
   aadhaar_no: "",
   nth_salary: "",
   joining_status: "Pending",
-  l2_approval: "Pending",
+  l2_status: "Pending",
   employee_status: "Active",
 });
 
@@ -696,7 +696,7 @@ loadData();
                     "Designation",
                     "Aadhaar Number",
                     "NTH Salary",
-                    "L2 Approval",
+                    "L2 Status",
                     "Joining Status",
                     "Employee Status",
                   ];
@@ -711,7 +711,7 @@ loadData();
                         row.designation || "",
                         row.aadhaar_no || "",
                         row.nth_salary || "",
-                        row.l2_approval || "",
+                        row.l2_status || "",
                         row.joining_status || "",
                         row.employee_status || "",
                       ]
@@ -799,7 +799,7 @@ loadData();
                     "Aadhaar Number",
                     "NTH Salary",
                     
-                    "L2 Approval",
+                    "L2 Status",
                      "Joining Status",
                     "Employee Status",
                     "Action",
@@ -868,19 +868,19 @@ loadData();
 
     <StatusPill
       variant={
-        item.l2_approval === "Approved"
+        item.l2_status === "Approved"
           ? "active"
-          : item.l2_approval === "Rejected"
+          : item.l2_status === "Rejected"
           ? "not_joined"
           : "pending"
       }
     >
-      {item.l2_approval || "Pending"}
+      {item.l2_status || "Pending"}
     </StatusPill>
 
     {isAllCircleUser && (
       <select
-        value={item.l2_approval || "Pending"}
+        value={item.l2_status || "Pending"}
         onChange={(e) => handleL2Approval(item.id, e.target.value)}
         className="h-8 w-32 rounded-lg border border-slate-200 bg-slate-50 px-2 text-xs font-medium text-slate-700 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
       >
@@ -923,7 +923,7 @@ loadData();
                       <td className="border-b border-slate-100 px-4 py-2">
                        <div className="flex items-center gap-2 whitespace-nowrap">
                          <TableActionButton
-                         disabled={item.l2_approval !== "Approved"}
+                         disabled={item.l2_status !== "Approved"}
                          onClick={() =>
                            handleStatusUpdate(item.id, "Joined", item)
                          }

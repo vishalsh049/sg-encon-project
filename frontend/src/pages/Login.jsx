@@ -113,7 +113,7 @@ const handleLogin = async (e) => {
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="app-surface w-full max-w-md p-8">
         <h2 className="mb-8 text-center text-2xl font-semibold text-primary">
-          S G Encon Pvt. Ltd.
+          S G Encon Ltd.
         </h2>
 
         <form onSubmit={handleLogin} className="space-y-6">

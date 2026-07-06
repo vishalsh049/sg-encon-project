@@ -179,6 +179,50 @@
       for (const [column, definition] of physicalColumns) {
         await ensureColumn("physical", column, definition);
       }
+
+      await ensureCircleUpdatesTable();
+    }
+
+    let circleUpdatesBackfilled = false;
+
+    async function ensureCircleUpdatesTable() {
+      await query(`
+        CREATE TABLE IF NOT EXISTS physical_circle_updates (
+          circle VARCHAR(100) NOT NULL PRIMARY KEY,
+          last_uploaded_at TIMESTAMP NULL DEFAULT NULL,
+          uploaded_by VARCHAR(255) DEFAULT NULL,
+          report_id INT DEFAULT NULL,
+          updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        )
+      `);
+
+      if (circleUpdatesBackfilled) return;
+      circleUpdatesBackfilled = true;
+
+      // Backfill last-updated info from pre-existing uploads made before this
+      // table existed, so circles with historical data aren't shown as "Never Uploaded".
+      await query(`
+        INSERT IGNORE INTO physical_circle_updates (circle, last_uploaded_at, uploaded_by, report_id)
+        SELECT
+          t.circle,
+          t.last_uploaded_at,
+          (
+            SELECT pr3.uploaded_by
+            FROM physical_reports pr3
+            JOIN physical p3 ON p3.report_id = pr3.id
+            WHERE p3.circle = t.circle
+            ORDER BY pr3.uploaded_at DESC
+            LIMIT 1
+          ) AS uploaded_by,
+          NULL AS report_id
+        FROM (
+          SELECT p.circle AS circle, MAX(pr.uploaded_at) AS last_uploaded_at
+          FROM physical p
+          JOIN physical_reports pr ON pr.id = p.report_id
+          WHERE p.circle IS NOT NULL AND TRIM(p.circle) != ''
+          GROUP BY p.circle
+        ) t
+      `);
     }
 
     function normalizeDate(value) {
@@ -221,6 +265,7 @@
   "FTTx Engineer",
   "Analyst",
   "State Fiber SME",
+  "Fiber SME",
   "Assistant Splicer",
   "FTTx Splicer",
   "Splicer",
@@ -280,6 +325,7 @@
   "Warehouse Incharge Cum Security",
   "Warehouse Helper",
   "MIS Executive",
+  "PROJECT MIS",  
   "OMCR Resources",
   "Analyst - Material",
   "Analyst - Utility",
@@ -291,6 +337,7 @@
   "Analyst - Fttx",
   "Analyst - Fiber",
   "Analyst - D2D",
+  "Analyst - HSEF",
   "Asst Fiber SME",
   "Utility SME",
   "Utility MIS Coordinator",
@@ -386,11 +433,14 @@ const allowedJobRoleMap = new Map(
   // (lowercase, no hyphens) — values point at the normalized form of the
   // canonical entry in allowedJobRoles, not its display casing.
   const roleMap = {
-  "commercial lead": "commercial lead",
+"commercial lead": "commercial lead",
 "hsef lead": "hsef lead",
+"analyst hsef": "analyst hsef",
 "cmp lead": "cmp lead",
 "fibre supervisor": "fiber supervisor",
+"fiber sme": "fiber sme",
 "mis executive": "mis executive",
+"project mis": "project mis",
 "fttx engineer": "fttx engineer",
 "circle head": "circle head",
 "warehouse security guard": "warehouse security guard",
@@ -419,6 +469,7 @@ const allowedJobRoleMap = new Map(
 "state operation head": "state operation head",
 "state material manager": "state material manager",
 "state energy manager": "state energy manager",
+"analyst d2d": "analyst d2d",
 
 // --- Warehouse ---
 "wh incharge cum security": "warehouse incharge cum security",
@@ -634,7 +685,7 @@ toText(
         ) VALUES ?
       `;
 
-      const chunkSize = 250;
+      const chunkSize = 1000;
 
       for (let index = 0; index < rows.length; index += chunkSize) {
         const chunk = rows.slice(index, index + chunkSize).map((row) => mapPhysicalRow(row, reportId));
@@ -875,6 +926,19 @@ toText(
 
     const employeeCode = row["Employee Code"] || "-";
     const employeeName = row["Employee Name"] || "-";
+    const aadhaarNo = String(
+    row["AADHAAR No"] ||
+    row["AADHAAR NO"] ||
+    ""
+).trim();
+
+if (!aadhaarNo) {
+
+    validationErrors.push(
+        `❌ Row ${excelRowNumber} - ${employeeName} (${employeeCode}) : Aadhaar Number is mandatory. Please fill Aadhaar Number and upload again.`
+    );
+
+}
 
     // Job Role Validation
 
@@ -894,9 +958,15 @@ if (!jobRole) {
 
   if (!matchedRole) {
 
-    validationErrors.push(
-      `❌ Row ${excelRowNumber} - ${employeeName} (${employeeCode}) : Invalid Job Role "${jobRole}"`
-    );
+  validationErrors.push({
+    row: excelRowNumber,
+    employee: employeeName,
+    employeeCode,
+    column: "Job Role",
+    currentValue: jobRole,
+    error: "Invalid Job Role",
+    expected: "Allowed Job Role"
+});
 
   } else {
 
@@ -1037,15 +1107,193 @@ if (!jobRole) {
           ]
         );
 
-        await insertPhysicalRows(conn, reportResult.insertId, rows);
+// ============================================
+// INSERT OR UPDATE EMPLOYEES
+// ============================================
+
+// Fetch existing employees
+const [existingEmployees] = await conn.promise().query(`
+SELECT id,aadhaar_no
+FROM physical
+WHERE aadhaar_no IS NOT NULL
+AND aadhaar_no<>''
+`);
+
+const employeeMap = new Map();
+
+existingEmployees.forEach(emp=>{
+    employeeMap.set(emp.aadhaar_no.trim(),emp.id);
+});
+
+const excelAadhaarSet=new Set();
+
+const insertRows=[];
+let updatedEmployees=0;
+
+for(const row of rows){
+
+    const aadhaarNo=String(
+        row["AADHAAR No"]||
+        row["AADHAAR NO"]||
+        ""
+    ).trim();
+
+   if (excelAadhaarSet.has(aadhaarNo)) {
+
+    validationErrors.push({
+        row: excelRowNumber,
+        employee: employeeName,
+        employeeCode,
+        column: "AADHAAR No",
+        currentValue: aadhaarNo,
+        error: "Duplicate Aadhaar Number",
+        expected: "Unique Aadhaar Number"
+    });
+
+    continue;
+}
+
+    excelAadhaarSet.add(aadhaarNo);
+
+    if(employeeMap.has(aadhaarNo)){
+
+        // UPDATE EMPLOYEE
+
+        await conn.promise().query(
+        `
+        UPDATE physical
+        SET
+
+        pprj_status=?,
+        pprj_code=?,
+        employee_code=?,
+        employee_name=?,
+        father_name=?,
+        function_name=?,
+        job_role_actual_cmp_verify=?,
+        job_role=?,
+        manpower_signoff_scope=?,
+        scrum_job_role=?,
+        circle=?,
+        cluster=?,
+        mobile_number=?,
+        dob=?,
+        age=?,
+        date_of_joining=?,
+        employment_status=?,
+        resigned_date=?,
+        last_working_date=?,
+        rm_code=?,
+        reporting_manager=?,
+        company_email_id=?,
+        laptop_status=?,
+        ifsc_code=?,
+        bank_account_no=?,
+        pan_no=?,
+        uan_no=?,
+        esic_ip_no=?,
+        pf_no=?,
+        nth_salary=?,
+        remarks=?,
+        cmp=?
+
+        WHERE id=?
+        `,
+        [
+
+        toText(row["PPRJ Status"]),
+        toText(row["PPRJ Code"]||row["PPRJ code"]),
+        toText(row["Employee Code"]),
+        toText(row["Employee Name"]),
+        toText(row["Father Name"]),
+        toText(row["Function"]),
+        toText(row["Job Role Actual CMP Verify"]||row["Job Role_Actual_CMP Verify"]),
+        row["Job Role"],
+        toText(row["Manpower SignOff Scope"]||row["Manpower Signoff Scope"]),
+        toText(row["Scrum Job Role"]),
+        toText(row["Circle"]),
+        toText(row["Cluster"]),
+        toText(row["Mobile number"]||row["Mobile Number"]),
+        normalizeDate(row["DOB"]),
+        toNullableInt(row["AGE"]||row["Age"]),
+        normalizeDate(row["Date of joining"]||row["Date Of Joining"]),
+        row["Employment Status"],
+        normalizeDate(row["Resigned Date"]),
+        normalizeDate(row["Last Working Date"]),
+        toText(row["RM Code"]),
+        toText(row["Reporting manager"]||row["Reporting Manager"]),
+        toText(row["Company Email id"]||row["Company Email"]),
+        toText(row["Laptop Status"]),
+        toText(row["IFSC Code"]),
+        toText(row["Bank Account No."]||row["Bank Account No"]),
+        toText(row["PAN No"]||row["PANNO"]),
+        toText(row["UAN No"]),
+        toText(row["ESIC IP No "]||row["ESIC IP No"]),
+        toText(row["PF No"]||row["PF NO"]||row["PF Number"]),
+        toNullableInt(row["NTH Salary"]||row["Nth Salary"]||row["Salary"]),
+        toText(row["Remarks"]),
+        toText(row["CMP"]),
+        employeeMap.get(aadhaarNo)
+
+        ]
+        );
+
+        updatedEmployees++;
+
+    }else{
+
+        insertRows.push(row);
+
+    }
+
+}
+
+// INSERT NEW EMPLOYEES
+await insertPhysicalRows(
+conn,
+reportResult.insertId,
+insertRows
+);
+
+        const uploadedCircles = Array.from(
+          new Set(
+            rows
+              .map((row) =>
+                String(row["Circle"] || row["circle"] || "")
+                  .replace(/\s+/g, " ")
+                  .trim()
+              )
+              .filter(Boolean)
+          )
+        );
+        const uploadTimestamp = new Date();
+
+        for (const circleName of uploadedCircles) {
+          await conn.promise().query(
+            `
+              INSERT INTO physical_circle_updates (circle, last_uploaded_at, uploaded_by, report_id)
+              VALUES (?, ?, ?, ?)
+              ON DUPLICATE KEY UPDATE
+                last_uploaded_at = VALUES(last_uploaded_at),
+                uploaded_by = VALUES(uploaded_by),
+                report_id = VALUES(report_id)
+            `,
+            [circleName, uploadTimestamp, uploadedBy, reportResult.insertId]
+          );
+        }
+
         await conn.promise().commit();
 
-        res.status(200).json({
-          success: true,
-          message: "Report Uploaded Successfully",
-          reportId: reportResult.insertId,
-          totalRecords: rows.length,
-        });
+  res.status(200).json({
+  success: true,
+  message: "Report Uploaded Successfully",
+  reportId: reportResult.insertId,
+
+  totalEmployees: rows.length,
+ addedEmployees: insertRows.length,
+
+updatedEmployees: updatedEmployees
+});
       } catch (error) {
         if (conn) {
           try {
@@ -1518,6 +1766,67 @@ if (!jobRole) {
       } catch (error) {
 
         console.error("Job role count error:", error);
+
+        res.status(500).json({
+          success: false,
+          message: "Server Error",
+        });
+
+      }
+
+    });
+
+    router.get("/circle-last-updated", async (req, res) => {
+
+      try {
+
+        await ensurePhysicalTables();
+
+        const scope = getCircleScope(req);
+        const rows = await query(`
+          SELECT circle, last_uploaded_at, uploaded_by
+          FROM physical_circle_updates
+          WHERE circle IS NOT NULL
+          AND circle != ''
+          ${scope.sql}
+        `, scope.params);
+
+        const updatesByCircle = new Map(rows.map((row) => [row.circle, row]));
+        const knownCircles = Object.keys(circleCmpMap);
+
+        let circleList;
+        if (isAllCircle(req.authUser)) {
+          const extraCircles = rows
+            .map((row) => row.circle)
+            .filter((circle) => !knownCircles.includes(circle));
+          circleList = [...new Set([...knownCircles, ...extraCircles])];
+        } else {
+          const canonical =
+            knownCircles.find(
+              (circle) => circle.toLowerCase() === req.authUser.circle.toLowerCase()
+            ) || req.authUser.circle;
+          circleList = [canonical];
+        }
+
+        const data = circleList
+          .map((circle) => {
+            const match = updatesByCircle.get(circle);
+            return {
+              circle,
+              lastUpdatedAt: match?.last_uploaded_at || null,
+              uploadedBy: match?.uploaded_by || null,
+            };
+          })
+          .sort((a, b) => a.circle.localeCompare(b.circle));
+
+        res.status(200).json({
+          success: true,
+          data,
+        });
+
+      } catch (error) {
+
+        console.error("Circle last-updated error:", error);
 
         res.status(500).json({
           success: false,
