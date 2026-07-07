@@ -88,11 +88,11 @@ async function fetchPhysicalActiveData(req) {
             WHEN normalized_role = 'utilitysupervisor' THEN 'utility_supervisor'
             WHEN normalized_role = 'utilityengineer' THEN 'utility_engineer'
             WHEN normalized_role = 'ispengineer' THEN 'isp_engineer'
-            WHEN normalized_role IN ('whinchargecumsecurity', 'warehouseincharge')
+            WHEN normalized_role IN ('whinchargecumsecurity', 'warehouseincharge', 'warehouseinchargecumsecurity')
             THEN 'wh_incharge_cum_security'
             WHEN normalized_role = 'splicer' THEN 'splicer'
             WHEN normalized_role = 'assistantsplicer' THEN 'assistant_splicer'
-            WHEN normalized_role IN ('fiberhelper', 'fibrehelper') THEN 'fiber_helper'
+            WHEN normalized_role IN ('fiberhelper', 'fibrehelper', 'frthelper') THEN 'fiber_helper'
             WHEN normalized_role = 'patroller' THEN 'patroller'
             WHEN normalized_role IN ('fibersupervisor', 'fibresupervisor') THEN 'fiber_supervisor'
             WHEN normalized_role IN ('fiberengineer', 'fibreengineer') THEN 'fibre_engineer'
@@ -125,13 +125,7 @@ async function fetchPhysicalActiveData(req) {
               )
             ) AS normalized_role
           FROM physical
-          WHERE report_id = (
-            SELECT id
-            FROM physical_reports
-            ORDER BY report_date DESC, id DESC
-            LIMIT 1
-          )
-            AND LOWER(TRIM(COALESCE(employment_status, ''))) = 'active'
+          WHERE LOWER(TRIM(COALESCE(employment_status, ''))) = 'active'
             AND cmp IS NOT NULL
             AND cmp != ''
             AND job_role IS NOT NULL
@@ -171,11 +165,11 @@ async function fetchPhysicalActiveData(req) {
             WHEN normalized_role = 'utilitysupervisor' THEN 'utility_supervisor'
             WHEN normalized_role = 'utilityengineer' THEN 'utility_engineer'
             WHEN normalized_role = 'ispengineer' THEN 'isp_engineer'
-            WHEN normalized_role IN ('whinchargecumsecurity', 'warehouseincharge')
+            WHEN normalized_role IN ('whinchargecumsecurity', 'warehouseincharge', 'warehouseinchargecumsecurity')
             THEN 'wh_incharge_cum_security'
             WHEN normalized_role = 'splicer' THEN 'splicer'
             WHEN normalized_role = 'assistantsplicer' THEN 'assistant_splicer'
-            WHEN normalized_role IN ('fiberhelper', 'fibrehelper') THEN 'fiber_helper'
+            WHEN normalized_role IN ('fiberhelper', 'fibrehelper', 'frthelper') THEN 'fiber_helper'
             WHEN normalized_role = 'patroller' THEN 'patroller'
             WHEN normalized_role IN ('fibersupervisor', 'fibresupervisor') THEN 'fiber_supervisor'
             WHEN normalized_role IN ('fiberengineer', 'fibreengineer') THEN 'fibre_engineer'

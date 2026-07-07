@@ -28,7 +28,19 @@ async function ensureColumn(table, column, definition) {
   }
 }
 
+let ensureAccessTablesPromise = null;
+
 async function ensureAccessTables() {
+  if (!ensureAccessTablesPromise) {
+    ensureAccessTablesPromise = ensureAccessTablesOnce().catch((error) => {
+      ensureAccessTablesPromise = null;
+      throw error;
+    });
+  }
+  return ensureAccessTablesPromise;
+}
+
+async function ensureAccessTablesOnce() {
   await query(`
     CREATE TABLE IF NOT EXISTS roles (
       id INT AUTO_INCREMENT PRIMARY KEY,

@@ -292,10 +292,6 @@ useEffect(() => {
   );
 
 useEffect(() => {
-  fetchStats();   // ✅ always get fresh data from backend
-}, []);
-
-useEffect(() => {
   fetchUptimeTrend(trendFilter);
 }, [trendFilter, filters.circle, filters.cmp]);
 

@@ -770,14 +770,11 @@ loadData();
             </div>
           </div>
 
-  <div
-  className="overflow-x-auto"
-  style={{ overflowY: "visible" }}
->
-   <table className="min-w-full border-collapse">
+ <div className="w-full overflow-hidden">
+   <table className="w-full table-fixed border-collapse">
      <thead>
       <tr className="bg-slate-50/90">
-        <th className="border-b border-slate-100 px-4 py-2 text-left">
+       <td className="w-10 border-b border-slate-100 px-1 py-2 text-center">
           <input
            type="checkbox"
            checked={
@@ -789,7 +786,7 @@ loadData();
           onChange={handleSelectAll}
          className="h-3 w-3 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
          />
-        </th>
+        </td>
                   {[
                     "Employee Code",
                     "Employee Name",
@@ -806,7 +803,7 @@ loadData();
                   ].map((heading) => (
                     <th
                       key={heading}
-                      className="border-b border-slate-200 px-4 py-2 text-left text-sm font-semibold text-slate-600"
+                      className="border-b border-slate-200 px-2 py-2 text-xs font-semibold whitespace-normal break-words text-slate-600"
                     >
                       {heading}
                     </th>
@@ -864,7 +861,7 @@ loadData();
                     
  <td className="relative border-b border-slate-100 px-4 py-2 overflow-visible">
 
-  <div className="flex flex-col gap-2">
+ <div className="flex flex-col items-center gap-1">
 
     <StatusPill
       variant={
@@ -882,8 +879,7 @@ loadData();
       <select
         value={item.l2_status || "Pending"}
         onChange={(e) => handleL2Approval(item.id, e.target.value)}
-        className="h-8 w-32 rounded-lg border border-slate-200 bg-slate-50 px-2 text-xs font-medium text-slate-700 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
-      >
+       className="h-7 w-24 rounded-md border border-slate-200 bg-slate-50 px-1 text-[11px] font-medium">
         <option value="Pending">🟡 Pending</option>
         <option value="Approved">🟢 Approved</option>
         <option value="Rejected">🔴 Rejected</option>
@@ -894,7 +890,7 @@ loadData();
 
 </td>
 
-<td className="border-b border-slate-100 px-4 py-2 text-sm">
+<td className="border-b border-slate-100 px-2 py-2 text-xs whitespace-normal break-words">
 
   <StatusPill
     variant={
@@ -921,7 +917,7 @@ loadData();
                         </StatusPill>
                       </td>
                       <td className="border-b border-slate-100 px-4 py-2">
-                       <div className="flex items-center gap-2 whitespace-nowrap">
+                      <div className="flex flex-col gap-2">
                          <TableActionButton
                          disabled={item.l2_status !== "Approved"}
                          onClick={() =>

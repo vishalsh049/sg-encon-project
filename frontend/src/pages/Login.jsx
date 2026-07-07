@@ -1,8 +1,10 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import { buildApiUrl } from "../lib/api";
 import { setStoredSession } from "../lib/session";
 import { getPageDisplayName } from "../lib/pageMap";
+import { useUser } from "../context/UserContext";
 
 const pageRouteMap = {
   Dashboard: "/dashboard",
@@ -65,6 +67,8 @@ function Login() {
   const [password, setPassword] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
+  const { setUser } = useUser();
 
 const handleLogin = async (e) => {
   e.preventDefault();
@@ -82,16 +86,18 @@ const handleLogin = async (e) => {
     console.log("LOGIN RESPONSE:", res.data);
 
    if (res.data?.token) {
-     localStorage.setItem("token", res.data.token);
-     setStoredSession({
+     const session = {
        ...(res.data.user || {}),
        token: res.data.token,
        roleName: res.data.user?.roleName || "Admin",
        permissions: res.data.user?.permissions || ["dashboard.view"],
-     });
-     window.location.href = getLoginRedirectPath(res.data.user);
+     };
+     localStorage.setItem("token", res.data.token);
+     setStoredSession(session);
+     setUser(session);
+     navigate(getLoginRedirectPath(res.data.user), { replace: true });
      return;
-   } 
+   }
 
     // No token but success
     setErrorMessage(res.data?.message || "Login failed - no token received");

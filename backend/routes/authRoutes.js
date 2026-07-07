@@ -88,25 +88,26 @@ console.log("Searching loginId:", queryLoginId);
         try {
           console.log("Fetching permissions for role:", user.role_id, "user:", user.id);
           
-          const rolePermissionRows = await query(
-            `
-              SELECT p.permission_key AS permissionKey
-              FROM role_permissions rp
-              INNER JOIN permissions p ON p.id = rp.permission_id
-              WHERE rp.role_id = ?
-            `,
-            [user.role_id || 0]
-          );
-
-          const userPermissionRows = await query(
-            `
-              SELECT p.permission_key AS permissionKey
-              FROM user_permissions up
-              INNER JOIN permissions p ON p.id = up.permission_id
-              WHERE up.user_id = ?
-            `,
-            [user.id]
-          );
+          const [rolePermissionRows, userPermissionRows] = await Promise.all([
+            query(
+              `
+                SELECT p.permission_key AS permissionKey
+                FROM role_permissions rp
+                INNER JOIN permissions p ON p.id = rp.permission_id
+                WHERE rp.role_id = ?
+              `,
+              [user.role_id || 0]
+            ),
+            query(
+              `
+                SELECT p.permission_key AS permissionKey
+                FROM user_permissions up
+                INNER JOIN permissions p ON p.id = up.permission_id
+                WHERE up.user_id = ?
+              `,
+              [user.id]
+            ),
+          ]);
 
           permissions = Array.from(
             new Set([
