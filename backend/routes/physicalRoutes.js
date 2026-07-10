@@ -478,7 +478,14 @@ const allowedJobRoleMap = new Map(
 "anlayst mis": "analyst mis",
 
 // --- Material spelling variant ---
-"material coordinator": "material cordinator"
+"material coordinator": "material cordinator",
+
+// --- Correct spellings mapped to the typo'd canonical entries ---
+// (canonical names stay as-is because job_role is stored in that form)
+"odsc supervisor": "odsc supevisor",
+"utility coordinator": "utility co orodinator",
+"utility co ordinator": "utility co orodinator",
+"quality & planning head": "quality & planing head"
 
 };
 
@@ -958,15 +965,9 @@ if (!jobRole) {
 
   if (!matchedRole) {
 
-  validationErrors.push({
-    row: excelRowNumber,
-    employee: employeeName,
-    employeeCode,
-    column: "Job Role",
-    currentValue: jobRole,
-    error: "Invalid Job Role",
-    expected: "Allowed Job Role"
-});
+  validationErrors.push(
+    `❌ Row ${excelRowNumber} - ${employeeName} (${employeeCode}) : Invalid Job Role "${jobRole}"`
+  );
 
   } else {
 
@@ -1129,6 +1130,7 @@ const excelAadhaarSet=new Set();
 
 const insertRows=[];
 let updatedEmployees=0;
+let duplicateEmployees=0;
 
 for(const row of rows){
 
@@ -1140,15 +1142,7 @@ for(const row of rows){
 
    if (excelAadhaarSet.has(aadhaarNo)) {
 
-    validationErrors.push({
-        row: excelRowNumber,
-        employee: employeeName,
-        employeeCode,
-        column: "AADHAAR No",
-        currentValue: aadhaarNo,
-        error: "Duplicate Aadhaar Number",
-        expected: "Unique Aadhaar Number"
-    });
+    duplicateEmployees++;
 
     continue;
 }
@@ -1292,7 +1286,8 @@ insertRows
   totalEmployees: rows.length,
  addedEmployees: insertRows.length,
 
-updatedEmployees: updatedEmployees
+updatedEmployees: updatedEmployees,
+duplicateEmployees: duplicateEmployees
 });
       } catch (error) {
         if (conn) {
@@ -2195,11 +2190,18 @@ updatedEmployees: updatedEmployees
               )
             ) AS normalized_role
           FROM new_joining
-          WHERE LOWER(TRIM(COALESCE(l2_status, ''))) = 'joined'
+          WHERE LOWER(TRIM(COALESCE(joining_status, ''))) = 'joined'
             AND cmp IS NOT NULL
             AND cmp != ''
             AND designation IS NOT NULL
             AND designation != ''
+            AND NOT EXISTS (
+              SELECT 1
+              FROM physical dedupe
+              WHERE TRIM(COALESCE(new_joining.aadhaar_no, '')) != ''
+                AND TRIM(COALESCE(dedupe.aadhaar_no, '')) = TRIM(new_joining.aadhaar_no)
+                AND LOWER(TRIM(COALESCE(dedupe.employment_status, ''))) = 'active'
+            )
             ${newJoiningScope.sql}
         ) AS new_joining_source
       ) AS new_joining_roles

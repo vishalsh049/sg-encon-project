@@ -407,12 +407,24 @@ useEffect(() => {
         }
       );
 
-      const result = await response.json();
+      let result = null;
 
- if (!response.ok || !result.success) {
+      try {
+        result = await response.json();
+      } catch {
+        result = null;
+      }
+
+ if (!response.ok || !result || !result.success) {
   setShowUploadModal(false);
   // Wait for upload modal to unmount, then open validation modal
-  setTimeout(() => setValidationError(result), 150);
+  setTimeout(
+    () =>
+      setValidationError(
+        result || { message: "Upload failed. Please try again." }
+      ),
+    150
+  );
   return;
 }
 
@@ -423,16 +435,21 @@ useEffect(() => {
     html: `
         <div style="text-align:left;font-size:16px">
 
-            <p><b>Total Employees :</b> ${response.totalEmployees}</p>
+            <p><b>Total Employees :</b> ${result.totalEmployees ?? 0}</p>
 
             <p style="color:green">
                 <b>✅ Added Successfully :</b>
-                ${response.addedEmployees}
+                ${result.addedEmployees ?? 0}
+            </p>
+
+            <p style="color:#2563eb">
+                <b>🔄 Updated :</b>
+                ${result.updatedEmployees ?? 0}
             </p>
 
             <p style="color:#d97706">
                 <b>⚠ Already Exists :</b>
-                ${response.duplicateEmployees}
+                ${result.duplicateEmployees ?? 0}
             </p>
 
         </div>
@@ -1476,7 +1493,7 @@ const jobRoleOptions = [
   "Analyst-Fiber",
   "Analyst-Fttx",
   "Analyst-IPCOLO",
-  "Analyst-ISP",
+  "Analyst-ISP", 
   "Analyst-Material",
   "Analyst-Planning",
   "Analyst-PMO",

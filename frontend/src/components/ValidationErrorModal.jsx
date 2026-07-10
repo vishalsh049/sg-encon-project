@@ -27,10 +27,24 @@ function getExpectedValues(field) {
   if (f.includes("circle"))
     return ["Punjab", "Delhi", "Haryana", "UP East", "UP West", "..."];
   if (f.includes("cmp")) return ["Valid CMP for selected Circle"];
+  if (f.includes("aadhaar")) return ["Valid Aadhaar Number"];
   return ["See format template"];
 }
 
 function classifyError(msg) {
+  // "Aadhaar Number is mandatory. Please fill Aadhaar Number and upload again."
+  const mandatoryMatch = msg.match(/^(.+?)\s+is\s+mandatory\b/i);
+  if (mandatoryMatch) {
+    const field = mandatoryMatch[1].trim();
+    return {
+      column: field,
+      currentValue: "(Blank)",
+      expectedValues: getExpectedValues(field),
+      errorType: `${field} is mandatory`,
+      howToFix: `Enter a valid ${field} value in Excel.`,
+    };
+  }
+
   // "Job Role is blank" / "Employment Status is blank"
   const blankMatch = msg.match(/^(.+?)\s+is\s+blank$/i);
   if (blankMatch) {
@@ -93,8 +107,69 @@ function classifyError(msg) {
   };
 }
 
-function parseErrorString(errorStr, index) {
-  const cleaned = errorStr.replace(/^[❌⚠️✗×\s]+/, "").trim();
+// Coerce any error payload (string, object, array, null, …) into display-safe text.
+function toErrorText(err) {
+  if (err === null || err === undefined) return "";
+  if (typeof err === "string") return err;
+  if (typeof err === "number" || typeof err === "boolean") return String(err);
+  if (Array.isArray(err)) return err.map(toErrorText).filter(Boolean).join("\n");
+  if (typeof err === "object") {
+    const msg = toErrorText(err.error ?? err.errorType ?? err.message ?? err.msg);
+    if (msg) return msg;
+    try {
+      return JSON.stringify(err);
+    } catch {
+      return "Validation error";
+    }
+  }
+  return String(err);
+}
+
+function firstText(...values) {
+  for (const v of values) {
+    if (typeof v === "string" && v.trim()) return v.trim();
+    if (typeof v === "number" && Number.isFinite(v)) return String(v);
+  }
+  return "";
+}
+
+// Structured backend error, e.g.
+// { row, employee, employeeCode, column, currentValue, error, expected }
+function parseErrorObject(errObj, index) {
+  const message =
+    firstText(errObj.error, errObj.errorType, errObj.message, errObj.msg) ||
+    "Validation error";
+  const classified = classifyError(message);
+  const column = firstText(errObj.column, errObj.field) || classified.column;
+  const rowNum = Number(errObj.row);
+  const expectedValues = Array.isArray(errObj.expected)
+    ? errObj.expected.map(toErrorText).filter(Boolean)
+    : firstText(errObj.expected)
+    ? [firstText(errObj.expected)]
+    : classified.expectedValues;
+
+  return {
+    id: index,
+    row: Number.isFinite(rowNum) && rowNum > 0 ? rowNum : null,
+    employee: firstText(errObj.employee, errObj.employeeName) || "-",
+    employeeCode: firstText(errObj.employeeCode, errObj.code) || "-",
+    column,
+    currentValue:
+      firstText(errObj.currentValue, errObj.value) || classified.currentValue,
+    expectedValues: expectedValues.length ? expectedValues : ["-"],
+    errorType: message,
+    howToFix:
+      firstText(errObj.howToFix) ||
+      `Correct the "${column}" value and upload again.`,
+  };
+}
+
+function parseErrorString(rawError, index) {
+  if (rawError && typeof rawError === "object" && !Array.isArray(rawError)) {
+    return parseErrorObject(rawError, index);
+  }
+
+  const cleaned = toErrorText(rawError).replace(/^[❌⚠️✗×\s]+/, "").trim();
 
   // "Row 2 - John Doe (EMP001) : Job Role is blank"
   const rowMatch = cleaned.match(
@@ -121,6 +196,46 @@ function parseErrorString(errorStr, index) {
   };
 }
 
+// Accept every response shape the upload APIs may produce and return a flat
+// list of error items (strings or structured objects).
+function normalizeErrorList(errorData) {
+  if (!errorData) return [];
+  if (typeof errorData === "string") {
+    return errorData.split("\n").filter((l) => l.trim());
+  }
+  if (Array.isArray(errorData)) {
+    return errorData
+      .flat(Infinity)
+      .filter((e) => e !== null && e !== undefined && e !== "");
+  }
+  if (typeof errorData === "object") {
+    const list = [
+      errorData.errors,
+      errorData.validationErrors,
+      errorData.details,
+    ].find((v) => Array.isArray(v) && v.length > 0);
+    if (list) {
+      return list
+        .flat(Infinity)
+        .filter((e) => e !== null && e !== undefined && e !== "");
+    }
+    const message = toErrorText(errorData.message ?? errorData.error);
+    return message.split("\n").filter((l) => l.trim());
+  }
+  return [];
+}
+
+const FALLBACK_ERROR = {
+  row: null,
+  employee: "-",
+  employeeCode: "-",
+  column: "Unknown",
+  currentValue: "-",
+  expectedValues: ["-"],
+  errorType: "Other",
+  howToFix: "Please correct this value and upload again.",
+};
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 const ROWS_PER_PAGE = 10;
@@ -134,18 +249,29 @@ export default function ValidationErrorModal({ isOpen, onClose, errorData }) {
   });
   const [copiedRow, setCopiedRow] = useState(null);
 
-  // Parse all errors
+  // Parse all errors — never let a malformed entry crash the modal
   const parsedErrors = useMemo(() => {
-    if (!errorData) return [];
-    const list =
-      Array.isArray(errorData.errors) && errorData.errors.length > 0
-        ? errorData.errors
-        : (errorData.message || "").split("\n").filter((l) => l.trim());
-    return list.map((e, i) => parseErrorString(e, i));
+    let list;
+    try {
+      list = normalizeErrorList(errorData);
+    } catch {
+      return [];
+    }
+    return list.map((e, i) => {
+      try {
+        return parseErrorString(e, i);
+      } catch {
+        return { id: i, ...FALLBACK_ERROR };
+      }
+    });
   }, [errorData]);
 
   // Stats
-  const totalRecords = errorData?.totalRecords ?? null;
+  const totalRecordsRaw = Number(errorData?.totalRecords);
+  const totalRecords =
+    Number.isFinite(totalRecordsRaw) && totalRecordsRaw > 0
+      ? totalRecordsRaw
+      : null;
   const invalidRows = useMemo(
     () =>
       new Set(parsedErrors.filter((e) => e.row !== null).map((e) => e.row))
@@ -153,7 +279,7 @@ export default function ValidationErrorModal({ isOpen, onClose, errorData }) {
     [parsedErrors]
   );
   const validRecords =
-    totalRecords !== null ? totalRecords - invalidRows : null;
+    totalRecords !== null ? Math.max(0, totalRecords - invalidRows) : null;
 
   // Grouped errors
   const groupedErrors = useMemo(() => {

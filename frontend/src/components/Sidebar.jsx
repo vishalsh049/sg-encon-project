@@ -4,6 +4,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import {
   BriefcaseBusiness,
   FileText,
+  GraduationCap,
   LayoutDashboard,
   LogOut,
   ReceiptText,
@@ -149,6 +150,59 @@ function Sidebar({ closeSidebar, collapsed, onExpandRequest }) {
   path: "/dashboard/manpower/signoff",
   icon: BriefcaseBusiness,
   accessPage: "Signoff",
+},
+
+  // TRAINING
+{
+  key: "training-dashboard",
+  label: "Training Dashboard",
+  path: "/dashboard/training",
+  exact: true,
+  icon: GraduationCap,
+  accessPage: "Training",
+  section: "TRAINING",
+},
+{
+  key: "training-registrations",
+  label: "New Registrations",
+  path: "/dashboard/training/registrations",
+  icon: GraduationCap,
+  accessPage: "Training",
+},
+{
+  key: "training-employees",
+  label: "Training Employees",
+  path: "/dashboard/training/employees",
+  icon: GraduationCap,
+  accessPage: "Training",
+},
+{
+  key: "training-documents",
+  label: "Documents",
+  path: "/dashboard/training/documents",
+  icon: GraduationCap,
+  accessPage: "Training",
+},
+{
+  key: "training-verification",
+  label: "Verification",
+  path: "/dashboard/training/verification",
+  icon: GraduationCap,
+  accessPage: "Training",
+},
+{
+  key: "training-reports",
+  label: "Training Reports",
+  path: "/dashboard/training/reports",
+  icon: GraduationCap,
+  accessPage: "Training",
+},
+{
+  key: "training-settings",
+  label: "Training Settings",
+  path: "/dashboard/training/settings",
+  icon: GraduationCap,
+  accessPage: "Training",
 },
 
   // REPORTS

@@ -73,6 +73,11 @@ const pageAccessList = [
 },
 
   {
+    title: "Training",
+    pages: ["Training"],
+  },
+
+  {
     title: "Reports",
     pages: ["tower-reports", "kpi-dashboard"],
   },

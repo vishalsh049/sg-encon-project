@@ -23,6 +23,65 @@ const upload = multer({
 
 router.use(authMiddleware);
 
+const EMPLOYEE_CODE_PREFIX = "SG";
+const EMPLOYEE_CODE_DIGITS = 6;
+
+async function findNextEmployeeCode() {
+  const rows = await query(
+    `SELECT employee_code FROM new_joining WHERE employee_code REGEXP '^SG[0-9]+$'`
+  );
+
+  let maxNumber = 0;
+
+  for (const row of rows) {
+    const numericPart = parseInt(row.employee_code.slice(EMPLOYEE_CODE_PREFIX.length), 10);
+    if (!Number.isNaN(numericPart) && numericPart > maxNumber) {
+      maxNumber = numericPart;
+    }
+  }
+
+  let candidateNumber = maxNumber + 1;
+  let candidateCode = `${EMPLOYEE_CODE_PREFIX}${String(candidateNumber).padStart(EMPLOYEE_CODE_DIGITS, "0")}`;
+
+  while (true) {
+    const existing = await query(
+      `SELECT id FROM new_joining WHERE employee_code = ? LIMIT 1`,
+      [candidateCode]
+    );
+
+    if (!existing.length) break;
+
+    candidateNumber += 1;
+    candidateCode = `${EMPLOYEE_CODE_PREFIX}${String(candidateNumber).padStart(EMPLOYEE_CODE_DIGITS, "0")}`;
+  }
+
+  return candidateCode;
+}
+
+router.get("/next-employee-code", async (req, res) => {
+
+  try {
+
+    const employeeCode = await findNextEmployeeCode();
+
+    res.json({
+      success: true,
+      employeeCode,
+    });
+
+  } catch (error) {
+
+    console.log("NEXT EMPLOYEE CODE ERROR:", error);
+
+    res.status(500).json({
+      success: false,
+      message: "Failed to generate employee code",
+    });
+
+  }
+
+});
+
 router.get("/", async (req, res) => {
 
   console.time("TOTAL_API");
@@ -86,10 +145,97 @@ router.post("/add-employee", async (req, res) => {
   joining_status,
   l2_status,
   employee_status,
+  employee_code_auto,
 } = req.body || {};
 
     if (!canAccessCircle(req.authUser, circle)) {
       return forbid(res);
+    }
+
+    const employeeCodeValue = String(employee_code || "").trim();
+    const employeeNameValue = String(employee_name || "").trim();
+    const circleValue = String(circle || "").trim();
+    const cmpValue = String(cmp || "").trim();
+    const designationValue = String(designation || "").trim();
+    const aadhaarValue = String(aadhaar_no || "").trim();
+
+    if (!employeeCodeValue) {
+      return res.status(400).json({
+        success: false,
+        message: "Employee Code is required.",
+      });
+    }
+
+    if (!employeeNameValue) {
+      return res.status(400).json({
+        success: false,
+        message: "Employee Name is required.",
+      });
+    }
+
+    if (!circleValue) {
+      return res.status(400).json({
+        success: false,
+        message: "Please select Circle.",
+      });
+    }
+
+    if (!cmpValue) {
+      return res.status(400).json({
+        success: false,
+        message: "Please select CMP.",
+      });
+    }
+
+    if (!designationValue) {
+      return res.status(400).json({
+        success: false,
+        message: "Designation is required.",
+      });
+    }
+
+    if (!aadhaarValue) {
+      return res.status(400).json({
+        success: false,
+        message: "Aadhaar Number is required.",
+      });
+    }
+
+    if (!/^\d{12}$/.test(aadhaarValue)) {
+      return res.status(400).json({
+        success: false,
+        message: "Aadhaar Number must contain exactly 12 digits.",
+      });
+    }
+
+    const existing = await query(
+      `SELECT id FROM new_joining WHERE aadhaar_no = ? LIMIT 1`,
+      [aadhaarValue]
+    );
+
+    if (existing.length) {
+      return res.status(409).json({
+        success: false,
+        message: "Employee with this Aadhaar Number already exists.",
+      });
+    }
+
+    let finalEmployeeCode = employeeCodeValue;
+
+    const existingCode = await query(
+      `SELECT id FROM new_joining WHERE employee_code = ? LIMIT 1`,
+      [employeeCodeValue]
+    );
+
+    if (existingCode.length) {
+      if (employee_code_auto) {
+        finalEmployeeCode = await findNextEmployeeCode();
+      } else {
+        return res.status(409).json({
+          success: false,
+          message: "Employee Code already exists. Please generate a new code.",
+        });
+      }
     }
 
     await query(
@@ -109,12 +255,12 @@ router.post("/add-employee", async (req, res) => {
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `,
       [
-        employee_code || "",
-        employee_name || "",
-        circle || "",
-        cmp || "",
-        designation || "",
-        aadhaar_no || "",
+        finalEmployeeCode,
+        employeeNameValue,
+        circleValue,
+        cmpValue,
+        designationValue,
+        aadhaarValue,
          nth_salary || 0,
         joining_status || "Pending",
         l2_status || "Pending",
@@ -125,6 +271,7 @@ router.post("/add-employee", async (req, res) => {
     return res.status(200).json({
       success: true,
       message: "Employee Added Successfully",
+      employeeCode: finalEmployeeCode,
     });
 
   } catch (error) {
@@ -327,6 +474,35 @@ router.post(
         (row) => row.circle || row["Circle"] || ""
       );
 
+const excelAadhaarNumbers = rows
+  .map((row) => {
+    const raw = row.aadhaar_no || row["Aadhar Number"] || "";
+    return raw ? String(raw).trim() : "";
+  })
+  .filter(Boolean);
+
+const existingAadhaarSet = new Set();
+
+if (excelAadhaarNumbers.length) {
+
+  const uniqueAadhaarNumbers = [...new Set(excelAadhaarNumbers)];
+
+  const existingAadhaarRows = await query(
+    `SELECT aadhaar_no FROM new_joining WHERE aadhaar_no IN (${uniqueAadhaarNumbers
+      .map(() => "?")
+      .join(",")})`,
+    uniqueAadhaarNumbers
+  );
+
+  existingAadhaarRows.forEach((r) => {
+    existingAadhaarSet.add(String(r.aadhaar_no).trim());
+  });
+
+}
+
+const seenAadhaarInFile = new Set();
+let skippedDuplicates = 0;
+
 const values = [];
 
 for (const row of rows) {
@@ -357,10 +533,24 @@ for (const row of rows) {
     row["Designation"] ||
     "";
 
-  const aadhaar_no =
+  const aadhaar_no_raw =
     row.aadhaar_no ||
     row["Aadhar Number"] ||
     "";
+
+  const aadhaar_no = aadhaar_no_raw ? String(aadhaar_no_raw).trim() : "";
+
+  if (
+    aadhaar_no &&
+    (existingAadhaarSet.has(aadhaar_no) || seenAadhaarInFile.has(aadhaar_no))
+  ) {
+    skippedDuplicates++;
+    continue;
+  }
+
+  if (aadhaar_no) {
+    seenAadhaarInFile.add(aadhaar_no);
+  }
 
   const nth_salary =
     row.nth_salary ||
@@ -426,26 +616,30 @@ values.push([
 // TEMP DEBUG: exact rows about to be inserted (index 8 in each array is l2_status)
 console.log("[UPLOAD-EXCEL] Values about to be inserted:", values);
 
-await query(
-  `
- INSERT INTO new_joining (
+if (values.length) {
 
-employee_code,
-employee_name,
-circle,
-cmp,
-designation,
-aadhaar_no,
-nth_salary,
-joining_status,
-l2_status,
-employee_status
+  await query(
+    `
+   INSERT INTO new_joining (
 
-)
-  VALUES ?
-  `,
-  [values]
-);
+  employee_code,
+  employee_name,
+  circle,
+  cmp,
+  designation,
+  aadhaar_no,
+  nth_salary,
+  joining_status,
+  l2_status,
+  employee_status
+
+  )
+    VALUES ?
+    `,
+    [values]
+  );
+
+}
 
 // TEMP DEBUG: re-query the just-inserted employee codes to confirm what actually landed in the DB
 const insertedCodes = values.map((row) => row[0]).filter(Boolean);
@@ -459,7 +653,10 @@ if (insertedCodes.length) {
 
       res.json({
         success: true,
-        message: "Excel Uploaded Successfully",
+        message: "Upload Completed Successfully",
+        totalRecords: rows.length,
+        insertedRecords: values.length,
+        skippedDuplicates,
       });
 
     } catch (error) {

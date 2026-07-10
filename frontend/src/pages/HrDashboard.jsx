@@ -14,6 +14,11 @@ import {
   Lightbulb,
   BarChart3,
   Download,
+  Maximize2,
+  X,
+  FileSpreadsheet,
+  FileText,
+  FileDown,
 } from "lucide-react";
 
 import toast from "react-hot-toast";
@@ -186,6 +191,155 @@ const canonicalCircleKey = (value = "") => {
 
 const ALL_CIRCLE_KEYS = new Set(["", "all", "allcircle", "allcircles"]);
 
+// Mirrors the dashboard's filteredGroups memo so the fullscreen and export
+// popups can filter with their own local Search/Circle/CMP state without
+// touching the dashboard's filters.
+const filterCmpGroups = (groupsSource, searchText, selectedCircle, selectedCmp) =>
+  groupsSource
+    .map((group) => ({
+      ...group,
+      items: group.items.filter((cmp) => {
+        const searchMatch = cmp
+          .toLowerCase()
+          .includes(searchText.toLowerCase());
+
+        const circleMatch =
+          selectedCircle === ""
+            ? true
+            : group.title.toLowerCase().includes(selectedCircle.toLowerCase());
+
+        const cmpMatch = selectedCmp === "" ? true : cmp === selectedCmp;
+
+        return searchMatch && circleMatch && cmpMatch;
+      }),
+    }))
+    .filter((group) => group.items.length > 0);
+
+const cmpOptionsForCircle = (groupsSource, selectedCircle) =>
+  groupsSource
+    .filter((group) =>
+      selectedCircle === ""
+        ? true
+        : group.title.toLowerCase().includes(selectedCircle.toLowerCase())
+    )
+    .flatMap((group) => group.items);
+
+// Flattens the RAG grid into plain rows (Circle, CMP, then R/A/G per
+// designation) for the client-side CSV and PDF exports. Reads the exact same
+// lookups the on-screen table renders from — no extra API calls.
+const buildRagExportRows = ({
+  groups,
+  columns,
+  countLookup,
+  getSignoffRow,
+  showJoining,
+}) => {
+  const header = ["Circle", "CMP"];
+  columns.forEach((column) => {
+    header.push(`${column.label} (R)`, `${column.label} (A)`, `${column.label} (G)`);
+  });
+
+  const rows = [];
+  groups.forEach((group) => {
+    const circleName = circleLabelFromTitle(group.title);
+    group.items.forEach((cmpName) => {
+      const signoffRow = getSignoffRow(cmpName);
+      const row = [circleName, cmpName];
+
+      columns.forEach((column) => {
+        const requirement = Number(signoffRow?.[column.key] || 0);
+        const available = Number(
+          showJoining
+            ? countLookup?.[cmpName]?.[column.key]?.total || 0
+            : countLookup?.[cmpName]?.[column.key] || 0
+        );
+        row.push(requirement, available, requirement - available);
+      });
+
+      rows.push(row);
+    });
+  });
+
+  return { header, rows };
+};
+
+const csvCell = (value) => {
+  const text = String(value ?? "");
+  return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+};
+
+const downloadRagCsv = (fileName, header, rows) => {
+  const csv = [header, ...rows]
+    .map((row) => row.map(csvCell).join(","))
+    .join("\r\n");
+
+  // UTF-8 BOM so Excel opens the CSV with correct encoding.
+  const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
+};
+
+const escapeHtml = (value = "") =>
+  String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+
+// PDF export: renders the flattened RAG rows into a print-optimised page and
+// opens the browser print dialog (user saves as PDF) — no extra dependency.
+const printRagPdf = ({ title, filtersSummary, header, rows }) => {
+  const printWindow = window.open("", "_blank", "width=1280,height=800");
+  if (!printWindow) {
+    toast.error("Popup blocked. Please allow popups to export PDF.");
+    return;
+  }
+
+  const headerHtml = header.map((cell) => `<th>${escapeHtml(cell)}</th>`).join("");
+  const bodyHtml = rows
+    .map(
+      (row) =>
+        `<tr>${row.map((cell) => `<td>${escapeHtml(cell)}</td>`).join("")}</tr>`
+    )
+    .join("");
+
+  printWindow.document.write(`<!DOCTYPE html>
+<html>
+<head>
+<title>${escapeHtml(title)}</title>
+<style>
+  @page { size: A3 landscape; margin: 8mm; }
+  body { font-family: "Segoe UI", Arial, sans-serif; color: #0f172a; margin: 14px; }
+  h1 { font-size: 15px; margin: 0 0 2px; color: #1e3a8a; }
+  p.meta { font-size: 9px; color: #475569; margin: 0 0 8px; }
+  table { border-collapse: collapse; width: 100%; }
+  th, td { border: 1px solid #cbd5e1; padding: 2px 3px; font-size: 6.5px; text-align: center; white-space: nowrap; }
+  th { background: #1e3a8a; color: #ffffff; font-weight: 600; }
+  td:first-child, td:nth-child(2) { text-align: left; font-weight: 600; background: #f8fafc; }
+  tr:nth-child(even) td { background: #f1f5f9; }
+  tr:nth-child(even) td:first-child, tr:nth-child(even) td:nth-child(2) { background: #e2e8f0; }
+</style>
+</head>
+<body>
+<h1>${escapeHtml(title)}</h1>
+<p class="meta">${escapeHtml(filtersSummary)} &nbsp;|&nbsp; Generated: ${escapeHtml(
+    new Date().toLocaleString()
+  )}</p>
+<table><thead><tr>${headerHtml}</tr></thead><tbody>${bodyHtml}</tbody></table>
+</body>
+</html>`);
+
+  printWindow.document.close();
+  printWindow.focus();
+  setTimeout(() => printWindow.print(), 500);
+};
+
 function HrDashboard() {
   const [jobRoles, setJobRoles] = useState([]);
   const [circles, setCircles] = useState([]);
@@ -203,6 +357,13 @@ function HrDashboard() {
   });
   const [exportingPhysical, setExportingPhysical] = useState(false);
   const [exportingScrum, setExportingScrum] = useState(false);
+  // "physical" | "scrum" | null — which panel's fullscreen / export popup is open.
+  const [fullScreenPanel, setFullScreenPanel] = useState(null);
+  const [exportModalPanel, setExportModalPanel] = useState(null);
+  // Filters the export popup should start from: set when opened from the
+  // fullscreen view (which has its own local filters); null means it opens
+  // with the dashboard's current filters.
+  const [exportModalFilters, setExportModalFilters] = useState(null);
 
   // Logged-in user's circle permission — drives which circle sections,
   // filters, totals, and exports are visible on this page.
@@ -552,18 +713,20 @@ function HrDashboard() {
   const XLSX_CONTENT_TYPE =
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
-  const downloadExport = async (endpoint, fallbackFileName, setLoading) => {
+  const downloadExport = async (endpoint, fallbackFileName, setLoading, filters) => {
     setLoading(true);
     try {
       const params = new URLSearchParams();
-      if (searchText) params.set("search", searchText);
+      const search = filters?.search ?? searchText;
+      const circle = filters?.circle ?? selectedCircle;
+      const cmp = filters?.cmp ?? selectedCmp;
+
+      if (search) params.set("search", search);
       // Single-circle users can only ever export their own circle, even if
       // selectedCircle hasn't caught up to the lock effect yet.
-      const effectiveCircle = isAllCircleUser
-        ? selectedCircle
-        : userCircleLabel || selectedCircle;
+      const effectiveCircle = isAllCircleUser ? circle : userCircleLabel || circle;
       if (effectiveCircle) params.set("circle", effectiveCircle);
-      if (selectedCmp) params.set("cmp", selectedCmp);
+      if (cmp) params.set("cmp", cmp);
 
       const response = await authFetch(
         buildApiUrl(`${endpoint}?${params.toString()}`)
@@ -604,19 +767,55 @@ function HrDashboard() {
     }
   };
 
-  const exportPhysicalRag = () =>
+  const exportPhysicalRag = (filters) =>
     downloadExport(
       "/api/hr-dashboard/export/physical",
       "Physical_RAG_Export.xlsx",
-      setExportingPhysical
+      setExportingPhysical,
+      filters
     );
 
-  const exportScrumRag = () =>
+  const exportScrumRag = (filters) =>
     downloadExport(
       "/api/hr-dashboard/export/scrum",
       "Scrum_RAG_Export.xlsx",
-      setExportingScrum
+      setExportingScrum,
+      filters
     );
+
+  // Shared meta for the two RAG panels so the fullscreen and export popups
+  // can render either one generically. Uses the same lookups the dashboard
+  // tables already render from — nothing is re-fetched.
+  const panelConfigs = {
+    physical: {
+      key: "physical",
+      icon: BriefcaseBusiness,
+      title: "PHYSICAL RAG",
+      subtitle: "Requirement vs Available Manpower",
+      gradient: "from-sky-500 via-cyan-500 to-teal-400",
+      columns: physicalDesignationColumns,
+      countLookup: activeCountLookup,
+      showJoining: true,
+      exportLabel: "Export Physical RAG",
+      fileBase: "Physical_RAG_Export",
+      onExportServer: exportPhysicalRag,
+      exporting: exportingPhysical,
+    },
+    scrum: {
+      key: "scrum",
+      icon: Layers3,
+      title: "SCRUM RAG",
+      subtitle: "Overview Scrum Manpower",
+      gradient: "from-violet-600 via-fuchsia-500 to-pink-500",
+      columns: scrumDesignationColumns,
+      countLookup: scrumActiveCountLookup,
+      showJoining: false,
+      exportLabel: "Export Scrum RAG",
+      fileBase: "Scrum_RAG_Export",
+      onExportServer: exportScrumRag,
+      exporting: exportingScrum,
+    },
+  };
 
   const topMeta = [
     { label: "Total Employees", value: totalEmployees || employmentTotals.total },
@@ -724,7 +923,11 @@ function HrDashboard() {
           showJoining={true}
           icon={BriefcaseBusiness}
           title="PHYSICAL RAG"
-          onExport={exportPhysicalRag}
+          onExport={() => {
+            setExportModalFilters(null);
+            setExportModalPanel("physical");
+          }}
+          onFullScreen={() => setFullScreenPanel("physical")}
           exporting={exportingPhysical}
           exportLabel="Export Physical RAG"
           subtitle="Requirement vs Available Manpower"
@@ -741,7 +944,11 @@ function HrDashboard() {
           panelId="scrumScroll"
           icon={Layers3}
           title="SCRUM RAG"
-          onExport={exportScrumRag}
+          onExport={() => {
+            setExportModalFilters(null);
+            setExportModalPanel("scrum");
+          }}
+          onFullScreen={() => setFullScreenPanel("scrum")}
           exporting={exportingScrum}
           exportLabel="Export Scrum RAG"
           subtitle="Overview Scrum Manpower"
@@ -814,6 +1021,46 @@ function HrDashboard() {
           subText={`Employment summary: ${employmentTotals.active || 0} active, ${employmentTotals.inactive || 0} inactive.`}
         />
       </div>
+
+      {fullScreenPanel && (
+        <FullScreenRagModal
+          config={panelConfigs[fullScreenPanel]}
+          groupsSource={visibleCmpGroups}
+          allowedCircleLabels={allowedCircleLabels}
+          isAllCircleUser={isAllCircleUser}
+          userCircleLabel={userCircleLabel}
+          initialFilters={{
+            search: searchText,
+            circle: selectedCircle,
+            cmp: selectedCmp,
+          }}
+          getSignoffRow={getSignoffRow}
+          onClose={() => setFullScreenPanel(null)}
+          onOpenExport={(filters) => {
+            setExportModalFilters(filters);
+            setExportModalPanel(fullScreenPanel);
+          }}
+        />
+      )}
+
+      {exportModalPanel && (
+        <ExportRagModal
+          config={panelConfigs[exportModalPanel]}
+          groupsSource={visibleCmpGroups}
+          allowedCircleLabels={allowedCircleLabels}
+          isAllCircleUser={isAllCircleUser}
+          userCircleLabel={userCircleLabel}
+          initialFilters={
+            exportModalFilters || {
+              search: searchText,
+              circle: selectedCircle,
+              cmp: selectedCmp,
+            }
+          }
+          getSignoffRow={getSignoffRow}
+          onClose={() => setExportModalPanel(null)}
+        />
+      )}
     </div>
   );
 }
@@ -832,6 +1079,7 @@ function TablePanel({
   getSignoffRow,
   showJoining = false,
   onExport,
+  onFullScreen,
   exporting,
   exportLabel,
 })
@@ -859,13 +1107,26 @@ function TablePanel({
 
 </div>
 
-<button
-    onClick={onExport}
-    disabled={exporting}
-    className="rounded-lg bg-white/20 px-4 py-2 text-sm font-semibold text-white hover:bg-white/30"
->
-    {exporting ? "Exporting..." : exportLabel}
-</button>
+<div className="flex items-center gap-2">
+    <button
+        type="button"
+        onClick={onFullScreen}
+        title="Open full screen view"
+        className="inline-flex items-center gap-2 rounded-lg border border-white/20 bg-white/20 px-4 py-2 text-sm font-semibold text-white backdrop-blur-sm transition hover:bg-white/30"
+    >
+        <Maximize2 className="h-4 w-4" />
+        Full Screen
+    </button>
+
+    <button
+        onClick={onExport}
+        disabled={exporting}
+        className="inline-flex items-center gap-2 rounded-lg border border-white/20 bg-white/20 px-4 py-2 text-sm font-semibold text-white backdrop-blur-sm transition hover:bg-white/30 disabled:cursor-not-allowed disabled:opacity-70"
+    >
+        <Download className="h-4 w-4" />
+        {exporting ? "Exporting..." : exportLabel}
+    </button>
+</div>
         </div>
       </div>
 
@@ -874,9 +1135,29 @@ function TablePanel({
       </div>
 
 
-      {/* PHYSICAL TOP CATEGORY CARDS */}
+      <StatCardsRow
+        groups={groups}
+        countLookup={countLookup}
+        getSignoffRow={getSignoffRow}
+      />
 
-<div className="grid grid-cols-2 gap-1 md:grid-cols-5 xl:grid-cols-5 p-1 border-b border-slate-200 bg-slate-50">
+      <RagTable
+        panelId={panelId}
+        groups={groups}
+        columns={columns}
+        countLookup={countLookup}
+        getSignoffRow={getSignoffRow}
+        showJoining={showJoining}
+      />
+    </div>
+  );
+}
+
+// Extracted verbatim from TablePanel so the fullscreen popup can reuse the
+// exact same category summary cards.
+function StatCardsRow({ groups, countLookup, getSignoffRow }) {
+  return (
+    <div className="grid grid-cols-2 gap-1 md:grid-cols-5 xl:grid-cols-5 p-1 border-b border-slate-200 bg-slate-50">
 
  {statCardConfig.map((card) => {
 
@@ -1033,15 +1314,36 @@ if (card.key === "fttxPo") {
 })}
 
 </div>
+  );
+}
 
+// Extracted verbatim from TablePanel: the scrolling RAG table with sticky
+// header and sticky first column. `fillHeight` lets the fullscreen popup
+// stretch it to the viewport instead of the dashboard's 55vh cap.
+function RagTable({
+  panelId,
+  groups,
+  columns,
+  countLookup,
+  getSignoffRow,
+  showJoining = false,
+  fillHeight = false,
+}) {
+  return (
   <div
     id={panelId}
-    className="relative overflow-auto custom-scrollbar"
-    style={{
-        maxHeight: "55vh",
-        minHeight: "240px",
-        isolation: "isolate",
-    }}
+    className={`relative overflow-auto custom-scrollbar ${
+      fillHeight ? "flex-1" : ""
+    }`}
+    style={
+      fillHeight
+        ? { isolation: "isolate" }
+        : {
+            maxHeight: "55vh",
+            minHeight: "240px",
+            isolation: "isolate",
+          }
+    }
 >
       <table  className="relative z-0 min-w-max w-full whitespace-nowrap border-collapse text-sm">
           <thead>
@@ -1290,7 +1592,6 @@ if (showJoining) {
           </tbody>
         </table>
       </div>
-    </div>
   );
 }
 
@@ -1304,6 +1605,473 @@ function InfoCard({ icon: Icon, title, accent, iconBg, description, subText }) {
           <p className={`text-sm font-semibold ${accent}`}>{title}</p>
           <p className="mt-1 text-sm leading-6 text-slate-600">{description}</p>
           <p className="mt-1 text-sm leading-6 text-slate-500">{subText}</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Fullscreen RAG popup: the complete table in an immersive modal with its own
+// Search / Circle / CMP filters. Renders from the same lookups the dashboard
+// already loaded — no extra API calls, no page reload.
+// ---------------------------------------------------------------------------
+function FullScreenRagModal({
+  config,
+  groupsSource,
+  allowedCircleLabels,
+  isAllCircleUser,
+  userCircleLabel,
+  initialFilters,
+  getSignoffRow,
+  onClose,
+  onOpenExport,
+}) {
+  const [search, setSearch] = useState(initialFilters.search || "");
+  const [circle, setCircle] = useState(initialFilters.circle || "");
+  const [cmp, setCmp] = useState(initialFilters.cmp || "");
+
+  useEffect(() => {
+    const onKeyDown = (event) => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [onClose]);
+
+  const groups = useMemo(
+    () => filterCmpGroups(groupsSource, search, circle, cmp),
+    [groupsSource, search, circle, cmp]
+  );
+
+  const cmpOptions = useMemo(
+    () => cmpOptionsForCircle(groupsSource, circle),
+    [groupsSource, circle]
+  );
+
+  const resetFilters = () => {
+    setSearch("");
+    setCircle(isAllCircleUser ? "" : userCircleLabel || "");
+    setCmp("");
+  };
+
+  const Icon = config.icon;
+
+  return (
+    <div className="fixed inset-0 z-[300] flex flex-col bg-slate-900/60 p-2 backdrop-blur-sm md:p-4">
+      <style>{`@keyframes hrModalIn { from { opacity: 0; transform: scale(0.985); } to { opacity: 1; transform: scale(1); } }`}</style>
+
+      <div
+        className="flex h-full min-h-0 flex-col overflow-hidden rounded-[18px] border border-white/40 bg-white/95 shadow-[0_40px_120px_rgba(15,23,42,0.5)] backdrop-blur-2xl"
+        style={{ animation: "hrModalIn 0.25s ease" }}
+      >
+        <div className={`bg-gradient-to-r ${config.gradient} px-4 py-2.5 text-white`}>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-3">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[12px] border border-white/25 bg-white/15 backdrop-blur-xl">
+                <Icon className="h-4 w-4" />
+              </div>
+              <div>
+                <p className="text-[0.75rem] font-semibold uppercase tracking-[0.14em]">
+                  {config.title} — Full Screen View
+                </p>
+                <p className="text-xs text-white/90">{config.subtitle}</p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => onOpenExport({ search, circle, cmp })}
+                className="inline-flex items-center gap-2 rounded-lg border border-white/20 bg-white/20 px-4 py-2 text-sm font-semibold text-white backdrop-blur-sm transition hover:bg-white/30"
+              >
+                <Download className="h-4 w-4" />
+                {config.exportLabel}
+              </button>
+              <button
+                type="button"
+                onClick={onClose}
+                title="Close (Esc)"
+                className="inline-flex items-center gap-2 rounded-lg border border-white/20 bg-white/20 px-3 py-2 text-sm font-semibold text-white backdrop-blur-sm transition hover:bg-white/35"
+              >
+                <X className="h-4 w-4" />
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className="border-b border-slate-200/80 bg-white/80 p-1.5 backdrop-blur-xl">
+          <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Search Employee / CMP..."
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                className="h-9 w-full rounded-[12px] border border-slate-200 bg-[linear-gradient(180deg,_#ffffff_0%,_#f8fafc_100%)] pl-10 pr-4 text-[13px] text-slate-700 outline-none transition focus:border-indigo-300 focus:ring-4 focus:ring-indigo-50"
+              />
+            </div>
+
+            <select
+              value={circle}
+              onChange={(event) => {
+                setCircle(event.target.value);
+                setCmp("");
+              }}
+              disabled={!isAllCircleUser}
+              className="h-9 w-full rounded-[12px] border border-slate-200 bg-[linear-gradient(180deg,_#ffffff_0%,_#f8fafc_100%)] px-4 text-[13px] text-slate-700 outline-none transition focus:border-indigo-300 focus:ring-4 focus:ring-indigo-50 disabled:cursor-not-allowed disabled:opacity-70"
+            >
+              {isAllCircleUser && <option value="">Select Circle</option>}
+              {allowedCircleLabels.map((circleLabel) => (
+                <option key={circleLabel} value={circleLabel}>
+                  {circleLabel}
+                </option>
+              ))}
+            </select>
+
+            <select
+              value={cmp}
+              onChange={(event) => setCmp(event.target.value)}
+              className="h-9 w-full rounded-[12px] border border-slate-200 bg-[linear-gradient(180deg,_#ffffff_0%,_#f8fafc_100%)] px-4 text-[13px] text-slate-700 outline-none transition focus:border-indigo-300 focus:ring-4 focus:ring-indigo-50"
+            >
+              <option value="">Select CMP</option>
+              {cmpOptions.map((cmpName) => (
+                <option key={cmpName} value={cmpName}>
+                  {cmpName}
+                </option>
+              ))}
+            </select>
+
+            <button
+              type="button"
+              onClick={resetFilters}
+              className="inline-flex h-9 items-center justify-center gap-2 rounded-[12px] bg-[linear-gradient(96deg,_#3b82f6_0%,_#7c3aed_100%)] px-4 text-sm font-semibold text-white transition hover:brightness-105"
+            >
+              <RefreshCcw className="h-4 w-4" />
+              Reset
+            </button>
+          </div>
+        </div>
+
+        <StatCardsRow
+          groups={groups}
+          countLookup={config.countLookup}
+          getSignoffRow={getSignoffRow}
+        />
+
+        {groups.length === 0 ? (
+          <div className="flex flex-1 items-center justify-center text-sm font-semibold text-slate-400">
+            No records match the current filters.
+          </div>
+        ) : (
+          <RagTable
+            panelId={`${config.key}ScrollFullScreen`}
+            groups={groups}
+            columns={config.columns}
+            countLookup={config.countLookup}
+            getSignoffRow={getSignoffRow}
+            showJoining={config.showJoining}
+            fillHeight
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Export popup: filter (Circle / CMP / Search) + format (Excel / CSV / PDF),
+// then export only the filtered data. Excel keeps using the existing backend
+// export endpoint untouched; CSV and PDF are built client-side from the data
+// already loaded on the dashboard.
+// ---------------------------------------------------------------------------
+const exportFormatOptions = [
+  {
+    value: "xlsx",
+    label: "Excel (.xlsx)",
+    hint: "Formatted RAG workbook",
+    icon: FileSpreadsheet,
+  },
+  {
+    value: "csv",
+    label: "CSV",
+    hint: "Plain data for analysis",
+    icon: FileText,
+  },
+  {
+    value: "pdf",
+    label: "PDF",
+    hint: "Print-ready snapshot",
+    icon: FileDown,
+  },
+];
+
+function ExportRagModal({
+  config,
+  groupsSource,
+  allowedCircleLabels,
+  isAllCircleUser,
+  userCircleLabel,
+  initialFilters,
+  getSignoffRow,
+  onClose,
+}) {
+  const [search, setSearch] = useState(initialFilters.search || "");
+  const [circle, setCircle] = useState(initialFilters.circle || "");
+  const [cmp, setCmp] = useState(initialFilters.cmp || "");
+  const [format, setFormat] = useState("xlsx");
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    const onKeyDown = (event) => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [onClose]);
+
+  const filteredGroups = useMemo(
+    () => filterCmpGroups(groupsSource, search, circle, cmp),
+    [groupsSource, search, circle, cmp]
+  );
+
+  const cmpOptions = useMemo(
+    () => cmpOptionsForCircle(groupsSource, circle),
+    [groupsSource, circle]
+  );
+
+  const matchedCmpCount = useMemo(
+    () => filteredGroups.reduce((sum, group) => sum + group.items.length, 0),
+    [filteredGroups]
+  );
+
+  const hasFilters = Boolean(search || circle || cmp);
+
+  const filtersSummary =
+    [
+      circle && `Circle: ${circle}`,
+      cmp && `CMP: ${cmp}`,
+      search && `Search: "${search}"`,
+    ]
+      .filter(Boolean)
+      .join("  |  ") || "Complete data (no filters applied)";
+
+  const handleExport = async () => {
+    if (matchedCmpCount === 0) {
+      toast.error("No records match the selected filters.");
+      return;
+    }
+
+    setBusy(true);
+    try {
+      if (format === "xlsx") {
+        await config.onExportServer({ search, circle, cmp });
+      } else {
+        const { header, rows } = buildRagExportRows({
+          groups: filteredGroups,
+          columns: config.columns,
+          countLookup: config.countLookup,
+          getSignoffRow,
+          showJoining: config.showJoining,
+        });
+
+        if (format === "csv") {
+          downloadRagCsv(`${config.fileBase}.csv`, header, rows);
+          toast.success("CSV exported successfully.");
+        } else {
+          printRagPdf({
+            title: config.title,
+            filtersSummary,
+            header,
+            rows,
+          });
+        }
+      }
+      onClose();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const resetFilters = () => {
+    setSearch("");
+    setCircle(isAllCircleUser ? "" : userCircleLabel || "");
+    setCmp("");
+  };
+
+  return (
+    <div className="fixed inset-0 z-[320] flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm">
+      <style>{`@keyframes hrModalIn { from { opacity: 0; transform: scale(0.985); } to { opacity: 1; transform: scale(1); } }`}</style>
+
+      <div
+        className="w-full max-w-2xl overflow-hidden rounded-[20px] border border-white/50 bg-white/95 shadow-[0_40px_120px_rgba(15,23,42,0.5)] backdrop-blur-2xl"
+        style={{ animation: "hrModalIn 0.25s ease" }}
+      >
+        <div className={`bg-gradient-to-r ${config.gradient} px-5 py-3 text-white`}>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[12px] border border-white/25 bg-white/15 backdrop-blur-xl">
+                <Download className="h-4 w-4" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold uppercase tracking-[0.1em]">
+                  {config.exportLabel}
+                </p>
+                <p className="text-xs text-white/90">
+                  Choose filters and format, then export
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={onClose}
+              title="Close (Esc)"
+              className="rounded-lg border border-white/20 bg-white/20 p-2 text-white backdrop-blur-sm transition hover:bg-white/35"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+
+        <div className="max-h-[70vh] overflow-y-auto p-5">
+          <p className="text-[0.7rem] font-semibold uppercase tracking-[0.14em] text-slate-400">
+            Filters
+          </p>
+
+          <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-2">
+            <div className="relative md:col-span-2">
+              <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Search Employee / CMP..."
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                className="h-9 w-full rounded-[12px] border border-slate-200 bg-[linear-gradient(180deg,_#ffffff_0%,_#f8fafc_100%)] pl-10 pr-4 text-[13px] text-slate-700 outline-none transition focus:border-indigo-300 focus:ring-4 focus:ring-indigo-50"
+              />
+            </div>
+
+            <select
+              value={circle}
+              onChange={(event) => {
+                setCircle(event.target.value);
+                setCmp("");
+              }}
+              disabled={!isAllCircleUser}
+              className="h-9 w-full rounded-[12px] border border-slate-200 bg-[linear-gradient(180deg,_#ffffff_0%,_#f8fafc_100%)] px-4 text-[13px] text-slate-700 outline-none transition focus:border-indigo-300 focus:ring-4 focus:ring-indigo-50 disabled:cursor-not-allowed disabled:opacity-70"
+            >
+              {isAllCircleUser && <option value="">All Circles</option>}
+              {allowedCircleLabels.map((circleLabel) => (
+                <option key={circleLabel} value={circleLabel}>
+                  {circleLabel}
+                </option>
+              ))}
+            </select>
+
+            <select
+              value={cmp}
+              onChange={(event) => setCmp(event.target.value)}
+              className="h-9 w-full rounded-[12px] border border-slate-200 bg-[linear-gradient(180deg,_#ffffff_0%,_#f8fafc_100%)] px-4 text-[13px] text-slate-700 outline-none transition focus:border-indigo-300 focus:ring-4 focus:ring-indigo-50"
+            >
+              <option value="">All CMPs</option>
+              {cmpOptions.map((cmpName) => (
+                <option key={cmpName} value={cmpName}>
+                  {cmpName}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-[12px] border border-indigo-100 bg-indigo-50/60 px-4 py-2">
+            <p className="text-xs text-slate-600">
+              <span className="font-semibold text-indigo-700">
+                {matchedCmpCount} CMP{matchedCmpCount === 1 ? "" : "s"}
+              </span>{" "}
+              will be exported — {filtersSummary}
+            </p>
+            {hasFilters && (
+              <button
+                type="button"
+                onClick={resetFilters}
+                className="inline-flex items-center gap-1.5 text-xs font-semibold text-indigo-600 transition hover:text-indigo-800"
+              >
+                <RefreshCcw className="h-3 w-3" />
+                Reset filters
+              </button>
+            )}
+          </div>
+
+          <p className="mt-4 text-[0.7rem] font-semibold uppercase tracking-[0.14em] text-slate-400">
+            Export Format
+          </p>
+
+          <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-3">
+            {exportFormatOptions.map((option) => {
+              const OptionIcon = option.icon;
+              const selected = format === option.value;
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => setFormat(option.value)}
+                  className={`flex items-center gap-3 rounded-[14px] border px-3 py-2.5 text-left transition ${
+                    selected
+                      ? "border-indigo-400 bg-indigo-50/80 ring-4 ring-indigo-50"
+                      : "border-slate-200 bg-white hover:border-indigo-200 hover:bg-slate-50"
+                  }`}
+                >
+                  <span
+                    className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] ${
+                      selected
+                        ? "bg-indigo-600 text-white"
+                        : "bg-slate-100 text-slate-500"
+                    }`}
+                  >
+                    <OptionIcon className="h-4 w-4" />
+                  </span>
+                  <span>
+                    <span
+                      className={`block text-[13px] font-semibold ${
+                        selected ? "text-indigo-700" : "text-slate-700"
+                      }`}
+                    >
+                      {option.label}
+                    </span>
+                    <span className="block text-[11px] text-slate-400">
+                      {option.hint}
+                    </span>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="flex items-center justify-end gap-2 border-t border-slate-200/80 bg-slate-50/80 px-5 py-3">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={busy}
+            className="rounded-[12px] border border-slate-200 bg-white px-5 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-70"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={handleExport}
+            disabled={busy || config.exporting}
+            className="inline-flex items-center gap-2 rounded-[12px] bg-[linear-gradient(96deg,_#3b82f6_0%,_#7c3aed_100%)] px-5 py-2 text-sm font-semibold text-white transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-70"
+          >
+            <Download className="h-4 w-4" />
+            {busy || config.exporting ? "Exporting..." : "Export"}
+          </button>
         </div>
       </div>
     </div>

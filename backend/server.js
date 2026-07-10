@@ -71,6 +71,9 @@ app.use("/uploads", authMiddleware, (_req, res) => {
 
 // ✅ ALL ROUTES
 registerRoute("./routes/authRoutes", "/api/auth");
+// Google Form webhook uses a shared-secret key (Apps Script cannot obtain a JWT),
+// so it must be mounted before the global auth middleware.
+registerRoute("./routes/trainingWebhookRoutes", "/api/training-webhook");
 app.use("/api", authMiddleware);
 registerRoute("./routes/dashboardRoutes", "/api/dashboard");
 registerRoute("./routes/siteRoutes", "/api/sites");
@@ -91,6 +94,9 @@ registerRoute("./routes/meRoute", "/api");
 registerRoute("./routes/billingStatus", "/api");
 registerRoute("./routes/billingDashboard", "/api/billing");
 registerRoute("./routes/newJoiningRoutes", "/api/new-joining");
+registerRoute("./routes/trainingRoutes", "/api/training");
+registerRoute("./routes/trainingDocumentRoutes", "/api/training-documents");
+registerRoute("./routes/trainingVerificationRoutes", "/api/training-verifications");
 
 // Test Route
 app.get("/api", (req, res) => {

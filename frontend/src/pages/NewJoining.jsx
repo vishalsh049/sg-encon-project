@@ -1,5 +1,7 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
+import Select from "react-select";
+import toast from "react-hot-toast";
 import {
   BriefcaseBusiness,
   CalendarClock,
@@ -10,23 +12,93 @@ import {
   Download,
   FileSpreadsheet,
   Filter,
+  MapPin,
+  Building2,
+  BadgeCheck,
   Plus,
   RefreshCw,
   Search,
   ShieldCheck,
+  Sparkles,
   Trash2,
   UserPlus2,
   Users,
   X,
   User,
-  MapPin,
-  Building2,
-  BadgeCheck,
   CreditCard,
   Upload,
 } from "lucide-react";
 import { authFetch, buildApiUrl } from "../lib/api";
 import { getStoredSession } from "../lib/session";
+
+const selectStyles = {
+  control: (provided, state) => ({
+    ...provided,
+    minHeight: "40px",
+    height: "40px",
+    borderRadius: "14px",
+    borderColor: state.isFocused ? "#bfdbfe" : "rgba(226,232,240,0.8)",
+    boxShadow: state.isFocused ? "0 0 0 4px rgba(59,130,246,0.08)" : "none",
+    fontSize: "13px",
+    "&:hover": { borderColor: "#cbd5e1" },
+  }),
+  valueContainer: (provided) => ({
+    ...provided,
+    height: "38px",
+    padding: "0 10px",
+  }),
+  indicatorsContainer: (provided) => ({
+    ...provided,
+    height: "38px",
+  }),
+  menu: (provided) => ({
+    ...provided,
+    zIndex: 9999,
+    marginTop: 2,
+    borderRadius: "12px",
+    overflow: "hidden",
+  }),
+  menuList: (provided) => ({
+    ...provided,
+    maxHeight: "260px",
+  }),
+  input: (provided) => ({
+    ...provided,
+    fontSize: "13px",
+    margin: 0,
+  }),
+  placeholder: (provided) => ({
+    ...provided,
+    fontSize: "13px",
+    color: "#94a3b8",
+  }),
+  singleValue: (provided) => ({
+    ...provided,
+    fontSize: "13px",
+  }),
+  option: (provided, state) => ({
+    ...provided,
+    fontSize: "13px",
+    cursor: "pointer",
+    backgroundColor: state.isSelected
+      ? "#3b82f6"
+      : state.isFocused
+        ? "#eff6ff"
+        : "white",
+  }),
+};
+
+function FilterField({ icon: Icon, label, children }) {
+  return (
+    <div className="min-w-[150px] flex-1">
+      <label className="mb-1 flex items-center gap-1 px-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+        {Icon ? <Icon className="h-3 w-3" /> : null}
+        {label}
+      </label>
+      {children}
+    </div>
+  );
+}
 
 const ALL_CIRCLE_VALUES = new Set(["ALL", "ALL CIRCLE", "ALL CIRCLES"]);
 
@@ -77,34 +149,6 @@ function MetricCard({ icon: Icon, label, value, accent, note }) {
       </div>
       <p className="relative mt-1 text-xs text-slate-500">{note}</p>
     </motion.div>
-  );
-}
-
-function FilterChip({ active, tone, children, onClick }) {
-  const toneClass =
-    tone === "green"
-      ? "bg-emerald-500"
-      : tone === "red"
-        ? "bg-rose-500"
-        : tone === "amber"
-          ? "bg-amber-500"
-          : tone === "blue"
-            ? "bg-blue-500"
-            : "bg-slate-400";
-
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`inline-flex items-center gap-2 rounded-2xl border px-4 py-2 text-sm font-medium transition ${
-        active
-          ? "border-blue-200 bg-blue-50 text-blue-700 shadow-[0_8px_20px_rgba(59,130,246,0.14)]"
-          : "border-slate-200/80 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50"
-      }`}
-    >
-      <span className={`h-2.5 w-2.5 rounded-full ${toneClass}`} />
-      {children}
-    </button>
   );
 }
 
@@ -174,7 +218,10 @@ export default function NewJoining() {
   const [search, setSearch] = useState("");
   const [circleFilter, setCircleFilter] = useState("");
   const [cmpFilter, setCmpFilter] = useState("");
-  const [statusFilter, setStatusFilter] = useState("");
+  const [designationFilter, setDesignationFilter] = useState("");
+  const [joiningStatusFilter, setJoiningStatusFilter] = useState("");
+  const [l2StatusFilter, setL2StatusFilter] = useState("");
+  const [employeeStatusFilter, setEmployeeStatusFilter] = useState("");
   const [selectedRows, setSelectedRows] = useState([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
@@ -248,10 +295,57 @@ export default function NewJoining() {
   employee_status: "Active",
 });
 
+  const [formErrors, setFormErrors] = useState({});
+  const employeeFieldRefs = useRef({});
+  const [isEmployeeCodeAuto, setIsEmployeeCodeAuto] = useState(true);
+  const [generatingEmployeeCode, setGeneratingEmployeeCode] = useState(false);
+
+  const clearFieldError = (field) => {
+    setFormErrors((prev) => {
+      if (!prev[field]) return prev;
+      const next = { ...prev };
+      delete next[field];
+      return next;
+    });
+  };
+
+  const generateEmployeeCode = useCallback(async () => {
+    try {
+      setGeneratingEmployeeCode(true);
+      const response = await authFetch(
+        buildApiUrl("/api/new-joining/next-employee-code")
+      );
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        toast.error(result.message || "Failed to generate employee code");
+        return;
+      }
+
+      setEmployeeForm((prev) => ({
+        ...prev,
+        employee_code: result.employeeCode,
+      }));
+      setIsEmployeeCodeAuto(true);
+      clearFieldError("employee_code");
+    } catch (error) {
+      console.log(error);
+      toast.error("Failed to generate employee code");
+    } finally {
+      setGeneratingEmployeeCode(false);
+    }
+  }, []);
+
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
+
+  useEffect(() => {
+    if (showModal) {
+      generateEmployeeCode();
+    }
+  }, [showModal, generateEmployeeCode]);
 
   const loadData = async () => {
     try {
@@ -275,13 +369,193 @@ export default function NewJoining() {
     loadData();
   }, []);
 
+  const circleOptions = useMemo(() => {
+    const unique = [...new Set(data.map((item) => item.circle))]
+      .filter(Boolean)
+      .sort();
+    return [
+      { value: "", label: "All Circles" },
+      ...unique.map((circle) => ({ value: circle, label: circle })),
+    ];
+  }, [data]);
+
+  const cmpOptions = useMemo(() => {
+    const unique = [
+      ...new Set(
+        data
+          .filter((item) => !circleFilter || item.circle === circleFilter)
+          .map((item) => item.cmp || item.cluster)
+      ),
+    ]
+      .filter(Boolean)
+      .sort();
+    return [
+      { value: "", label: "All Clusters" },
+      ...unique.map((cmp) => ({ value: cmp, label: cmp })),
+    ];
+  }, [data, circleFilter]);
+
+  const designationOptions = useMemo(() => {
+    const unique = [...new Set(data.map((item) => item.designation))]
+      .filter(Boolean)
+      .sort();
+    return [
+      { value: "", label: "All Designations" },
+      ...unique.map((designation) => ({
+        value: designation,
+        label: designation,
+      })),
+    ];
+  }, [data]);
+
+  const joiningStatusOptions = [
+    { value: "", label: "All Joining Status" },
+    { value: "Pending", label: "Pending" },
+    { value: "Joined", label: "Joined" },
+    { value: "Not Joined", label: "Not Joined" },
+  ];
+
+  const l2StatusOptions = [
+    { value: "", label: "All L2 Status" },
+    { value: "Pending", label: "Pending" },
+    { value: "Approved", label: "Approved" },
+    { value: "Rejected", label: "Rejected" },
+  ];
+
+  const employeeStatusOptions = [
+    { value: "", label: "All Employee Status" },
+    { value: "Active", label: "Active" },
+    { value: "Inactive", label: "Inactive" },
+  ];
+
   const filteredData = useMemo(() => {
-    return data.filter((item) =>
-      Object.values(item).some((value) =>
-        String(value || "").toLowerCase().includes(search.toLowerCase())
-      )
-    );
-  }, [data, search]);
+    const searchTerm = search.trim().toLowerCase();
+
+    return data.filter((item) => {
+      const matchesSearch =
+        !searchTerm ||
+        [
+          item.employee_code,
+          item.employee_name,
+          item.aadhaar_no,
+          item.circle,
+          item.cmp || item.cluster,
+          item.designation,
+          item.joining_status,
+          item.l2_status,
+          item.employee_status,
+        ].some((value) =>
+          String(value || "").toLowerCase().includes(searchTerm)
+        );
+
+      const matchesCircle = !circleFilter || item.circle === circleFilter;
+
+      const matchesCmp =
+        !cmpFilter || (item.cmp || item.cluster) === cmpFilter;
+
+      const matchesDesignation =
+        !designationFilter || item.designation === designationFilter;
+
+      const matchesJoiningStatus =
+        !joiningStatusFilter ||
+        (item.joining_status || "Pending") === joiningStatusFilter;
+
+      const matchesL2Status =
+        !l2StatusFilter || (item.l2_status || "Pending") === l2StatusFilter;
+
+      const matchesEmployeeStatus =
+        !employeeStatusFilter ||
+        (item.employee_status || "Active") === employeeStatusFilter;
+
+      return (
+        matchesSearch &&
+        matchesCircle &&
+        matchesCmp &&
+        matchesDesignation &&
+        matchesJoiningStatus &&
+        matchesL2Status &&
+        matchesEmployeeStatus
+      );
+    });
+  }, [
+    data,
+    search,
+    circleFilter,
+    cmpFilter,
+    designationFilter,
+    joiningStatusFilter,
+    l2StatusFilter,
+    employeeStatusFilter,
+  ]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [
+    search,
+    circleFilter,
+    cmpFilter,
+    designationFilter,
+    joiningStatusFilter,
+    l2StatusFilter,
+    employeeStatusFilter,
+  ]);
+
+  const resetFilters = useCallback(() => {
+    setSearch("");
+    setCircleFilter("");
+    setCmpFilter("");
+    setDesignationFilter("");
+    setJoiningStatusFilter("");
+    setL2StatusFilter("");
+    setEmployeeStatusFilter("");
+    setCurrentPage(1);
+  }, []);
+
+  const handleExport = useCallback(() => {
+    const header = [
+      "Employee Code",
+      "Employee Name",
+      "Circle",
+      "CMP / Cluster",
+      "Designation",
+      "Aadhaar Number",
+      "NTH Salary",
+      "L2 Status",
+      "Joining Status",
+      "Employee Status",
+    ];
+    const csv = [
+      header.join(","),
+      ...filteredData.map((row) =>
+        [
+          row.employee_code || "",
+          row.employee_name || "",
+          row.circle || "",
+          row.cmp || row.cluster || "",
+          row.designation || "",
+          row.aadhaar_no || "",
+          row.nth_salary || "",
+          row.l2_status || "",
+          row.joining_status || "",
+          row.employee_status || "",
+        ]
+          .map((value) => `"${String(value).replaceAll('"', '""')}"`)
+          .join(",")
+      ),
+    ].join("\n");
+
+    const blob = new Blob([csv], {
+      type: "text/csv;charset=utf-8;",
+    });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `new-joining-${new Date()
+      .toISOString()
+      .slice(0, 10)}.csv`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  }, [filteredData]);
 
   const totalPages = Math.max(1, Math.ceil(filteredData.length / pageSize));
 
@@ -290,16 +564,19 @@ export default function NewJoining() {
     currentPage * pageSize
   );
 
-  const joinedCount = data.filter(
-  (item) => item.joining_status === "Joined"
-).length;
-const pendingCount = data.filter((item) =>
-  String(item.l2_status || "")
-    .toLowerCase()
-    .includes("pending")
-).length;
-  const activeCount = data.filter(
+  const joinedCount = filteredData.filter(
+    (item) => item.joining_status === "Joined"
+  ).length;
+  const pendingCount = filteredData.filter((item) =>
+    String(item.l2_status || "")
+      .toLowerCase()
+      .includes("pending")
+  ).length;
+  const activeCount = filteredData.filter(
     (item) => String(item.employee_status || "Active") !== "Inactive"
+  ).length;
+  const inactiveCount = filteredData.filter(
+    (item) => String(item.employee_status || "") === "Inactive"
   ).length;
 
   const handleSelectAll = (e) => {
@@ -455,7 +732,63 @@ if (!confirmUpdate) return;
   }
 };
 
+ const validateEmployeeForm = () => {
+  const errors = {};
+
+  if (!String(employeeForm.employee_code || "").trim()) {
+    errors.employee_code = "Employee Code is required.";
+  }
+
+  if (!String(employeeForm.employee_name || "").trim()) {
+    errors.employee_name = "Employee Name is required.";
+  }
+
+  if (!String(employeeForm.circle || "").trim()) {
+    errors.circle = "Please select Circle.";
+  }
+
+  if (!String(employeeForm.cmp || "").trim()) {
+    errors.cmp = "Please select CMP.";
+  }
+
+  if (!String(employeeForm.designation || "").trim()) {
+    errors.designation = "Designation is required.";
+  }
+
+  const aadhaar = String(employeeForm.aadhaar_no || "").trim();
+
+  if (!aadhaar) {
+    errors.aadhaar_no = "Aadhaar Number is required.";
+  } else if (!/^\d{12}$/.test(aadhaar)) {
+    errors.aadhaar_no = "Aadhaar Number must contain exactly 12 digits.";
+  }
+
+  return errors;
+};
+
  const handleAddEmployee = async () => {
+  const errors = validateEmployeeForm();
+
+  if (Object.keys(errors).length > 0) {
+    setFormErrors(errors);
+
+    const fieldOrder = [
+      "employee_code",
+      "employee_name",
+      "circle",
+      "cmp",
+      "designation",
+      "aadhaar_no",
+    ];
+    const firstInvalidField = fieldOrder.find((field) => errors[field]);
+    employeeFieldRefs.current[firstInvalidField]?.focus();
+
+    toast.error("Please fill all required fields.");
+    return;
+  }
+
+  setFormErrors({});
+
   try {
     setSavingEmployee(true);
 
@@ -466,20 +799,35 @@ if (!confirmUpdate) return;
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(employeeForm),
+        body: JSON.stringify({
+          ...employeeForm,
+          employee_code_auto: isEmployeeCodeAuto,
+        }),
       }
     );
 
     const result = await response.json();
 
-    if (!result.success) {
-      alert("Failed");
+    if (!response.ok || !result.success) {
+      const message = result.message || "Failed";
+      toast.error(message);
+
+      if (response.status === 409 && /employee code/i.test(message)) {
+        setFormErrors((prev) => ({ ...prev, employee_code: message }));
+        employeeFieldRefs.current.employee_code?.focus();
+      } else if (response.status === 409 && /aadhaar/i.test(message)) {
+        setFormErrors((prev) => ({ ...prev, aadhaar_no: message }));
+        employeeFieldRefs.current.aadhaar_no?.focus();
+      }
+
       return;
     }
 
-    alert("Employee Added Successfully");
+    toast.success("Employee Added Successfully");
 
     setShowModal(false);
+    setFormErrors({});
+    setIsEmployeeCodeAuto(true);
 
    setEmployeeForm({
   employee_code: "",
@@ -497,7 +845,7 @@ if (!confirmUpdate) return;
     loadData();
   } catch (error) {
     console.log(error);
-    alert("Something went wrong");
+    toast.error("Something went wrong");
   } finally {
     setSavingEmployee(false);
   }
@@ -544,40 +892,39 @@ loadData();
   const statCards = [
     {
       label: "Total Employees",
-      value: data.length.toLocaleString(),
-      note: "Live employee count synced from records",
+      value: filteredData.length.toLocaleString(),
+      note: "",
       accent: "from-blue-500 to-indigo-500",
       icon: Users,
     },
     {
-      label: "Joined Today",
-      value: String(joinedCount).padStart( "0"),
-      note: "Employees successfully marked as joined",
+      label: "Joined",
+      value: joinedCount.toLocaleString(),
+      note: "",
       accent: "from-emerald-400 to-teal-500",
       icon: UserPlus2,
     },
     {
       label: "Pending Verification",
       value: pendingCount.toLocaleString(),
-      note: "Records needing approval or verification",
+      note: "",
       accent: "from-amber-400 to-orange-500",
       icon: ShieldCheck,
     },
     {
-      label: "Active Employees",
+      label: "Active",
       value: activeCount.toLocaleString(),
-      note: "Current active employment profiles",
+      note: "",
       accent: "from-violet-500 to-fuchsia-500",
       icon: BriefcaseBusiness,
     },
-  ];
-
-  const filterChips = [
-    { label: `All (${filteredData.length})`, tone: "blue", value: "" },
-    { label: "Joined", tone: "green", value: "Joined" },
-    { label: "Not Joined", tone: "red", value: "Not Joined" },
-    { label: "Pending", tone: "amber", value: "Pending" },
-    { label: "Active", tone: "green", value: "Active" },
+    {
+      label: "Inactive",
+      value: inactiveCount.toLocaleString(),
+      note: "",
+      accent: "from-slate-400 to-slate-600",
+      icon: CircleDashed,
+    },
   ];
 
   return (
@@ -587,7 +934,7 @@ loadData();
       </div>
 
       <div className="relative mx-auto max-w-[1450px]">
-        <div className="mb-3 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div className="mb-1 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="space-y-4">
          
 
@@ -606,6 +953,16 @@ loadData();
             <motion.button
               whileHover={{ y: -2, scale: 1.01 }}
               whileTap={{ scale: 0.99 }}
+              onClick={handleExport}
+              className="inline-flex items-center gap-3 rounded-[18px] border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50"
+            >
+              <Download className="h-4 w-4" />
+              Export
+            </motion.button>
+
+            <motion.button
+              whileHover={{ y: -2, scale: 1.01 }}
+              whileTap={{ scale: 0.99 }}
               onClick={() => setShowModal(true)}
               className="inline-flex items-center gap-3 rounded-[18px] bg-gradient-to-r from-[#5b5cf0] via-[#4368ff]
                to-[#2a94ff] px-4 py-2 text-sm font-semibold text-white transition"
@@ -616,134 +973,137 @@ loadData();
           </div>
         </div>
 
-        <div className="mb-2 grid gap-2 grid-cols-4">
+        <div className="mb-2 grid gap-2 grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
           {statCards.map((card) => (
             <MetricCard key={card.label} {...card} />
           ))}
         </div>
 
-        <div className="mb-2 rounded-[18px] border border-white/70 bg-white/78 px-2 py-1 backdrop-blur-2xl">
-          <div className="flex flex-col gap-2 xl:flex-row xl:items-center xl:justify-between">
-            <div className="grid flex-1 gap-2 grid-cols-5">
-              <label className="relative block">
-                <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+        <div className="relative z-20 mb-2 rounded-[18px] border border-white/70 bg-white/78 px-2 py-1 backdrop-blur-2xl">
+          <div className="flex flex-wrap items-end gap-2 xl:flex-nowrap">
+            <FilterField icon={Search} label="Search Employee">
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                 <input
                   type="text"
-                  placeholder="Search employee by name, code, aadhaar..."
+                  placeholder="Search name, code, aadhaar, circle..."
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  className="h-10 w-full rounded-[14px] border border-slate-200/80 bg-white pl-10 pr-4 text-sm text-slate-700 outline-none transition focus:border-blue-200 focus:ring-4 focus:ring-blue-50"
+                  className="h-10 w-full rounded-[14px] border border-slate-200/80 bg-white pl-9 pr-3 text-sm text-slate-700 outline-none transition focus:border-blue-200 focus:ring-4 focus:ring-blue-50"
                 />
-              </label>
+              </div>
+            </FilterField>
 
-              <label className="relative block">
-                <select
-                  value={circleFilter}
-                  onChange={(e) => setCircleFilter(e.target.value)}
-                  className="h-10 w-full appearance-none rounded-[14px] border border-slate-200/80 bg-white px-4 pr-10 text-sm text-slate-700 outline-none transition focus:border-blue-200 focus:ring-4 focus:ring-blue-50"
-                >
-                  <option value="">All Circles</option>
-                  {Object.keys(circleCmpData).map((circle) => (
-                    <option key={circle} value={circle}>
-                      {circle}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-              </label>
+            <FilterField icon={MapPin} label="Circle">
+              <Select
+                styles={selectStyles}
+                placeholder="All Circles"
+                options={circleOptions}
+                value={
+                  circleOptions.find((item) => item.value === circleFilter) ||
+                  null
+                }
+                onChange={(selected) => {
+                  setCircleFilter(selected?.value || "");
+                  setCmpFilter("");
+                }}
+                isClearable
+              />
+            </FilterField>
 
-              <label className="relative block">
-                <select
-                  value={cmpFilter}
-                  onChange={(e) => setCmpFilter(e.target.value)}
-                  className="h-10 w-full appearance-none rounded-[14px] border border-slate-200/80 bg-white px-4 pr-10 text-sm text-slate-700 outline-none transition focus:border-blue-200 focus:ring-4 focus:ring-blue-50"
-                >
-                  <option value="">All Clusters</option>
-                  {(circleFilter ? circleCmpData[circleFilter] : [])?.map((cmp) => (
-                    <option key={cmp} value={cmp}>
-                      {cmp}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-              </label>
+            <FilterField icon={Building2} label="CMP / Cluster">
+              <Select
+                styles={selectStyles}
+                placeholder="All Clusters"
+                options={cmpOptions}
+                value={
+                  cmpOptions.find((item) => item.value === cmpFilter) || null
+                }
+                onChange={(selected) => setCmpFilter(selected?.value || "")}
+                isClearable
+              />
+            </FilterField>
 
-              <label className="relative block">
-                <select
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value)}
-                  className="h-10 w-full appearance-none rounded-[14px] border border-slate-200/80 bg-white px-4 pr-10 text-sm text-slate-700 outline-none transition focus:border-blue-200 focus:ring-4 focus:ring-blue-50"
-                >
-                  <option value="">All Status</option>
-                  <option value="Pending">Pending</option>
-                  <option value="Joined">Joined</option>
-                  <option value="Active">Active</option>
-                  <option value="Inactive">Inactive</option>
-                </select>
-                <ChevronDown className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-              </label>
+            <FilterField icon={BadgeCheck} label="Designation">
+              <Select
+                styles={selectStyles}
+                placeholder="All Designations"
+                options={designationOptions}
+                value={
+                  designationOptions.find(
+                    (item) => item.value === designationFilter
+                  ) || null
+                }
+                onChange={(selected) =>
+                  setDesignationFilter(selected?.value || "")
+                }
+                isClearable
+              />
+            </FilterField>
 
-                <div className="flex flex-wrap items-center gap-3">
+            <FilterField icon={ShieldCheck} label="L2 Status">
+              <Select
+                styles={selectStyles}
+                placeholder="All L2 Status"
+                options={l2StatusOptions}
+                value={
+                  l2StatusOptions.find(
+                    (item) => item.value === l2StatusFilter
+                  ) || null
+                }
+                onChange={(selected) =>
+                  setL2StatusFilter(selected?.value || "")
+                }
+                isClearable
+              />
+            </FilterField>
 
+        {/*     <FilterField icon={UserPlus2} label="Joining Status">
+              <Select
+                styles={selectStyles}
+                placeholder="All Joining Status"
+                options={joiningStatusOptions}
+                value={
+                  joiningStatusOptions.find(
+                    (item) => item.value === joiningStatusFilter
+                  ) || null
+                }
+                onChange={(selected) =>
+                  setJoiningStatusFilter(selected?.value || "")
+                }
+                isClearable
+              />
+            </FilterField>
+            */}
+
+            <FilterField icon={CircleDashed} label="Employee Status">
+              <Select
+                styles={selectStyles}
+                placeholder="All Employee Status"
+                options={employeeStatusOptions}
+                value={
+                  employeeStatusOptions.find(
+                    (item) => item.value === employeeStatusFilter
+                  ) || null
+                }
+                onChange={(selected) =>
+                  setEmployeeStatusFilter(selected?.value || "")
+                }
+                isClearable
+              />
+            </FilterField>
+
+            <div className="flex items-center gap-2">
               <button
                 type="button"
-                onClick={() => {
-                  const header = [
-                    "Employee Code",
-                    "Employee Name",
-                    "Circle",
-                    "CMP / Cluster",
-                    "Designation",
-                    "Aadhaar Number",
-                    "NTH Salary",
-                    "L2 Status",
-                    "Joining Status",
-                    "Employee Status",
-                  ];
-                  const csv = [
-                    header.join(","),
-                    ...filteredData.map((row) =>
-                      [
-                        row.employee_code || "",
-                        row.employee_name || "",
-                        row.circle || "",
-                        row.cmp || row.cluster || "",
-                        row.designation || "",
-                        row.aadhaar_no || "",
-                        row.nth_salary || "",
-                        row.l2_status || "",
-                        row.joining_status || "",
-                        row.employee_status || "",
-                      ]
-                        .map((value) => `"${String(value).replaceAll('"', '""')}"`)
-                        .join(",")
-                    ),
-                  ].join("\n");
-
-                  const blob = new Blob([csv], {
-                    type: "text/csv;charset=utf-8;",
-                  });
-                  const url = URL.createObjectURL(blob);
-                  const anchor = document.createElement("a");
-                  anchor.href = url;
-                  anchor.download = `new-joining-${new Date()
-                    .toISOString()
-                    .slice(0, 10)}.csv`;
-                  anchor.click();
-                  URL.revokeObjectURL(url);
-                }}
-                className="inline-flex h-10 items-center gap-2 rounded-[14px] border border-blue-100 bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700 transition hover:bg-blue-100"
+                onClick={resetFilters}
+                className="inline-flex h-10 items-center gap-2 whitespace-nowrap rounded-[14px] border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-600 transition hover:border-slate-300 hover:bg-slate-50"
               >
-                <Download className="h-4 w-4" />
-                Export
+                <RefreshCw className="h-4 w-4" />
+                Reset
               </button>
-            </div>  
             </div>
-
-          
           </div>
-
-          
         </div>
 
         <div className="overflow-visible rounded-[18px] border border-white/70 bg-white/85 backdrop-blur-2xl">
@@ -762,7 +1122,10 @@ loadData();
               </div>
             </div>
 
-            <div className="text-sm text-slate-500">
+            <div className="flex items-center gap-3 text-sm text-slate-500">
+              {tableLoading && (
+                <RefreshCw className="h-4 w-4 animate-spin text-blue-500" />
+              )}
               Total Records:{" "}
               <span className="font-semibold text-slate-900">
                 {filteredData.length}
@@ -794,7 +1157,7 @@ loadData();
                     "CMP / Cluster",
                     "Designation",
                     "Aadhaar Number",
-                    "NTH Salary",
+                    
                     
                     "L2 Status",
                      "Joining Status",
@@ -855,9 +1218,10 @@ loadData();
                       <td className="border-b border-slate-100 px-4 py-2 text-sm text-slate-600">
                         {item.aadhaar_no || "-"}
                       </td>
-                      <td className="border-b border-slate-100 px-4 py-2 text-sm text-slate-600">
+                    {/*   <td className="border-b border-slate-100 px-4 py-2 text-sm text-slate-600">
   ₹ {Number(item.nth_salary || 0).toLocaleString("en-IN")}
 </td>
+*/}
                     
  <td className="relative border-b border-slate-100 px-4 py-2 overflow-visible">
 
@@ -1043,7 +1407,10 @@ loadData();
         {/* CLOSE */}
 
         <button
-          onClick={() => setShowModal(false)}
+          onClick={() => {
+            setShowModal(false);
+            setFormErrors({});
+          }}
           className="flex h-10 w-10 items-center justify-center rounded-3xl border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50"
         >
           <span className="text-xl leading-none">×</span>
@@ -1069,27 +1436,58 @@ loadData();
             Employee Code <span className="text-red-500">*</span>
           </label>
 
-          <div className="relative">
+          <div className="flex items-stretch gap-2">
 
-            <User
-              size={14}
-              className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400"
-            />
+            <div className="relative flex-1">
 
-            <input
-              type="text"
-              placeholder="Enter Employee Code"
-              value={employeeForm.employee_code || ""}
-              onChange={(e) =>
-               setEmployeeForm({
-               ...employeeForm,
-               employee_code: e.target.value,
-                })
-               }
-              className="h-9 w-full rounded-xl border border-slate-200 bg-white pl-8 pr-2 text-xs outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100"
-            />
+              <User
+                size={14}
+                className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400"
+              />
+
+              <input
+                ref={(el) => (employeeFieldRefs.current.employee_code = el)}
+                type="text"
+                placeholder="Enter Employee Code"
+                value={employeeForm.employee_code || ""}
+                onChange={(e) => {
+                 setEmployeeForm({
+                 ...employeeForm,
+                 employee_code: e.target.value,
+                  });
+                 setIsEmployeeCodeAuto(false);
+                 clearFieldError("employee_code");
+                 }}
+                className={`h-9 w-full rounded-xl border bg-white pl-8 pr-2 text-xs outline-none transition focus:ring-4 ${
+                  formErrors.employee_code
+                    ? "border-red-500 focus:border-red-500 focus:ring-red-100"
+                    : "border-slate-200 focus:border-indigo-500 focus:ring-indigo-100"
+                }`}
+              />
+
+            </div>
+
+            <button
+              type="button"
+              onClick={generateEmployeeCode}
+              disabled={generatingEmployeeCode}
+              className="flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-xl bg-gradient-to-r from-indigo-600 to-blue-500 px-3 text-xs font-semibold text-white shadow-sm transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {generatingEmployeeCode ? (
+                <RefreshCw size={13} className="animate-spin" />
+              ) : (
+                <Sparkles size={13} />
+              )}
+              Generate Code
+            </button>
 
           </div>
+
+          {formErrors.employee_code && (
+            <p className="mt-1 px-1 text-xs text-red-500">
+              {formErrors.employee_code}
+            </p>
+          )}
 
         </div>
 
@@ -1109,19 +1507,31 @@ loadData();
             />
 
             <input
+              ref={(el) => (employeeFieldRefs.current.employee_name = el)}
               type="text"
               placeholder="Enter Employee Name"
               value={employeeForm.employee_name || ""}
-             onChange={(e) =>
+             onChange={(e) => {
   setEmployeeForm({
     ...employeeForm,
     employee_name: e.target.value,
-  })
-}
-              className="h-9 w-full rounded-2xl border border-slate-200 bg-white pl-8 pr-4 text-xs outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100"
+  });
+  clearFieldError("employee_name");
+}}
+              className={`h-9 w-full rounded-2xl border bg-white pl-8 pr-4 text-xs outline-none transition focus:ring-4 ${
+                formErrors.employee_name
+                  ? "border-red-500 focus:border-red-500 focus:ring-red-100"
+                  : "border-slate-200 focus:border-indigo-500 focus:ring-indigo-100"
+              }`}
             />
 
           </div>
+
+          {formErrors.employee_name && (
+            <p className="mt-1 px-1 text-xs text-red-500">
+              {formErrors.employee_name}
+            </p>
+          )}
 
         </div>
 
@@ -1141,15 +1551,21 @@ loadData();
             />
 
             <select
+              ref={(el) => (employeeFieldRefs.current.circle = el)}
               value={employeeForm.circle}
-             onChange={(e) =>
+             onChange={(e) => {
   setEmployeeForm({
     ...employeeForm,
     circle: e.target.value,
     cmp: "",
-  })
-}
-              className="h-9 w-full rounded-2xl border border-slate-200 bg-white pl-8 pr-4 text-xs outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100"
+  });
+  clearFieldError("circle");
+}}
+              className={`h-9 w-full rounded-2xl border bg-white pl-8 pr-4 text-xs outline-none transition focus:ring-4 ${
+                formErrors.circle
+                  ? "border-red-500 focus:border-red-500 focus:ring-red-100"
+                  : "border-slate-200 focus:border-indigo-500 focus:ring-indigo-100"
+              }`}
             >
 
               <option value="">
@@ -1176,6 +1592,12 @@ loadData();
 
           </div>
 
+          {formErrors.circle && (
+            <p className="mt-1 px-1 text-xs text-red-500">
+              {formErrors.circle}
+            </p>
+          )}
+
         </div>
 
         {/* CMP */}
@@ -1194,14 +1616,20 @@ loadData();
             />
 
             <select
+              ref={(el) => (employeeFieldRefs.current.cmp = el)}
               value={employeeForm.cmp}
-             onChange={(e) =>
+             onChange={(e) => {
   setEmployeeForm({
     ...employeeForm,
     cmp: e.target.value,
-  })
-}
-              className="h-9 w-full rounded-2xl border border-slate-200 bg-white pl-8 pr-4 text-xs outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100"
+  });
+  clearFieldError("cmp");
+}}
+              className={`h-9 w-full rounded-2xl border bg-white pl-8 pr-4 text-xs outline-none transition focus:ring-4 ${
+                formErrors.cmp
+                  ? "border-red-500 focus:border-red-500 focus:ring-red-100"
+                  : "border-slate-200 focus:border-indigo-500 focus:ring-indigo-100"
+              }`}
             >
 
               <option value="">
@@ -1224,6 +1652,10 @@ loadData();
 
           </div>
 
+          {formErrors.cmp && (
+            <p className="mt-1 px-1 text-xs text-red-500">{formErrors.cmp}</p>
+          )}
+
         </div>
 
         {/* Designation */}
@@ -1242,19 +1674,31 @@ loadData();
             />
 
         <input
+  ref={(el) => (employeeFieldRefs.current.designation = el)}
   type="text"
   placeholder="Select Designation"
   value={employeeForm.designation || ""}
-  onChange={(e) =>
+  onChange={(e) => {
     setEmployeeForm({
       ...employeeForm,
       designation: e.target.value,
-    })
-  }
-  className="h-9 w-full rounded-2xl border border-slate-200 bg-white pl-8 pr-4 text-xs outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100"
+    });
+    clearFieldError("designation");
+  }}
+  className={`h-9 w-full rounded-2xl border bg-white pl-8 pr-4 text-xs outline-none transition focus:ring-4 ${
+    formErrors.designation
+      ? "border-red-500 focus:border-red-500 focus:ring-red-100"
+      : "border-slate-200 focus:border-indigo-500 focus:ring-indigo-100"
+  }`}
 />
 
           </div>
+
+          {formErrors.designation && (
+            <p className="mt-1 px-1 text-xs text-red-500">
+              {formErrors.designation}
+            </p>
+          )}
 
         </div>
 
@@ -1274,19 +1718,34 @@ loadData();
             />
 
             <input
+              ref={(el) => (employeeFieldRefs.current.aadhaar_no = el)}
               type="text"
-              placeholder="Enter Aadhaar Number"
+              inputMode="numeric"
+              maxLength={12}
+              placeholder="Enter 12-digit Aadhaar Number"
               value={employeeForm.aadhaar_no || ""}
-              onChange={(e) =>
+              onChange={(e) => {
+                const digitsOnly = e.target.value.replace(/\D/g, "").slice(0, 12);
                 setEmployeeForm({
                   ...employeeForm,
-                  aadhaar_no: e.target.value,
-                })
-              }
-              className="h-9 w-full rounded-2xl border border-slate-200 bg-white pl-8 pr-4 text-xs outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100"
+                  aadhaar_no: digitsOnly,
+                });
+                clearFieldError("aadhaar_no");
+              }}
+              className={`h-9 w-full rounded-2xl border bg-white pl-8 pr-4 text-xs outline-none transition focus:ring-4 ${
+                formErrors.aadhaar_no
+                  ? "border-red-500 focus:border-red-500 focus:ring-red-100"
+                  : "border-slate-200 focus:border-indigo-500 focus:ring-indigo-100"
+              }`}
             />
 
           </div>
+
+          {formErrors.aadhaar_no && (
+            <p className="mt-1 px-1 text-xs text-red-500">
+              {formErrors.aadhaar_no}
+            </p>
+          )}
 
         </div>
 
@@ -1405,7 +1864,10 @@ loadData();
     <div className="flex items-center justify-end gap-5 border-t border-slate-200 bg-slate-50 px-4 py-4">
 
       <button
-        onClick={() => setShowModal(false)}
+        onClick={() => {
+          setShowModal(false);
+          setFormErrors({});
+        }}
         className="rounded-2xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
       >
         Cancel

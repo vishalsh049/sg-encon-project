@@ -18,6 +18,10 @@ export const PAGE_ID_MAP = {
   // Manpower
   "physical": "Physical",
   "scrum": "Scrum",
+  "new-joining": "New Joining",
+
+  // Training
+  "training": "Training",
 
   // Reports
   "tower-reports": "Tower Reports",

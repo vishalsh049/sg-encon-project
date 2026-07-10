@@ -202,11 +202,18 @@ async function fetchPhysicalActiveData(req) {
               )
             ) AS normalized_role
           FROM new_joining
-          WHERE LOWER(TRIM(COALESCE(l2_status, ''))) = 'joined'
+          WHERE LOWER(TRIM(COALESCE(joining_status, ''))) = 'joined'
             AND cmp IS NOT NULL
             AND cmp != ''
             AND designation IS NOT NULL
             AND designation != ''
+            AND NOT EXISTS (
+              SELECT 1
+              FROM physical dedupe
+              WHERE TRIM(COALESCE(new_joining.aadhaar_no, '')) != ''
+                AND TRIM(COALESCE(dedupe.aadhaar_no, '')) = TRIM(new_joining.aadhaar_no)
+                AND LOWER(TRIM(COALESCE(dedupe.employment_status, ''))) = 'active'
+            )
             ${newJoiningScope.sql}
         ) AS new_joining_source
       ) AS new_joining_roles

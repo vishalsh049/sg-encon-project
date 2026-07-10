@@ -21,6 +21,15 @@ import Revenue from "./pages/Revenue";
 import HrDashboard from "./pages/HrDashboard";
 import Signoff from "./pages/Signoff";
 import NewJoining from "./pages/NewJoining";
+import TrainingDashboard from "./pages/Training/Dashboard";
+import TrainingNewRegistrations from "./pages/Training/NewRegistrations";
+import TrainingEmployeeList from "./pages/Training/EmployeeList";
+import TrainingEmployeeProfile from "./pages/Training/EmployeeProfile";
+import TrainingEmployeeEdit from "./pages/Training/EmployeeEdit";
+import TrainingDocuments from "./pages/Training/Documents";
+import TrainingVerification from "./pages/Training/Verification";
+import TrainingReports from "./pages/Training/Reports";
+import TrainingSettings from "./pages/Training/Settings";
 
 function App() {
   return (
@@ -99,6 +108,61 @@ function App() {
   <Route path="manpower/new-joining" element={
     <ProtectedRoute page={"New Joining"}>
       <NewJoining />
+    </ProtectedRoute>
+  } />
+
+  {/* Training */}
+  <Route path="training" element={
+    <ProtectedRoute page={"Training"}>
+      <TrainingDashboard />
+    </ProtectedRoute>
+  } />
+
+  <Route path="training/registrations" element={
+    <ProtectedRoute page={"Training"}>
+      <TrainingNewRegistrations />
+    </ProtectedRoute>
+  } />
+
+  <Route path="training/employees" element={
+    <ProtectedRoute page={"Training"}>
+      <TrainingEmployeeList />
+    </ProtectedRoute>
+  } />
+
+  <Route path="training/employees/:id" element={
+    <ProtectedRoute page={"Training"}>
+      <TrainingEmployeeProfile />
+    </ProtectedRoute>
+  } />
+
+  <Route path="training/employees/:id/edit" element={
+    <ProtectedRoute page={"Training"}>
+      <TrainingEmployeeEdit />
+    </ProtectedRoute>
+  } />
+
+  <Route path="training/documents" element={
+    <ProtectedRoute page={"Training"}>
+      <TrainingDocuments />
+    </ProtectedRoute>
+  } />
+
+  <Route path="training/verification" element={
+    <ProtectedRoute page={"Training"}>
+      <TrainingVerification />
+    </ProtectedRoute>
+  } />
+
+  <Route path="training/reports" element={
+    <ProtectedRoute page={"Training"}>
+      <TrainingReports />
+    </ProtectedRoute>
+  } />
+
+  <Route path="training/settings" element={
+    <ProtectedRoute page={"Training"}>
+      <TrainingSettings />
     </ProtectedRoute>
   } />
 
