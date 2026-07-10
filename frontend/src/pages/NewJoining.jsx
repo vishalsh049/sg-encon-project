@@ -544,7 +544,9 @@ export default function NewJoining() {
       ),
     ].join("\n");
 
-    const blob = new Blob([csv], {
+    // UTF-8 BOM so Excel opens the CSV as UTF-8 instead of ANSI (prevents
+    // names from being corrupted if the export is edited and re-uploaded)
+    const blob = new Blob([String.fromCharCode(0xfeff), csv], {
       type: "text/csv;charset=utf-8;",
     });
     const url = URL.createObjectURL(blob);

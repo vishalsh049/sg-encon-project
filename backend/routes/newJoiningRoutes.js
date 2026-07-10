@@ -6,6 +6,8 @@ const { query } = require("../services/accessControl");
 
 const multer = require("multer");
 const XLSX = require("xlsx");
+const { sanitizeText } = require("../utils/sanitizeText");
+const { readUploadedWorkbook } = require("../utils/readUploadedWorkbook");
 const {
   addCircleFilter,
   assertRowsAllowedCircle,
@@ -152,12 +154,12 @@ router.post("/add-employee", async (req, res) => {
       return forbid(res);
     }
 
-    const employeeCodeValue = String(employee_code || "").trim();
-    const employeeNameValue = String(employee_name || "").trim();
-    const circleValue = String(circle || "").trim();
-    const cmpValue = String(cmp || "").trim();
-    const designationValue = String(designation || "").trim();
-    const aadhaarValue = String(aadhaar_no || "").trim();
+    const employeeCodeValue = sanitizeText(employee_code);
+    const employeeNameValue = sanitizeText(employee_name);
+    const circleValue = sanitizeText(circle);
+    const cmpValue = sanitizeText(cmp);
+    const designationValue = sanitizeText(designation);
+    const aadhaarValue = sanitizeText(aadhaar_no);
 
     if (!employeeCodeValue) {
       return res.status(400).json({
@@ -413,8 +415,8 @@ function getColumnValue(row, aliases) {
   for (const key of Object.keys(row)) {
     if (normalizedAliases.includes(normalizeHeaderKey(key))) {
       const val = row[key];
-      if (val !== undefined && val !== null && String(val).trim() !== "") {
-        return String(val).trim();
+      if (val !== undefined && val !== null && sanitizeText(val) !== "") {
+        return sanitizeText(val);
       }
     }
   }
@@ -437,12 +439,7 @@ router.post(
 
       }
 
-      const workbook = XLSX.read(
-        req.file.buffer,
-        {
-          type: "buffer",
-        }
-      );
+      const workbook = readUploadedWorkbook(req.file);
 
       const sheetName =
         workbook.SheetNames[0];
@@ -471,13 +468,13 @@ router.post(
       assertRowsAllowedCircle(
         req.authUser,
         rows,
-        (row) => row.circle || row["Circle"] || ""
+        (row) => sanitizeText(row.circle || row["Circle"] || "")
       );
 
 const excelAadhaarNumbers = rows
   .map((row) => {
     const raw = row.aadhaar_no || row["Aadhar Number"] || "";
-    return raw ? String(raw).trim() : "";
+    return raw ? sanitizeText(raw) : "";
   })
   .filter(Boolean);
 
@@ -507,38 +504,43 @@ const values = [];
 
 for (const row of rows) {
 
-  const employee_code =
+  const employee_code = sanitizeText(
     row.employee_code ||
     row["Employee Code"] ||
-    "";
+    ""
+  );
 
-  const employee_name =
+  const employee_name = sanitizeText(
     row.employee_name ||
     row["Employee Name"] ||
-    "";
+    ""
+  );
 
-  const circle =
+  const circle = sanitizeText(
     row.circle ||
     row["Circle"] ||
-    "";
+    ""
+  );
 
-  const cmp =
+  const cmp = sanitizeText(
     row.cmp ||
     row.cluster ||
     row["Cluster"] ||
-    "";
+    ""
+  );
 
-  const designation =
+  const designation = sanitizeText(
     row.designation ||
     row["Designation"] ||
-    "";
+    ""
+  );
 
   const aadhaar_no_raw =
     row.aadhaar_no ||
     row["Aadhar Number"] ||
     "";
 
-  const aadhaar_no = aadhaar_no_raw ? String(aadhaar_no_raw).trim() : "";
+  const aadhaar_no = aadhaar_no_raw ? sanitizeText(aadhaar_no_raw) : "";
 
   if (
     aadhaar_no &&
@@ -558,10 +560,11 @@ for (const row of rows) {
     row["Nth Salary"] ||
     0;
 
-  const joining_status =
-  row.joining_status ||
-  row["Joining Status"] ||
-  "Pending";
+  const joining_status = sanitizeText(
+    row.joining_status ||
+    row["Joining Status"] ||
+    "Pending"
+  );
 
  let l2_status = getColumnValue(row, [
   "l2_status",

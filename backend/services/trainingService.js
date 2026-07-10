@@ -4,6 +4,7 @@ const TrainingDocument = require("../models/TrainingDocument");
 const TrainingVerification = require("../models/TrainingVerification");
 const TrainingLog = require("../models/TrainingLog");
 const { query } = require("../models/trainingTables");
+const { sanitizeText } = require("../utils/sanitizeText");
 
 const EMPLOYEE_CODE_PREFIX = "SG";
 const EMPLOYEE_CODE_DIGITS = 6;
@@ -494,11 +495,11 @@ async function convertToEmployee(id, context = {}) {
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       employeeCode,
-      employee.full_name,
-      employee.circle || "",
-      employee.training_batch || "",
-      employee.designation_applied || "",
-      employee.aadhaar_no,
+      sanitizeText(employee.full_name),
+      sanitizeText(employee.circle || ""),
+      sanitizeText(employee.training_batch || ""),
+      sanitizeText(employee.designation_applied || ""),
+      sanitizeText(employee.aadhaar_no),
       0,
       "Pending",
       "Pending",
