@@ -3,6 +3,7 @@
     const XLSX = require("xlsx");
 
     const { db } = require("../config/db");
+    const { createError, sendError } = require("../utils/apiErrors");
     const {
       addCircleFilter,
       assertRowsAllowedCircle,
@@ -11,6 +12,20 @@
       forbid,
       isAllCircle,
     } = require("../middleware/circleAccess");
+    const {
+      buildPhysicalFilters,
+      clearPhysicalCache,
+      createExecutor,
+      ensurePhysicalInfrastructure,
+      findDuplicateEmployees,
+      getActorContext,
+      getCachedValue,
+      insertAuditLog,
+      insertNotification,
+      insertTimelineEvent,
+      isPrivilegedPhysicalAdmin,
+      setCachedValue,
+    } = require("../services/physicalDomainService");
 
     const router = express.Router();
     const storage = multer.memoryStorage();
@@ -37,6 +52,7 @@
           resolve(rows);
         });
       });
+    const rootExecutor = createExecutor(query);
 
     const getConnection = () =>
       new Promise((resolve, reject) => {
@@ -181,6 +197,7 @@
       }
 
       await ensureCircleUpdatesTable();
+      await ensurePhysicalInfrastructure(query, ensureColumn);
     }
 
     let circleUpdatesBackfilled = false;
@@ -257,6 +274,12 @@
       if (value === null || value === undefined) return null;
       const text = String(value).trim();
       return text ? text : null;
+    }
+
+    function createConnectionExecutor(conn) {
+      return createExecutor((sql, params = []) =>
+        conn.promise().query(sql, params).then(([rows]) => rows)
+      );
     }
 
  const allowedJobRoles = [
@@ -703,18 +726,19 @@ toText(
     router.get("/export", async (req, res) => {
 
       try {
+        await ensurePhysicalTables();
 
         const userCircle =
           req.authUser?.circle || "ALL";
 
-        let whereClause = "";
+        let whereClause = "WHERE COALESCE(is_deleted, 0) = 0";
         let params = [];
 
         if (
           userCircle &&
           userCircle !== "ALL"
         ) {
-          whereClause = "WHERE circle = ?";
+          whereClause += " AND circle = ?";
           params.push(userCircle);
         }
 
@@ -748,62 +772,87 @@ toText(
 
     router.get("/", async (req, res) => {
       try {
+        await ensurePhysicalTables();
 
-        const userCircle =
-          req.authUser?.circle || "ALL";
+        const rawPage = Number.parseInt(req.query.page, 10);
+        const rawPageSize = Number.parseInt(req.query.pageSize, 10);
+        const page = Number.isInteger(rawPage) && rawPage > 0 ? rawPage : 1;
+        const pageSize =
+          Number.isInteger(rawPageSize) && rawPageSize > 0
+            ? Math.min(rawPageSize, 500)
+            : 50;
+        const search = String(req.query.search || "").trim();
 
-    // Pagination removed
+        const filters = {
+          circle: req.query.circle || "",
+          cmp: req.query.cmp || "",
+          jobRole: req.query.jobRole || "",
+          employmentStatus: req.query.employmentStatus || "",
+          dojFrom: req.query.dojFrom || "",
+          dojTo: req.query.dojTo || "",
+          salaryMin: req.query.salaryMin || "",
+          salaryMax: req.query.salaryMax || "",
+          ageMin: req.query.ageMin || "",
+          ageMax: req.query.ageMax || "",
+          reportingManager: req.query.reportingManager || "",
+          laptopStatus: req.query.laptopStatus || "",
+          uploadDateFrom: req.query.uploadDateFrom || "",
+          uploadDateTo: req.query.uploadDateTo || "",
+          reportDateFrom: req.query.reportDateFrom || "",
+          reportDateTo: req.query.reportDateTo || "",
+        };
 
-        let whereClause = "";
-        let params = [];
-
-        if (
-          userCircle &&
-          userCircle !== "ALL"
-        ) {
-          whereClause = "WHERE circle = ?";
-          params.push(userCircle);
-        }
-
-        // TOTAL RECORDS
-        const totalResult = await query(
-          `
-          SELECT COUNT(*) AS total
-          FROM physical
-          ${whereClause}
-          `,
-          params
-        );
-
-        const total =
-          totalResult[0]?.total || 0;
-
-        // PAGE DATA
-      const rows = await query(
-      `
-      SELECT *
-      FROM physical
-      ${whereClause}
-      ORDER BY id DESC
-      `,
-      params
-    );
-
-      res.json({
-      success: true,
-      data: rows,
-      total
-    });
-
-      } catch (error) {
-
-        console.log(error);
-
-        res.status(500).json({
-          success: false,
-          message: "Failed",
+        const filterMeta = buildPhysicalFilters({
+          authUser: req.authUser,
+          filters,
+          search,
+          sortBy: req.query.sortBy || "id",
+          sortOrder: req.query.sortOrder || "DESC",
         });
 
+        const totalResult = await query(
+          `
+            SELECT COUNT(*) AS total
+            FROM physical
+            LEFT JOIN physical_reports pr
+              ON pr.id = physical.report_id
+             AND COALESCE(pr.is_deleted, 0) = 0
+            ${filterMeta.whereSql}
+          `,
+          filterMeta.params
+        );
+
+        const totalRecords = Number(totalResult[0]?.total || 0);
+        const totalPages = Math.max(1, Math.ceil(totalRecords / pageSize));
+        const safePage = Math.min(page, totalPages);
+        const offset = (safePage - 1) * pageSize;
+
+        const rows = await query(
+          `
+            SELECT physical.*, pr.report_date
+            FROM physical
+            LEFT JOIN physical_reports pr
+              ON pr.id = physical.report_id
+             AND COALESCE(pr.is_deleted, 0) = 0
+            ${filterMeta.whereSql}
+            ORDER BY ${filterMeta.orderBy} ${filterMeta.orderDirection}
+            LIMIT ? OFFSET ?
+          `,
+          [...filterMeta.params, pageSize, offset]
+        );
+
+        res.json({
+          success: true,
+          data: rows,
+          total: totalRecords,
+          totalRecords,
+          totalPages,
+          currentPage: safePage,
+          pageSize,
+        });
+      } catch (error) {
+        console.error("Physical list error:", error);
+        sendError(res, error, "Failed to load physical data");
       }
     });
 
@@ -812,6 +861,7 @@ toText(
 
       try {
         await ensurePhysicalTables();
+        const actor = getActorContext(req);
 
         if (!req.file) {
           return res.status(400).json({
@@ -1276,7 +1326,36 @@ insertRows
           );
         }
 
+        const uploadExecutor = createConnectionExecutor(conn);
+        await insertAuditLog(uploadExecutor, {
+          ...actor,
+          entityType: "report",
+          reportId: reportResult.insertId,
+          action: "REPORT_UPLOAD",
+          circle: uploadedCircles.length === 1 ? uploadedCircles[0] : null,
+          previousData: null,
+          newData: {
+            reportId: reportResult.insertId,
+            totalEmployees: rows.length,
+            addedEmployees: insertRows.length,
+            updatedEmployees,
+            duplicateEmployees,
+          },
+        });
+
+        await insertNotification(uploadExecutor, {
+          moduleName: "physical",
+          eventType: "report_uploaded",
+          title: "Physical report uploaded",
+          message: `${req.file.originalname} was uploaded successfully.`,
+          circle: uploadedCircles.length === 1 ? uploadedCircles[0] : null,
+          actorUserId: req.authUser.id || null,
+          referenceId: reportResult.insertId,
+          referenceType: "physical_report",
+        });
+
         await conn.promise().commit();
+        clearPhysicalCache();
 
   res.status(200).json({
   success: true,
@@ -1313,8 +1392,10 @@ duplicateEmployees: duplicateEmployees
     router.post("/add-employee", async (req, res) => {
 
     try {
+      await ensurePhysicalTables();
 
       const data = req.body;
+      const actor = getActorContext(req);
 
       if (!canAccessCircle(req.authUser, data.circle)) {
         return forbid(res);
@@ -1348,123 +1429,154 @@ duplicateEmployees: duplicateEmployees
 
         // DUPLICATE CHECK
 
-      const existingEmployee = await query(
-      `
-      SELECT id
-      FROM physical
-      WHERE aadhaar_no = ?
-      AND id != ?
-      LIMIT 1
-      `,
-      [data.aadhaar_no, req.params.id]
-    );
+      const duplicateRows = await findDuplicateEmployees(query, data);
+      if (duplicateRows.length > 0) {
+        return res.status(409).json({
+          success: false,
+          message: "Employee already exists with matching unique details",
+        });
+      }
 
-    if (existingEmployee.length > 0) {
+        const conn = await getConnection();
 
-      return res.status(400).json({
-        success: false,
-        message:
-          "Employee already exists with this Aadhaar Number",
-      });
+        try {
+          await conn.promise().beginTransaction();
+          const executor = createConnectionExecutor(conn);
 
-    }
-        if (existingEmployee.length > 0) {
+          const result = await executor.query(
+            `
+            INSERT INTO physical (
 
-          return res.status(400).json({
-            success: false,
-            message:
-              "Employee already exists with this Aadhaar Number",
+              circle,
+              cmp,
+              pprj_status,
+              pprj_code,
+              employee_code,
+              employee_name,
+              father_name,
+              function_name,
+              job_role_actual_cmp_verify,
+              job_role,
+              manpower_signoff_scope,
+              scrum_job_role,
+              cluster,
+              mobile_number,
+              dob,
+              age,
+              date_of_joining,
+              employment_status,
+              resigned_date,
+              last_working_date,
+              rm_code,
+              reporting_manager,
+              company_email_id,
+              laptop_status,
+              ifsc_code,
+              bank_account_no,
+              pan_no,
+              aadhaar_no,
+              uan_no,
+              esic_ip_no,
+              pf_no,
+              nth_salary,
+              remarks
+
+            )
+
+          VALUES (
+
+      ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+      ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+      ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+      ?, ?, ?
+
+      )
+            `,
+            [
+
+              data.circle || "",
+              data.cmp || "",
+              data.pprj_status || "",
+              data.pprj_code || "",
+              data.employee_code || "",
+              data.employee_name || "",
+              data.father_name || "",
+              data.function_name || "",
+              data.job_role_actual_cmp_verify || "",
+              data.job_role || "",
+              data.manpower_signoff_scope || "",
+              data.scrum_job_role || "",
+              data.cluster || "",
+              data.mobile_number || "",
+              data.dob || null,
+              data.age || null,
+              data.date_of_joining || null,
+              data.employment_status || "",
+              data.resigned_date || null,
+              data.last_working_date || null,
+              data.rm_code || "",
+              data.reporting_manager || "",
+              data.company_email_id || "",
+              data.laptop_status || "",
+              data.ifsc_code || "",
+              data.bank_account_no || "",
+              data.pan_no || "",
+              data.aadhaar_no || "",
+              data.uan_no || "",
+              data.esic_ip_no || "",
+              data.pf_no || "",
+              data.nth_salary || 0,
+              data.remarks || ""
+
+            ]
+          );
+
+          const insertedRows = await executor.query(
+            `SELECT * FROM physical WHERE id = ? LIMIT 1`,
+            [result.insertId]
+          );
+          const insertedRow = insertedRows[0];
+
+          await insertAuditLog(executor, {
+            ...actor,
+            entityType: "employee",
+            entityId: insertedRow.id,
+            action: "EMPLOYEE_CREATE",
+            circle: insertedRow.circle,
+            cmp: insertedRow.cmp,
+            newData: insertedRow,
           });
 
+          await insertTimelineEvent(executor, {
+            employeeId: insertedRow.id,
+            action: "CREATED",
+            actorUserId: actor.actorUserId,
+            actorName: actor.actorName,
+            circle: insertedRow.circle,
+            cmp: insertedRow.cmp,
+            newData: insertedRow,
+          });
+
+          await insertNotification(executor, {
+            moduleName: "physical",
+            eventType: "employee_created",
+            title: "Physical employee created",
+            message: `${insertedRow.employee_name || "Employee"} was added.`,
+            circle: insertedRow.circle,
+            cmp: insertedRow.cmp,
+            actorUserId: req.authUser.id || null,
+            referenceId: insertedRow.id,
+            referenceType: "physical_employee",
+          });
+
+          await conn.promise().commit();
+          clearPhysicalCache();
+        } catch (error) {
+          await conn.promise().rollback();
+          throw error;
+        } finally {
+          conn.release();
         }
-
-        await query(
-          `
-          INSERT INTO physical (
-
-            circle,
-            cmp,
-            pprj_status,
-            pprj_code,
-            employee_code,
-            employee_name,
-            father_name,
-            function_name,
-            job_role_actual_cmp_verify,
-            job_role,
-            manpower_signoff_scope,
-            scrum_job_role,
-            cluster,
-            mobile_number,
-            dob,
-            age,
-            date_of_joining,
-            employment_status,
-            resigned_date,
-            last_working_date,
-            rm_code,
-            reporting_manager,
-            company_email_id,
-            laptop_status,
-            ifsc_code,
-            bank_account_no,
-            pan_no,
-            aadhaar_no,
-            uan_no,
-            esic_ip_no,
-            pf_no,
-            nth_salary,
-            remarks
-
-          )
-
-        VALUES (
-
-    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-    ?, ?, ?
-
-    )
-          `,
-          [
-
-            data.circle || "",
-            data.cmp || "",
-            data.pprj_status || "",
-            data.pprj_code || "",
-            data.employee_code || "",
-            data.employee_name || "",
-            data.father_name || "",
-            data.function_name || "",
-            data.job_role_actual_cmp_verify || "",
-            data.job_role || "",
-            data.manpower_signoff_scope || "",
-            data.scrum_job_role || "",
-            data.cluster || "",
-            data.mobile_number || "",
-            data.dob || null,
-            data.age || null,
-            data.date_of_joining || null,
-            data.employment_status || "",
-            data.resigned_date || null,
-            data.last_working_date || null,
-            data.rm_code || "",
-            data.reporting_manager || "",
-            data.company_email_id || "",
-            data.laptop_status || "",
-            data.ifsc_code || "",
-            data.bank_account_no || "",
-            data.pan_no || "",
-            data.aadhaar_no || "",
-            data.uan_no || "",
-            data.esic_ip_no || "",
-            data.pf_no || "",
-            data.nth_salary || 0,
-            data.remarks || ""
-
-          ]
-        );
 
         res.json({
           success: true,
@@ -1490,12 +1602,14 @@ duplicateEmployees: duplicateEmployees
 
         const params = [];
         const circleClause = isAllCircle(req.authUser)
-          ? ""
+          ? "WHERE COALESCE(physical_reports.is_deleted, 0) = 0"
           : `WHERE EXISTS (
               SELECT 1 FROM physical p
               WHERE p.report_id = physical_reports.id
+                AND COALESCE(p.is_deleted, 0) = 0
                 AND LOWER(TRIM(p.circle)) = LOWER(TRIM(?))
-            )`;
+            )
+            AND COALESCE(physical_reports.is_deleted, 0) = 0`;
         if (!isAllCircle(req.authUser)) params.push(req.authUser.circle);
         const rows = await query(`
           SELECT
@@ -1541,14 +1655,16 @@ duplicateEmployees: duplicateEmployees
 
       try {
         await ensurePhysicalTables();
+        const actor = getActorContext(req);
 
         const filters = ["report_id = ?"];
         const params = [reportId];
         addCircleFilter(filters, params, req.authUser);
-        const [report] = await query(
-          `SELECT report_id FROM physical WHERE ${filters.join(" AND ")} LIMIT 1`,
+        const reportRows = await query(
+          `SELECT * FROM physical WHERE ${filters.join(" AND ")} AND COALESCE(is_deleted, 0) = 0`,
           params
         );
+        const report = reportRows[0];
 
         if (!report) {
           return res.status(404).json({
@@ -1568,8 +1684,66 @@ duplicateEmployees: duplicateEmployees
           if (foreignRow) return forbid(res);
         }
 
-        await query(`DELETE FROM physical WHERE report_id = ?`, [reportId]);
-        await query(`DELETE FROM physical_reports WHERE id = ?`, [reportId]);
+        const conn = await getConnection();
+
+        try {
+          await conn.promise().beginTransaction();
+          const executor = createConnectionExecutor(conn);
+
+          await executor.query(
+            `
+              UPDATE physical
+              SET is_deleted = 1,
+                  deleted_at = NOW(),
+                  deleted_by = ?
+              WHERE report_id = ?
+                AND COALESCE(is_deleted, 0) = 0
+            `,
+            [req.authUser.id || null, reportId]
+          );
+
+          await executor.query(
+            `
+              UPDATE physical_reports
+              SET is_deleted = 1,
+                  deleted_at = NOW(),
+                  deleted_by = ?
+              WHERE id = ?
+                AND COALESCE(is_deleted, 0) = 0
+            `,
+            [req.authUser.id || null, reportId]
+          );
+
+          await insertAuditLog(executor, {
+            ...actor,
+            entityType: "report",
+            reportId,
+            action: "REPORT_SOFT_DELETE",
+            circle: report.circle,
+            cmp: report.cmp,
+            previousData: { reportId, rows: reportRows.length },
+          });
+
+          await insertNotification(executor, {
+            moduleName: "physical",
+            eventType: "report_deleted",
+            title: "Physical report deleted",
+            message: `Report ${reportId} was soft deleted.`,
+            circle: report.circle,
+            cmp: report.cmp,
+            actorUserId: req.authUser.id || null,
+            referenceId: reportId,
+            referenceType: "physical_report",
+          });
+
+          await conn.promise().commit();
+          clearPhysicalCache();
+        } catch (error) {
+          await conn.promise().rollback();
+          throw error;
+        } finally {
+          conn.release();
+        }
 
         res.status(200).json({
           success: true,
@@ -1587,6 +1761,7 @@ duplicateEmployees: duplicateEmployees
     router.delete("/bulk-delete", async (req, res) => {
 
       try {
+        await ensurePhysicalTables();
 
         const { ids } = req.body;
 
@@ -1598,26 +1773,94 @@ duplicateEmployees: duplicateEmployees
         }
 
         const placeholders = ids.map(() => "?").join(",");
-
-        await query(
-          `DELETE FROM physical
-          WHERE id IN (${placeholders})`,
-          ids
+        const actor = getActorContext(req);
+        const rows = await query(
+          `
+            SELECT *
+            FROM physical
+            WHERE id IN (${placeholders})
+              AND COALESCE(is_deleted, 0) = 0
+              ${isAllCircle(req.authUser) ? "" : " AND LOWER(TRIM(circle)) = LOWER(TRIM(?))"}
+          `,
+          isAllCircle(req.authUser) ? ids : [...ids, req.authUser.circle]
         );
+
+        if (!rows.length) {
+          return forbid(res);
+        }
+
+        const conn = await getConnection();
+
+        try {
+          await conn.promise().beginTransaction();
+          const executor = createConnectionExecutor(conn);
+
+          await executor.query(
+            `
+              UPDATE physical
+              SET is_deleted = 1,
+                  deleted_at = NOW(),
+                  deleted_by = ?
+              WHERE id IN (${rows.map(() => "?").join(",")})
+            `,
+            [req.authUser.id || null, ...rows.map((row) => row.id)]
+          );
+
+          for (const row of rows) {
+            await insertAuditLog(executor, {
+              ...actor,
+              entityType: "employee",
+              entityId: row.id,
+              reportId: row.report_id,
+              action: "EMPLOYEE_SOFT_DELETE",
+              circle: row.circle,
+              cmp: row.cmp,
+              previousData: row,
+              meta: { source: "bulk-delete" },
+            });
+
+            await insertTimelineEvent(executor, {
+              employeeId: row.id,
+              action: "DELETED",
+              actorUserId: actor.actorUserId,
+              actorName: actor.actorName,
+              circle: row.circle,
+              cmp: row.cmp,
+              previousData: row,
+              meta: { source: "bulk-delete" },
+            });
+          }
+
+          await insertNotification(executor, {
+            moduleName: "physical",
+            eventType: "bulk_delete",
+            title: "Physical employees deleted",
+            message: `${rows.length} employee record(s) were soft deleted.`,
+            circle: rows[0]?.circle || null,
+            cmp: null,
+            actorUserId: req.authUser.id || null,
+            referenceId: null,
+            referenceType: "physical_employee",
+          });
+
+          await conn.promise().commit();
+          clearPhysicalCache();
+        } catch (error) {
+          await conn.promise().rollback();
+          throw error;
+        } finally {
+          conn.release();
+        }
 
         res.json({
           success: true,
-          message: `${ids.length} records deleted successfully`
+          message: `${rows.length} records deleted successfully`
         });
 
       } catch (error) {
 
-        console.log(error);
-
-        res.status(500).json({
-          success: false,
-          message: "Delete failed"
-        });
+        console.error("Physical bulk delete error:", error);
+        sendError(res, error, "Delete failed");
 
       }
 
@@ -1637,14 +1880,87 @@ duplicateEmployees: duplicateEmployees
       }
 
       try {
-
-        const result = await query(
-          `DELETE FROM physical WHERE id = ?${
-            isAllCircle(req.authUser) ? "" : " AND LOWER(TRIM(circle)) = LOWER(TRIM(?))"
-          }`,
+        await ensurePhysicalTables();
+        const actor = getActorContext(req);
+        const rows = await query(
+          `
+            SELECT *
+            FROM physical
+            WHERE id = ?
+              AND COALESCE(is_deleted, 0) = 0
+              ${isAllCircle(req.authUser) ? "" : " AND LOWER(TRIM(circle)) = LOWER(TRIM(?))"}
+            LIMIT 1
+          `,
           isAllCircle(req.authUser) ? [id] : [id, req.authUser.circle]
         );
-        if (!result.affectedRows) return forbid(res);
+        const row = rows[0];
+
+        if (!row) {
+          return forbid(res);
+        }
+
+        const conn = await getConnection();
+
+        try {
+          await conn.promise().beginTransaction();
+          const executor = createConnectionExecutor(conn);
+
+          const result = await executor.query(
+            `
+              UPDATE physical
+              SET is_deleted = 1,
+                  deleted_at = NOW(),
+                  deleted_by = ?
+              WHERE id = ?
+                AND COALESCE(is_deleted, 0) = 0
+            `,
+            [req.authUser.id || null, id]
+          );
+          if (!result.affectedRows) {
+            throw createError("Employee not found", 404, "EMPLOYEE_NOT_FOUND");
+          }
+
+          await insertAuditLog(executor, {
+            ...actor,
+            entityType: "employee",
+            entityId: row.id,
+            reportId: row.report_id,
+            action: "EMPLOYEE_SOFT_DELETE",
+            circle: row.circle,
+            cmp: row.cmp,
+            previousData: row,
+          });
+
+          await insertTimelineEvent(executor, {
+            employeeId: row.id,
+            action: "DELETED",
+            actorUserId: actor.actorUserId,
+            actorName: actor.actorName,
+            circle: row.circle,
+            cmp: row.cmp,
+            previousData: row,
+          });
+
+          await insertNotification(executor, {
+            moduleName: "physical",
+            eventType: "employee_deleted",
+            title: "Physical employee deleted",
+            message: `${row.employee_name || "Employee"} was soft deleted.`,
+            circle: row.circle,
+            cmp: row.cmp,
+            actorUserId: req.authUser.id || null,
+            referenceId: row.id,
+            referenceType: "physical_employee",
+          });
+
+          await conn.promise().commit();
+          clearPhysicalCache();
+        } catch (error) {
+          await conn.promise().rollback();
+          throw error;
+        } finally {
+          conn.release();
+        }
 
         res.status(200).json({
           success: true,
@@ -1654,14 +1970,248 @@ duplicateEmployees: duplicateEmployees
       } catch (error) {
 
         console.error("Employee delete error:", error);
-
-        res.status(500).json({
-          success: false,
-          message: "Server Error",
-        });
+        sendError(res, error, "Server Error");
 
       }
 
+    });
+
+    router.post("/restore-employee/:id", async (req, res) => {
+      const id = Number(req.params.id);
+
+      if (!Number.isInteger(id) || id <= 0) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid Employee ID",
+        });
+      }
+
+      if (!isPrivilegedPhysicalAdmin(req.authUser)) {
+        return forbid(res, "Only admin users can restore employee records.");
+      }
+
+      try {
+        await ensurePhysicalTables();
+        const actor = getActorContext(req);
+        const rows = await query(
+          `SELECT * FROM physical WHERE id = ? AND COALESCE(is_deleted, 0) = 1 LIMIT 1`,
+          [id]
+        );
+        const row = rows[0];
+
+        if (!row) {
+          throw createError("Deleted employee not found", 404, "EMPLOYEE_NOT_FOUND");
+        }
+
+        const conn = await getConnection();
+        try {
+          await conn.promise().beginTransaction();
+          const executor = createConnectionExecutor(conn);
+
+          await executor.query(
+            `
+              UPDATE physical
+              SET is_deleted = 0,
+                  deleted_at = NULL,
+                  deleted_by = NULL
+              WHERE id = ?
+            `,
+            [id]
+          );
+
+          await insertAuditLog(executor, {
+            ...actor,
+            entityType: "employee",
+            entityId: row.id,
+            reportId: row.report_id,
+            action: "EMPLOYEE_RESTORE",
+            circle: row.circle,
+            cmp: row.cmp,
+            previousData: { is_deleted: 1 },
+            newData: { is_deleted: 0 },
+          });
+
+          await insertTimelineEvent(executor, {
+            employeeId: row.id,
+            action: "RESTORED",
+            actorUserId: actor.actorUserId,
+            actorName: actor.actorName,
+            circle: row.circle,
+            cmp: row.cmp,
+            previousData: { is_deleted: 1 },
+            newData: { is_deleted: 0 },
+          });
+
+          await insertNotification(executor, {
+            moduleName: "physical",
+            eventType: "employee_restored",
+            title: "Physical employee restored",
+            message: `${row.employee_name || "Employee"} was restored.`,
+            circle: row.circle,
+            cmp: row.cmp,
+            actorUserId: req.authUser.id || null,
+            referenceId: row.id,
+            referenceType: "physical_employee",
+          });
+
+          await conn.promise().commit();
+          clearPhysicalCache();
+        } catch (error) {
+          await conn.promise().rollback();
+          throw error;
+        } finally {
+          conn.release();
+        }
+
+        res.json({
+          success: true,
+          message: "Employee restored successfully",
+        });
+      } catch (error) {
+        console.error("Employee restore error:", error);
+        sendError(res, error, "Failed to restore employee");
+      }
+    });
+
+    router.get("/download/:id", async (req, res) => {
+      const reportId = Number(req.params.id);
+
+      if (!Number.isInteger(reportId) || reportId <= 0) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid report ID",
+        });
+      }
+
+      try {
+        await ensurePhysicalTables();
+
+        const reportRows = await query(
+          `
+            SELECT *
+            FROM physical_reports
+            WHERE id = ?
+              AND COALESCE(is_deleted, 0) = 0
+            LIMIT 1
+          `,
+          [reportId]
+        );
+        const report = reportRows[0];
+
+        if (!report) {
+          throw createError("Report not found", 404, "REPORT_NOT_FOUND");
+        }
+
+        const dataRows = await query(
+          `
+            SELECT *
+            FROM physical
+            WHERE report_id = ?
+              AND COALESCE(is_deleted, 0) = 0
+              ${isAllCircle(req.authUser) ? "" : " AND LOWER(TRIM(circle)) = LOWER(TRIM(?))"}
+            ORDER BY id ASC
+          `,
+          isAllCircle(req.authUser) ? [reportId] : [reportId, req.authUser.circle]
+        );
+
+        if (!dataRows.length) {
+          return forbid(res);
+        }
+
+        const workbook = XLSX.utils.book_new();
+        const worksheet = XLSX.utils.json_to_sheet(dataRows);
+        XLSX.utils.book_append_sheet(workbook, worksheet, "Physical");
+
+        const buffer = XLSX.write(workbook, {
+          type: "buffer",
+          bookType: "xlsx",
+        });
+
+        res.setHeader(
+          "Content-Disposition",
+          `attachment; filename="${report.original_name || `physical_report_${reportId}.xlsx`}"`
+        );
+        res.setHeader(
+          "Content-Type",
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        );
+
+        return res.send(buffer);
+      } catch (error) {
+        console.error("Physical report download error:", error);
+        sendError(res, error, "Download failed");
+      }
+    });
+
+    router.delete("/permanent-delete-employee/:id", async (req, res) => {
+      const id = Number(req.params.id);
+
+      if (!Number.isInteger(id) || id <= 0) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid Employee ID",
+        });
+      }
+
+      if (!isPrivilegedPhysicalAdmin(req.authUser)) {
+        return forbid(res, "Only admin users can permanently delete employee records.");
+      }
+
+      try {
+        await ensurePhysicalTables();
+        const actor = getActorContext(req);
+        const rows = await query(`SELECT * FROM physical WHERE id = ? LIMIT 1`, [id]);
+        const row = rows[0];
+
+        if (!row) {
+          throw createError("Employee not found", 404, "EMPLOYEE_NOT_FOUND");
+        }
+
+        const conn = await getConnection();
+        try {
+          await conn.promise().beginTransaction();
+          const executor = createConnectionExecutor(conn);
+
+          await insertAuditLog(executor, {
+            ...actor,
+            entityType: "employee",
+            entityId: row.id,
+            reportId: row.report_id,
+            action: "EMPLOYEE_PERMANENT_DELETE",
+            circle: row.circle,
+            cmp: row.cmp,
+            previousData: row,
+          });
+
+          await insertTimelineEvent(executor, {
+            employeeId: row.id,
+            action: "PERMANENTLY_DELETED",
+            actorUserId: actor.actorUserId,
+            actorName: actor.actorName,
+            circle: row.circle,
+            cmp: row.cmp,
+            previousData: row,
+          });
+
+          await executor.query(`DELETE FROM physical WHERE id = ?`, [id]);
+
+          await conn.promise().commit();
+          clearPhysicalCache();
+        } catch (error) {
+          await conn.promise().rollback();
+          throw error;
+        } finally {
+          conn.release();
+        }
+
+        res.json({
+          success: true,
+          message: "Employee permanently deleted successfully",
+        });
+      } catch (error) {
+        console.error("Employee permanent delete error:", error);
+        sendError(res, error, "Failed to permanently delete employee");
+      }
     });
 
     router.put("/:id", async (req, res) => {
@@ -1677,7 +2227,10 @@ duplicateEmployees: duplicateEmployees
       } = req.body;
 
       try {
-        const [existing] = await query(`SELECT circle FROM physical WHERE id = ? LIMIT 1`, [id]);
+        const [existing] = await query(
+          `SELECT circle FROM physical WHERE id = ? AND COALESCE(is_deleted, 0) = 0 LIMIT 1`,
+          [id]
+        );
         if (
           !existing ||
           !canAccessCircle(req.authUser, existing.circle) ||
@@ -1696,6 +2249,7 @@ duplicateEmployees: duplicateEmployees
             cluster = ?,
             mobile_number = ?
           WHERE id = ?
+            AND COALESCE(is_deleted, 0) = 0
           `,
           [
             employee_name,
@@ -1744,7 +2298,8 @@ duplicateEmployees: duplicateEmployees
 
       FROM physical
 
-      WHERE job_role IS NOT NULL
+      WHERE COALESCE(is_deleted, 0) = 0
+      AND job_role IS NOT NULL
       AND job_role != ''
       ${scope.sql}
 
@@ -1843,7 +2398,8 @@ duplicateEmployees: duplicateEmployees
         COUNT(*) as total
       FROM physical
 
-      WHERE circle IS NOT NULL
+      WHERE COALESCE(is_deleted, 0) = 0
+      AND circle IS NOT NULL
       AND circle != ''
       ${scope.sql}
 
@@ -1892,7 +2448,8 @@ duplicateEmployees: duplicateEmployees
 
     FROM physical
 
-    WHERE employment_status IS NOT NULL
+    WHERE COALESCE(is_deleted, 0) = 0
+    AND employment_status IS NOT NULL
     AND TRIM(employment_status) != ''
     ${scope.sql}
 
@@ -1998,7 +2555,8 @@ duplicateEmployees: duplicateEmployees
 
           FROM physical
 
-          WHERE job_role IS NOT NULL
+          WHERE COALESCE(is_deleted, 0) = 0
+            AND job_role IS NOT NULL
             AND job_role != ''
             ${scope.sql}
 
@@ -2108,7 +2666,8 @@ duplicateEmployees: duplicateEmployees
               )
             ) AS normalized_role
           FROM physical
-          WHERE LOWER(TRIM(COALESCE(employment_status, ''))) = 'active'
+          WHERE COALESCE(is_deleted, 0) = 0
+            AND LOWER(TRIM(COALESCE(employment_status, ''))) = 'active'
             AND cmp IS NOT NULL
             AND cmp != ''
             AND job_role IS NOT NULL
@@ -2198,8 +2757,9 @@ duplicateEmployees: duplicateEmployees
             AND NOT EXISTS (
               SELECT 1
               FROM physical dedupe
-              WHERE TRIM(COALESCE(new_joining.aadhaar_no, '')) != ''
+            WHERE TRIM(COALESCE(new_joining.aadhaar_no, '')) != ''
                 AND TRIM(COALESCE(dedupe.aadhaar_no, '')) = TRIM(new_joining.aadhaar_no)
+                AND COALESCE(dedupe.is_deleted, 0) = 0
                 AND LOWER(TRIM(COALESCE(dedupe.employment_status, ''))) = 'active'
             )
             ${newJoiningScope.sql}
@@ -2243,6 +2803,7 @@ duplicateEmployees: duplicateEmployees
             SELECT *
             FROM physical
             WHERE aadhaar_no = ?
+            AND COALESCE(is_deleted, 0) = 0
             ${scope.sql}
             LIMIT 1
             `,
@@ -2290,6 +2851,7 @@ duplicateEmployees: duplicateEmployees
           SELECT *
           FROM physical
           WHERE TRIM(employee_code) = TRIM(?)
+          AND COALESCE(is_deleted, 0) = 0
           ${scope.sql}
           LIMIT 1
           `,
@@ -2320,10 +2882,12 @@ duplicateEmployees: duplicateEmployees
       async (req, res) => {
 
         try {
+          await ensurePhysicalTables();
 
           const data = req.body;
+          const actor = getActorContext(req);
 
-          const [existing] = await query(`SELECT circle FROM physical WHERE id = ? LIMIT 1`, [
+          const [existing] = await query(`SELECT * FROM physical WHERE id = ? AND COALESCE(is_deleted, 0) = 0 LIMIT 1`, [
             req.params.id,
           ]);
           if (
@@ -2334,87 +2898,155 @@ duplicateEmployees: duplicateEmployees
             return forbid(res);
           }
 
-        const result = await query(
-      `
-      UPDATE physical
-      SET
+        const duplicateRows = await findDuplicateEmployees(
+          query,
+          data,
+          Number(req.params.id)
+        );
 
-        circle = ?,
-        cmp = ?,
-        pprj_status = ?,
-        pprj_code = ?,
-        employee_code = ?,
-        employee_name = ?,
-        father_name = ?,
-        function_name = ?,
-        job_role_actual_cmp_verify = ?,
-        job_role = ?,
-        manpower_signoff_scope = ?,
-        scrum_job_role = ?,
-        cluster = ?,
-        mobile_number = ?,
-        dob = ?,
-        age = ?,
-        date_of_joining = ?,
-        employment_status = ?,
-        resigned_date = ?,
-        last_working_date = ?,
-        rm_code = ?,
-        reporting_manager = ?,
-        company_email_id = ?,
-        laptop_status = ?,
-        ifsc_code = ?,
-        bank_account_no = ?,
-        pan_no = ?,
-        aadhaar_no = ?,
-        uan_no = ?,
-        esic_ip_no = ?,
-        pf_no = ?,
-        nth_salary = ?,
-        remarks = ?
+        if (duplicateRows.length > 0) {
+          return res.status(409).json({
+            success: false,
+            message: "Employee already exists with matching unique details",
+          });
+        }
 
-      WHERE id = ?
-      `,
-      [
+        const conn = await getConnection();
+        try {
+          await conn.promise().beginTransaction();
+          const executor = createConnectionExecutor(conn);
 
-        data.circle || "",
-        data.cmp || "",
-        data.pprj_status || "",
-        data.pprj_code || "",
-        data.employee_code || "",
-        data.employee_name || "",
-        data.father_name || "",
-        data.function_name || "",
-        data.job_role_actual_cmp_verify || "",
-        data.job_role || "",
-        data.manpower_signoff_scope || "",
-        data.scrum_job_role || "",
-        data.cluster || "",
-        data.mobile_number || "",
-        data.dob || null,
-        data.age || null,
-        data.date_of_joining || null,
-        data.employment_status || "",
-        data.resigned_date || null,
-        data.last_working_date || null,
-        data.rm_code || "",
-        data.reporting_manager || "",
-        data.company_email_id || "",
-        data.laptop_status || "",
-        data.ifsc_code || "",
-        data.bank_account_no || "",
-        data.pan_no || "",
-        data.aadhaar_no || "",
-        data.uan_no || "",
-        data.esic_ip_no || "",
-        data.pf_no || "",
-        data.nth_salary || 0,
-        data.remarks || "",
+          await executor.query(
+            `
+            UPDATE physical
+            SET
 
-        req.params.id,
+              circle = ?,
+              cmp = ?,
+              pprj_status = ?,
+              pprj_code = ?,
+              employee_code = ?,
+              employee_name = ?,
+              father_name = ?,
+              function_name = ?,
+              job_role_actual_cmp_verify = ?,
+              job_role = ?,
+              manpower_signoff_scope = ?,
+              scrum_job_role = ?,
+              cluster = ?,
+              mobile_number = ?,
+              dob = ?,
+              age = ?,
+              date_of_joining = ?,
+              employment_status = ?,
+              resigned_date = ?,
+              last_working_date = ?,
+              rm_code = ?,
+              reporting_manager = ?,
+              company_email_id = ?,
+              laptop_status = ?,
+              ifsc_code = ?,
+              bank_account_no = ?,
+              pan_no = ?,
+              aadhaar_no = ?,
+              uan_no = ?,
+              esic_ip_no = ?,
+              pf_no = ?,
+              nth_salary = ?,
+              remarks = ?
 
-      ]
-    );
+            WHERE id = ?
+            `,
+            [
+
+              data.circle || "",
+              data.cmp || "",
+              data.pprj_status || "",
+              data.pprj_code || "",
+              data.employee_code || "",
+              data.employee_name || "",
+              data.father_name || "",
+              data.function_name || "",
+              data.job_role_actual_cmp_verify || "",
+              data.job_role || "",
+              data.manpower_signoff_scope || "",
+              data.scrum_job_role || "",
+              data.cluster || "",
+              data.mobile_number || "",
+              data.dob || null,
+              data.age || null,
+              data.date_of_joining || null,
+              data.employment_status || "",
+              data.resigned_date || null,
+              data.last_working_date || null,
+              data.rm_code || "",
+              data.reporting_manager || "",
+              data.company_email_id || "",
+              data.laptop_status || "",
+              data.ifsc_code || "",
+              data.bank_account_no || "",
+              data.pan_no || "",
+              data.aadhaar_no || "",
+              data.uan_no || "",
+              data.esic_ip_no || "",
+              data.pf_no || "",
+              data.nth_salary || 0,
+              data.remarks || "",
+
+              req.params.id,
+
+            ]
+          );
+
+          const updatedRows = await executor.query(
+            `SELECT * FROM physical WHERE id = ? LIMIT 1`,
+            [req.params.id]
+          );
+          const updatedRow = updatedRows[0];
+
+          await insertAuditLog(executor, {
+            ...actor,
+            entityType: "employee",
+            entityId: updatedRow.id,
+            reportId: updatedRow.report_id,
+            action: "EMPLOYEE_UPDATE",
+            circle: updatedRow.circle,
+            cmp: updatedRow.cmp,
+            previousData: existing,
+            newData: updatedRow,
+          });
+
+          await insertTimelineEvent(executor, {
+            employeeId: updatedRow.id,
+            action: "UPDATED",
+            actorUserId: actor.actorUserId,
+            actorName: actor.actorName,
+            circle: updatedRow.circle,
+            cmp: updatedRow.cmp,
+            previousData: existing,
+            newData: updatedRow,
+          });
+
+          await insertNotification(executor, {
+            moduleName: "physical",
+            eventType: "employee_updated",
+            title: "Physical employee updated",
+            message: `${updatedRow.employee_name || "Employee"} was updated.`,
+            circle: updatedRow.circle,
+            cmp: updatedRow.cmp,
+            actorUserId: req.authUser.id || null,
+            referenceId: updatedRow.id,
+            referenceType: "physical_employee",
+          });
+
+          await conn.promise().commit();
+          clearPhysicalCache();
+        } catch (error) {
+          await conn.promise().rollback();
+          throw error;
+        } finally {
+          conn.release();
+        }
 
           res.json({
             success: true,

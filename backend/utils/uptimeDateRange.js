@@ -29,41 +29,43 @@ function buildCircleCmpFilter({ authUser, hasCircleCol, hasCmpCol, selectedCircl
 // default case). today/yesterday/this_week/this_month/custom anchor to
 // CURDATE() instead, and can come back empty if the latest upload lags
 // behind the calendar date.
+// All conditions are written as sargable half-open ranges on the bare column
+// (`col >= X AND col < Y`) instead of wrapping the column in DATE()/MONTH()/
+// YEARWEEK(), so MySQL can use an index on the date column. The returned row
+// sets are identical for both DATE and DATETIME columns.
 function buildRangeSql({ range, table, dateColumn, filterWhereSql, filterParams, from, to }) {
   const r = range || "last7";
-
-  if (r === "last7" || r === "last15" || r === "last30") {
-    const days = r === "last7" ? 6 : r === "last15" ? 14 : 29;
-    const sql = `DATE(\`${dateColumn}\`) >= (
-      SELECT DATE(MAX(\`${dateColumn}\`)) - INTERVAL ${days} DAY
-      FROM \`${table}\`
-      WHERE 1=1 ${filterWhereSql}
-    )`;
-    return { sql, params: [...filterParams] };
-  }
+  const col = `\`${dateColumn}\``;
 
   if (r === "today") {
-    return { sql: `DATE(\`${dateColumn}\`) = CURDATE()`, params: [] };
+    return { sql: `${col} >= CURDATE() AND ${col} < CURDATE() + INTERVAL 1 DAY`, params: [] };
   }
   if (r === "yesterday") {
-    return { sql: `DATE(\`${dateColumn}\`) = CURDATE() - INTERVAL 1 DAY`, params: [] };
+    return { sql: `${col} >= CURDATE() - INTERVAL 1 DAY AND ${col} < CURDATE()`, params: [] };
   }
   if (r === "this_week") {
-    return { sql: `YEARWEEK(\`${dateColumn}\`, 1) = YEARWEEK(CURDATE(), 1)`, params: [] };
+    // ISO week (Monday start) — same rows as YEARWEEK(col, 1) = YEARWEEK(CURDATE(), 1)
+    return {
+      sql: `${col} >= CURDATE() - INTERVAL WEEKDAY(CURDATE()) DAY
+        AND ${col} < CURDATE() - INTERVAL WEEKDAY(CURDATE()) DAY + INTERVAL 7 DAY`,
+      params: [],
+    };
   }
   if (r === "this_month") {
     return {
-      sql: `MONTH(\`${dateColumn}\`) = MONTH(CURDATE()) AND YEAR(\`${dateColumn}\`) = YEAR(CURDATE())`,
+      sql: `${col} >= DATE_FORMAT(CURDATE(), '%Y-%m-01')
+        AND ${col} < DATE_FORMAT(CURDATE(), '%Y-%m-01') + INTERVAL 1 MONTH`,
       params: [],
     };
   }
   if (r === "custom" && from && to) {
-    return { sql: `DATE(\`${dateColumn}\`) BETWEEN ? AND ?`, params: [from, to] };
+    return { sql: `${col} >= ? AND ${col} < DATE(?) + INTERVAL 1 DAY`, params: [from, to] };
   }
 
-  // Fallback: same as last7
-  const sql = `DATE(\`${dateColumn}\`) >= (
-    SELECT DATE(MAX(\`${dateColumn}\`)) - INTERVAL 6 DAY
+  // last7 / last15 / last30 / fallback — anchored to MAX(date) in the table
+  const days = r === "last15" ? 14 : r === "last30" ? 29 : 6;
+  const sql = `${col} >= (
+    SELECT DATE(MAX(\`${dateColumn}\`)) - INTERVAL ${days} DAY
     FROM \`${table}\`
     WHERE 1=1 ${filterWhereSql}
   )`;

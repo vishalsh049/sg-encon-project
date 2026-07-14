@@ -1,10 +1,11 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { startTransition, useEffect, useMemo, useRef, useState } from "react";
 import {
   BriefcaseBusiness,
   CalendarRange,
   ChevronDown,
   Layers3,
   RefreshCcw,
+  RefreshCw,
   Search,
   ShieldCheck,
   Users,
@@ -364,6 +365,19 @@ function HrDashboard() {
   // fullscreen view (which has its own local filters); null means it opens
   // with the dashboard's current filters.
   const [exportModalFilters, setExportModalFilters] = useState(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [lastRefreshedAt, setLastRefreshedAt] = useState(null);
+  const refreshAbortRef = useRef(null);
+  const refreshPromiseRef = useRef(null);
+  const snapshotHashRef = useRef({
+    jobRoles: "",
+    circles: "",
+    employmentStatus: "",
+    scrumCount: "",
+    signoffData: "",
+    activeData: "",
+    scrumActiveData: "",
+  });
 
   // Logged-in user's circle permission — drives which circle sections,
   // filters, totals, and exports are visible on this page.
@@ -391,16 +405,6 @@ function HrDashboard() {
       ),
     [allowedCircleLabels]
   );
-
-  useEffect(() => {
-    loadJobRoles();
-    loadCircles();
-    loadEmploymentStatus();
-    loadScrumCount();
-    loadSignoffData();
-    loadActiveData();
-    loadScrumActiveData();
-  }, []);
 
   // Single-circle users only ever have one valid circle — lock the filter
   // to it so every section (including Export Excel) scopes to it by default.
@@ -435,96 +439,153 @@ function HrDashboard() {
     };
   }, []);
 
-  const loadJobRoles = async () => {
-    try {
-      const response = await authFetch(buildApiUrl("/api/physical/job-role-count"));
-      const result = await response.json();
+  const setStateIfChanged = (key, nextValue, setState) => {
+    const nextHash = JSON.stringify(nextValue);
 
-      if (result.success) {
-        setJobRoles(result.data || []);
-      }
-    } catch (error) {
-      console.log(error);
+    if (snapshotHashRef.current[key] === nextHash) {
+      return false;
     }
+
+    snapshotHashRef.current[key] = nextHash;
+    setState(nextValue);
+    return true;
   };
 
-  const loadCircles = async () => {
-    try {
-      const response = await authFetch(buildApiUrl("/api/physical/circle-count"));
-      const result = await response.json();
+  const fetchJson = async (path, signal) => {
+    const response = await authFetch(buildApiUrl(path), { signal });
+    const contentType = response.headers.get("content-type") || "";
+    let payload = null;
 
-      if (result.success) {
-        setCircles(result.data || []);
-      }
-    } catch (error) {
-      console.log(error);
+    if (contentType.includes("application/json")) {
+      payload = await response.json();
     }
+
+    if (!response.ok) {
+      throw new Error(payload?.message || "Failed to load HR dashboard data.");
+    }
+
+    return payload;
   };
 
-  const loadEmploymentStatus = async () => {
-    try {
-      const response = await authFetch(
-        buildApiUrl("/api/physical/employment-status-count")
+  const applySnapshot = (snapshot) => {
+    startTransition(() => {
+      setStateIfChanged("jobRoles", snapshot.jobRoles, setJobRoles);
+      setStateIfChanged("circles", snapshot.circles, setCircles);
+      setStateIfChanged(
+        "employmentStatus",
+        snapshot.employmentStatus,
+        setEmploymentStatus
       );
-      const result = await response.json();
-
-      if (result.success) {
-        setEmploymentStatus(result.data || []);
-      }
-    } catch (error) {
-      console.log(error);
-    }
-  };
-
-  const loadScrumCount = async () => {
-    try {
-      const response = await authFetch(buildApiUrl("/api/manpower/scrum/count"));
-      const result = await response.json();
-      setScrumCount(result);
-    } catch (error) {
-      console.log(error);
-    }
-  };
-
-  const loadActiveData = async () => {
-    try {
-      const response = await authFetch(
-        buildApiUrl("/api/physical/active-job-role-cmp-count")
+      setStateIfChanged("scrumCount", snapshot.scrumCount, setScrumCount);
+      setStateIfChanged("signoffData", snapshot.signoffData, setSignoffData);
+      setStateIfChanged("activeData", snapshot.activeData, setActiveData);
+      setStateIfChanged(
+        "scrumActiveData",
+        snapshot.scrumActiveData,
+        setScrumActiveData
       );
-      const result = await response.json();
+    });
+  };
 
-      if (result.success) {
-        setActiveData(result.data || []);
+  const refreshDashboard = async ({
+    reason = "manual",
+    silent = false,
+    forceRestart = false,
+  } = {}) => {
+    if (refreshPromiseRef.current && forceRestart) {
+      refreshAbortRef.current?.abort();
+    }
+
+    if (refreshPromiseRef.current && !forceRestart) {
+      if (reason === "manual") {
+        refreshAbortRef.current?.abort();
+      } else {
+        return refreshPromiseRef.current;
       }
-    } catch (error) {
-      console.log(error);
     }
-  };
 
-  const loadScrumActiveData = async () => {
-    try {
-      const response = await authFetch(
-        buildApiUrl("/api/manpower/scrum/cmp-role-count")
-      );
-      const result = await response.json();
+    const controller = new AbortController();
+    refreshAbortRef.current = controller;
+    setIsRefreshing(true);
 
-      if (result.success) {
-        setScrumActiveData(result.data || []);
+    const refreshPromise = (async () => {
+      try {
+        const [
+          jobRoleResult,
+          circleResult,
+          employmentResult,
+          scrumCountResult,
+          signoffResult,
+          activeDataResult,
+          scrumActiveResult,
+        ] = await Promise.all([
+          fetchJson("/api/physical/job-role-count", controller.signal),
+          fetchJson("/api/physical/circle-count", controller.signal),
+          fetchJson("/api/physical/employment-status-count", controller.signal),
+          fetchJson("/api/manpower/scrum/count", controller.signal),
+          fetchJson("/api/signoff", controller.signal),
+          fetchJson("/api/physical/active-job-role-cmp-count", controller.signal),
+          fetchJson("/api/manpower/scrum/cmp-role-count", controller.signal),
+        ]);
+
+        applySnapshot({
+          jobRoles: jobRoleResult?.success ? jobRoleResult.data || [] : [],
+          circles: circleResult?.success ? circleResult.data || [] : [],
+          employmentStatus: employmentResult?.success
+            ? employmentResult.data || []
+            : [],
+          scrumCount: scrumCountResult || {
+            total: 0,
+            active: 0,
+            inactive: 0,
+          },
+          signoffData: signoffResult?.rows || [],
+          activeData: activeDataResult?.success ? activeDataResult.data || [] : [],
+          scrumActiveData: scrumActiveResult?.success
+            ? scrumActiveResult.data || []
+            : [],
+        });
+
+        setLastRefreshedAt(new Date());
+      } catch (error) {
+        if (error?.name === "AbortError") {
+          return;
+        }
+
+        console.log(error);
+        toast.error("Unable to refresh dashboard. Please try again.", {
+          id: "hr-dashboard-refresh-error",
+        });
+      } finally {
+        if (refreshAbortRef.current === controller) {
+          refreshAbortRef.current = null;
+        }
+        if (refreshPromiseRef.current === refreshPromise) {
+          refreshPromiseRef.current = null;
+          setIsRefreshing(false);
+        }
       }
-    } catch (error) {
-      console.log(error);
-    }
+    })();
+
+    refreshPromiseRef.current = refreshPromise;
+    return refreshPromise;
   };
 
-  const loadSignoffData = async () => {
-    try {
-      const response = await authFetch(buildApiUrl("/api/signoff"));
-      const result = await response.json();
-      setSignoffData(result.rows || []);
-    } catch (error) {
-      console.log(error);
-    }
-  };
+  useEffect(() => {
+    void refreshDashboard({ reason: "initial", silent: true });
+
+    return () => {
+      refreshAbortRef.current?.abort();
+    };
+  }, []);
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      void refreshDashboard({ reason: "auto", silent: true });
+    }, 60000);
+
+    return () => window.clearInterval(intervalId);
+  }, []);
 
   const signoffLookup = useMemo(() => {
     return signoffData.reduce((lookup, row) => {
@@ -824,6 +885,20 @@ function HrDashboard() {
     { label: "Scrum Active", value: scrumCount.active || 0 },
   ];
 
+  const lastRefreshedLabel = useMemo(() => {
+    if (!lastRefreshedAt) return "Last Refreshed: --";
+
+    return `Last Refreshed: ${lastRefreshedAt.toLocaleString("en-GB", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: false,
+    })}`;
+  }, [lastRefreshedAt]);
+
   return (
     <div className="min-h-screen">
     <div className="relative overflow-hidden rounded-[14px] border border-white/70 bg-[linear-gradient(96deg,_#4f46e5_0%,_#7c3aed_50%,_#a21caf_100%)] px-4 py-2 text-white md:px-4 md:py-2">
@@ -927,9 +1002,14 @@ function HrDashboard() {
             setExportModalFilters(null);
             setExportModalPanel("physical");
           }}
+          onRefresh={() => {
+            void refreshDashboard({ reason: "manual", forceRestart: true });
+          }}
           onFullScreen={() => setFullScreenPanel("physical")}
           exporting={exportingPhysical}
           exportLabel="Export Physical RAG"
+          isRefreshing={isRefreshing}
+          lastRefreshedLabel={lastRefreshedLabel}
           subtitle="Requirement vs Available Manpower"
           description="Real-time view of physical workforce requirements, availability, and deployment gaps."
           gradient="from-sky-500 via-cyan-500 to-teal-400"
@@ -948,9 +1028,14 @@ function HrDashboard() {
             setExportModalFilters(null);
             setExportModalPanel("scrum");
           }}
+          onRefresh={() => {
+            void refreshDashboard({ reason: "manual", forceRestart: true });
+          }}
           onFullScreen={() => setFullScreenPanel("scrum")}
           exporting={exportingScrum}
           exportLabel="Export Scrum RAG"
+          isRefreshing={isRefreshing}
+          lastRefreshedLabel={lastRefreshedLabel}
           subtitle="Overview Scrum Manpower"
           description="Real-time view of scrum workforce requirements, availability, and deployment gaps."
           gradient="from-violet-600 via-fuchsia-500 to-pink-500"
@@ -1079,9 +1164,12 @@ function TablePanel({
   getSignoffRow,
   showJoining = false,
   onExport,
+  onRefresh,
   onFullScreen,
   exporting,
   exportLabel,
+  isRefreshing,
+  lastRefreshedLabel,
 })
  {
   
@@ -1121,11 +1209,28 @@ function TablePanel({
     <button
         onClick={onExport}
         disabled={exporting}
+        title={exportLabel}
         className="inline-flex items-center gap-2 rounded-lg border border-white/20 bg-white/20 px-4 py-2 text-sm font-semibold text-white backdrop-blur-sm transition hover:bg-white/30 disabled:cursor-not-allowed disabled:opacity-70"
     >
         <Download className="h-4 w-4" />
         {exporting ? "Exporting..." : exportLabel}
     </button>
+
+    <div className="flex flex-col items-end">
+      <button
+        type="button"
+        onClick={onRefresh}
+        disabled={isRefreshing}
+        title="Refresh Dashboard Data"
+        className="inline-flex items-center gap-2 rounded-lg border border-white/20 bg-white/20 px-4 py-2 text-sm font-semibold text-white backdrop-blur-sm transition hover:bg-white/30 disabled:cursor-not-allowed disabled:opacity-70"
+      >
+        <RefreshCw className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} />
+        Refresh
+      </button>
+      <span className="mt-1 text-[11px] font-medium text-white/85">
+        {lastRefreshedLabel}
+      </span>
+    </div>
 </div>
         </div>
       </div>

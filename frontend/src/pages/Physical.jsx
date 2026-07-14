@@ -1,4 +1,4 @@
-  import React, { useEffect, useMemo, useState } from "react";
+  import React, { useEffect, useState } from "react";
  import {
   UserPlus,
   Upload,
@@ -132,6 +132,7 @@ const Field = ({ label, value }) => (
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
   const [search, setSearch] = useState("");
+  const [totalPages, setTotalPages] = useState(1);
 
   const [circleFilter, setCircleFilter] = useState("");
   const [cmpFilter, setCmpFilter] = useState("");
@@ -141,12 +142,23 @@ const Field = ({ label, value }) => (
     const loadPhysicalData = async () => {
       try {
         setTableLoading(true);
-    
-   const response = await authFetch(
-  buildApiUrl(
-    `/api/physical`
-  )
-);
+
+        const query = new URLSearchParams({
+          page: String(currentPage),
+          pageSize: String(pageSize),
+          sortBy: "id",
+          sortOrder: "DESC",
+        });
+
+        if (search.trim()) query.set("search", search.trim());
+        if (circleFilter) query.set("circle", circleFilter);
+        if (cmpFilter) query.set("cmp", cmpFilter);
+        if (jobRoleFilter) query.set("jobRole", jobRoleFilter);
+        if (statusFilter) query.set("employmentStatus", statusFilter);
+
+        const response = await authFetch(
+          buildApiUrl(`/api/physical?${query.toString()}`)
+        );
 
           const result = await response.json();
 
@@ -154,15 +166,16 @@ const Field = ({ label, value }) => (
           throw new Error(result.message || "Failed to load physical data");
         }
 
-    const formattedData = (result.data || [])
-  .sort((a, b) => b.id - a.id)
-  .map((item, index) => ({
-    ...item,
-    srNo: index + 1,
-  }));
+    const offset = ((result.currentPage || currentPage) - 1) * (result.pageSize || pageSize);
+    const formattedData = (result.data || []).map((item, index) => ({
+      ...item,
+      srNo: offset + index + 1,
+    }));
 
   setData(formattedData);
-  setTotalRecords(result.total || 0);
+  setTotalRecords(result.totalRecords || result.total || 0);
+  setTotalPages(result.totalPages || 1);
+  setCurrentPage(result.currentPage || 1);
       } catch (error) {
         console.error(error);
       }
@@ -295,7 +308,11 @@ const Field = ({ label, value }) => (
 
  useEffect(() => {
   loadPhysicalData();
-}, [currentPage, pageSize]);
+}, [currentPage, pageSize, search, circleFilter, cmpFilter, jobRoleFilter, statusFilter]);
+
+useEffect(() => {
+  setCurrentPage(1);
+}, [search, circleFilter, cmpFilter, jobRoleFilter, statusFilter, pageSize]);
 
 useEffect(() => {
   setTimeout(() => {
@@ -481,85 +498,7 @@ loadEmploymentStatus();
   }
   };
 
-  // PAGINATION
-
-  const filteredData = useMemo(() => {
-
-    return data.filter((item) => {
-
- const matchesSearch =
-  !search ||
-  String(item.employee_name || "")
-    .toLowerCase()
-    .includes(search.toLowerCase()) ||
-
-  String(item.employee_code || "")
-    .toLowerCase()
-    .includes(search.toLowerCase()) ||
-
-  String(item.mobile_number || "")
-    .toLowerCase()
-    .includes(search.toLowerCase()) ||
-
-String(item.pf_no || "")
-  .toLowerCase()
-  .includes(search.toLowerCase())
-
-  String(item.aadhaar_no || "")
-    .toLowerCase()
-    .includes(search.toLowerCase()) ||
-
-  String(item.cmp || "")
-    .toLowerCase()
-    .includes(search.toLowerCase());
-
-  const matchesCircle =
-
-    !circleFilter ||
-    item.circle === circleFilter;
-
-  const matchesCmp =
-
-    !cmpFilter ||
-    item.cmp === cmpFilter;
-  
-    const matchesJobRole =
-  !jobRoleFilter ||
-  item.job_role === jobRoleFilter;
-  
-  const matchesStatus =
-  !statusFilter ||
-  item.employment_status === statusFilter;
-
-  return (
-  matchesSearch &&
-  matchesCircle &&
-  matchesCmp &&
-  matchesJobRole &&
-  matchesStatus
-  );
-
-    });
-
-  },
-   [
-  data,
-  search,
-  circleFilter,
-  cmpFilter,
-  jobRoleFilter,
-  statusFilter
-]);
-
-const totalPages = Math.max(
-  1,
-  Math.ceil(filteredData.length / pageSize)
-);
-
-const paginatedData = filteredData.slice(
-  (currentPage - 1) * pageSize,
-  currentPage * pageSize
-);
+const paginatedData = data;
 
 const handleEdit = (item) => {
 
@@ -1670,7 +1609,10 @@ const jobRoleFilterOptions = [
 
   ...[
     ...new Set(
-      data.map(item => item.job_role)
+      [
+        ...data.map(item => item.job_role),
+        ...jobRoles.map(item => item.role_group),
+      ]
     )
   ]
     .filter(Boolean)
@@ -1688,14 +1630,14 @@ const statusFilterOptions = [
 ];
 
 const startRecord =
-  filteredData.length === 0
+  totalRecords === 0
     ? 0
     : (currentPage - 1) * pageSize + 1;
 
 const endRecord =
   Math.min(
-    currentPage * pageSize,
-    filteredData.length
+    (currentPage - 1) * pageSize + paginatedData.length,
+    totalRecords
   );
 
   const resetFilters = () => {
@@ -2223,7 +2165,7 @@ const inactiveCount =
     <input
       type="checkbox"
       checked={
-        filteredData.length > 0 &&
+        paginatedData.length > 0 &&
         selectedRows.length === paginatedData.length
       }
       onChange={handleSelectAll}
@@ -2301,7 +2243,7 @@ const inactiveCount =
       </td>
     </tr>
 
-  ) : filteredData.length === 0 ? (
+  ) : paginatedData.length === 0 ? (
       <tr>
       <td
     colSpan="100"

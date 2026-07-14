@@ -4,6 +4,7 @@ const router = express.Router();
 const { db } = require("../config/db");
 const { isAllCircle } = require("../middleware/circleAccess");
 const { buildCircleCmpFilter, buildRangeSql } = require("../utils/uptimeDateRange");
+const { getKpiTableSchemas } = require("../utils/kpiSchemaCache");
 
 const query = (sql, params = []) =>
   new Promise((resolve, reject) => {
@@ -13,327 +14,281 @@ const query = (sql, params = []) =>
     });
   });
 
-const normalizeUptimeValue = (value, scaleFraction = false) => {
+const KPI_TABLES = ["ag1", "enb", "esc", "gnb", "osc", "hpodsc"];
+
+const normalizeUptimeValue = (value) => {
   const numericValue = Number(value);
 
   if (!Number.isFinite(numericValue)) {
     return 0;
   }
 
-  // Only tables that store uptime as a 0-1 marker (e.g. AG1 inserts a literal 1
-  // per row) opt into rescaling. Real availability uploads (OSC, HPODSC, ...)
-  // must keep 0, 0.1, 0.5, 1.0 exactly as uploaded.
-  if (scaleFraction && numericValue > 0 && numericValue <= 1) {
-    return Number((numericValue * 100).toFixed(2));
-  }
-
+  // Values are displayed exactly as stored (0, 0.1, 0.5, 1.0, ...). Marker
+  // tables like AG1 (kpi_value = 1 per row) are converted to percent in SQL
+  // via buildKpiValueSql, not rescaled here.
   return Number(numericValue.toFixed(2));
 };
 
-router.get("/tower-uptime", async (req, res) => {
+// Builds the SQL expression for a row's uptime value. Marker tables (markerKpi)
+// store kpi_value = 1 per site for counting; their real uptime lives in the
+// `availability` column (added 2026-07). Old rows without it fall back to
+// kpi_value * 100, matching the historical 100% display.
+const buildKpiValueSql = ({ markerKpi, kpiColumn, columnNames }) => {
+  if (markerKpi) {
+    return columnNames.includes("availability")
+      ? "COALESCE(CAST(REPLACE(availability, '%', '') AS DECIMAL(12,4)), kpi_value * 100)"
+      : "kpi_value * 100";
+  }
+  return `CAST(REPLACE(\`${kpiColumn}\`, '%', '') AS DECIMAL(12,4))`;
+};
 
-  try {
+// SQL TRIM() strips spaces only — mirror that exactly (not JS .trim(), which
+// also strips tabs/newlines) so results stay identical to the old queries.
+const sqlTrim = (v) => String(v == null ? "" : v).replace(/^ +| +$/g, "");
 
-    const siteTables = [
+// Case-insensitive sort matching the *_ci collation of the old ORDER BY.
+const ciSort = (arr) =>
+  arr.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }) || a.localeCompare(b));
 
-      {
-        name: "AG1",
-        table: "ag1",
-        color: "blue",
-        scaleFraction: true,
-        possibleColumns: [
-          "kpi_value",
-          "availability",
-        ],
-      },
+// The circle/CMP dropdown lists were previously built with
+// SELECT DISTINCT TRIM(col) ... WHERE LOWER(TRIM(circle)) = ? — those wrapper
+// functions disqualify MariaDB's loose index scan, forcing a full table scan
+// on every request. Instead we fetch bare DISTINCT pairs (which loose-scans
+// the (circle, cmp) index) and trim/filter/sort here with identical results.
+async function getDistinctCircleCmpPairs(table, columnNames) {
+  const hasCircle = columnNames.includes("circle");
+  const hasCmp = columnNames.includes("cmp");
+  if (!hasCircle && !hasCmp) return [];
+  const cols = [hasCircle ? "circle" : null, hasCmp ? "cmp" : null].filter(Boolean).join(", ");
+  const rows = await query(`SELECT DISTINCT ${cols} FROM \`${table}\``);
+  return rows.map((r) => ({
+    circle: hasCircle ? sqlTrim(r.circle) : null,
+    cmp: hasCmp ? sqlTrim(r.cmp) : null,
+  }));
+}
 
-      {
-        name: "ENB",
-        table: "enb",
-        color: "emerald",
-        possibleColumns: [
-          "availability",
-          "kpi_value",
-        ],
-      },
+const matchesCircle = (pairCircle, wanted) =>
+  String(pairCircle || "").toLowerCase() === sqlTrim(wanted).toLowerCase();
 
-    {
-  name: "ESC",
-  table: "esc",
-  color: "violet",
-  possibleColumns: [
-    "total_availability",
-    "kpi_value",
-    "availability",
-  ],
-},
+// Distinct non-empty values of `field`, restricted by circle filters (each
+// non-empty filter is equivalent to a stacked LOWER(TRIM(circle)) = ? clause).
+function pickDistinct(pairs, field, circleFilters = []) {
+  const filters = circleFilters.filter(Boolean);
+  const out = new Set();
+  for (const p of pairs) {
+    if (!p[field]) continue;
+    if (filters.length && !filters.every((f) => matchesCircle(p.circle, f))) continue;
+    out.add(p[field]);
+  }
+  return ciSort(Array.from(out));
+}
 
-      {
-        name: "GNB",
-        table: "gnb",
-        color: "orange",
-        possibleColumns: [
-          "kpi_value",
-          "availability",
-        ],
-      },
-
-      {
-        name: "OSC",
-        table: "osc",
-        color: "cyan",
-        possibleColumns: [
-          "availability",
-          "kpi_value",
-        ],
-      },
-
-    {
-  name: "HPODSC",
-  table: "hpodsc",
-  color: "rose",
-  possibleColumns: [
-    "total_availability",
-    "kpi_value",
-    "availability",
-  ],
-},
-
-    ];
-
-    const finalData = [];
-
-    for (const site of siteTables) {
-
-      try {
-
-        // CHECK TABLE EXISTS
-
-        const tableCheck = await query(`
-          SHOW TABLES LIKE '${site.table}'
-        `);
-
-        if (tableCheck.length === 0) {
-
-          console.log(
-            `Table not found: ${site.table}`
-          );
-
-          continue;
-
-        }
-
-        // GET TABLE COLUMNS
-
-        const columns = await query(`
-          SHOW COLUMNS FROM ${site.table}
-        `);
-
-        const columnNames =
-          columns.map((c) => c.Field);
-
-        // AUTO DETECT KPI COLUMN
-
-        const kpiColumn =
-          site.possibleColumns.find((c) =>
-            columnNames.includes(c)
-          );
-
-        if (!kpiColumn) {
-
-          console.log(
-            `No KPI column found in ${site.table}`
-          );
-
-          continue;
-
-        }
-
-        // AUTO DETECT DATE COLUMN
-
-     const possibleDateColumns = [
-  "Date",
-  "date",
-  "created_at",
-  "report_date",
-  "timestamp",
+const SITE_TABLES = [
+  {
+    name: "AG1",
+    table: "ag1",
+    color: "blue",
+    markerKpi: true,
+    possibleColumns: ["kpi_value", "availability"],
+  },
+  {
+    name: "ENB",
+    table: "enb",
+    color: "emerald",
+    possibleColumns: ["availability", "kpi_value"],
+  },
+  {
+    name: "ESC",
+    table: "esc",
+    color: "violet",
+    possibleColumns: ["total_availability", "kpi_value", "availability"],
+  },
+  {
+    name: "GNB",
+    table: "gnb",
+    color: "orange",
+    possibleColumns: ["kpi_value", "availability"],
+  },
+  {
+    name: "OSC",
+    table: "osc",
+    color: "cyan",
+    possibleColumns: ["availability", "kpi_value"],
+  },
+  {
+    name: "HPODSC",
+    table: "hpodsc",
+    color: "rose",
+    possibleColumns: ["total_availability", "kpi_value", "availability"],
+  },
 ];
 
-        const dateColumn =
-          possibleDateColumns.find((c) =>
-            columnNames.includes(c)
-          );
+const POSSIBLE_DATE_COLUMNS = ["Date", "date", "created_at", "report_date", "timestamp"];
 
-        if (!dateColumn) {
-
-          console.log(
-            `No date column found in ${site.table}`
-          );
-
-          continue;
-
-        }
-
-        // MAIN QUERY
-        const hasCircleColumn = columnNames.includes("circle");
-        const hasCmpColumn = columnNames.includes("cmp");
-
-        const selectedCircle = req.query.circle || "";
-        const selectedCmp    = req.query.cmp    || "";
-        const selectedRange  = req.query.range  || "last7";
-        const rangeFrom      = req.query.from   || "";
-        const rangeTo        = req.query.to     || "";
-
-        // Switch to CMP-wise grouping when a specific circle is selected and cmp column exists
-        const groupByCmp = selectedCircle !== "" && hasCmpColumn;
-
-        const { conditions: whereConditions, params } = buildCircleCmpFilter({
-          authUser: req.authUser,
-          hasCircleCol: hasCircleColumn,
-          hasCmpCol: hasCmpColumn,
-          selectedCircle,
-          selectedCmp,
-        });
-
-        const whereClause = whereConditions.length > 0
-          ? "AND " + whereConditions.join(" AND ")
-          : "";
-
-        const { sql: rangeSql, params: rangeParams } = buildRangeSql({
-          range: selectedRange,
-          table: site.table,
-          dateColumn,
-          filterWhereSql: whereClause,
-          filterParams: params,
-          from: rangeFrom,
-          to: rangeTo,
-        });
-
-        // Build entity SELECT / GROUP expressions based on grouping mode
-        let entitySelectSql, entityGroupSql;
-        if (groupByCmp) {
-          entitySelectSql = `TRIM(cmp) AS entity,`;
-          entityGroupSql  = `, TRIM(cmp)`;
-        } else if (hasCircleColumn) {
-          entitySelectSql = `TRIM(circle) AS entity,`;
-          entityGroupSql  = `, TRIM(circle)`;
-        } else {
-          entitySelectSql = `'Overall' AS entity,`;
-          entityGroupSql  = ``;
-        }
-
-        const orderEntitySql = entityGroupSql ? entityGroupSql + " ASC" : "";
-
-        const rows = await query(`
-          SELECT
-            DATE_FORMAT(${dateColumn}, '%Y-%m-%d') AS report_date,
-            ${entitySelectSql}
-            ROUND(AVG(CAST(REPLACE(${kpiColumn}, '%', '') AS DECIMAL(10,2))), 2) AS uptime
-          FROM ${site.table}
-          WHERE ${rangeSql}
-          ${whereClause}
-          GROUP BY DATE(${dateColumn})${entityGroupSql}
-          ORDER BY DATE(${dateColumn}) ASC${orderEntitySql}
-        `, [...rangeParams, ...params]);
-
-        const normalizedRows = rows.map((row) => ({
-          ...row,
-          uptime: normalizeUptimeValue(row.uptime, site.scaleFraction),
-        }));
-
-        // Group flat rows into { date → { entity → uptime } }
-        const rawGrouped = {};
-        const entitySet  = new Set();
-        for (const row of normalizedRows) {
-          if (!rawGrouped[row.report_date]) rawGrouped[row.report_date] = {};
-          const e = (row.entity || "Overall").trim();
-          if (e) { entitySet.add(e); rawGrouped[row.report_date][e] = Number(row.uptime || 0); }
-        }
-
-        const allDateKeys = Object.keys(rawGrouped).sort();
-
-        // Build chart data from dates that actually have records — no
-        // zero-filled gap days, since `range` now spans anywhere from a
-        // single day (today) to 30 days or an arbitrary custom span.
-        const chartData = allDateKeys.map((dateKey) => {
-          const d = new Date(`${dateKey}T00:00:00`);
-          const label = d.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
-          return { date: label, ...rawGrouped[dateKey] };
-        });
-
-        const entities = Array.from(entitySet).sort();
-                let cmps = [];
-
-if (hasCmpColumn) {
-  const cmpRows = await query(`
-    SELECT DISTINCT TRIM(cmp) AS cmp
-    FROM ${site.table}
-    WHERE cmp IS NOT NULL
-      AND TRIM(cmp) <> ''
-    ${selectedCircle ? "AND LOWER(TRIM(circle)) = LOWER(TRIM(?))" : ""}
-    ORDER BY cmp
-  `, selectedCircle ? [selectedCircle] : []);
-
-  cmps = cmpRows.map(r => r.cmp);
-}
-        const allVals = Object.values(rawGrouped).flatMap(day => Object.values(day)).map(Number);
-
-        const avg = allVals.length > 0
-          ? (allVals.reduce((a, b) => a + b, 0) / allVals.length).toFixed(2)
-          : "0.00";
-
-        finalData.push({
-          name:     site.name,
-          uptime:   `${avg}%`,
-          increase: "+0.00%",
-          color:    site.color,
-          chartData,
-          circles:  entities,  // kept for backward compat
-          entities,
-          cmps,
-          groupBy:  groupByCmp ? "cmp" : "circle",
-        });
-
-      } catch (siteError) {
-
-        console.log(
-
-          `Error in ${site.table}:`,
-
-          siteError.sqlMessage ||
-          siteError.message
-
-        );
-
-      }
-
+// Builds one KPI card. Runs the aggregate query and the cmp-list query in
+// parallel; returns null when the table/columns are missing or errored so the
+// caller can filter it out (same behavior as the old sequential loop).
+async function buildTowerCard(site, columnNames, req) {
+  try {
+    if (!columnNames) {
+      console.log(`Table not found: ${site.table}`);
+      return null;
     }
 
+    const kpiColumn = site.possibleColumns.find((c) => columnNames.includes(c));
+    if (!kpiColumn) {
+      console.log(`No KPI column found in ${site.table}`);
+      return null;
+    }
 
-    res.json(finalData);
+    const dateColumn = POSSIBLE_DATE_COLUMNS.find((c) => columnNames.includes(c));
+    if (!dateColumn) {
+      console.log(`No date column found in ${site.table}`);
+      return null;
+    }
 
-  } catch (error) {
+    const hasCircleColumn = columnNames.includes("circle");
+    const hasCmpColumn = columnNames.includes("cmp");
 
-    console.log(
+    const selectedCircle = req.query.circle || "";
+    const selectedCmp    = req.query.cmp    || "";
+    const selectedRange  = req.query.range  || "last7";
+    const rangeFrom      = req.query.from   || "";
+    const rangeTo        = req.query.to     || "";
 
-      "Tower uptime error:",
+    // Switch to CMP-wise grouping when a specific circle is selected and cmp column exists
+    const groupByCmp = selectedCircle !== "" && hasCmpColumn;
 
-      error.sqlMessage ||
-      error.message
-
-    );
-
-    res.status(500).json({
-
-      success: false,
-
-      message:
-        "Failed to fetch tower uptime data",
-
+    const { conditions: whereConditions, params } = buildCircleCmpFilter({
+      authUser: req.authUser,
+      hasCircleCol: hasCircleColumn,
+      hasCmpCol: hasCmpColumn,
+      selectedCircle,
+      selectedCmp,
     });
 
-  }
+    const whereClause = whereConditions.length > 0
+      ? "AND " + whereConditions.join(" AND ")
+      : "";
 
+    const { sql: rangeSql, params: rangeParams } = buildRangeSql({
+      range: selectedRange,
+      table: site.table,
+      dateColumn,
+      filterWhereSql: whereClause,
+      filterParams: params,
+      from: rangeFrom,
+      to: rangeTo,
+    });
+
+    // Build entity SELECT / GROUP expressions based on grouping mode
+    let entitySelectSql, entityGroupSql;
+    if (groupByCmp) {
+      entitySelectSql = `TRIM(cmp) AS entity,`;
+      entityGroupSql  = `, TRIM(cmp)`;
+    } else if (hasCircleColumn) {
+      entitySelectSql = `TRIM(circle) AS entity,`;
+      entityGroupSql  = `, TRIM(circle)`;
+    } else {
+      entitySelectSql = `'Overall' AS entity,`;
+      entityGroupSql  = ``;
+    }
+
+    const orderEntitySql = entityGroupSql ? entityGroupSql + " ASC" : "";
+
+    const kpiValueSql = buildKpiValueSql({
+      markerKpi: site.markerKpi,
+      kpiColumn,
+      columnNames,
+    });
+
+    const rowsPromise = query(`
+      SELECT
+        DATE_FORMAT(${dateColumn}, '%Y-%m-%d') AS report_date,
+        ${entitySelectSql}
+        ROUND(AVG(${kpiValueSql}), 2) AS uptime
+      FROM ${site.table}
+      WHERE ${rangeSql}
+      ${whereClause}
+      GROUP BY DATE(${dateColumn})${entityGroupSql}
+      ORDER BY DATE(${dateColumn}) ASC${orderEntitySql}
+    `, [...rangeParams, ...params]);
+
+    const cmpsPromise = hasCmpColumn
+      ? getDistinctCircleCmpPairs(site.table, columnNames)
+      : Promise.resolve([]);
+
+    const [rows, cmpPairs] = await Promise.all([rowsPromise, cmpsPromise]);
+
+    const normalizedRows = rows.map((row) => ({
+      ...row,
+      uptime: normalizeUptimeValue(row.uptime),
+    }));
+
+    // Group flat rows into { date → { entity → uptime } }
+    const rawGrouped = {};
+    const entitySet  = new Set();
+    for (const row of normalizedRows) {
+      if (!rawGrouped[row.report_date]) rawGrouped[row.report_date] = {};
+      const e = (row.entity || "Overall").trim();
+      if (e) { entitySet.add(e); rawGrouped[row.report_date][e] = Number(row.uptime || 0); }
+    }
+
+    const allDateKeys = Object.keys(rawGrouped).sort();
+
+    // Build chart data from dates that actually have records — no
+    // zero-filled gap days, since `range` now spans anywhere from a
+    // single day (today) to 30 days or an arbitrary custom span.
+    const chartData = allDateKeys.map((dateKey) => {
+      const d = new Date(`${dateKey}T00:00:00`);
+      const label = d.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+      return { date: label, ...rawGrouped[dateKey] };
+    });
+
+    const entities = Array.from(entitySet).sort();
+    const cmps = pickDistinct(cmpPairs, "cmp", [selectedCircle]);
+
+    const allVals = Object.values(rawGrouped).flatMap(day => Object.values(day)).map(Number);
+
+    const avg = allVals.length > 0
+      ? (allVals.reduce((a, b) => a + b, 0) / allVals.length).toFixed(2)
+      : "0.00";
+
+    return {
+      name:     site.name,
+      uptime:   `${avg}%`,
+      increase: "+0.00%",
+      color:    site.color,
+      chartData,
+      circles:  entities,  // kept for backward compat
+      entities,
+      cmps,
+      groupBy:  groupByCmp ? "cmp" : "circle",
+    };
+  } catch (siteError) {
+    console.log(`Error in ${site.table}:`, siteError.sqlMessage || siteError.message);
+    return null;
+  }
+}
+
+router.get("/tower-uptime", async (req, res) => {
+  try {
+    const schemas = await getKpiTableSchemas(KPI_TABLES);
+
+    // All 6 KPI tables are independent — query them concurrently instead of
+    // one after another. Promise.all preserves the card order.
+    const cards = await Promise.all(
+      SITE_TABLES.map((site) => buildTowerCard(site, schemas.get(site.table), req))
+    );
+
+    res.json(cards.filter(Boolean));
+  } catch (error) {
+    console.log("Tower uptime error:", error.sqlMessage || error.message);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch tower uptime data",
+    });
+  }
 });
 
 // ─── Analytics endpoint ──────────────────────────────────────────────────────
@@ -346,7 +301,7 @@ router.get("/tower-uptime/analytics", async (req, res) => {
     }
 
     const siteConfigs = {
-      AG1:    { table: "ag1",    kpiCols: ["kpi_value", "availability"], scaleFraction: true },
+      AG1:    { table: "ag1",    kpiCols: ["kpi_value", "availability"], markerKpi: true },
       ENB:    { table: "enb",    kpiCols: ["availability", "kpi_value"] },
       ESC:    { table: "esc",    kpiCols: ["total_availability", "kpi_value", "availability"] },
       GNB:    { table: "gnb",    kpiCols: ["availability", "kpi_value"] },
@@ -361,13 +316,11 @@ router.get("/tower-uptime/analytics", async (req, res) => {
 
     const { table } = config;
 
-    const tableCheck = await query(`SHOW TABLES LIKE '${table}'`);
-    if (!tableCheck.length) {
+    const schemas = await getKpiTableSchemas(KPI_TABLES);
+    const columnNames = schemas.get(table);
+    if (!columnNames) {
       return res.json({ chartData: [], summary: { avg: 0, highest: 0, lowest: 0, total: 0, trend: "stable" }, circles: [], cmps: [] });
     }
-
-    const cols = await query(`SHOW COLUMNS FROM \`${table}\``);
-    const columnNames = cols.map(c => c.Field);
 
     const kpiColumn = config.kpiCols.find(c => columnNames.includes(c));
     if (!kpiColumn) {
@@ -377,16 +330,50 @@ router.get("/tower-uptime/analytics", async (req, res) => {
     const hasCircleCol = columnNames.includes("circle");
     const hasCmpCol   = columnNames.includes("cmp");
     const dateColumn  = columnNames.includes("date") ? "date" : "created_at";
+    const col = `\`${dateColumn}\``;
 
-    // Determine latest date in the table
+    // Circles / CMP option lists don't depend on the period — start them
+    // immediately so they overlap with the maxDate lookup below.
+    let circlesPromise = Promise.resolve([]);
+    if (hasCircleCol) {
+      let cq = `SELECT DISTINCT TRIM(circle) AS circle FROM \`${table}\` WHERE circle IS NOT NULL AND TRIM(circle) != ''`;
+      const cqp = [];
+      if (!isAllCircle(req.authUser)) {
+        cq += ` AND LOWER(TRIM(circle)) = LOWER(TRIM(?))`;
+        cqp.push(req.authUser.circle);
+      }
+      cq += ` ORDER BY circle`;
+      circlesPromise = query(cq, cqp);
+    }
+
+    let cmpsPromise = Promise.resolve([]);
+    if (hasCmpCol) {
+      let mq = `SELECT DISTINCT TRIM(cmp) AS cmp FROM \`${table}\` WHERE cmp IS NOT NULL AND TRIM(cmp) != ''`;
+      const mqp = [];
+      if (!isAllCircle(req.authUser) && hasCircleCol) {
+        mq += ` AND LOWER(TRIM(circle)) = LOWER(TRIM(?))`;
+        mqp.push(req.authUser.circle);
+      }
+      if (circle && hasCircleCol) {
+        mq += ` AND LOWER(TRIM(circle)) = LOWER(TRIM(?))`;
+        mqp.push(circle);
+      }
+      mq += ` ORDER BY cmp`;
+      cmpsPromise = query(mq, mqp);
+    }
+
+    // Determine latest date in the table (indexed MAX — fast)
     const [{ maxDate } = {}] = await query(
-      `SELECT DATE(MAX(\`${dateColumn}\`)) AS maxDate FROM \`${table}\``
+      `SELECT DATE(MAX(${col})) AS maxDate FROM \`${table}\``
     );
 
-    // Build period WHERE clause
+    // Build period WHERE clause. Every condition is a sargable half-open
+    // range on the bare column (no DATE()/MONTH()/YEAR() wrappers) so the
+    // date index is used. Row sets are identical to the previous expressions.
     const normalizedPeriod = period  || "last7";
     const normalizedYear   = year    ? Number(year)  : new Date().getFullYear();
     const normalizedMonth  = month   ? Number(month) : (new Date().getMonth() + 1);
+    const pad2 = (n) => String(n).padStart(2, "0");
 
     let periodSql = "1=1";
     const periodParams = [];
@@ -394,55 +381,60 @@ router.get("/tower-uptime/analytics", async (req, res) => {
     if (maxDate) {
       switch (normalizedPeriod) {
         case "last7":
-          periodSql = `DATE(\`${dateColumn}\`) >= DATE(?) - INTERVAL 6 DAY AND DATE(\`${dateColumn}\`) <= DATE(?)`;
+          periodSql = `${col} >= DATE(?) - INTERVAL 6 DAY AND ${col} < DATE(?) + INTERVAL 1 DAY`;
           periodParams.push(maxDate, maxDate);
           break;
         case "last30":
-          periodSql = `DATE(\`${dateColumn}\`) >= DATE(?) - INTERVAL 29 DAY AND DATE(\`${dateColumn}\`) <= DATE(?)`;
+          periodSql = `${col} >= DATE(?) - INTERVAL 29 DAY AND ${col} < DATE(?) + INTERVAL 1 DAY`;
           periodParams.push(maxDate, maxDate);
           break;
         case "current_month":
-          periodSql = `MONTH(\`${dateColumn}\`) = MONTH(CURDATE()) AND YEAR(\`${dateColumn}\`) = YEAR(CURDATE())`;
+          periodSql = `${col} >= DATE_FORMAT(CURDATE(), '%Y-%m-01') AND ${col} < DATE_FORMAT(CURDATE(), '%Y-%m-01') + INTERVAL 1 MONTH`;
           break;
         case "prev_month":
-          periodSql = `MONTH(\`${dateColumn}\`) = MONTH(CURDATE() - INTERVAL 1 MONTH) AND YEAR(\`${dateColumn}\`) = YEAR(CURDATE() - INTERVAL 1 MONTH)`;
+          periodSql = `${col} >= DATE_FORMAT(CURDATE() - INTERVAL 1 MONTH, '%Y-%m-01') AND ${col} < DATE_FORMAT(CURDATE(), '%Y-%m-01')`;
           break;
-        case "custom_month":
-          periodSql = `MONTH(\`${dateColumn}\`) = ? AND YEAR(\`${dateColumn}\`) = ?`;
-          periodParams.push(normalizedMonth, normalizedYear);
+        case "custom_month": {
+          const monthStart = `${normalizedYear}-${pad2(normalizedMonth)}-01`;
+          periodSql = `${col} >= ? AND ${col} < DATE(?) + INTERVAL 1 MONTH`;
+          periodParams.push(monthStart, monthStart);
           break;
-        case "yearly":
-          periodSql = `YEAR(\`${dateColumn}\`) = ?`;
-          periodParams.push(normalizedYear);
+        }
+        case "yearly": {
+          const yearStart = `${normalizedYear}-01-01`;
+          periodSql = `${col} >= ? AND ${col} < DATE(?) + INTERVAL 1 YEAR`;
+          periodParams.push(yearStart, yearStart);
           break;
+        }
         case "month_range": {
           const fmY = fromMonthYear ? Number(fromMonthYear) : normalizedYear;
           const fmM = fromMonth     ? Number(fromMonth)     : 1;
           const tmY = toMonthYear   ? Number(toMonthYear)   : normalizedYear;
           const tmM = toMonth       ? Number(toMonth)       : 12;
-          periodSql = `DATE(\`${dateColumn}\`) >= ? AND DATE(\`${dateColumn}\`) <= LAST_DAY(?)`;
+          periodSql = `${col} >= ? AND ${col} < LAST_DAY(?) + INTERVAL 1 DAY`;
           periodParams.push(
-            `${fmY}-${String(fmM).padStart(2, "0")}-01`,
-            `${tmY}-${String(tmM).padStart(2, "0")}-01`
+            `${fmY}-${pad2(fmM)}-01`,
+            `${tmY}-${pad2(tmM)}-01`
           );
           break;
         }
         case "date_range": {
           const fDate = fromDate || new Date().toISOString().split("T")[0];
           const tDate = toDate   || fDate;
-          periodSql = `DATE(\`${dateColumn}\`) BETWEEN ? AND ?`;
+          periodSql = `${col} >= ? AND ${col} < DATE(?) + INTERVAL 1 DAY`;
           periodParams.push(fDate, tDate);
           break;
         }
         case "quarterly": {
           const qY = quarterYear ? Number(quarterYear) : normalizedYear;
           const q  = Math.min(4, Math.max(1, Number(quarter || Math.ceil((new Date().getMonth() + 1) / 3))));
-          periodSql = `YEAR(\`${dateColumn}\`) = ? AND MONTH(\`${dateColumn}\`) BETWEEN ? AND ?`;
-          periodParams.push(qY, (q - 1) * 3 + 1, q * 3);
+          const qStart = `${qY}-${pad2((q - 1) * 3 + 1)}-01`;
+          periodSql = `${col} >= ? AND ${col} < DATE(?) + INTERVAL 3 MONTH`;
+          periodParams.push(qStart, qStart);
           break;
         }
         default:
-          periodSql = `DATE(\`${dateColumn}\`) >= DATE(?) - INTERVAL 6 DAY AND DATE(\`${dateColumn}\`) <= DATE(?)`;
+          periodSql = `${col} >= DATE(?) - INTERVAL 6 DAY AND ${col} < DATE(?) + INTERVAL 1 DAY`;
           periodParams.push(maxDate, maxDate);
       }
     }
@@ -486,67 +478,51 @@ router.get("/tower-uptime/analytics", async (req, res) => {
 
     const orderEntitySql = entityGroupSql ? entityGroupSql + " ASC" : "";
 
+    const kpiValueSql = buildKpiValueSql({
+      markerKpi: config.markerKpi,
+      kpiColumn,
+      columnNames,
+    });
+
     // Chart data
     const chartSql = `
       SELECT
         ${dateFormatSql} AS date,
         ${entitySelectSql}
-        ROUND(AVG(CAST(REPLACE(\`${kpiColumn}\`, '%', '') AS DECIMAL(12,4))), 2) AS uptime
+        ROUND(AVG(${kpiValueSql}), 2) AS uptime
       FROM \`${table}\`
       ${whereClause}
       GROUP BY ${groupByExpr}${entityGroupSql}
       ORDER BY ${groupByExpr} ASC${orderEntitySql}
     `;
-    const chartRows = await query(chartSql, allParams);
 
     // Summary stats
     const summarySql = `
       SELECT
-        ROUND(AVG(CAST(REPLACE(\`${kpiColumn}\`, '%', '') AS DECIMAL(12,4))), 2) AS avg_uptime,
-        ROUND(MAX(CAST(REPLACE(\`${kpiColumn}\`, '%', '') AS DECIMAL(12,4))), 2) AS highest_uptime,
-        ROUND(MIN(CAST(REPLACE(\`${kpiColumn}\`, '%', '') AS DECIMAL(12,4))), 2) AS lowest_uptime,
+        ROUND(AVG(${kpiValueSql}), 2) AS avg_uptime,
+        ROUND(MAX(${kpiValueSql}), 2) AS highest_uptime,
+        ROUND(MIN(${kpiValueSql}), 2) AS lowest_uptime,
         COUNT(*) AS total_records
       FROM \`${table}\`
       ${whereClause}
     `;
-    const [summaryRow = {}] = await query(summarySql, allParams);
 
-    // Available circles (always full list, unfiltered except by user role)
-    let circles = [];
-    if (hasCircleCol) {
-      let cq = `SELECT DISTINCT TRIM(circle) AS circle FROM \`${table}\` WHERE circle IS NOT NULL AND TRIM(circle) != ''`;
-      const cqp = [];
-      if (!isAllCircle(req.authUser)) {
-        cq += ` AND LOWER(TRIM(circle)) = LOWER(TRIM(?))`;
-        cqp.push(req.authUser.circle);
-      }
-      cq += ` ORDER BY circle`;
-      const cr = await query(cq, cqp);
-      circles = cr.map(r => r.circle).filter(Boolean);
-    }
+    // Chart + summary + option lists all run concurrently
+    const [chartRows, summaryRows, cr, mr] = await Promise.all([
+      query(chartSql, allParams),
+      query(summarySql, allParams),
+      circlesPromise,
+      cmpsPromise,
+    ]);
 
-    // Available CMPs (filtered by selected circle if provided)
-    let cmps = [];
-    if (hasCmpCol) {
-      let mq = `SELECT DISTINCT TRIM(cmp) AS cmp FROM \`${table}\` WHERE cmp IS NOT NULL AND TRIM(cmp) != ''`;
-      const mqp = [];
-      if (!isAllCircle(req.authUser) && hasCircleCol) {
-        mq += ` AND LOWER(TRIM(circle)) = LOWER(TRIM(?))`;
-        mqp.push(req.authUser.circle);
-      }
-      if (circle && hasCircleCol) {
-        mq += ` AND LOWER(TRIM(circle)) = LOWER(TRIM(?))`;
-        mqp.push(circle);
-      }
-      mq += ` ORDER BY cmp`;
-      const mr = await query(mq, mqp);
-      cmps = mr.map(r => r.cmp).filter(Boolean);
-    }
+    const summaryRow = summaryRows[0] || {};
+    const circles = cr.map(r => r.circle).filter(Boolean);
+    const cmps    = mr.map(r => r.cmp).filter(Boolean);
 
     // Normalize values and detect trend
     const normalizedRows = chartRows.map(row => ({
       ...row,
-      uptime: normalizeUptimeValue(row.uptime, config.scaleFraction),
+      uptime: normalizeUptimeValue(row.uptime),
     }));
 
     // Trend: compare first-half avg vs second-half avg across all circles combined
@@ -571,9 +547,9 @@ router.get("/tower-uptime/analytics", async (req, res) => {
     res.json({
       chartData: normalizedRows,
       summary: {
-        avg:     normalizeUptimeValue(summaryRow.avg_uptime     || 0, config.scaleFraction),
-        highest: normalizeUptimeValue(summaryRow.highest_uptime || 0, config.scaleFraction),
-        lowest:  normalizeUptimeValue(summaryRow.lowest_uptime  || 0, config.scaleFraction),
+        avg:     normalizeUptimeValue(summaryRow.avg_uptime     || 0),
+        highest: normalizeUptimeValue(summaryRow.highest_uptime || 0),
+        lowest:  normalizeUptimeValue(summaryRow.lowest_uptime  || 0),
         total:   Number(summaryRow.total_records || 0),
         trend,
       },
@@ -600,40 +576,41 @@ router.get("/tower-uptime/analytics", async (req, res) => {
 router.get("/tower-uptime/cmps", async (req, res) => {
   try {
     const selectedCircle = req.query.circle || "";
-    const knownTables    = ["ag1", "enb", "esc", "gnb", "osc", "hpodsc"];
-    const allCmps        = new Set();
+    const schemas = await getKpiTableSchemas(KPI_TABLES);
 
-    for (const table of knownTables) {
-      try {
-        const tableCheck = await query(`SHOW TABLES LIKE '${table}'`);
-        if (!tableCheck.length) continue;
+    // Query all tables concurrently instead of sequentially
+    const perTableCmps = await Promise.all(
+      KPI_TABLES.map(async (table) => {
+        try {
+          const columnNames = schemas.get(table);
+          if (!columnNames || !columnNames.includes("cmp")) return [];
 
-        const cols        = await query(`SHOW COLUMNS FROM \`${table}\``);
-        const columnNames = cols.map(c => c.Field);
+          const hasCircleCol = columnNames.includes("circle");
+          const conditions   = ["cmp IS NOT NULL", "TRIM(cmp) != ''"];
+          const params       = [];
 
-        if (!columnNames.includes("cmp")) continue;
+          if (!isAllCircle(req.authUser) && hasCircleCol) {
+            conditions.push("LOWER(TRIM(circle)) = LOWER(TRIM(?))");
+            params.push(req.authUser.circle);
+          }
 
-        const hasCircleCol = columnNames.includes("circle");
-        const conditions   = ["cmp IS NOT NULL", "TRIM(cmp) != ''"];
-        const params       = [];
+          if (selectedCircle && hasCircleCol) {
+            conditions.push("LOWER(TRIM(circle)) = LOWER(TRIM(?))");
+            params.push(selectedCircle);
+          }
 
-        if (!isAllCircle(req.authUser) && hasCircleCol) {
-          conditions.push("LOWER(TRIM(circle)) = LOWER(TRIM(?))");
-          params.push(req.authUser.circle);
+          const sql  = `SELECT DISTINCT TRIM(cmp) AS cmp FROM \`${table}\` WHERE ${conditions.join(" AND ")} ORDER BY cmp`;
+          const rows = await query(sql, params);
+          return rows.map((r) => r.cmp).filter(Boolean);
+        } catch (e) {
+          console.log(`CMP fetch for ${table}:`, e.message);
+          return [];
         }
+      })
+    );
 
-        if (selectedCircle && hasCircleCol) {
-          conditions.push("LOWER(TRIM(circle)) = LOWER(TRIM(?))");
-          params.push(selectedCircle);
-        }
-
-        const sql  = `SELECT DISTINCT TRIM(cmp) AS cmp FROM \`${table}\` WHERE ${conditions.join(" AND ")} ORDER BY cmp`;
-        const rows = await query(sql, params);
-        rows.forEach(r => { if (r.cmp) allCmps.add(r.cmp.trim()); });
-      } catch (e) {
-        console.log(`CMP fetch for ${table}:`, e.message);
-      }
-    }
+    const allCmps = new Set();
+    perTableCmps.flat().forEach((cmp) => allCmps.add(cmp.trim()));
 
     res.json({ cmps: Array.from(allCmps).sort() });
   } catch (error) {

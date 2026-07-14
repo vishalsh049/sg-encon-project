@@ -65,13 +65,22 @@ async function authMiddleware(req, res, next) {
     await ensureAccessTables();
     const decoded = jwt.verify(header.slice(7), JWT_SECRET);
     const rows = await query(
-      `SELECT id, name, username, email, designation, circle, domain, status
+      `SELECT id, name, username, email, designation, circle, domain, status, role_id
        FROM users
        WHERE id = ?
        LIMIT 1`,
       [decoded.id]
     );
     const user = rows[0];
+
+    let roleName = "";
+    if (user?.role_id) {
+      const roleRows = await query(
+        `SELECT name FROM roles WHERE id = ? LIMIT 1`,
+        [user.role_id]
+      );
+      roleName = roleRows[0]?.name || "";
+    }
 
     if (!user || String(user.status || "active").toLowerCase() !== "active") {
       return res.status(401).json({ message: "User not found or inactive" });
@@ -83,6 +92,8 @@ async function authMiddleware(req, res, next) {
       username: user.username,
       email: user.email,
       designation: user.designation || "",
+      roleId: user.role_id || null,
+      roleName,
       circle: normalizeCircle(user.circle),
       domain: user.domain || "",
       status: user.status || "active",

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity,
   BarChart2,
@@ -122,6 +122,44 @@ function getCardLatestAvg(card) {
   return vals.reduce((a, b) => a + b, 0) / vals.length;
 }
 
+// ─── Loading skeletons ───────────────────────────────────────────────────────
+// Shown while /tower-uptime is in flight so the page paints its layout
+// instantly instead of a bare spinner. Mirrors the summary-row + card grid.
+
+function DashboardSkeleton() {
+  return (
+    <div className="animate-pulse" aria-hidden="true">
+      {/* Summary row skeleton */}
+      <div className="mb-2 grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <div key={i} className="rounded-xl border border-border-color bg-surface p-3 shadow-sm">
+            <div className="h-3 w-20 rounded bg-surface-muted" />
+            <div className="mt-2 h-5 w-16 rounded bg-surface-muted" />
+            <div className="mt-1.5 h-3 w-12 rounded bg-surface-muted" />
+          </div>
+        ))}
+      </div>
+
+      {/* KPI card skeletons */}
+      <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-2">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <div key={i} className="rounded-[18px] border border-border-color bg-surface p-4 shadow-sm">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-2xl bg-surface-muted" />
+              <div>
+                <div className="h-4 w-24 rounded bg-surface-muted" />
+                <div className="mt-1.5 h-3 w-14 rounded bg-surface-muted" />
+              </div>
+            </div>
+            <div className="mt-3 h-6 w-20 rounded bg-surface-muted" />
+            <div className="mt-3 h-44 rounded-xl bg-surface-muted" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ─── Analytics Popup (drill-down) ────────────────────────────────────────────
 
 function UptimeAnalyticsPopup({ kpiName, kpiColor, chartType, onClose, initialCircle, initialCmp }) {
@@ -163,9 +201,12 @@ function UptimeAnalyticsPopup({ kpiName, kpiColor, chartType, onClose, initialCi
     return () => document.removeEventListener("keydown", fn);
   }, [onClose]);
 
-  // Fetch whenever filters change (or a manual refresh is requested)
+  // Fetch whenever filters change (or a manual refresh is requested).
+  // AbortController cancels the previous in-flight request so rapid filter
+  // clicks don't stack duplicate requests.
   useEffect(() => {
     let cancelled = false;
+    const controller = new AbortController();
     const fetchData = async () => {
       setLoading(true);
       try {
@@ -185,10 +226,11 @@ function UptimeAnalyticsPopup({ kpiName, kpiColor, chartType, onClose, initialCi
           quarter:       filters.quarter,
           quarterYear:   filters.quarterYear,
         });
-        const res  = await authFetch(buildApiUrl(`/api/tower-uptime/analytics?${params}`));
+        const res  = await authFetch(buildApiUrl(`/api/tower-uptime/analytics?${params}`), { signal: controller.signal });
         const json = await res.json();
         if (!cancelled) setData(json);
       } catch (err) {
+        if (err.name === "AbortError") return;
         console.error("Analytics fetch error:", err);
         if (!cancelled) setData({ chartData: [], summary: { avg: 0, highest: 0, lowest: 0, total: 0, trend: "stable" }, circles: [], cmps: [] });
       } finally {
@@ -196,7 +238,7 @@ function UptimeAnalyticsPopup({ kpiName, kpiColor, chartType, onClose, initialCi
       }
     };
     fetchData();
-    return () => { cancelled = true; };
+    return () => { cancelled = true; controller.abort(); };
   }, [kpiName, filters, refreshTick]);
 
   // Regroup flat rows -> { date: label, <entity1>: value, ... } so it matches
@@ -663,7 +705,7 @@ const KpiCard = React.memo(function KpiCard({ card, chartType, collapsed, onTogg
           />
 
           <button
-            onClick={onToggleCollapse}
+            onClick={() => onToggleCollapse(card.name)}
             className="flex h-8 w-8 items-center justify-center rounded-xl text-text-muted hover:bg-surface-muted hover:text-text-secondary transition"
             title={collapsed ? "Expand card" : "Collapse card"}
           >
@@ -736,12 +778,16 @@ function KpiDashboard() {
   const { chartType, selectedCircle, selectedCmp, dateRange, customFrom, customTo, collapsedCards } = prefs;
   const isDark = useIsDarkMode();
 
-  const toggleCardCollapsed = (kpiName) => {
-    const set = new Set(collapsedCards);
-    if (set.has(kpiName)) set.delete(kpiName);
-    else set.add(kpiName);
-    updatePrefs({ collapsedCards: Array.from(set) });
-  };
+  // Stable identity so the memoized KpiCards don't re-render on every
+  // dashboard render (updatePrefs supports functional patches).
+  const toggleCardCollapsed = useCallback((kpiName) => {
+    updatePrefs(prev => {
+      const set = new Set(prev.collapsedCards);
+      if (set.has(kpiName)) set.delete(kpiName);
+      else set.add(kpiName);
+      return { collapsedCards: Array.from(set) };
+    });
+  }, [updatePrefs]);
 
   const [towerCards, setTowerCards] = useState([]);
   const [circleList, setCircleList] = useState([]);
@@ -769,67 +815,83 @@ function KpiDashboard() {
     return () => document.removeEventListener("mousedown", fn);
   }, [chartTypeMenuOpen, rangeMenuOpen]);
 
-  // Fetch tower cards
-  const fetchTower = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const params = new URLSearchParams({
-        circle: selectedCircle,
-        cmp:    selectedCmp,
-        range:  dateRange,
-      });
-      if (dateRange === "custom") {
-        params.set("from", customFrom || "");
-        params.set("to",   customTo   || "");
-      }
-      const res  = await authFetch(buildApiUrl(`/api/tower-uptime?${params}`));
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
-      setTowerCards(data);
+  // Manual refresh just bumps a tick; the effect below owns the actual fetch
+  // so every request is cancellable and the callback identity stays stable
+  // for the memoized cards.
+  const [refreshTick, setRefreshTick] = useState(0);
+  const refreshTower = useCallback(() => setRefreshTick(t => t + 1), []);
 
-      if (!selectedCircle) {
-        const circles = new Set();
-        data.forEach(card => {
-          if (card.groupBy === "circle") {
-            (card.entities || card.circles || []).forEach(c => { if (c) circles.add(c); });
-          }
-        });
-        const sorted = Array.from(circles).sort();
-        if (sorted.length > 0) setCircleList(sorted);
-      }
-    } catch (err) {
-      console.error(err);
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
+  // Fetch tower cards. The AbortController cancels the in-flight request when
+  // filters change again before it resolves, so rapid filter changes can't
+  // pile up duplicate requests or apply stale responses out of order.
   useEffect(() => {
+    const controller = new AbortController();
+
+    const fetchTower = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const params = new URLSearchParams({
+          circle: selectedCircle,
+          cmp:    selectedCmp,
+          range:  dateRange,
+        });
+        if (dateRange === "custom") {
+          params.set("from", customFrom || "");
+          params.set("to",   customTo   || "");
+        }
+        const res  = await authFetch(buildApiUrl(`/api/tower-uptime?${params}`), { signal: controller.signal });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        setTowerCards(data);
+
+        if (!selectedCircle) {
+          const circles = new Set();
+          data.forEach(card => {
+            if (card.groupBy === "circle") {
+              (card.entities || card.circles || []).forEach(c => { if (c) circles.add(c); });
+            }
+          });
+          const sorted = Array.from(circles).sort();
+          if (sorted.length > 0) setCircleList(sorted);
+        }
+        setLoading(false);
+      } catch (err) {
+        if (err.name === "AbortError") return; // superseded by a newer request
+        console.error(err);
+        setError(err.message);
+        setLoading(false);
+      }
+    };
+
     fetchTower();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedCircle, selectedCmp, dateRange, customFrom, customTo]);
+    return () => controller.abort();
+  }, [selectedCircle, selectedCmp, dateRange, customFrom, customTo, refreshTick]);
 
   // Fetch CMP list from dedicated endpoint whenever circle selection changes
   useEffect(() => {
+    const controller = new AbortController();
+
     const fetchCmps = async () => {
       try {
         const params = new URLSearchParams({ circle: selectedCircle });
-        const res    = await authFetch(buildApiUrl(`/api/tower-uptime/cmps?${params}`));
+        const res    = await authFetch(buildApiUrl(`/api/tower-uptime/cmps?${params}`), { signal: controller.signal });
         const json   = await res.json();
         setCmpList(json.cmps || []);
       } catch (err) {
+        if (err.name === "AbortError") return;
         console.error("CMP fetch error:", err);
         setCmpList([]);
       }
     };
+
     fetchCmps();
+    return () => controller.abort();
   }, [selectedCircle]);
 
-  const openAnalytics = (card) => {
+  const openAnalytics = useCallback((card) => {
     setAnalyticsPopup({ name: card.name, color: card.color });
-  };
+  }, []);
 
   const activeRangeLabel = RANGE_OPTIONS.find(r => r.key === dateRange)?.label || "Last 7 Days";
   const activeChartLabel = CHART_TYPE_OPTIONS.find(c => c.key === chartType)?.label || "Line Chart";
@@ -943,15 +1005,8 @@ function KpiDashboard() {
         </div>
       )}
 
-      {/* Loading */}
-      {loading && (
-        <div className="flex items-center justify-center py-16">
-          <div className="flex flex-col items-center gap-3">
-            <div className="h-8 w-8 animate-spin rounded-full border-[3px] border-border-color border-t-blue-500" />
-            <p className="text-sm text-text-muted">Loading tower uptime data…</p>
-          </div>
-        </div>
-      )}
+      {/* Loading skeleton — page paints instantly while the API completes */}
+      {loading && <DashboardSkeleton />}
 
       {/* ── Summary Row ── */}
       {!loading && towerCards.length > 0 && <SummaryRow towerCards={towerCards} />}
@@ -968,15 +1023,15 @@ function KpiDashboard() {
       {/* ── KPI Cards ── */}
       {!loading && chartType !== "kpi-comparison" && (
         <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-2">
-          {towerCards.map((card, index) => (
-            <KpiCard  
-              key={index}
+          {towerCards.map((card) => (
+            <KpiCard
+              key={card.name}
               card={card}
               chartType={chartType}
               collapsed={collapsedCards.includes(card.name)}
-              onToggleCollapse={() => toggleCardCollapsed(card.name)}
+              onToggleCollapse={toggleCardCollapsed}
               onOpenAnalytics={openAnalytics}
-              onRefresh={fetchTower}
+              onRefresh={refreshTower}
             />
           ))}
         </div>

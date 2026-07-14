@@ -161,7 +161,7 @@ console.log("Searching loginId:", queryLoginId);
         });
       } catch (err) {
         console.error("LOGIN FULL ERROR:", err);
-        return res.status(500).json({ error: err.message, stack: process.env.NODE_ENV === 'development' ? err.stack : undefined });
+        return res.status(500).json({ message: "Login failed" });
       }
     })();
     

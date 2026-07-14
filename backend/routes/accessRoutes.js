@@ -1,5 +1,6 @@
 const express = require("express");
 const jwt = require("jsonwebtoken");
+const bcrypt = require("bcrypt");
 
 const {
 ensureAccessTables,
@@ -210,7 +211,7 @@ pagePermissions = [],
       normalizedDesignation,
       normalizedUsername,
       normalizedEmail,
-      normalizedPassword,
+      await bcrypt.hash(normalizedPassword, 10),
       normalizedCircle,
       normalizedDomain,
       status,
@@ -333,13 +334,14 @@ req.params.id
   `;
 
   if (normalizedPassword) {
+    const hashedPassword = await bcrypt.hash(normalizedPassword, 10);
     sql += `
       , password = ?
       WHERE id = ?
     `;
 
     updates.push(
-      normalizedPassword,
+      hashedPassword,
       userId
     );
   } else {

@@ -1507,6 +1507,10 @@ if (!isValidCircle(circle)) {
                   )
                 `);
 
+    // Real availability from the Excel file; kpi_value stays a per-site marker
+    // (=1) because the main dashboard counts sites with SUM(kpi_value).
+    await ensureColumn(tableName, "availability", "DECIMAL(12,4) NULL");
+
     const insertRows = [];
 
     const normalizeKey = (key) =>
@@ -1540,7 +1544,16 @@ if (!isValidCircle(circle)) {
 
       if (!circle || !cmp) return;
 
-      insertRows.push([fileId, String(circle).trim(), String(cmp).trim(), dateValue, 1]);
+      const availabilityValue = toExactNumber(
+        findHeaderValue(cleanRow, [
+          "availability",
+          "total availability",
+          "overall cell availability",
+          "uptime",
+        ])
+      );
+
+      insertRows.push([fileId, String(circle).trim(), String(cmp).trim(), dateValue, 1, availabilityValue]);
     });
 
     if (!insertRows.length) {
@@ -1549,7 +1562,7 @@ if (!isValidCircle(circle)) {
       throw error;
     }
 
-    await query(`INSERT INTO ${tableName} (file_id, circle, cmp, date, kpi_value) VALUES ?`, [
+    await query(`INSERT INTO ${tableName} (file_id, circle, cmp, date, kpi_value, availability) VALUES ?`, [
       insertRows,
     ]);
     return insertRows.length;

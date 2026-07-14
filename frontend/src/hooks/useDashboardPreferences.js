@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 const STORAGE_KEY = "kpiDashboardPrefs";
 
@@ -35,7 +35,15 @@ export function useDashboardPreferences() {
     }
   }, [prefs]);
 
-  const updatePrefs = (patch) => setPrefs(prev => ({ ...prev, ...patch }));
+  // Stable identity (useCallback) so memoized consumers don't re-render just
+  // because the hook re-ran. Accepts either a patch object or a function of
+  // the previous prefs returning a patch.
+  const updatePrefs = useCallback((patch) => {
+    setPrefs(prev => ({
+      ...prev,
+      ...(typeof patch === "function" ? patch(prev) : patch),
+    }));
+  }, []);
 
   return [prefs, updatePrefs];
 }
