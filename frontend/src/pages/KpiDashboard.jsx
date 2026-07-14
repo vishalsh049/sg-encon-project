@@ -5,13 +5,11 @@ import {
   CalendarDays,
   ChevronDown,
   ChevronUp,
-  Eye,
   FileSpreadsheet,
   Image as ImageIcon,
   Maximize2,
   Minimize2,
   Minus,
-  MoreVertical,
   Printer,
   TrendingDown,
   TrendingUp,
@@ -112,16 +110,6 @@ const formatChartDate = (dateStr, period) => {
   return d.toLocaleDateString("en-GB", { day: "2-digit", month: "short" });
 };
 
-function getCardLatestAvg(card) {
-  const last = (card.chartData || [])[card.chartData.length - 1];
-  if (!last) return null;
-  const vals = (card.entities || [])
-    .map(e => Number(last[e]))
-    .filter(v => Number.isFinite(v));
-  if (!vals.length) return null;
-  return vals.reduce((a, b) => a + b, 0) / vals.length;
-}
-
 // ─── Loading skeletons ───────────────────────────────────────────────────────
 // Shown while /tower-uptime is in flight so the page paints its layout
 // instantly instead of a bare spinner. Mirrors the summary-row + card grid.
@@ -162,8 +150,27 @@ function DashboardSkeleton() {
 
 // ─── Analytics Popup (drill-down) ────────────────────────────────────────────
 
+// Every chart view the popup renders from the one analytics dataset — the
+// popup is the complete analytics view for a KPI, so all of these are shown
+// together (main chart first, the rest in the related-charts grid below).
+const POPUP_CHART_VIEWS = [
+  { key: "line",      label: "Line Trend" },
+  { key: "bar",       label: "Bar Comparison" },
+  { key: "area",      label: "Area Trend" },
+  { key: "stacked",   label: "Stacked Bar" },
+  { key: "combo",     label: "Combo View" },
+  { key: "heatmap",   label: "Heat Map" },
+  { key: "sparkline", label: "Sparkline Cards" },
+  { key: "table",     label: "Data Table" },
+];
+
 function UptimeAnalyticsPopup({ kpiName, kpiColor, chartType, onClose, initialCircle, initialCmp }) {
   const style = colorStyles[kpiColor] || colorStyles.blue;
+
+  // The dashboard-level "kpi-comparison" type has no single-KPI equivalent —
+  // fall back to the line trend as the popup's main chart.
+  const mainChartType = POPUP_CHART_VIEWS.some(v => v.key === chartType) ? chartType : "line";
+  const relatedChartViews = POPUP_CHART_VIEWS.filter(v => v.key !== mainChartType);
 
   const _now = new Date();
   const [filters, setFilters] = useState({
@@ -187,6 +194,12 @@ function UptimeAnalyticsPopup({ kpiName, kpiColor, chartType, onClose, initialCi
   const [fullscreen, setFullscreen] = useState(false);
   const [refreshTick, setRefreshTick] = useState(0);
   const chartRef = useRef(null);
+
+  // Per-popup response cache keyed by query string — switching a filter back
+  // to a combination already fetched reuses the response instead of hitting
+  // the API again. Cleared by the explicit Refresh button, and discarded
+  // entirely when the popup unmounts, so data can never go stale silently.
+  const cacheRef = useRef(new Map());
 
   // Lock body scroll
   useEffect(() => {
@@ -226,8 +239,15 @@ function UptimeAnalyticsPopup({ kpiName, kpiColor, chartType, onClose, initialCi
           quarter:       filters.quarter,
           quarterYear:   filters.quarterYear,
         });
+        const cacheKey = params.toString();
+        const cached = cacheRef.current.get(cacheKey);
+        if (cached) {
+          if (!cancelled) setData(cached);
+          return;
+        }
         const res  = await authFetch(buildApiUrl(`/api/tower-uptime/analytics?${params}`), { signal: controller.signal });
         const json = await res.json();
+        if (res.ok) cacheRef.current.set(cacheKey, json); // never cache error payloads
         if (!cancelled) setData(json);
       } catch (err) {
         if (err.name === "AbortError") return;
@@ -534,7 +554,7 @@ function UptimeAnalyticsPopup({ kpiName, kpiColor, chartType, onClose, initialCi
                   <FileSpreadsheet className="h-3 w-3" />
                   Export CSV
                 </button>
-                <button
+           {/*     <button
                   onClick={() => window.print()}
                   disabled={loading || !transformedData.length}
                   title="Print or save this analytics view as PDF"
@@ -543,8 +563,9 @@ function UptimeAnalyticsPopup({ kpiName, kpiColor, chartType, onClose, initialCi
                   <Printer className="h-3 w-3" />
                   Download PDF
                 </button>
+                 */}
                 <button
-                  onClick={() => setRefreshTick(t => t + 1)}
+                  onClick={() => { cacheRef.current.clear(); setRefreshTick(t => t + 1); }}
                   className="flex items-center gap-1.5 rounded-xl border border-border-color bg-surface px-3 py-1.5 text-xs font-medium text-text-secondary hover:bg-surface-muted shadow-sm transition"
                 >
                   Refresh
@@ -587,8 +608,9 @@ function UptimeAnalyticsPopup({ kpiName, kpiColor, chartType, onClose, initialCi
                   <ChartRenderer
                     chartData={transformedData}
                     entities={chartEntities}
-                    chartType={chartType}
+                    chartType={mainChartType}
                     variant="full"
+                    verticalLabels
                   />
                 </div>
               )}
@@ -596,55 +618,38 @@ function UptimeAnalyticsPopup({ kpiName, kpiColor, chartType, onClose, initialCi
           </div>
 
           {/* ── Summary KPI cards ── */}
-          {!loading && (
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+         
 
-              {/* Average */}
-              <div className="rounded-2xl border border-blue-100 dark:border-blue-500/20 bg-gradient-to-br from-blue-50/70 to-surface dark:from-blue-500/10 dark:to-surface p-4 shadow-sm hover:shadow-md transition">
-                <p className="text-[10px] font-bold uppercase tracking-[0.20em] text-blue-400">Average</p>
-                <p className="mt-2 text-2xl font-bold tracking-tight text-text-primary">
-                  {Number(summary.avg || 0).toFixed(2)}%
-                </p>
-                <p className="mt-0.5 text-xs text-text-muted">Avg uptime</p>
+          {/* ── Related charts — every other view of the same dataset ── */}
+          {!loading && transformedData.length > 0 && (
+            <div>
+              <div className="mb-3 flex items-center gap-2">
+                <BarChart2 className={`h-4 w-4 ${style.text}`} />
+                <h3 className="text-sm font-semibold text-text-primary">All Chart Views</h3>
+                <span className="rounded-full bg-surface-muted px-2 py-0.5 text-[10px] font-semibold text-text-muted">
+                  Same data, {relatedChartViews.length} more views
+                </span>
               </div>
-
-              {/* Highest */}
-              <div className="rounded-2xl border border-emerald-100 dark:border-emerald-500/20 bg-gradient-to-br from-emerald-50/70 to-surface dark:from-emerald-500/10 dark:to-surface p-4 shadow-sm hover:shadow-md transition">
-                <p className="text-[10px] font-bold uppercase tracking-[0.20em] text-emerald-500">Highest</p>
-                <p className="mt-2 text-2xl font-bold tracking-tight text-emerald-700 dark:text-emerald-400">
-                  {Number(summary.highest || 0).toFixed(2)}%
-                </p>
-                <p className="mt-0.5 text-xs text-text-muted">Peak uptime</p>
+              <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                {relatedChartViews.map(view => (
+                  <div key={view.key} className="min-w-0 overflow-hidden rounded-2xl border border-border-color bg-surface shadow-sm">
+                    <div className="border-b border-border-color bg-surface-muted/40 px-4 py-2.5">
+                      <span className="text-xs font-semibold text-text-primary">
+                        {kpiName} — {view.label}
+                      </span>
+                    </div>
+                    <div className="p-4">
+                      <ChartRenderer
+                        chartData={transformedData}
+                        entities={chartEntities}
+                        chartType={view.key}
+                        variant="compact"
+                        verticalLabels
+                      />
+                    </div>
+                  </div>
+                ))}
               </div>
-
-              {/* Lowest */}
-              <div className="rounded-2xl border border-rose-100 dark:border-rose-500/20 bg-gradient-to-br from-rose-50/70 to-surface dark:from-rose-500/10 dark:to-surface p-4 shadow-sm hover:shadow-md transition">
-                <p className="text-[10px] font-bold uppercase tracking-[0.20em] text-rose-400">Lowest</p>
-                <p className="mt-2 text-2xl font-bold tracking-tight text-rose-600 dark:text-rose-400">
-                  {Number(summary.lowest || 0).toFixed(2)}%
-                </p>
-                <p className="mt-0.5 text-xs text-text-muted">Min uptime</p>
-              </div>
-
-              {/* Trend */}
-              <div className={`rounded-2xl border p-4 shadow-sm hover:shadow-md transition ${trendBg}`}>
-                <p className="text-[10px] font-bold uppercase tracking-[0.20em] text-text-muted">Trend</p>
-                <div className={`mt-2 flex items-center gap-1.5 ${trendColor}`}>
-                  <TrendIcon className="h-5 w-5 flex-shrink-0" />
-                  <span className="text-xl font-bold tracking-tight">{trendText}</span>
-                </div>
-                <p className="mt-0.5 text-xs text-text-muted">Overall direction</p>
-              </div>
-
-              {/* Total Records */}
-              <div className="rounded-2xl border border-border-color bg-gradient-to-br from-surface-muted/70 to-surface p-4 shadow-sm hover:shadow-md transition">
-                <p className="text-[10px] font-bold uppercase tracking-[0.20em] text-text-muted">Records</p>
-                <p className="mt-2 text-2xl font-bold tracking-tight text-text-primary">
-                  {Number(summary.total || 0).toLocaleString()}
-                </p>
-                <p className="mt-0.5 text-xs text-text-muted">Total data points</p>
-              </div>
-
             </div>
           )}
 
@@ -656,26 +661,13 @@ function UptimeAnalyticsPopup({ kpiName, kpiColor, chartType, onClose, initialCi
 
 // ─── KPI Card ────────────────────────────────────────────────────────────────
 // Memoized so switching the global chart type / date range only re-renders
-// cards whose data actually changed, and each card's own menu/legend state
-// stays local instead of living in an index-keyed map on the parent.
+// cards whose data actually changed, and each card's legend state stays local
+// instead of living in an index-keyed map on the parent.
 
 const KpiCard = React.memo(function KpiCard({ card, chartType, collapsed, onToggleCollapse, onOpenAnalytics, onRefresh }) {
-  const [menuOpen, setMenuOpen] = useState(false);
-  const menuRef = useRef(null);
-  const containerRef = useRef(null);
-
-  useEffect(() => {
-    if (!menuOpen) return;
-    const fn = (e) => { if (menuRef.current && !menuRef.current.contains(e.target)) setMenuOpen(false); };
-    document.addEventListener("mousedown", fn);
-    return () => document.removeEventListener("mousedown", fn);
-  }, [menuOpen]);
-
   const style = colorStyles[card.color] || colorStyles.blue;
   const orderedEntities = useMemo(() => orderEntities(card.entities || card.circles || []), [card.entities, card.circles]);
   const health = useMemo(() => getHealthStatus(parseFloat(card.uptime)), [card.uptime]);
-  const latestAvg = useMemo(() => getCardLatestAvg(card), [card]);
-  const lastDateLabel = card.chartData?.[card.chartData.length - 1]?.date;
 
   return (
     <div className={`relative rounded-[18px] border ${style.border} bg-surface p-4 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-xl`}>
@@ -696,10 +688,6 @@ const KpiCard = React.memo(function KpiCard({ card, chartType, collapsed, onTogg
 
         <div className="flex items-center gap-1">
           <ChartToolbar
-            kpiName={card.name}
-            chartData={card.chartData}
-            entities={orderedEntities}
-            containerRef={containerRef}
             onFullscreen={() => onOpenAnalytics(card)}
             onRefresh={onRefresh}
           />
@@ -711,61 +699,20 @@ const KpiCard = React.memo(function KpiCard({ card, chartType, collapsed, onTogg
           >
             {collapsed ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
           </button>
-
-          {/* Three-dot menu (drill-down) */}
-          <div className="relative" ref={menuRef}>
-            <button
-              onClick={() => setMenuOpen(o => !o)}
-              className="flex h-8 w-8 items-center justify-center rounded-xl text-text-muted hover:bg-surface-muted hover:text-text-secondary transition"
-              title="Options"
-            >
-              <MoreVertical className="h-4 w-4" />
-            </button>
-
-            {menuOpen && (
-              <div className="absolute right-0 top-9 z-50 min-w-[160px] rounded-2xl border border-border-color bg-surface p-1.5 shadow-[0_10px_40px_rgba(15,23,42,0.14)]">
-                <button
-                  onClick={() => { setMenuOpen(false); onOpenAnalytics(card); }}
-                  className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-text-secondary hover:bg-blue-50 hover:text-blue-700 transition"
-                >
-                  <Eye className="h-4 w-4 text-blue-400 flex-shrink-0" />
-                  View Analytics
-                </button>
-              </div>
-            )}
-          </div>
         </div>
       </div>
 
       {collapsed ? (
         <p className="mt-2 text-lg font-semibold text-text-primary">{card.uptime}</p>
       ) : (
-        <>
-          {/* Stats row */}
-          <div className="mt-2 flex items-center justify-between">
-            <p className="text-lg font-semibold text-text-primary">{card.uptime}</p>
-            <div className="flex items-center gap-1 rounded-full bg-green-50 dark:bg-green-500/10 px-2 py-1">
-              <TrendingUp className="h-3 w-3 text-green-600 dark:text-green-400" />
-              <span className="text-xs font-semibold text-green-600 dark:text-green-400">{card.increase}</span>
-            </div>
-          </div>
-
-          {/* Latest data point + health label */}
-          <div className="mt-1 flex items-center justify-between text-[10px] text-text-muted">
-            <span>{lastDateLabel ? `Last data: ${lastDateLabel}` : ""}</span>
-            <span>{latestAvg != null ? `Latest avg: ${latestAvg.toFixed(2)}%` : ""}</span>
-          </div>
-
-          {/* Chart */}
-          <div className="mt-3" ref={containerRef}>
-            <ChartRenderer
-              chartData={card.chartData || []}
-              entities={orderedEntities}
-              chartType={chartType}
-              variant="compact"
-            />
-          </div>
-        </>
+        <div className="mt-3">
+          <ChartRenderer
+            chartData={card.chartData || []}
+            entities={orderedEntities}
+            chartType={chartType}
+            variant="compact"
+          />
+        </div>
       )}
     </div>
   );

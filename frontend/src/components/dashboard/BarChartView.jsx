@@ -9,7 +9,7 @@ import { createValueLabel } from "./ValueLabel";
 // to know about this limitation.
 const BAR_CAP = 7;
 
-export default function BarChartView({ chartData, entities, hiddenEntities, variant = "compact", dark = false }) {
+export default function BarChartView({ chartData, entities, hiddenEntities, variant = "compact", dark = false, verticalLabels = false }) {
   const isCompact = variant === "compact";
   const theme = getChartTheme(dark);
   const source = chartData || [];
@@ -18,7 +18,9 @@ export default function BarChartView({ chartData, entities, hiddenEntities, vari
   const stride = getLabelStride(data.length, variant);
   // Narrow grouped bars (compact card + several entities) collide
   // horizontally with a horizontal label — rotate vertical instead.
-  const rotate = isCompact && entities.length > 3;
+  const rotate = (isCompact && entities.length > 3) || verticalLabels;
+  // Headroom for rotated labels near the top of the plot (see LineChartView).
+  const topMargin = verticalLabels ? (isCompact ? 34 : 46) : 10;
 
   const allVals = useMemo(() =>
     data.flatMap(row => entities.map(e => Number(row[e])).filter(v => v > 0)),
@@ -47,7 +49,7 @@ export default function BarChartView({ chartData, entities, hiddenEntities, vari
       )}
       <div className={isCompact ? "h-36 w-full" : "h-[360px] w-full"}>
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={data} margin={{ top: 10, right: isCompact ? 4 : 20, left: isCompact ? -28 : -8, bottom: 0 }} barCategoryGap="20%" barGap={2}>
+          <BarChart data={data} margin={{ top: topMargin, right: isCompact ? 4 : 20, left: isCompact ? -28 : -8, bottom: 0 }} barCategoryGap="20%" barGap={2}>
             <CartesianGrid strokeDasharray="2 2" stroke={theme.grid} vertical={false} />
             <XAxis dataKey="date" tick={{ fontSize: isCompact ? 8 : 11, fill: theme.tick }} axisLine={false} tickLine={false} />
             <YAxis

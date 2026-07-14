@@ -16,7 +16,9 @@ const NO_LEGEND_TYPES = ["table", "sparkline"];
 
 // Pure/presentational — dispatches to the selected chart view. No fetching;
 // used both inside the compact per-card view and the fullscreen popup.
-function ChartRendererBase({ chartData, entities, chartType, variant = "compact" }) {
+// `verticalLabels` rotates every on-chart value label -90° — set only by the
+// fullscreen analytics popup; dashboard cards keep horizontal labels.
+function ChartRendererBase({ chartData, entities, chartType, variant = "compact", verticalLabels = false }) {
   const [hidden, setHidden] = useState(() => new Set());
   const dark = useIsDarkMode();
 
@@ -31,7 +33,7 @@ function ChartRendererBase({ chartData, entities, chartType, variant = "compact"
     });
   };
 
-  const commonProps = { chartData, entities: orderedEntities, hiddenEntities: hidden, variant, dark };
+  const commonProps = { chartData, entities: orderedEntities, hiddenEntities: hidden, variant, dark, verticalLabels };
 
   return (
     <div>

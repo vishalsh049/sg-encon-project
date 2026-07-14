@@ -4,10 +4,13 @@ import { calcYAxis, getChartTheme, getEntityColor, getLabelStride } from "../../
 import { ChartTooltip } from "./Tooltip";
 import { createValueLabel } from "./ValueLabel";
 
-export default function LineChartView({ chartData, entities, hiddenEntities, variant = "compact", dark = false }) {
+export default function LineChartView({ chartData, entities, hiddenEntities, variant = "compact", dark = false, verticalLabels = false }) {
   const isCompact = variant === "compact";
   const theme = getChartTheme(dark);
   const stride = getLabelStride(chartData?.length, variant);
+  // Rotated labels extend upward from their anchor — reserve headroom so
+  // labels on points near the top of the plot aren't clipped by the SVG edge.
+  const topMargin = verticalLabels ? (isCompact ? 34 : 46) : 10;
 
   const allVals = useMemo(() =>
     (chartData || []).flatMap(row => entities.map(e => Number(row[e])).filter(v => v > 0)),
@@ -30,7 +33,7 @@ export default function LineChartView({ chartData, entities, hiddenEntities, var
   return (
     <div className={isCompact ? "h-40 w-full" : "h-[360px] w-full"}>
       <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={chartData} margin={{ top: 10, right: isCompact ? 8 : 20, left: isCompact ? -24 : -8, bottom: 0 }}>
+        <LineChart data={chartData} margin={{ top: topMargin, right: isCompact ? 8 : 20, left: isCompact ? -24 : -8, bottom: 0 }}>
           <CartesianGrid strokeDasharray="2 2" stroke={theme.grid} vertical={false} />
           <XAxis dataKey="date" tick={{ fontSize: isCompact ? 8 : 11, fill: theme.tick }} axisLine={false} tickLine={false} />
           <YAxis
@@ -58,7 +61,7 @@ export default function LineChartView({ chartData, entities, hiddenEntities, var
             >
               <LabelList
                 dataKey={e}
-                content={createValueLabel({ mode: "point", seriesIndex: i, stride, variant, dark })}
+                content={createValueLabel({ mode: "point", seriesIndex: i, stride, variant, dark, vertical: verticalLabels })}
               />
             </Line>
           ))}

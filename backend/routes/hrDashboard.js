@@ -1,6 +1,9 @@
 const express = require("express");
 const router = express.Router();
-const db = require("../config/db");
+const { db: pool } = require("../config/db");
+// This file used `await db.query(...)` with array destructuring, which needs
+// the mysql2 promise API — the callback pool returns a Query object instead.
+const db = pool.promise();
 const { addCircleFilter, authMiddleware } = require("../middleware/circleAccess");
 
 router.use(authMiddleware);

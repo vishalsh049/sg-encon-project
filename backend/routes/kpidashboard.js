@@ -257,7 +257,6 @@ async function buildTowerCard(site, columnNames, req) {
     return {
       name:     site.name,
       uptime:   `${avg}%`,
-      increase: "+0.00%",
       color:    site.color,
       chartData,
       circles:  entities,  // kept for backward compat

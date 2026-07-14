@@ -6,7 +6,7 @@ import { createValueLabel } from "./ValueLabel";
 // Total daily uptime composition across entities — stacked so the total bar
 // height communicates each date's combined contribution, not a per-entity
 // trend comparison (use Line/Area for that).
-export default function StackedBarChart({ chartData, entities, hiddenEntities, variant = "compact", dark = false }) {
+export default function StackedBarChart({ chartData, entities, hiddenEntities, variant = "compact", dark = false, verticalLabels = false }) {
   const isCompact = variant === "compact";
   const theme = getChartTheme(dark);
   const stride = getLabelStride(chartData?.length, variant);
@@ -39,7 +39,7 @@ export default function StackedBarChart({ chartData, entities, hiddenEntities, v
             >
               <LabelList
                 dataKey={e}
-                content={createValueLabel({ mode: "stackCenter", stride, variant, dark, minSegmentHeight: isCompact ? 10 : 14 })}
+                content={createValueLabel({ mode: "stackCenter", stride, variant, dark, vertical: verticalLabels, minSegmentHeight: isCompact ? 10 : 14 })}
               />
             </Bar>
           ))}

@@ -6,10 +6,12 @@ import { createValueLabel } from "./ValueLabel";
 
 const gradientId = (entity) => `area-grad-${entity.replace(/[^a-zA-Z0-9]/g, "")}`;
 
-export default function AreaChartView({ chartData, entities, hiddenEntities, variant = "compact", dark = false }) {
+export default function AreaChartView({ chartData, entities, hiddenEntities, variant = "compact", dark = false, verticalLabels = false }) {
   const isCompact = variant === "compact";
   const theme = getChartTheme(dark);
   const stride = getLabelStride(chartData?.length, variant);
+  // Headroom for rotated labels near the top of the plot (see LineChartView).
+  const topMargin = verticalLabels ? (isCompact ? 34 : 46) : 10;
 
   const allVals = useMemo(() =>
     (chartData || []).flatMap(row => entities.map(e => Number(row[e])).filter(v => v > 0)),
@@ -32,7 +34,7 @@ export default function AreaChartView({ chartData, entities, hiddenEntities, var
   return (
     <div className={isCompact ? "h-40 w-full" : "h-[360px] w-full"}>
       <ResponsiveContainer width="100%" height="100%">
-        <AreaChart data={chartData} margin={{ top: 10, right: isCompact ? 8 : 20, left: isCompact ? -24 : -8, bottom: 0 }}>
+        <AreaChart data={chartData} margin={{ top: topMargin, right: isCompact ? 8 : 20, left: isCompact ? -24 : -8, bottom: 0 }}>
           <defs>
             {entities.map((e, i) => (
               <linearGradient key={e} id={gradientId(e)} x1="0" y1="0" x2="0" y2="1">
@@ -67,7 +69,7 @@ export default function AreaChartView({ chartData, entities, hiddenEntities, var
             >
               <LabelList
                 dataKey={e}
-                content={createValueLabel({ mode: "point", seriesIndex: i, stride, variant, dark })}
+                content={createValueLabel({ mode: "point", seriesIndex: i, stride, variant, dark, vertical: verticalLabels })}
               />
             </Area>
           ))}

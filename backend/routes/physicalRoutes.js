@@ -45,6 +45,17 @@
       };
     }
 
+    // Dashboard count responses only vary by the user's circle scope, so
+    // identical requests within the TTL are served from the in-memory cache
+    // (cleared by clearPhysicalCache() on every physical mutation).
+    function getDashboardCacheScope(req) {
+      return {
+        circle: isAllCircle(req.authUser)
+          ? "ALL"
+          : String(req.authUser.circle || "").trim().toLowerCase(),
+      };
+    }
+
     const query = (sql, params = []) =>
       new Promise((resolve, reject) => {
         db.query(sql, params, (err, rows) => {
@@ -72,7 +83,7 @@
       }
     }
 
-    async function ensurePhysicalTables() {
+    async function runPhysicalSchemaMigration() {
       await query(`
         CREATE TABLE IF NOT EXISTS physical_reports (
           id INT AUTO_INCREMENT PRIMARY KEY,
@@ -199,6 +210,42 @@
       await ensureCircleUpdatesTable();
       await ensurePhysicalInfrastructure(query, ensureColumn);
     }
+
+    // The migration must have completed before any query that references
+    // is_deleted (soft delete) runs, but it only ever needs to run once per
+    // process — not once per request. On failure the promise is dropped so
+    // the next request retries instead of caching the error forever.
+    let physicalSchemaPromise = null;
+
+    function ensurePhysicalTables() {
+      if (!physicalSchemaPromise) {
+        physicalSchemaPromise = runPhysicalSchemaMigration().catch((error) => {
+          physicalSchemaPromise = null;
+          throw error;
+        });
+      }
+      return physicalSchemaPromise;
+    }
+
+    // Every endpoint in this router (the dashboard count endpoints included)
+    // queries columns the migration creates, so gate all of them on it.
+    router.use(async (_req, res, next) => {
+      try {
+        await ensurePhysicalTables();
+        next();
+      } catch (error) {
+        console.error("Physical schema init error:", error);
+        res.status(500).json({ success: false, message: "Server Error" });
+      }
+    });
+
+    // Warm the migration at boot so the first request doesn't pay for it.
+    ensurePhysicalTables().catch((error) =>
+      console.error(
+        "Physical schema warm-up failed (will retry on request):",
+        error.message
+      )
+    );
 
     let circleUpdatesBackfilled = false;
 
@@ -2283,6 +2330,10 @@ duplicateEmployees: duplicateEmployees
 
       try {
 
+    const cacheScope = getDashboardCacheScope(req);
+    const cached = getCachedValue("jobRoleCount", cacheScope);
+    if (cached) return res.status(200).json(cached);
+
     const scope = getCircleScope(req);
     const rows = await query(`
       SELECT 
@@ -2308,10 +2359,9 @@ duplicateEmployees: duplicateEmployees
       ORDER BY total DESC
     `, scope.params);
 
-        res.status(200).json({
-          success: true,
-          data: rows,
-        });
+        const payload = { success: true, data: rows };
+        setCachedValue("jobRoleCount", cacheScope, payload);
+        res.status(200).json(payload);
 
       } catch (error) {
 
@@ -2391,6 +2441,10 @@ duplicateEmployees: duplicateEmployees
 
       try {
 
+      const cacheScope = getDashboardCacheScope(req);
+      const cached = getCachedValue("circleCount", cacheScope);
+      if (cached) return res.status(200).json(cached);
+
       const scope = getCircleScope(req);
       const rows = await query(`
       SELECT
@@ -2407,10 +2461,9 @@ duplicateEmployees: duplicateEmployees
       ORDER BY total DESC
     `, scope.params);
 
-        res.status(200).json({
-          success: true,
-          data: rows,
-        });
+        const payload = { success: true, data: rows };
+        setCachedValue("circleCount", cacheScope, payload);
+        res.status(200).json(payload);
 
       } catch (error) {
 
@@ -2428,6 +2481,10 @@ duplicateEmployees: duplicateEmployees
     router.get("/employment-status-count", async (req, res) => {
 
       try {
+
+    const cacheScope = getDashboardCacheScope(req);
+    const cached = getCachedValue("employmentStatusCount", cacheScope);
+    if (cached) return res.status(200).json(cached);
 
     const scope = getCircleScope(req);
     const rows = await query(`
@@ -2456,10 +2513,9 @@ duplicateEmployees: duplicateEmployees
     GROUP BY employment_status
     `, scope.params);
 
-        res.status(200).json({
-          success: true,
-          data: rows,
-        });
+        const payload = { success: true, data: rows };
+        setCachedValue("employmentStatusCount", cacheScope, payload);
+        res.status(200).json(payload);
 
       } catch (error) {
 
@@ -2477,6 +2533,10 @@ duplicateEmployees: duplicateEmployees
     router.get("/job-role-document-average", async (req, res) => {
 
       try {
+
+        const cacheScope = getDashboardCacheScope(req);
+        const cached = getCachedValue("jobRoleDocumentAverage", cacheScope);
+        if (cached) return res.status(200).json(cached);
 
         const scope = getCircleScope(req);
         const rows = await query(`
@@ -2565,10 +2625,9 @@ duplicateEmployees: duplicateEmployees
           ORDER BY document_average DESC
         `, scope.params);
 
-        res.status(200).json({
-          success: true,
-          data: rows,
-        });
+        const payload = { success: true, data: rows };
+        setCachedValue("jobRoleDocumentAverage", cacheScope, payload);
+        res.status(200).json(payload);
 
       } catch (error) {
 
@@ -2586,6 +2645,10 @@ duplicateEmployees: duplicateEmployees
     router.get("/active-job-role-cmp-count", async (req, res) => {
 
       try {
+
+        const cacheScope = getDashboardCacheScope(req);
+        const cached = getCachedValue("activeJobRoleCmpCount", cacheScope);
+        if (cached) return res.status(200).json(cached);
 
         const physicalScope = getCircleScope(req);
         const newJoiningScope = getCircleScope(req);
@@ -2773,10 +2836,11 @@ duplicateEmployees: duplicateEmployees
 
         `, [...physicalScope.params, ...newJoiningScope.params]);
 
-        res.status(200).json({
-          success: true,
-          data: rows,
-        });
+        const payload = { success: true, data: rows };
+        // Shorter TTL: this also reads new_joining, whose mutations don't
+        // pass through clearPhysicalCache().
+        setCachedValue("activeJobRoleCmpCount", cacheScope, payload, 30 * 1000);
+        res.status(200).json(payload);
 
       } catch (error) {
 

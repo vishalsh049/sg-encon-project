@@ -1554,17 +1554,6 @@ function RagTable({
                       0
                     );
 
-                    console.log(
-  group.title,
-  column.key,
-  "R=",
-  totalRequirement,
-  "A=",
-  totalAvailable,
-  "G=",
-  totalRequirement - totalAvailable
-);
-
                     const totalGap = totalRequirement - totalAvailable;
 
                     return (

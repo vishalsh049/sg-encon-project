@@ -21,10 +21,12 @@ function buildComboData(chartData, entities) {
   });
 }
 
-export default function ComboChartView({ chartData, entities, hiddenEntities, variant = "compact", dark = false }) {
+export default function ComboChartView({ chartData, entities, hiddenEntities, variant = "compact", dark = false, verticalLabels = false }) {
   const isCompact = variant === "compact";
   const theme = getChartTheme(dark);
   const visibleEntities = entities.filter(e => !hiddenEntities?.has(e));
+  // Headroom for rotated labels near the top of the plot (see LineChartView).
+  const topMargin = verticalLabels ? (isCompact ? 34 : 46) : 10;
 
   const data = useMemo(() => buildComboData(chartData, visibleEntities), [chartData, visibleEntities]);
   const stride = getLabelStride(data.length, variant);
@@ -50,7 +52,7 @@ export default function ComboChartView({ chartData, entities, hiddenEntities, va
   return (
     <div className={isCompact ? "h-40 w-full" : "h-[360px] w-full"}>
       <ResponsiveContainer width="100%" height="100%">
-        <ComposedChart data={data} margin={{ top: 10, right: isCompact ? 8 : 20, left: isCompact ? -24 : -8, bottom: 0 }}>
+        <ComposedChart data={data} margin={{ top: topMargin, right: isCompact ? 8 : 20, left: isCompact ? -24 : -8, bottom: 0 }}>
           <CartesianGrid strokeDasharray="2 2" stroke={theme.grid} vertical={false} />
           <XAxis dataKey="date" tick={{ fontSize: isCompact ? 8 : 11, fill: theme.tick }} axisLine={false} tickLine={false} />
           <YAxis
@@ -67,10 +69,10 @@ export default function ComboChartView({ chartData, entities, hiddenEntities, va
             contentStyle={{ borderRadius: 12, border: "none", boxShadow: "0 10px 30px rgba(15,23,42,0.14)", fontSize: 11, background: theme.tooltipBg, color: theme.tooltipText }}
           />
           <Bar dataKey="uptime" name="uptime" fill="#3b82f6" fillOpacity={0.55} radius={[3, 3, 0, 0]} maxBarSize={isCompact ? 14 : 32} isAnimationActive={false}>
-            <LabelList dataKey="uptime" content={createValueLabel({ mode: "bar", seriesIndex: 0, stride, variant, dark, fill: dark ? "#93c5fd" : "#1d4ed8" })} />
+            <LabelList dataKey="uptime" content={createValueLabel({ mode: "bar", seriesIndex: 0, stride, variant, dark, vertical: verticalLabels, fill: dark ? "#93c5fd" : "#1d4ed8" })} />
           </Bar>
           <Line dataKey="movingAvg" name="movingAvg" type="monotone" stroke="#f59e0b" strokeWidth={isCompact ? 1.75 : 2.25} dot={false} connectNulls isAnimationActive={false}>
-            <LabelList dataKey="movingAvg" content={createValueLabel({ mode: "point", seriesIndex: 2, stride, variant, dark, fill: dark ? "#fcd34d" : "#b45309" })} />
+            <LabelList dataKey="movingAvg" content={createValueLabel({ mode: "point", seriesIndex: 2, stride, variant, dark, vertical: verticalLabels, fill: dark ? "#fcd34d" : "#b45309" })} />
           </Line>
         </ComposedChart>
       </ResponsiveContainer>
