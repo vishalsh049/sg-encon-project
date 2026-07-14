@@ -13,15 +13,17 @@ const query = (sql, params = []) =>
     });
   });
 
-const normalizeUptimeValue = (value) => {
+const normalizeUptimeValue = (value, scaleFraction = false) => {
   const numericValue = Number(value);
 
   if (!Number.isFinite(numericValue)) {
     return 0;
   }
 
-  // Some uploads store uptime as 0-1 while others store 0-100.
-  if (numericValue > 0 && numericValue <= 1) {
+  // Only tables that store uptime as a 0-1 marker (e.g. AG1 inserts a literal 1
+  // per row) opt into rescaling. Real availability uploads (OSC, HPODSC, ...)
+  // must keep 0, 0.1, 0.5, 1.0 exactly as uploaded.
+  if (scaleFraction && numericValue > 0 && numericValue <= 1) {
     return Number((numericValue * 100).toFixed(2));
   }
 
@@ -38,6 +40,7 @@ router.get("/tower-uptime", async (req, res) => {
         name: "AG1",
         table: "ag1",
         color: "blue",
+        scaleFraction: true,
         possibleColumns: [
           "kpi_value",
           "availability",
@@ -80,8 +83,8 @@ router.get("/tower-uptime", async (req, res) => {
         table: "osc",
         color: "cyan",
         possibleColumns: [
-          "kpi_value",
           "availability",
+          "kpi_value",
         ],
       },
 
@@ -235,7 +238,7 @@ router.get("/tower-uptime", async (req, res) => {
 
         const normalizedRows = rows.map((row) => ({
           ...row,
-          uptime: normalizeUptimeValue(row.uptime),
+          uptime: normalizeUptimeValue(row.uptime, site.scaleFraction),
         }));
 
         // Group flat rows into { date → { entity → uptime } }
@@ -343,7 +346,7 @@ router.get("/tower-uptime/analytics", async (req, res) => {
     }
 
     const siteConfigs = {
-      AG1:    { table: "ag1",    kpiCols: ["kpi_value", "availability"] },
+      AG1:    { table: "ag1",    kpiCols: ["kpi_value", "availability"], scaleFraction: true },
       ENB:    { table: "enb",    kpiCols: ["availability", "kpi_value"] },
       ESC:    { table: "esc",    kpiCols: ["total_availability", "kpi_value", "availability"] },
       GNB:    { table: "gnb",    kpiCols: ["availability", "kpi_value"] },
@@ -488,7 +491,7 @@ router.get("/tower-uptime/analytics", async (req, res) => {
       SELECT
         ${dateFormatSql} AS date,
         ${entitySelectSql}
-        ROUND(AVG(CAST(REPLACE(COALESCE(\`${kpiColumn}\`, '0'), '%', '') AS DECIMAL(12,4))), 2) AS uptime
+        ROUND(AVG(CAST(REPLACE(\`${kpiColumn}\`, '%', '') AS DECIMAL(12,4))), 2) AS uptime
       FROM \`${table}\`
       ${whereClause}
       GROUP BY ${groupByExpr}${entityGroupSql}
@@ -499,9 +502,9 @@ router.get("/tower-uptime/analytics", async (req, res) => {
     // Summary stats
     const summarySql = `
       SELECT
-        ROUND(AVG(CAST(REPLACE(COALESCE(\`${kpiColumn}\`, '0'), '%', '') AS DECIMAL(12,4))), 2) AS avg_uptime,
-        ROUND(MAX(CAST(REPLACE(COALESCE(\`${kpiColumn}\`, '0'), '%', '') AS DECIMAL(12,4))), 2) AS highest_uptime,
-        ROUND(MIN(CAST(REPLACE(COALESCE(\`${kpiColumn}\`, '0'), '%', '') AS DECIMAL(12,4))), 2) AS lowest_uptime,
+        ROUND(AVG(CAST(REPLACE(\`${kpiColumn}\`, '%', '') AS DECIMAL(12,4))), 2) AS avg_uptime,
+        ROUND(MAX(CAST(REPLACE(\`${kpiColumn}\`, '%', '') AS DECIMAL(12,4))), 2) AS highest_uptime,
+        ROUND(MIN(CAST(REPLACE(\`${kpiColumn}\`, '%', '') AS DECIMAL(12,4))), 2) AS lowest_uptime,
         COUNT(*) AS total_records
       FROM \`${table}\`
       ${whereClause}
@@ -543,7 +546,7 @@ router.get("/tower-uptime/analytics", async (req, res) => {
     // Normalize values and detect trend
     const normalizedRows = chartRows.map(row => ({
       ...row,
-      uptime: normalizeUptimeValue(row.uptime),
+      uptime: normalizeUptimeValue(row.uptime, config.scaleFraction),
     }));
 
     // Trend: compare first-half avg vs second-half avg across all circles combined
@@ -568,9 +571,9 @@ router.get("/tower-uptime/analytics", async (req, res) => {
     res.json({
       chartData: normalizedRows,
       summary: {
-        avg:     normalizeUptimeValue(summaryRow.avg_uptime     || 0),
-        highest: normalizeUptimeValue(summaryRow.highest_uptime || 0),
-        lowest:  normalizeUptimeValue(summaryRow.lowest_uptime  || 0),
+        avg:     normalizeUptimeValue(summaryRow.avg_uptime     || 0, config.scaleFraction),
+        highest: normalizeUptimeValue(summaryRow.highest_uptime || 0, config.scaleFraction),
+        lowest:  normalizeUptimeValue(summaryRow.lowest_uptime  || 0, config.scaleFraction),
         total:   Number(summaryRow.total_records || 0),
         trend,
       },

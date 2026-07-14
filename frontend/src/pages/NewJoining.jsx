@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { motion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import Select from "react-select";
 import toast from "react-hot-toast";
 import {
@@ -23,6 +23,7 @@ import {
   Trash2,
   UserPlus2,
   Users,
+  UserX,
   X,
   User,
   CreditCard,
@@ -225,7 +226,8 @@ export default function NewJoining() {
   const [selectedRows, setSelectedRows] = useState([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
-  const [deletingId, setDeletingId] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleting, setDeleting] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [excelFile, setExcelFile] = useState(null);
   const [uploadingExcel, setUploadingExcel] = useState(false);
@@ -236,6 +238,21 @@ export default function NewJoining() {
     () => isAllCircleAccess(getStoredSession()?.circle),
     []
   );
+
+  // Per-page delete flag from pagePermissions; an empty/missing list means an
+  // unrestricted (admin) user, matching utils/access.js. Permissions may store
+  // the page as the slug ("new-joining") or display name ("New Joining"), so
+  // normalize whitespace to hyphens before comparing.
+  const canDelete = useMemo(() => {
+    const perms = getStoredSession()?.pagePermissions;
+    if (!Array.isArray(perms) || perms.length === 0) return true;
+    const entry = perms.find(
+      (p) =>
+        String(p?.page || "").trim().toLowerCase().replace(/\s+/g, "-") ===
+        "new-joining"
+    );
+    return Boolean(entry?.delete);
+  }, []);
 
   const circleCmpData = {
     Delhi: [
@@ -561,19 +578,23 @@ export default function NewJoining() {
 
   const totalPages = Math.max(1, Math.ceil(filteredData.length / pageSize));
 
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
+
   const paginatedData = filteredData.slice(
     (currentPage - 1) * pageSize,
     currentPage * pageSize
   );
 
   const joinedCount = filteredData.filter(
-    (item) => item.joining_status === "Joined"
+    (item) => String(item.joining_status || "").trim() === "Joined"
   ).length;
-  const pendingCount = filteredData.filter((item) =>
-    String(item.l2_status || "")
-      .toLowerCase()
-      .includes("pending")
-  ).length;
+  // Business rule: Joined + Not Joined must always equal Total Employees.
+  // Anything not "Joined" (Pending, Not Joined, null, empty) counts as Not Joined.
+  const notJoinedCount = filteredData.length - joinedCount;
   const activeCount = filteredData.filter(
     (item) => String(item.employee_status || "Active") !== "Inactive"
   ).length;
@@ -599,56 +620,78 @@ export default function NewJoining() {
     setSelectedRows([...selectedRows, id]);
   };
 
-  const handleDelete = async (id) => {
-    const confirmDelete = window.confirm("Delete record?");
-    if (!confirmDelete) return;
-
-    try {
-      setDeletingId(id);
-      await authFetch(buildApiUrl(`/api/new-joining/delete/${id}`), {
-        method: "DELETE",
-      });
-      loadData();
-    } catch (error) {
-      console.log(error);
-    } finally {
-      setDeletingId(null);
-    }
+  const openSingleDelete = (item) => {
+    setDeleteTarget({ type: "single", item });
   };
 
-const handleBulkDelete = async () => {
-  if (selectedRows.length === 0) {
-    alert("Please select records");
-    return;
-  }
+  const openBulkDelete = () => {
+    if (selectedRows.length === 0) {
+      toast.error("Please select at least one record");
+      return;
+    }
+    setDeleteTarget({ type: "bulk", count: selectedRows.length });
+  };
 
-  const confirmDelete = window.confirm(
-    `Delete ${selectedRows.length} selected records?`
-  );
+  const closeDeleteModal = () => {
+    if (deleting) return;
+    setDeleteTarget(null);
+  };
 
-  if (!confirmDelete) return;
+  const confirmDelete = async () => {
+    if (!deleteTarget || deleting) return;
 
-  try {
-    await Promise.all(
-      selectedRows.map((id) =>
-        authFetch(
-          buildApiUrl(`/api/new-joining/delete/${id}`),
+    try {
+      setDeleting(true);
+
+      if (deleteTarget.type === "single") {
+        const response = await authFetch(
+          buildApiUrl(`/api/new-joining/delete/${deleteTarget.item.id}`),
+          { method: "DELETE" }
+        );
+
+        const result = await response.json();
+
+        if (!response.ok || !result.success) {
+          toast.error(result.message || "Failed to delete record");
+          return;
+        }
+
+        toast.success("Employee deleted successfully");
+        setSelectedRows((prev) =>
+          prev.filter((id) => id !== deleteTarget.item.id)
+        );
+      } else {
+        const response = await authFetch(
+          buildApiUrl("/api/new-joining/bulk-delete"),
           {
-            method: "DELETE",
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ids: selectedRows }),
           }
-        )
-      )
-    );
+        );
 
-    alert("Records deleted successfully");
+        const result = await response.json();
 
-    setSelectedRows([]);
-    loadData();
-  } catch (error) {
-    console.log(error);
-    alert("Delete failed");
-  }
-};
+        if (!response.ok || !result.success) {
+          toast.error(result.message || "Failed to delete records");
+          return;
+        }
+
+        toast.success(
+          `${result.deletedCount ?? selectedRows.length} record(s) deleted successfully`
+        );
+        setSelectedRows([]);
+      }
+
+      setDeleteTarget(null);
+      await loadData();
+    } catch (error) {
+      console.log(error);
+      toast.error("Something went wrong while deleting");
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   const handleStatusUpdate = async (id, status, item) => {
     const confirmUpdate = window.confirm(
@@ -907,11 +950,11 @@ loadData();
       icon: UserPlus2,
     },
     {
-      label: "Pending Verification",
-      value: pendingCount.toLocaleString(),
+      label: "Not Joined",
+      value: notJoinedCount.toLocaleString(),
       note: "",
-      accent: "from-amber-400 to-orange-500",
-      icon: ShieldCheck,
+      accent: "from-rose-400 to-red-500",
+      icon: UserX,
     },
     {
       label: "Active",
@@ -951,6 +994,22 @@ loadData();
           </div>
 
           <div className="flex flex-wrap items-center gap-2 lg:justify-end">
+
+            {canDelete && (
+              <motion.button
+                whileHover={
+                  selectedRows.length > 0 ? { y: -2, scale: 1.01 } : {}
+                }
+                whileTap={selectedRows.length > 0 ? { scale: 0.99 } : {}}
+                onClick={openBulkDelete}
+                disabled={selectedRows.length === 0 || deleting}
+                className="inline-flex items-center gap-3 rounded-[18px] bg-gradient-to-r from-rose-500 to-red-500 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <Trash2 className="h-4 w-4" />
+                Bulk Delete
+                {selectedRows.length > 0 ? ` (${selectedRows.length})` : ""}
+              </motion.button>
+            )}
 
             <motion.button
               whileHover={{ y: -2, scale: 1.01 }}
@@ -1149,7 +1208,8 @@ loadData();
            )
           }
           onChange={handleSelectAll}
-         className="h-3 w-3 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+          disabled={!canDelete}
+         className="h-3 w-3 rounded border-slate-300 text-blue-600 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-40"
          />
         </td>
                   {[
@@ -1199,7 +1259,8 @@ loadData();
                           type="checkbox"
                           checked={selectedRows.includes(item.id)}
                           onChange={() => handleSelectRow(item.id)}
-                          className="h-3 w-3 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                          disabled={!canDelete}
+                          className="h-3 w-3 rounded border-slate-300 text-blue-600 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-40"
                         />
                       </td>
                       <td className="border-b border-slate-100 px-4 py-2 text-sm font-semibold text-blue-600">
@@ -1301,7 +1362,16 @@ loadData();
                           >
                             Not Joined
                           </TableActionButton>
-                          
+                          {canDelete && (
+                            <TableActionButton
+                              icon={Trash2}
+                              disabled={deleting}
+                              onClick={() => openSingleDelete(item)}
+                              className="border border-red-200 bg-red-50 text-red-600 hover:bg-red-100"
+                            >
+                              Delete
+                            </TableActionButton>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -1895,7 +1965,119 @@ loadData();
 
 )}
 
+{/* DELETE CONFIRMATION MODAL */}
 
+<AnimatePresence>
+  {deleteTarget && (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/40 p-4 backdrop-blur-md"
+      onClick={closeDeleteModal}
+    >
+      <motion.div
+        initial={{ opacity: 0, scale: 0.94, y: 12 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.94, y: 12 }}
+        transition={{ type: "spring", stiffness: 320, damping: 26 }}
+        onClick={(e) => e.stopPropagation()}
+        className="w-full max-w-md overflow-hidden rounded-[18px] bg-white shadow-[0_30px_80px_rgba(15,23,42,0.3)]"
+      >
+        {/* HEADER */}
+        <div className="relative overflow-hidden border-b border-slate-100 bg-gradient-to-r from-rose-50 via-white to-red-50 px-6 py-5">
+          <div className="absolute right-0 top-0 h-16 w-16 rounded-full bg-rose-100 opacity-60 blur-3xl" />
+
+          <div className="relative flex items-start gap-4">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[14px] bg-gradient-to-br from-rose-500 to-red-500 text-white shadow-lg shadow-rose-200">
+              <Trash2 className="h-5 w-5" />
+            </div>
+
+            <div>
+              <h3 className="text-base font-semibold tracking-[-0.02em] text-slate-900">
+                {deleteTarget.type === "single"
+                  ? "Delete Employee?"
+                  : `Delete ${selectedRows.length} Employees?`}
+              </h3>
+              <p className="mt-0.5 text-sm text-slate-500">
+                This action is permanent and cannot be undone.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* BODY */}
+        <div className="px-6 py-5">
+          {deleteTarget.type === "single" ? (
+            <div className="rounded-[14px] border border-slate-200 bg-slate-50/70 px-4 py-3">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                    Employee Name
+                  </p>
+                  <p className="mt-0.5 text-sm font-semibold text-slate-900">
+                    {deleteTarget.item?.employee_name || "-"}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                    Employee Code
+                  </p>
+                  <p className="mt-0.5 text-sm font-semibold text-blue-600">
+                    {deleteTarget.item?.employee_code || "-"}
+                  </p>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center gap-3 rounded-[14px] border border-rose-200 bg-rose-50/70 px-4 py-3">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-rose-100 text-sm font-bold text-rose-600">
+                {selectedRows.length}
+              </div>
+              <p className="text-sm font-medium text-slate-700">
+                {selectedRows.length === 1
+                  ? "1 selected employee record"
+                  : `${selectedRows.length} selected employee records`}{" "}
+                will be permanently removed.
+              </p>
+            </div>
+          )}
+
+          <p className="mt-3 px-1 text-xs text-slate-500">
+            The record{deleteTarget.type === "bulk" ? "s" : ""} will be
+            deleted from the New Joining database and cannot be recovered.
+          </p>
+        </div>
+
+        {/* FOOTER */}
+        <div className="flex items-center justify-end gap-3 border-t border-slate-100 bg-slate-50 px-6 py-4">
+          <button
+            type="button"
+            onClick={closeDeleteModal}
+            disabled={deleting}
+            className="rounded-2xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            Cancel
+          </button>
+
+          <button
+            type="button"
+            onClick={confirmDelete}
+            disabled={deleting}
+            className="flex items-center gap-2 rounded-2xl bg-gradient-to-r from-rose-500 to-red-500 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-rose-200 transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {deleting ? (
+              <RefreshCw className="h-4 w-4 animate-spin" />
+            ) : (
+              <Trash2 className="h-4 w-4" />
+            )}
+            {deleting ? "Deleting..." : "Delete"}
+          </button>
+        </div>
+      </motion.div>
+    </motion.div>
+  )}
+</AnimatePresence>
 
       </div>
     </div>

@@ -115,7 +115,9 @@ const formatChartDate = (dateStr, period) => {
 function getCardLatestAvg(card) {
   const last = (card.chartData || [])[card.chartData.length - 1];
   if (!last) return null;
-  const vals = (card.entities || []).map(e => Number(last[e])).filter(v => v > 0);
+  const vals = (card.entities || [])
+    .map(e => Number(last[e]))
+    .filter(v => Number.isFinite(v));
   if (!vals.length) return null;
   return vals.reduce((a, b) => a + b, 0) / vals.length;
 }
@@ -961,11 +963,13 @@ function KpiDashboard() {
         <KPIComparisonView towerCards={towerCards} dark={isDark} />
       )}
 
+      
+
       {/* ── KPI Cards ── */}
       {!loading && chartType !== "kpi-comparison" && (
         <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-2">
           {towerCards.map((card, index) => (
-            <KpiCard
+            <KpiCard  
               key={index}
               card={card}
               chartType={chartType}

@@ -3,6 +3,7 @@ const express = require("express");
 const router = express.Router();
 
 const { query } = require("../services/accessControl");
+const { db } = require("../config/db");
 
 const multer = require("multer");
 const XLSX = require("xlsx");
@@ -289,9 +290,73 @@ router.post("/add-employee", async (req, res) => {
 
 });
 
+// Per-page delete permission: empty/missing page_permissions means an
+// unrestricted (admin) user, matching the frontend convention in utils/access.js.
+async function canDeleteNewJoining(authUser) {
+  const rows = await query(
+    `SELECT page_permissions FROM users WHERE id = ? LIMIT 1`,
+    [authUser?.id]
+  );
+
+  const raw = rows[0]?.page_permissions;
+  if (!raw) return true;
+
+  let parsed;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (_error) {
+    return true;
+  }
+
+  if (!Array.isArray(parsed) || parsed.length === 0) return true;
+
+  // Permissions may store the page as the slug ("new-joining") or the display
+  // name ("New Joining"); normalize whitespace to hyphens before comparing.
+  const entry = parsed.find(
+    (p) =>
+      String(p?.page || "").trim().toLowerCase().replace(/\s+/g, "-") ===
+      "new-joining"
+  );
+
+  return Boolean(entry?.delete);
+}
+
+const getConnection = () =>
+  new Promise((resolve, reject) => {
+    db.getConnection((err, connection) =>
+      err ? reject(err) : resolve(connection)
+    );
+  });
+
+const connectionQuery = (connection, sql, params = []) =>
+  new Promise((resolve, reject) => {
+    connection.query(sql, params, (err, rows) =>
+      err ? reject(err) : resolve(rows)
+    );
+  });
+
+const beginTransaction = (connection) =>
+  new Promise((resolve, reject) => {
+    connection.beginTransaction((err) => (err ? reject(err) : resolve()));
+  });
+
+const commitTransaction = (connection) =>
+  new Promise((resolve, reject) => {
+    connection.commit((err) => (err ? reject(err) : resolve()));
+  });
+
+const rollbackTransaction = (connection) =>
+  new Promise((resolve) => {
+    connection.rollback(() => resolve());
+  });
+
 router.delete("/delete/:id", async (req, res) => {
 
   try {
+
+    if (!(await canDeleteNewJoining(req.authUser))) {
+      return forbid(res, "You do not have permission to delete records.");
+    }
 
     const filters = ["id = ?"];
     const params = [req.params.id];
@@ -301,12 +366,89 @@ router.delete("/delete/:id", async (req, res) => {
 
     res.json({
       success: true,
+      message: "Employee deleted successfully",
     });
 
   } catch (error) {
 
+    console.log("DELETE EMPLOYEE ERROR:", error);
+
     res.status(500).json({
       success: false,
+      message: "Failed to delete record",
+    });
+
+  }
+
+});
+
+router.post("/bulk-delete", async (req, res) => {
+
+  try {
+
+    const ids = Array.isArray(req.body?.ids) ? req.body.ids : [];
+
+    const numericIds = [...new Set(ids.map((id) => Number(id)))].filter(
+      (id) => Number.isInteger(id) && id > 0
+    );
+
+    if (!numericIds.length) {
+      return res.status(400).json({
+        success: false,
+        message: "Please select at least one record to delete.",
+      });
+    }
+
+    if (!(await canDeleteNewJoining(req.authUser))) {
+      return forbid(res, "You do not have permission to delete records.");
+    }
+
+    const filters = [
+      `id IN (${numericIds.map(() => "?").join(",")})`,
+    ];
+    const params = [...numericIds];
+    addCircleFilter(filters, params, req.authUser);
+
+    const connection = await getConnection();
+
+    let deletedCount = 0;
+
+    try {
+      await beginTransaction(connection);
+
+      const result = await connectionQuery(
+        connection,
+        `DELETE FROM new_joining WHERE ${filters.join(" AND ")}`,
+        params
+      );
+
+      deletedCount = result.affectedRows || 0;
+
+      await commitTransaction(connection);
+    } catch (error) {
+      await rollbackTransaction(connection);
+      throw error;
+    } finally {
+      connection.release();
+    }
+
+    if (!deletedCount) {
+      return forbid(res);
+    }
+
+    res.json({
+      success: true,
+      deletedCount,
+      message: `${deletedCount} record(s) deleted successfully`,
+    });
+
+  } catch (error) {
+
+    console.log("BULK DELETE ERROR:", error);
+
+    res.status(500).json({
+      success: false,
+      message: "Failed to delete records",
     });
 
   }

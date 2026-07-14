@@ -355,6 +355,20 @@ const ensureHpodscTable = async () => {
                   created_at DATETIME DEFAULT CURRENT_TIMESTAMP
                 )
               `);
+
+  // Columns required by insertHpodscRows — added only if missing.
+  await ensureColumn("hpodsc", "sap_id", "VARCHAR(100) NULL");
+  await ensureColumn("hpodsc", "jc_name", "VARCHAR(150) NULL");
+  await ensureColumn("hpodsc", "jc_id", "VARCHAR(100) NULL");
+  await ensureColumn("hpodsc", "jc_sap_id", "VARCHAR(100) NULL");
+  await ensureColumn("hpodsc", "city", "VARCHAR(100) NULL");
+  await ensureColumn("hpodsc", "site_type", "VARCHAR(100) NULL");
+  await ensureColumn("hpodsc", "device_type", "VARCHAR(100) NULL");
+  await ensureColumn("hpodsc", "integration_state", "VARCHAR(100) NULL");
+  await ensureColumn("hpodsc", "total_cnum_count", "INT NULL");
+  await ensureColumn("hpodsc", "total_outage", "BIGINT NULL");
+  await ensureColumn("hpodsc", "total_availability", "DECIMAL(12,4) NULL");
+  await ensureColumn("hpodsc", "cells_up", "INT NULL");
 };
 
 const insertEnbRows = async (rows) => {
@@ -810,6 +824,19 @@ const toNumber = (value) => {
     return isNaN(num) ? null : num;
 };
 
+// 🔥 EXACT NUMERIC CONVERSION - Preserves 0 and decimals exactly as uploaded.
+// Only blank/non-numeric values become NULL; "%" suffixes are stripped so the
+// numeric magnitude (e.g. "0.5%" -> 0.5) is stored unchanged.
+const toExactNumber = (value) => {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+
+  const num = Number(String(value).replace(/%/g, "").trim());
+
+  return Number.isFinite(num) ? num : null;
+};
+
 const parseGnbRows = (rows, fallbackDate, fileId) => {
   const insertRows = [];
   let headerMappingIssuesDetected = false;
@@ -994,13 +1021,13 @@ function parseHpodscRows(rows, fallbackDate, fileId) {
 
       cleanRow["integration state"] || null,
 
-      cleanRow["total cnum count"] || null,
+      toExactNumber(cleanRow["total cnum count"]),
 
-      cleanRow["total outage"] || null,
+      toExactNumber(cleanRow["total outage"]),
 
-      cleanRow["total availability"] || null,
+      toExactNumber(cleanRow["total availability"]),
 
-      cleanRow["cells up"] ?? null,
+      toExactNumber(cleanRow["cells up"]),
 
       date
     ]);
@@ -1333,6 +1360,12 @@ if (!isValidCircle(circle)) {
 
       if (!circle || !cmp) return;
 
+      // Store the availability exactly as uploaded (0, 0.1, 0.5, 1.0, ...).
+      // kpi_value mirrors it so dashboards averaging either column are correct.
+      const availabilityValue = toExactNumber(
+        getValue(cleanRow, ["availability", "Availability"])
+      );
+
  insertRows.push([
   fileId,
   dateValue,
@@ -1416,10 +1449,7 @@ if (!isValidCircle(circle)) {
     "CMP_CODE"
   ]),
 
-  getValue(cleanRow, [
-    "availability",
-    "Availability"
-  ]),
+  availabilityValue,
 
   getValue(cleanRow, [
     "equipment vendor",
@@ -1430,7 +1460,7 @@ if (!isValidCircle(circle)) {
   getValue(cleanRow, ["jc name", "jc_name"]),
   getValue(cleanRow, ["jc id", "jc_id"]),
 
-  1
+  availabilityValue
 ]);
     });
 
