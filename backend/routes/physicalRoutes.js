@@ -56,6 +56,75 @@
       };
     }
 
+    function buildAnalyticsFilters(req) {
+      const scope = getCircleScope(req);
+      const conditions = ["COALESCE(is_deleted, 0) = 0"];
+      const params = [];
+
+      if (scope.sql) {
+        conditions.push("LOWER(TRIM(circle)) = LOWER(TRIM(?))");
+        params.push(...scope.params);
+      }
+
+      const requestedCircle = String(req.query.circle || "").trim();
+      if (requestedCircle) {
+        if (!canAccessCircle(req.authUser, requestedCircle)) {
+          const error = new Error("You cannot access this circle's analytics.");
+          error.statusCode = 403;
+          throw error;
+        }
+        conditions.push("LOWER(TRIM(circle)) = LOWER(TRIM(?))");
+        params.push(requestedCircle);
+      }
+
+      const requestedCmp = String(req.query.cmp || "").trim();
+      if (requestedCmp) {
+        conditions.push("LOWER(TRIM(cmp)) = LOWER(TRIM(?))");
+        params.push(requestedCmp);
+      }
+
+      const requestedJobRole = String(req.query.jobRole || req.query.job_role || "").trim();
+      if (requestedJobRole) {
+        conditions.push("LOWER(TRIM(job_role)) = LOWER(TRIM(?))");
+        params.push(requestedJobRole);
+      }
+
+      const requestedStatus = String(req.query.employmentStatus || req.query.employment_status || "").trim();
+      if (requestedStatus) {
+        conditions.push("LOWER(TRIM(employment_status)) = LOWER(TRIM(?))");
+        params.push(requestedStatus);
+      }
+
+      const requestedPprjStatus = String(req.query.pprjStatus || req.query.pprj_status || "").trim();
+      if (requestedPprjStatus) {
+        const normalized = requestedPprjStatus.toLowerCase();
+        if (normalized === "pending") {
+          conditions.push("(TRIM(COALESCE(pprj_status, '')) = '' OR LOWER(TRIM(pprj_status)) = 'pending')");
+        } else if (["not applicable", "n/a", "na"].includes(normalized)) {
+          conditions.push("(LOWER(TRIM(COALESCE(pprj_status, ''))) LIKE 'n/a%' OR LOWER(TRIM(COALESCE(pprj_status, ''))) IN ('na', 'not applicable'))");
+        } else {
+          conditions.push("LOWER(TRIM(COALESCE(pprj_status, ''))) = LOWER(TRIM(?))");
+          params.push(requestedPprjStatus);
+        }
+      }
+
+      const dateFrom = String(req.query.dateFrom || "").trim();
+      const dateTo = String(req.query.dateTo || "").trim();
+      if (dateFrom) {
+        conditions.push("date_of_joining >= ?");
+        params.push(dateFrom);
+      }
+      if (dateTo) {
+        conditions.push("date_of_joining <= ?");
+        params.push(dateTo);
+      }
+
+      return {
+        whereClause: `WHERE ${conditions.join(" AND ")}`,
+        params,
+      };
+    }
+
     const query = (sql, params = []) =>
       new Promise((resolve, reject) => {
         db.query(sql, params, (err, rows) => {
@@ -199,6 +268,7 @@
         ["uan_no", "VARCHAR(50) DEFAULT NULL"],
         ["esic_ip_no", "VARCHAR(50) DEFAULT NULL"],
         ["pf_no", "VARCHAR(50) DEFAULT NULL"],
+        ["gtli", "VARCHAR(100) DEFAULT NULL"],
         ["nth_salary", "DECIMAL(12,2) DEFAULT 0"],
         ["remarks", "TEXT DEFAULT NULL"],
       ];
@@ -702,6 +772,10 @@ toText(
   row["PF Number"]
 ),
 
+// gtli
+toText(
+  row["GTLI"]
+),
 
         // nth_salary
     toNullableInt(
@@ -756,6 +830,7 @@ toText(
           uan_no,
           esic_ip_no,
           pf_no,
+          gtli,
           nth_salary,
           remarks,
           cmp
@@ -769,6 +844,493 @@ toText(
         await conn.promise().query(insertSql, [chunk]);
       }
     }
+
+    // Employees whose PF/ESIC field carries an explicit "not applicable" marker
+    // are exempted rather than pending. For ESIC, employees above the statutory
+    // wage ceiling are also exempt even when the field is blank.
+    const DOC_EXEMPT_MARKERS = "('na', 'n/a', 'exempt', 'exempted', 'not applicable')";
+    const ESIC_WAGE_CEILING = 21000;
+
+    // Uploaded sheets store placeholder text ("Pending", "PPRJ Pending", "0")
+    // inside document columns. A placeholder is not a real value, so it counts
+    // as Pending — a plain non-blank check would wrongly report it Complete.
+    const fieldPendingSql = (column) =>
+      `(TRIM(COALESCE(${column}, '')) IN ('', '0') OR LOWER(TRIM(${column})) LIKE '%pending%')`;
+    const fieldCompleteSql = (column) => `NOT ${fieldPendingSql(column)}`;
+
+    const ESIC_EXEMPT_SQL = `(LOWER(TRIM(COALESCE(esic_ip_no, ''))) IN ${DOC_EXEMPT_MARKERS} OR (${fieldPendingSql("esic_ip_no")} AND COALESCE(nth_salary, 0) > ${ESIC_WAGE_CEILING}))`;
+    const PF_EXEMPT_SQL = `LOWER(TRIM(COALESCE(pf_no, ''))) IN ${DOC_EXEMPT_MARKERS}`;
+
+    // One shared definition of a "fully documented" employee, reused by every
+    // completion percentage / missing-documents aggregate so they never drift.
+    const ALL_DOCS_COMPLETE_SQL = `(
+      ${fieldCompleteSql("aadhaar_no")} AND
+      ${fieldCompleteSql("pan_no")} AND
+      ${fieldCompleteSql("bank_account_no")} AND
+      ${fieldCompleteSql("ifsc_code")} AND
+      ${fieldCompleteSql("uan_no")} AND
+      (${fieldCompleteSql("pf_no")} OR ${PF_EXEMPT_SQL}) AND
+      (${fieldCompleteSql("esic_ip_no")} OR ${ESIC_EXEMPT_SQL}) AND
+      ${fieldCompleteSql("company_email_id")} AND
+      ${fieldCompleteSql("mobile_number")} AND
+      ${fieldCompleteSql("pprj_code")} AND
+      TRIM(COALESCE(pprj_status, '')) != '' AND
+      date_of_joining IS NOT NULL
+    )`;
+
+    router.get("/dashboard/filter-options", async (req, res) => {
+      try {
+        await ensurePhysicalTables();
+        const scope = getCircleScope(req);
+
+        const requestedCircle = String(req.query.circle || "").trim();
+        if (requestedCircle && !canAccessCircle(req.authUser, requestedCircle)) {
+          return res.status(403).json({
+            success: false,
+            message: "You cannot access this circle's data.",
+          });
+        }
+
+        const cacheScope = {
+          ...getDashboardCacheScope(req),
+          requestedCircle: requestedCircle.toLowerCase(),
+        };
+        const cached = getCachedValue("dashboardFilterOptions", cacheScope);
+        if (cached) return res.status(200).json(cached);
+
+        const baseWhere = `WHERE COALESCE(is_deleted, 0) = 0${scope.sql}`;
+
+        // CMP options narrow to the selected circle so the dropdowns stay consistent.
+        const cmpWhere = requestedCircle
+          ? `${baseWhere} AND LOWER(TRIM(circle)) = LOWER(TRIM(?))`
+          : baseWhere;
+        const cmpParams = requestedCircle
+          ? [...scope.params, requestedCircle]
+          : scope.params;
+
+        const distinctQuery = (column, where = baseWhere, queryParams = scope.params) =>
+          query(
+            `SELECT DISTINCT TRIM(${column}) AS value FROM physical ${where} AND TRIM(COALESCE(${column}, '')) != '' ORDER BY value ASC`,
+            queryParams
+          );
+
+        const [circles, cmps, jobRoles, employmentStatuses, pprjStatuses] = await Promise.all([
+          distinctQuery("circle"),
+          distinctQuery("cmp", cmpWhere, cmpParams),
+          distinctQuery("job_role"),
+          distinctQuery("employment_status"),
+          distinctQuery("pprj_status"),
+        ]);
+
+        const values = (rows) => rows.map((row) => row.value);
+        const payload = {
+          success: true,
+          data: {
+            circles: values(circles),
+            cmps: values(cmps),
+            jobRoles: values(jobRoles),
+            employmentStatuses: values(employmentStatuses),
+            pprjStatuses: values(pprjStatuses),
+          },
+        };
+
+        setCachedValue("dashboardFilterOptions", cacheScope, payload);
+        res.status(200).json(payload);
+      } catch (error) {
+        console.error("Physical dashboard filter options error:", error);
+        res.status(500).json({
+          success: false,
+          message: "Failed to load filter options",
+        });
+      }
+    });
+
+    router.get("/dashboard/analytics", async (req, res) => {
+      try {
+        await ensurePhysicalTables();
+        const { whereClause, params } = buildAnalyticsFilters(req);
+
+        const summaryPromise = query(
+          `
+          SELECT
+            COUNT(*) AS total_employees,
+            SUM(CASE WHEN LOWER(TRIM(COALESCE(employment_status, ''))) = 'active' THEN 1 ELSE 0 END) AS active_employees,
+            SUM(CASE WHEN LOWER(TRIM(COALESCE(employment_status, ''))) = 'inactive' THEN 1 ELSE 0 END) AS inactive_employees,
+            SUM(CASE WHEN LOWER(TRIM(COALESCE(employment_status, ''))) = 'resigned' THEN 1 ELSE 0 END) AS resigned_employees,
+            SUM(CASE WHEN date_of_joining IS NOT NULL AND date_of_joining >= DATE_FORMAT(CURDATE(), '%Y-%m-01') AND date_of_joining <= LAST_DAY(CURDATE()) THEN 1 ELSE 0 END) AS new_joinings,
+            COUNT(DISTINCT CASE WHEN TRIM(COALESCE(circle, '')) != '' THEN circle END) AS circle_count,
+            COUNT(DISTINCT CASE WHEN TRIM(COALESCE(cmp, '')) != '' THEN cmp END) AS cmp_count,
+            COUNT(DISTINCT CASE WHEN TRIM(COALESCE(job_role, '')) != '' THEN job_role END) AS job_role_count
+          FROM physical
+          ${whereClause}
+          `,
+          params
+        );
+
+        // Resigned/last-working dates are only "pending" for employees who have
+        // actually separated; active employees legitimately have neither.
+        const documentPromise = query(
+          `
+          SELECT
+            COUNT(*) AS total_records,
+            SUM(CASE WHEN LOWER(TRIM(COALESCE(pprj_status, ''))) = 'active' THEN 1 ELSE 0 END) AS pprj_status_active,
+            SUM(CASE WHEN LOWER(TRIM(COALESCE(pprj_status, ''))) = 'inactive' THEN 1 ELSE 0 END) AS pprj_status_inactive,
+            SUM(CASE WHEN TRIM(COALESCE(pprj_status, '')) = '' OR LOWER(TRIM(pprj_status)) = 'pending' THEN 1 ELSE 0 END) AS pprj_status_pending,
+            SUM(CASE WHEN LOWER(TRIM(COALESCE(pprj_status, ''))) LIKE 'n/a%' OR LOWER(TRIM(COALESCE(pprj_status, ''))) IN ('na', 'not applicable') THEN 1 ELSE 0 END) AS pprj_status_not_applicable,
+            SUM(CASE WHEN ${fieldCompleteSql("pprj_code")} THEN 1 ELSE 0 END) AS pprj_code_completed,
+            SUM(CASE WHEN ${fieldPendingSql("pprj_code")} THEN 1 ELSE 0 END) AS pprj_code_pending,
+            SUM(CASE WHEN ${fieldCompleteSql("employee_code")} THEN 1 ELSE 0 END) AS employee_code_completed,
+            SUM(CASE WHEN ${fieldPendingSql("employee_code")} THEN 1 ELSE 0 END) AS employee_code_pending,
+            SUM(CASE WHEN ${fieldCompleteSql("mobile_number")} THEN 1 ELSE 0 END) AS mobile_completed,
+            SUM(CASE WHEN ${fieldPendingSql("mobile_number")} THEN 1 ELSE 0 END) AS mobile_pending,
+            SUM(CASE WHEN date_of_joining IS NOT NULL THEN 1 ELSE 0 END) AS joining_date_completed,
+            SUM(CASE WHEN date_of_joining IS NULL THEN 1 ELSE 0 END) AS joining_date_pending,
+            SUM(CASE WHEN LOWER(TRIM(COALESCE(employment_status, ''))) = 'active' THEN 1 ELSE 0 END) AS employment_active,
+            SUM(CASE WHEN LOWER(TRIM(COALESCE(employment_status, ''))) = 'inactive' THEN 1 ELSE 0 END) AS employment_inactive,
+            SUM(CASE WHEN resigned_date IS NOT NULL THEN 1 ELSE 0 END) AS resigned_date_completed,
+            SUM(CASE WHEN resigned_date IS NULL AND LOWER(TRIM(COALESCE(employment_status, ''))) IN ('inactive', 'resigned') THEN 1 ELSE 0 END) AS resigned_date_pending,
+            SUM(CASE WHEN last_working_date IS NOT NULL THEN 1 ELSE 0 END) AS last_working_date_completed,
+            SUM(CASE WHEN last_working_date IS NULL AND LOWER(TRIM(COALESCE(employment_status, ''))) IN ('inactive', 'resigned') THEN 1 ELSE 0 END) AS last_working_date_pending,
+            SUM(CASE WHEN ${fieldCompleteSql("ifsc_code")} THEN 1 ELSE 0 END) AS ifsc_completed,
+            SUM(CASE WHEN ${fieldPendingSql("ifsc_code")} THEN 1 ELSE 0 END) AS ifsc_pending,
+            SUM(CASE WHEN ${fieldCompleteSql("bank_account_no")} THEN 1 ELSE 0 END) AS bank_completed,
+            SUM(CASE WHEN ${fieldPendingSql("bank_account_no")} THEN 1 ELSE 0 END) AS bank_pending,
+            SUM(CASE WHEN ${fieldCompleteSql("pan_no")} THEN 1 ELSE 0 END) AS pan_completed,
+            SUM(CASE WHEN ${fieldPendingSql("pan_no")} THEN 1 ELSE 0 END) AS pan_pending,
+            SUM(CASE WHEN ${fieldCompleteSql("aadhaar_no")} THEN 1 ELSE 0 END) AS aadhaar_completed,
+            SUM(CASE WHEN ${fieldPendingSql("aadhaar_no")} THEN 1 ELSE 0 END) AS aadhaar_pending,
+            SUM(CASE WHEN ${fieldCompleteSql("uan_no")} THEN 1 ELSE 0 END) AS uan_completed,
+            SUM(CASE WHEN ${fieldPendingSql("uan_no")} THEN 1 ELSE 0 END) AS uan_pending,
+            SUM(CASE WHEN ${fieldCompleteSql("esic_ip_no")} AND LOWER(TRIM(esic_ip_no)) NOT IN ${DOC_EXEMPT_MARKERS} THEN 1 ELSE 0 END) AS esic_completed,
+            SUM(CASE WHEN ${fieldPendingSql("esic_ip_no")} AND COALESCE(nth_salary, 0) <= ${ESIC_WAGE_CEILING} THEN 1 ELSE 0 END) AS esic_pending,
+            SUM(CASE WHEN ${ESIC_EXEMPT_SQL} THEN 1 ELSE 0 END) AS esic_exempted,
+            SUM(CASE WHEN ${fieldCompleteSql("pf_no")} AND LOWER(TRIM(pf_no)) NOT IN ${DOC_EXEMPT_MARKERS} THEN 1 ELSE 0 END) AS pf_completed,
+            SUM(CASE WHEN ${fieldPendingSql("pf_no")} THEN 1 ELSE 0 END) AS pf_pending,
+            SUM(CASE WHEN ${PF_EXEMPT_SQL} THEN 1 ELSE 0 END) AS pf_exempted
+          FROM physical
+          ${whereClause}
+          `,
+          params
+        );
+
+        const circlePromise = query(
+          `
+          SELECT
+            CASE WHEN TRIM(COALESCE(circle, '')) != '' THEN circle ELSE 'Unassigned' END AS label,
+            COUNT(*) AS total_employees,
+            SUM(CASE WHEN LOWER(TRIM(COALESCE(employment_status, ''))) = 'active' THEN 1 ELSE 0 END) AS active_employees,
+            SUM(CASE WHEN LOWER(TRIM(COALESCE(employment_status, ''))) = 'inactive' THEN 1 ELSE 0 END) AS inactive_employees,
+            SUM(CASE WHEN ${fieldPendingSql("pf_no")} THEN 1 ELSE 0 END) AS pf_pending,
+            SUM(CASE WHEN ${fieldPendingSql("aadhaar_no")} THEN 1 ELSE 0 END) AS aadhaar_pending,
+            SUM(CASE WHEN ${fieldPendingSql("bank_account_no")} THEN 1 ELSE 0 END) AS bank_pending,
+            SUM(CASE WHEN ${fieldPendingSql("uan_no")} THEN 1 ELSE 0 END) AS uan_pending,
+            SUM(CASE WHEN ${fieldPendingSql("esic_ip_no")} THEN 1 ELSE 0 END) AS esic_pending,
+            SUM(CASE WHEN ${fieldPendingSql("pprj_code")} THEN 1 ELSE 0 END) AS pprj_pending,
+            ROUND(AVG(CASE WHEN ${ALL_DOCS_COMPLETE_SQL} THEN 1 ELSE 0 END) * 100, 2) AS completion_percentage
+          FROM physical
+          ${whereClause}
+          GROUP BY label
+          ORDER BY total_employees DESC
+          LIMIT 20
+          `,
+          params
+        );
+
+        const cmpPromise = query(
+          `
+          SELECT
+            CASE WHEN TRIM(COALESCE(cmp, '')) != '' THEN cmp ELSE 'Unassigned' END AS label,
+            COUNT(*) AS total_employees,
+            SUM(CASE WHEN LOWER(TRIM(COALESCE(employment_status, ''))) = 'active' THEN 1 ELSE 0 END) AS active_employees,
+            SUM(CASE WHEN LOWER(TRIM(COALESCE(employment_status, ''))) = 'inactive' THEN 1 ELSE 0 END) AS inactive_employees,
+            SUM(CASE WHEN ${fieldPendingSql("pf_no")} THEN 1 ELSE 0 END) AS pf_pending,
+            SUM(CASE WHEN ${fieldPendingSql("aadhaar_no")} THEN 1 ELSE 0 END) AS aadhaar_pending,
+            SUM(CASE WHEN ${fieldPendingSql("bank_account_no")} THEN 1 ELSE 0 END) AS bank_pending,
+            SUM(CASE WHEN ${fieldPendingSql("uan_no")} THEN 1 ELSE 0 END) AS uan_pending,
+            SUM(CASE WHEN ${fieldPendingSql("esic_ip_no")} THEN 1 ELSE 0 END) AS esic_pending,
+            ROUND(AVG(CASE WHEN ${ALL_DOCS_COMPLETE_SQL} THEN 1 ELSE 0 END) * 100, 2) AS completion_percentage
+          FROM physical
+          ${whereClause}
+          GROUP BY label
+          ORDER BY total_employees DESC
+          LIMIT 20
+          `,
+          params
+        );
+
+        const jobRolePromise = query(
+          `
+          SELECT
+            CASE WHEN TRIM(COALESCE(job_role, '')) != '' THEN job_role ELSE 'Unassigned' END AS label,
+            COUNT(*) AS total_employees,
+            SUM(CASE WHEN NOT ${ALL_DOCS_COMPLETE_SQL} THEN 1 ELSE 0 END) AS missing_documents,
+            ROUND(AVG(CASE WHEN ${ALL_DOCS_COMPLETE_SQL} THEN 1 ELSE 0 END) * 100, 2) AS completion_percentage
+          FROM physical
+          ${whereClause}
+          GROUP BY label
+          ORDER BY total_employees DESC
+          LIMIT 20
+          `,
+          params
+        );
+
+        const [summaryRows, documentRows, circleRows, cmpRows, jobRoleRows] = await Promise.all([
+          summaryPromise,
+          documentPromise,
+          circlePromise,
+          cmpPromise,
+          jobRolePromise,
+        ]);
+
+        const summary = summaryRows[0] || {};
+        const documentSummary = documentRows[0] || {};
+        const pair = (completedKey, pendingKey) => ({
+          completed: Number(documentSummary[completedKey] || 0),
+          pending: Number(documentSummary[pendingKey] || 0),
+        });
+
+        res.status(200).json({
+          success: true,
+          data: {
+            summary: {
+              totalEmployees: Number(summary.total_employees || 0),
+              activeEmployees: Number(summary.active_employees || 0),
+              inactiveEmployees: Number(summary.inactive_employees || 0),
+              resignedEmployees: Number(summary.resigned_employees || 0),
+              newJoinings: Number(summary.new_joinings || 0),
+              circleCount: Number(summary.circle_count || 0),
+              cmpCount: Number(summary.cmp_count || 0),
+              jobRoleCount: Number(summary.job_role_count || 0),
+            },
+            documentSummary: {
+              totalRecords: Number(documentSummary.total_records || 0),
+              pprjStatus: {
+                active: Number(documentSummary.pprj_status_active || 0),
+                inactive: Number(documentSummary.pprj_status_inactive || 0),
+                pending: Number(documentSummary.pprj_status_pending || 0),
+                notApplicable: Number(documentSummary.pprj_status_not_applicable || 0),
+              },
+              pprjCode: pair("pprj_code_completed", "pprj_code_pending"),
+              employeeCode: pair("employee_code_completed", "employee_code_pending"),
+              mobile: pair("mobile_completed", "mobile_pending"),
+              joiningDate: pair("joining_date_completed", "joining_date_pending"),
+              employmentStatus: {
+                active: Number(documentSummary.employment_active || 0),
+                inactive: Number(documentSummary.employment_inactive || 0),
+              },
+              resignedDate: pair("resigned_date_completed", "resigned_date_pending"),
+              lastWorkingDate: pair("last_working_date_completed", "last_working_date_pending"),
+              ifsc: pair("ifsc_completed", "ifsc_pending"),
+              bankAccount: pair("bank_completed", "bank_pending"),
+              pan: pair("pan_completed", "pan_pending"),
+              aadhaar: pair("aadhaar_completed", "aadhaar_pending"),
+              uan: pair("uan_completed", "uan_pending"),
+              esic: {
+                ...pair("esic_completed", "esic_pending"),
+                exempted: Number(documentSummary.esic_exempted || 0),
+              },
+              pf: {
+                ...pair("pf_completed", "pf_pending"),
+                exempted: Number(documentSummary.pf_exempted || 0),
+              },
+            },
+            circleBreakdown: circleRows,
+            cmpBreakdown: cmpRows,
+            jobRoleBreakdown: jobRoleRows,
+          },
+        });
+      } catch (error) {
+        console.error("Physical dashboard analytics error:", error);
+        const status = error?.statusCode || 500;
+        res.status(status).json({
+          success: false,
+          message: error.message || "Failed to load dashboard analytics",
+        });
+      }
+    });
+
+    // Whitelist of columns a field_status/missing_data drilldown may target.
+    const DRILLDOWN_FIELD_COLUMNS = new Set([
+      "pprj_code",
+      "employee_code",
+      "mobile_number",
+      "date_of_joining",
+      "resigned_date",
+      "last_working_date",
+      "ifsc_code",
+      "bank_account_no",
+      "pan_no",
+      "aadhaar_no",
+      "uan_no",
+      "esic_ip_no",
+      "pf_no",
+      "company_email_id",
+    ]);
+
+    const DRILLDOWN_DATE_COLUMNS = new Set(["date_of_joining", "resigned_date", "last_working_date"]);
+
+    function buildFieldStatusCondition(column, status) {
+      if (DRILLDOWN_DATE_COLUMNS.has(column)) {
+        if (status === "complete") return ` AND ${column} IS NOT NULL`;
+        if (column === "resigned_date" || column === "last_working_date") {
+          return ` AND ${column} IS NULL AND LOWER(TRIM(COALESCE(employment_status, ''))) IN ('inactive', 'resigned')`;
+        }
+        return ` AND ${column} IS NULL`;
+      }
+
+      // Conditions must mirror the analytics aggregates exactly, otherwise the
+      // employee list behind a count won't match the count on the card.
+      const isExemptible = column === "pf_no" || column === "esic_ip_no";
+
+      if (status === "complete") {
+        return isExemptible
+          ? ` AND ${fieldCompleteSql(column)} AND LOWER(TRIM(${column})) NOT IN ${DOC_EXEMPT_MARKERS}`
+          : ` AND ${fieldCompleteSql(column)}`;
+      }
+
+      if (status === "exempted") {
+        if (column === "esic_ip_no") return ` AND ${ESIC_EXEMPT_SQL}`;
+        if (column === "pf_no") return ` AND ${PF_EXEMPT_SQL}`;
+        return ` AND LOWER(TRIM(COALESCE(${column}, ''))) IN ${DOC_EXEMPT_MARKERS}`;
+      }
+
+      // pending
+      if (column === "esic_ip_no") {
+        return ` AND ${fieldPendingSql("esic_ip_no")} AND COALESCE(nth_salary, 0) <= ${ESIC_WAGE_CEILING}`;
+      }
+      return ` AND ${fieldPendingSql(column)}`;
+    }
+
+    router.get("/dashboard/drilldown", async (req, res) => {
+      try {
+        await ensurePhysicalTables();
+        // Same permission-aware base filters as the analytics endpoint —
+        // circle scope, CMP, job role, statuses and date range come from here.
+        const { whereClause, params } = buildAnalyticsFilters(req);
+
+        const isExport = String(req.query.export || "") === "true";
+        const page = Math.max(1, Number(req.query.page || 1));
+        const pageSize = Math.min(isExport ? 10000 : 100, Math.max(1, Number(req.query.pageSize || 25)));
+        const search = String(req.query.search || "").trim();
+        const metric = String(req.query.metric || "missing_data").trim();
+        const field = String(req.query.field || "").trim();
+        const value = String(req.query.value || "").trim();
+
+        let whereSql = whereClause;
+        const queryParams = [...params];
+
+        if (metric === "circle" && value) {
+          if (!canAccessCircle(req.authUser, value)) {
+            return res.status(403).json({ success: false, message: "You cannot access this circle's analytics." });
+          }
+          whereSql += ` AND LOWER(TRIM(circle)) = LOWER(TRIM(?))`;
+          queryParams.push(value);
+        } else if (metric === "cmp" && value) {
+          whereSql += ` AND LOWER(TRIM(cmp)) = LOWER(TRIM(?))`;
+          queryParams.push(value);
+        } else if (metric === "job_role" && value) {
+          whereSql += ` AND LOWER(TRIM(job_role)) = LOWER(TRIM(?))`;
+          queryParams.push(value);
+        } else if (metric === "employment_status" && value) {
+          whereSql += ` AND LOWER(TRIM(employment_status)) = LOWER(TRIM(?))`;
+          queryParams.push(value);
+        } else if (metric === "pprj_status" && value) {
+          const normalized = value.toLowerCase();
+          if (normalized === "pending") {
+            whereSql += ` AND (TRIM(COALESCE(pprj_status, '')) = '' OR LOWER(TRIM(pprj_status)) = 'pending')`;
+          } else if (["not applicable", "n/a", "na"].includes(normalized)) {
+            whereSql += ` AND (LOWER(TRIM(COALESCE(pprj_status, ''))) LIKE 'n/a%' OR LOWER(TRIM(COALESCE(pprj_status, ''))) IN ('na', 'not applicable'))`;
+          } else {
+            whereSql += ` AND LOWER(TRIM(COALESCE(pprj_status, ''))) = LOWER(TRIM(?))`;
+            queryParams.push(value);
+          }
+        } else if (metric === "field_status") {
+          if (!DRILLDOWN_FIELD_COLUMNS.has(field)) {
+            return res.status(400).json({ success: false, message: "Unknown drilldown field." });
+          }
+          const status = ["complete", "pending", "exempted"].includes(value.toLowerCase())
+            ? value.toLowerCase()
+            : "pending";
+          whereSql += buildFieldStatusCondition(field, status);
+        } else if (metric === "missing_data") {
+          const targetField = DRILLDOWN_FIELD_COLUMNS.has(field) ? field : "pf_no";
+          whereSql += buildFieldStatusCondition(targetField, "pending");
+        }
+
+        if (search) {
+          whereSql += ` AND (LOWER(employee_name) LIKE LOWER(?) OR LOWER(employee_code) LIKE LOWER(?) OR aadhaar_no LIKE ? OR mobile_number LIKE ? OR LOWER(cmp) LIKE LOWER(?) OR LOWER(circle) LIKE LOWER(?))`;
+          const likeValue = `%${search}%`;
+          queryParams.push(likeValue, likeValue, likeValue, likeValue, likeValue, likeValue);
+        }
+
+        const SORTABLE_COLUMNS = new Set(["employee_name", "employee_code", "circle", "cmp", "job_role", "employment_status", "date_of_joining"]);
+        const sortBy = SORTABLE_COLUMNS.has(String(req.query.sortBy || "")) ? req.query.sortBy : "employee_name";
+        const sortOrder = String(req.query.sortOrder || "asc").toLowerCase() === "desc" ? "DESC" : "ASC";
+
+        const [totalRows, rows] = await Promise.all([
+          query(`SELECT COUNT(*) AS total FROM physical ${whereSql}`, queryParams),
+          query(
+            `
+            SELECT
+              id,
+              employee_code,
+              employee_name,
+              circle,
+              cmp,
+              job_role,
+              employment_status,
+              pprj_status,
+              mobile_number,
+              DATE_FORMAT(date_of_joining, '%d-%m-%Y') AS date_of_joining,
+              DATE_FORMAT(resigned_date, '%d-%m-%Y') AS resigned_date,
+              DATE_FORMAT(last_working_date, '%d-%m-%Y') AS last_working_date,
+              aadhaar_no,
+              pan_no,
+              bank_account_no,
+              ifsc_code,
+              uan_no,
+              esic_ip_no,
+              pf_no,
+              CONCAT_WS(', ',
+                CASE WHEN ${fieldPendingSql("pprj_code")} THEN 'PPRJ Code' END,
+                CASE WHEN ${fieldPendingSql("employee_code")} THEN 'Employee Code' END,
+                CASE WHEN ${fieldPendingSql("mobile_number")} THEN 'Mobile Number' END,
+                CASE WHEN date_of_joining IS NULL THEN 'Date Of Joining' END,
+                CASE WHEN ${fieldPendingSql("ifsc_code")} THEN 'IFSC Code' END,
+                CASE WHEN ${fieldPendingSql("bank_account_no")} THEN 'Bank Account' END,
+                CASE WHEN ${fieldPendingSql("pan_no")} THEN 'PAN Number' END,
+                CASE WHEN ${fieldPendingSql("aadhaar_no")} THEN 'Aadhaar Number' END,
+                CASE WHEN ${fieldPendingSql("uan_no")} THEN 'UAN Number' END,
+                CASE WHEN ${fieldPendingSql("esic_ip_no")} AND COALESCE(nth_salary, 0) <= ${ESIC_WAGE_CEILING} THEN 'ESIC IP Number' END,
+                CASE WHEN ${fieldPendingSql("pf_no")} THEN 'PF Number' END
+              ) AS missing_fields
+            FROM physical
+            ${whereSql}
+            ORDER BY ${sortBy} ${sortOrder}
+            LIMIT ? OFFSET ?
+            `,
+            [...queryParams, pageSize, (page - 1) * pageSize]
+          ),
+        ]);
+
+        res.status(200).json({
+          success: true,
+          data: rows,
+          pagination: {
+            page,
+            pageSize,
+            totalRecords: Number(totalRows[0]?.total || 0),
+            totalPages: Math.max(1, Math.ceil((Number(totalRows[0]?.total || 0)) / pageSize)),
+          },
+        });
+      } catch (error) {
+        console.error("Physical dashboard drilldown error:", error);
+        res.status(error?.statusCode || 500).json({
+          success: false,
+          message: error.message || "Failed to load drilldown data",
+        });
+      }
+    });
 
     router.get("/export", async (req, res) => {
 
@@ -1284,6 +1846,7 @@ for(const row of rows){
         uan_no=?,
         esic_ip_no=?,
         pf_no=?,
+        gtli=?,
         nth_salary=?,
         remarks=?,
         cmp=?
@@ -1321,6 +1884,7 @@ for(const row of rows){
         toText(row["UAN No"]),
         toText(row["ESIC IP No "]||row["ESIC IP No"]),
         toText(row["PF No"]||row["PF NO"]||row["PF Number"]),
+        toText(row["GTLI"]),
         toNullableInt(row["NTH Salary"]||row["Nth Salary"]||row["Salary"]),
         toText(row["Remarks"]),
         toText(row["CMP"]),
@@ -1525,6 +2089,7 @@ duplicateEmployees: duplicateEmployees
               uan_no,
               esic_ip_no,
               pf_no,
+              gtli,
               nth_salary,
               remarks
 
@@ -1572,6 +2137,7 @@ duplicateEmployees: duplicateEmployees
               data.uan_no || "",
               data.esic_ip_no || "",
               data.pf_no || "",
+              data.gtli || "",
               data.nth_salary || 0,
               data.remarks || ""
 
@@ -3016,6 +3582,7 @@ duplicateEmployees: duplicateEmployees
               uan_no = ?,
               esic_ip_no = ?,
               pf_no = ?,
+              gtli = ?,
               nth_salary = ?,
               remarks = ?
 
@@ -3054,6 +3621,7 @@ duplicateEmployees: duplicateEmployees
               data.uan_no || "",
               data.esic_ip_no || "",
               data.pf_no || "",
+              data.gtli || "",
               data.nth_salary || 0,
               data.remarks || "",
 

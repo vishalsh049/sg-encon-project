@@ -7,7 +7,8 @@
    Download,
   Trash2,
   RotateCcw,
-  Clock
+  Clock,
+  BarChart3
 } from "lucide-react";
 import Swal from "sweetalert2";
 import PremiumDatePicker from "../components/PremiumDatePicker";
@@ -110,6 +111,7 @@ const Field = ({ label, value }) => (
     uan_no: "",
     esic_ip_no: "",
     pf_no: "",
+    gtli: "",
     nth_salary: "",
     remarks: "",
   });
@@ -771,6 +773,9 @@ if (
         pf_no:
           result.data.pf_no || "",
 
+          gtli:
+  result.data.gtli || "",
+
         nth_salary:
           result.data.nth_salary || "",
         
@@ -899,6 +904,9 @@ if (
 
     pf_no:
   result.data.pf_no || "",
+
+  gtli:
+  result.data.gtli || "",
 
   nth_salary:
     result.data.nth_salary || "",
@@ -1157,6 +1165,7 @@ setEmployeeForm({
         uan_no: "",
         esic_ip_no: "",
         pf_no: "",
+        gtli: "",
         nth_salary: "",
         remarks: "",
       });
@@ -1302,6 +1311,8 @@ setEmployeeForm({
         item.esic_ip_no,
       "PF No":
        item.pf_no,
+       "GTLI":
+       item.gtli,
       "NTH Salary":
         item.nth_salary,
       Remarks:
@@ -1716,6 +1727,25 @@ const inactiveCount =
   >
     <Upload size={16} />
     Upload Report
+  </button>
+
+  <button
+    onClick={() => window.location.href = "/physical/dashboard"}
+    className="
+      group
+      flex items-center gap-2
+      rounded-lg
+      border border-slate-200
+      bg-white
+      px-4
+      py-2
+      text-[13px]
+      font-semibold
+      text-slate-700
+    "
+  >
+    <BarChart3 size={16} />
+    Dashboard
   </button>
 
 </div>
@@ -2178,7 +2208,16 @@ const inactiveCount =
 
   <th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-center text-xs font-bold
    uppercase tracking-wider text-slate-700 whitespace-nowrap">CMP</th>
-
+<th
+  className="border-b border-r border-slate-200 bg-white px-4 py-3 text-center text-xs font-bold uppercase tracking-wider text-slate-700 whitespace-nowrap"
+>
+  PPRJ Status
+</th>
+<th
+  className="border-b border-r border-slate-200 bg-white px-4 py-3 text-center text-xs font-bold uppercase tracking-wider text-slate-700 whitespace-nowrap"
+>
+  PPRJ Code
+</th>
 
   <th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-center text-xs font-bold 
   uppercase tracking-wider text-slate-700 whitespace-nowrap">Employee Code</th>
@@ -2187,21 +2226,16 @@ const inactiveCount =
   uppercase tracking-wider text-slate-700 whitespace-nowrap">Employee Name</th>
 
   <th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-center text-xs font-bold
-   uppercase tracking-wider text-slate-700 whitespace-nowrap">Function</th>
-
-  <th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-center text-xs font-bold
    uppercase tracking-wider text-slate-700 whitespace-nowrap">Job Role</th>
-
-  <th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-center text-xs font-bold
-   uppercase tracking-wider text-slate-700 whitespace-nowrap">Scrum Job Role</th>
 
   <th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-center text-xs font-bold
    uppercase tracking-wider text-slate-700 whitespace-nowrap">Mobile Number</th>
 
-   <th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-center text-xs font-bold
-    uppercase tracking-wider text-slate-700 whitespace-nowrap">
-   PF No
-   </th>
+   <th
+  className="border-b border-r border-slate-200 bg-white px-4 py-3 text-center text-xs font-bold uppercase tracking-wider text-slate-700 whitespace-nowrap"
+>
+  Aadhaar No
+</th>
 
   <th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-center text-xs font-bold
    uppercase tracking-wider text-slate-700 whitespace-nowrap">Date Of Joining</th>
@@ -2274,29 +2308,40 @@ const inactiveCount =
     />
   </td>
 
-  <td className="border-b border-r border-slate-200 px-4 py-2 text-sm text-slate-700 whitespace-nowrap">
+  <td className="border-b border-r border-slate-200 px-4 py-2 text-sm text-slate-700 text-center whitespace-nowrap">
     {item.circle || "-"}</td>
-  <td className="border-b border-r border-slate-200 px-4 py-2 text-sm text-slate-700 whitespace-nowrap">
+  <td className="border-b border-r border-slate-200 px-4 py-2 text-sm text-slate-700 text-center whitespace-nowrap">
     {item.cmp || "-"}</td>
-
-  <td className="border-b border-r border-slate-200 px-4 py-2 text-sm text-slate-700 whitespace-nowrap">{item.employee_code || "-"}</td>
-  <td className="border-b border-r border-slate-200 px-4 py-2 text-sm text-slate-700 whitespace-nowrap">{item.employee_name || "-"}</td>
- <td className="border-b border-slate-100 px-4 py-2 whitespace-nowrap">
-  <span className="px-3 py-1 rounded-lg bg-blue-50 text-blue-700 text-xs font-semibold">
-    {item.function_name || "-"}
+   <td className="border-b border-r border-slate-200 px-4 py-2 text-center whitespace-nowrap">
+  <span
+    className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${
+      item.pprj_status === "Active"
+        ? "bg-green-100 text-green-700"
+        : item.pprj_status === "Inactive"
+        ? "bg-red-100 text-red-700"
+        : item.pprj_status === "Pending"
+        ? "bg-amber-100 text-amber-700"
+        : "bg-slate-100 text-slate-700"
+    }`}
+  >
+    {item.pprj_status || "-"}
   </span>
 </td>
-  
-  <td className="border-b border-r border-slate-200 px-4 py-2 text-sm text-slate-700 whitespace-nowrap">{item.job_role || "-"}</td>
-  <td className="border-b border-r border-slate-200 px-4 py-2 text-sm text-slate-700 whitespace-nowrap">{item.scrum_job_role || "-"}</td>
- 
-  <td className="border-b border-r border-slate-200 px-4 py-2 text-sm text-slate-700 whitespace-nowrap">{item.mobile_number || "-"}</td>
-  <td className="border-b border-r border-slate-200 px-4 py-2 text-sm text-slate-700 whitespace-nowrap">{item.pf_no || "-"}</td>
-  <td className="border-b border-r border-slate-200 px-4 py-2 text-sm text-slate-700 whitespace-nowrap">{item.date_of_joining
+    <td className="border-b border-r border-slate-200 px-4 py-2 text-sm text-center text-slate-700 whitespace-nowrap">
+  {item.pprj_code || "-"}
+</td>
+  <td className="border-b border-r border-slate-200 px-4 py-2 text-sm text-slate-700 text-center whitespace-nowrap">{item.employee_code || "-"}</td>
+  <td className="border-b border-r border-slate-200 px-4 py-2 text-sm text-slate-700 text-center whitespace-nowrap">{item.employee_name || "-"}</td>  
+  <td className="border-b border-r border-slate-200 px-4 py-2 text-sm text-slate-700 text-center whitespace-nowrap">{item.job_role || "-"}</td>
+  <td className="border-b border-r border-slate-200 px-4 py-2 text-sm text-slate-700 text-center whitespace-nowrap">{item.mobile_number || "-"}</td>
+  <td className="border-b border-r border-slate-200 px-4 py-2 text-sm text-slate-700 text-center whitespace-nowrap">
+  {item.aadhaar_no || "-"}
+</td>
+  <td className="border-b border-r border-slate-200 px-4 py-2 text-sm text-slate-700 text-center whitespace-nowrap">{item.date_of_joining
     ? new Date(item.date_of_joining)
         .toLocaleDateString("en-GB")
     : "-"}</td>
-<td>
+<td className="border-b border-r border-slate-200 px-4 py-2 text-center whitespace-nowrap">
   <span
       className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${
       item.employment_status === "Active"
@@ -2770,6 +2815,7 @@ records
         <Field label="UAN No" value={viewEmployee.uan_no} />
         <Field label="ESIC IP No" value={viewEmployee.esic_ip_no} />
         <Field label="PF No" value={viewEmployee.pf_no} />
+        <Field label="GTLI" value={viewEmployee.gtli} />
         <Field label="NTH Salary" value={viewEmployee.nth_salary} />
       </div>
 
@@ -2810,7 +2856,7 @@ records
   "
 >
 
-        <div className="mb-6 flex items-start justify-between border-b border-slate-200 pb-4">
+        <div className="mb-2 flex items-start justify-between border-b border-slate-200 pb-2">
 
        <div className="flex items-start gap-4">
 
@@ -3471,6 +3517,21 @@ onChange={(selected) =>
     value={employeeForm.pf_no}
     onChange={handleEmployeeChange}
     placeholder="Enter PF No"
+    className="w-full rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs outline-none focus:border-violet-500"
+  />
+</div>
+
+<div>
+  <label className="mb-1 block text-xs px-1 font-semibold text-slate-700">
+    GTLI
+  </label>
+
+  <input
+    type="text"
+    name="gtli"
+    value={employeeForm.gtli}
+    onChange={handleEmployeeChange}
+    placeholder="Enter GTLI"
     className="w-full rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs outline-none focus:border-violet-500"
   />
 </div>

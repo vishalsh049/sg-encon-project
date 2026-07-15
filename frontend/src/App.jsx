@@ -14,6 +14,7 @@ import NSOReports from "./pages/NsoReports";
 import NsoDashboard from "./pages/NsoDashboard";
 import FiberInventory from "./pages/FiberInventory";
 import Physical from "./pages/Physical";
+import PhysicalDashboard from "./pages/PhysicalDashboard";
 import Scrum from "./pages/Scrum";
 import BillingStatus from "./pages/BillingStatus";
 import BillingDashboard from "./pages/BillingDashboard";
@@ -41,6 +42,11 @@ function App() {
       <Routes>
         <Route path="/" element={<Login />} />
         <Route path="/login" element={<Login />} />
+        <Route path="/physical/dashboard" element={
+          <ProtectedRoute page={"Physical"}>
+            <PhysicalDashboard />
+          </ProtectedRoute>
+        } />
 
         <Route path="/dashboard" element={<DashboardLayout />}>
   <Route index element={
@@ -96,6 +102,12 @@ function App() {
   <Route path="manpower/physical" element={
     <ProtectedRoute page={"Physical"}>
       <Physical />
+    </ProtectedRoute>
+  } />
+
+  <Route path="manpower/physical/dashboard" element={
+    <ProtectedRoute page={"Physical"}>
+      <PhysicalDashboard />
     </ProtectedRoute>
   } />
 

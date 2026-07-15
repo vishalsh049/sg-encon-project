@@ -17,6 +17,7 @@ export const PAGE_ID_MAP = {
 
   // Manpower
   "physical": "Physical",
+  "physical dashboard": "Physical",
   "scrum": "Scrum",
   "new-joining": "New Joining",
 
