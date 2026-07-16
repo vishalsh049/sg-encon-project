@@ -420,10 +420,10 @@ export default function PhysicalDashboard() {
           { label: "Not Applicable", count: summary.pprjStatus?.notApplicable || 0, metric: "pprj_status", field: "pprj_status", drillValue: "Not Applicable" },
         ],
       },
-      fieldCard("pprjCode", "PPRJ Code", "pprjCode", "pprj_code"),
+     // fieldCard("pprjCode", "PPRJ Code", "pprjCode", "pprj_code"),
       fieldCard("employeeCode", "Employee Code", "employeeCode", "employee_code"),
       fieldCard("mobile", "Mobile Number", "mobile", "mobile_number"),
-      fieldCard("joiningDate", "Date Of Joining", "joiningDate", "date_of_joining"),
+     // fieldCard("joiningDate", "Date Of Joining", "joiningDate", "date_of_joining"),
       {
         key: "employmentStatus",
         title: "Employment Status",
@@ -432,8 +432,8 @@ export default function PhysicalDashboard() {
           { label: "Inactive Employees", count: summary.employmentStatus?.inactive || 0, metric: "employment_status", field: "employment_status", drillValue: "Inactive" },
         ],
       },
-      fieldCard("resignedDate", "Resigned Date", "resignedDate", "resigned_date"),
-      fieldCard("lastWorkingDate", "Last Working Date", "lastWorkingDate", "last_working_date"),
+    //  fieldCard("resignedDate", "Resigned Date", "resignedDate", "resigned_date"),
+   //   fieldCard("lastWorkingDate", "Last Working Date", "lastWorkingDate", "last_working_date"),
       fieldCard("ifsc", "IFSC Code", "ifsc", "ifsc_code"),
       fieldCard("bankAccount", "Bank Account Number", "bankAccount", "bank_account_no"),
       fieldCard("pan", "PAN Number", "pan", "pan_no"),
@@ -441,6 +441,12 @@ export default function PhysicalDashboard() {
       fieldCard("uan", "UAN Number", "uan", "uan_no"),
       fieldCard("esic", "ESIC IP Number", "esic", "esic_ip_no", true),
       fieldCard("pf", "PF Number", "pf", "pf_no", true),
+      fieldCard(
+  "gtli",
+  "GTLI",
+  "gtli",
+  "gtli"
+),
     ];
   }, [data]);
 
@@ -574,17 +580,17 @@ export default function PhysicalDashboard() {
   return (
     <div className="min-h-screen bg-slate-50 p-4 lg:p-4">
       <div className="mx-auto max-w-8xl space-y-4">
-        <div className="sticky top-0 z-20 rounded-3xl border border-slate-200 bg-white/95 p-4 shadow-sm backdrop-blur">
+        <div className=" top-0 z-20 rounded-3xl border border-slate-200 bg-white/95 p-4 shadow-sm backdrop-blur">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
-              <div className="flex items-center gap-2 text-sm font-medium text-indigo-600">
-                <FileText size={14} />
+              <div className="flex items-center gap-1 text-sm font-medium text-indigo-600">
+                <FileText size={12} />
                 Physical Analytics Dashboard
               </div>
-              <h1 className="mt-1 text-xl font-semibold text-slate-900">Employee document tracking</h1>
+              <h1 className="mt-1 text-lg font-semibold text-slate-900">Employee document tracking</h1>
               <p className="mt-1 text-sm text-slate-500">Permission-aware insights for circles, CMPs, roles, documents, and employment status.</p>
             </div>
-            <div className="flex flex-wrap items-center gap-3">
+            <div className="flex flex-wrap items-center gap-2">
               <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-500">
                 Last updated: {lastUpdated ? formatTimestamp(lastUpdated) : "Loading..."}
               </div>
@@ -603,7 +609,7 @@ export default function PhysicalDashboard() {
             </div>
           </div>
 
-          <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3 xl:grid-cols-7">
+          <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-4 xl:grid-cols-5">
             <div className="rounded-2xl border border-slate-200 bg-slate-50 p-2 xl:col-span-1">
               <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Circle</label>
               <select value={filters.circle} onChange={(event) => setFilters((prev) => ({ ...prev, circle: event.target.value, cmp: "" }))} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm">
@@ -622,7 +628,7 @@ export default function PhysicalDashboard() {
                 ))}
               </select>
             </div>
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-2 xl:col-span-1">
+          {/*  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-2 xl:col-span-1">
               <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Job Role</label>
               <select value={filters.jobRole} onChange={(event) => setFilters((prev) => ({ ...prev, jobRole: event.target.value }))} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm">
                 <option value="">All roles</option>
@@ -631,6 +637,7 @@ export default function PhysicalDashboard() {
                 ))}
               </select>
             </div>
+             */}
             <div className="rounded-2xl border border-slate-200 bg-slate-50 p-2 xl:col-span-1">
               <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Employment Status</label>
               <select value={filters.employmentStatus} onChange={(event) => setFilters((prev) => ({ ...prev, employmentStatus: event.target.value }))} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm">
@@ -640,7 +647,7 @@ export default function PhysicalDashboard() {
                 ))}
               </select>
             </div>
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-2 xl:col-span-1">
+         {/*    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-2 xl:col-span-1">
               <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">PPRJ Status</label>
               <select value={filters.pprjStatus} onChange={(event) => setFilters((prev) => ({ ...prev, pprjStatus: event.target.value }))} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm">
                 <option value="">All PPRJ status</option>
@@ -649,6 +656,7 @@ export default function PhysicalDashboard() {
                 ))}
               </select>
             </div>
+            */}
            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-2 xl:col-span-2">
               <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Date Range (DOJ)</label>
               <div className="grid grid-cols-2 gap-2">
@@ -666,7 +674,7 @@ export default function PhysicalDashboard() {
                 <div key={index} className="h-24 animate-pulse rounded-2xl bg-slate-200" />
               ))}
             </div>
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-3">
               {[...Array(6)].map((_, index) => (
                 <div key={index} className="h-40 animate-pulse rounded-2xl bg-slate-200" />
               ))}
@@ -685,7 +693,7 @@ export default function PhysicalDashboard() {
             </div>
 
             <SectionCard title="Enterprise Document Tracking" subtitle="Click any count to see the employees behind it. Each field appears exactly once.">
-              <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-5">
+              <div className="grid gap-3 md:grid-cols-4 xl:grid-cols-6">
                 {documentCards.map((card) => (
                   <div key={card.key} className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
                     <h4 className="mb-2 text-sm font-semibold text-slate-900">{card.title}</h4>
