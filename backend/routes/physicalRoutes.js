@@ -1717,10 +1717,52 @@ if (!jobRole) {
             : normalizedPprjStatus === "pending"
             ? "Pending"
             : "Not Applicable";
-
       }
+       // =========================
+// GTLI Validation
+// =========================
+
+const gtli = String(
+  row["GTLI"] ?? ""
+).trim();
+
+if (!gtli) {
+
+  validationErrors.push(
+    `❌ Row ${excelRowNumber} - ${employeeName} (${employeeCode}) : GTLI is blank`
+  );
+
+} else {
+
+  const normalizedGtli = gtli.toLowerCase();
+
+  const validGtli = [
+    "covered",
+    "pending",
+    "not applicable"
+  ];
+
+  if (!validGtli.includes(normalizedGtli)) {
+
+    validationErrors.push(
+      `❌ Row ${excelRowNumber} - ${employeeName} (${employeeCode}) : Invalid GTLI "${gtli}". Allowed values are Covered, Pending, Not Applicable.`
+    );
+
+  } else {
+
+    row["GTLI"] =
+      normalizedGtli === "covered"
+        ? "Covered"
+        : normalizedGtli === "pending"
+        ? "Pending"
+        : "Not Applicable";
+
+  }
+}
     }
   }
+
+ 
 
   // =========================
   // Show All Errors Together

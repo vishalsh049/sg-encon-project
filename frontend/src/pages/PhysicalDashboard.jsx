@@ -441,12 +441,33 @@ export default function PhysicalDashboard() {
       fieldCard("uan", "UAN Number", "uan", "uan_no"),
       fieldCard("esic", "ESIC IP Number", "esic", "esic_ip_no", true),
       fieldCard("pf", "PF Number", "pf", "pf_no", true),
-      fieldCard(
-  "gtli",
-  "GTLI",
-  "gtli",
-  "gtli"
-),
+  {
+  key: "gtli",
+  title: "GTLI",
+  items: [
+    {
+      label: "Covered",
+      count: summary.gtli?.covered || 0,
+      metric: "gtli_status",
+      field: "gtli",
+      drillValue: "Covered",
+    },
+    {
+      label: "Pending",
+      count: summary.gtli?.pending || 0,
+      metric: "gtli_status",
+      field: "gtli",
+      drillValue: "Pending",
+    },
+    {
+      label: "Not Applicable",
+      count: summary.gtli?.notApplicable || 0,
+      metric: "gtli_status",
+      field: "gtli",
+      drillValue: "Not Applicable",
+    },
+  ],
+},
     ];
   }, [data]);
 

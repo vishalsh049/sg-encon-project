@@ -1506,6 +1506,12 @@ const laptopStatusOptions = [
   { value: "Not Required", label: "Not Required" },
 ];
 
+const gtliOptions = [
+  { value: "Covered", label: "Covered" },
+  { value: "Pending", label: "Pending" },
+  { value: "Not Applicable", label: "Not Applicable" },
+];
+
 const pprjStatusOptions = [
   { value: "Active", label: "Active" },
   { value: "Inactive", label: "Inactive" },
@@ -3526,14 +3532,22 @@ onChange={(selected) =>
     GTLI
   </label>
 
-  <input
-    type="text"
-    name="gtli"
-    value={employeeForm.gtli}
-    onChange={handleEmployeeChange}
-    placeholder="Enter GTLI"
-    className="w-full rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs outline-none focus:border-violet-500"
-  />
+ <Select
+  styles={selectStyles}
+  options={gtliOptions}
+  placeholder="Select GTLI"
+  value={
+    gtliOptions.find(
+      item => item.value === employeeForm.gtli
+    ) || null
+  }
+  onChange={(selected) =>
+    setEmployeeForm({
+      ...employeeForm,
+      gtli: selected?.value || "",
+    })
+  }
+/>
 </div>
 
     {/* ESIC IP No */}
