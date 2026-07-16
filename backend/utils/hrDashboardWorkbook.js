@@ -1,6 +1,6 @@
 const ExcelJS = require("exceljs");
 
-const COMPANY_NAME = "SG ENCON PVT LTD";
+const COMPANY_NAME = "SG ENCON LTD";
 
 const COLOR = {
   categoryFill: "FF1E3A8A", // blue-900
