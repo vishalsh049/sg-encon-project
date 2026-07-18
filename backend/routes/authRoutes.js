@@ -84,6 +84,12 @@ console.log("Searching loginId:", queryLoginId);
           return res.status(401).json({ message: "Wrong password" });
         }
 
+        try {
+          await query("UPDATE users SET last_login = NOW() WHERE id = ?", [user.id]);
+        } catch (lastLoginError) {
+          console.log("Failed to update last_login:", lastLoginError.message);
+        }
+
         let permissions = ['dashboard.view']; // default
         try {
           console.log("Fetching permissions for role:", user.role_id, "user:", user.id);
@@ -127,7 +133,7 @@ console.log("Searching loginId:", queryLoginId);
           {
             id: user.id,
             email: user.email,
-            roleId: user.role_id || 1,
+            roleId: user.role_id || null,
             circle: user.circle || "",
             domain: user.domain || "",
           },
@@ -148,14 +154,16 @@ console.log("Searching loginId:", queryLoginId);
             circle: user.circle || "",
             domain: user.domain || "",
             status: user.status || "active",
-            roleId: user.role_id || 1,
-            roleName: user.role_name || "Admin",
+            roleId: user.role_id || null,
+            roleName: user.role_name || "Unassigned",
             permissions,
             pagePermissions: user.page_permissions
               ? JSON.parse(user.page_permissions)
               : [],
             pageAccess: user.page_permissions
-              ? JSON.parse(user.page_permissions).map((item) => item.page)
+              ? JSON.parse(user.page_permissions)
+                  .filter((item) => item.view)
+                  .map((item) => item.page)
               : [],
           },
         });

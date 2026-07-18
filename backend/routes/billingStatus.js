@@ -2,6 +2,7 @@ const express = require("express");
 const dbModule = require("../config/db");
 const db = dbModule.db;
 const { canAccessCircle, isAllCircle } = require("../middleware/circleAccess");
+const { requirePagePermission } = require("../middleware/pagePermission");
 
 const router = express.Router();
 
@@ -37,7 +38,7 @@ ORDER BY id DESC
   });
 });
 
-router.post("/billing/status", (req, res) => {
+router.post("/billing/status", requirePagePermission("billing-status", "edit"), (req, res) => {
   const data = req.body;
 
   console.log("BODY:", data);

@@ -22,6 +22,11 @@ export default function ProtectedRoute({ page, children }) {
     return <AccessDenied pageName={page} />;
   }
 
+  // No page-level restriction requested (e.g. a user's own Profile) — just require login
+  if (!page) {
+    return <>{children}</>;
+  }
+
   // Check if user has access to this specific page
   const allowed = hasAccess(page, user);
 

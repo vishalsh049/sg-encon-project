@@ -383,6 +383,49 @@ const generatePassword = () => {
   }
 };
 
+const toggleUserStatus = async (user) => {
+  const nextStatus = user.status === "active" ? "inactive" : "active";
+
+  try {
+    await axios.put(
+      buildApiUrl(`/api/access/users/${user.id}/status`),
+      { status: nextStatus },
+      { headers }
+    );
+
+    toast.success(
+      nextStatus === "active" ? "User activated" : "User deactivated"
+    );
+
+    loadAccessData();
+  } catch (error) {
+    toast.error(
+      error.response?.data?.message || "Failed to update user status"
+    );
+  }
+};
+
+const deleteUser = async (id) => {
+  const confirmDelete = window.confirm(
+    "Delete this user? This cannot be undone."
+  );
+  if (!confirmDelete) return;
+
+  try {
+    await axios.delete(
+      buildApiUrl(`/api/access/users/${id}`),
+      { headers }
+    );
+
+    toast.success("User deleted successfully");
+    loadAccessData();
+  } catch (error) {
+    toast.error(
+      error.response?.data?.message || "Failed to delete user"
+    );
+  }
+};
+
   return (
     <div className="mx-auto max-w-7xl">
       <div className="app-surface overflow-hidden mb-2">

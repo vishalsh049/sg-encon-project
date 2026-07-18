@@ -31,6 +31,7 @@ import TrainingDocuments from "./pages/Training/Documents";
 import TrainingVerification from "./pages/Training/Verification";
 import TrainingReports from "./pages/Training/Reports";
 import TrainingSettings from "./pages/Training/Settings";
+import Profile from "./pages/Profile";
 
 function App() {
   return (
@@ -58,6 +59,12 @@ function App() {
   <Route path="add-data" element={
     <ProtectedRoute page={"Add Data"}>
       <AddData />
+    </ProtectedRoute>
+  } />
+
+  <Route path="profile" element={
+    <ProtectedRoute>
+      <Profile />
     </ProtectedRoute>
   } />
 
@@ -185,8 +192,12 @@ function App() {
 } />
 
 <Route
-  path="/dashboard/manpower/signoff"
-  element={<Signoff />}
+  path="manpower/signoff"
+  element={
+    <ProtectedRoute page={"Signoff"}>
+      <Signoff />
+    </ProtectedRoute>
+  }
 />
 
   {/* Users */}

@@ -67,19 +67,28 @@ router.get("/me", async (req, res) => {
 
     const pagePermissions = user.page_permissions ? JSON.parse(user.page_permissions) : [];
     const pageAccess = Array.isArray(pagePermissions)
-      ? pagePermissions.map((p) => p.page)
+      ? pagePermissions.filter((p) => p.view).map((p) => p.page)
       : [];
 
     res.json({
       id: user.id,
       name: user.name || "Admin",
+      username: user.username || "",
       email: user.email,
       designation: user.designation || "",
       circle: user.circle || "",
       domain: user.domain || "",
       status: user.status || "active",
-      roleId: user.role_id || 1,
-      roleName: user.role_name || "Admin",
+      roleId: user.role_id || null,
+      roleName: user.role_name || "Unassigned",
+      employeeId: user.employee_id || "",
+      department: user.department || "",
+      mobile: user.mobile || "",
+      dateOfJoining: user.date_of_joining || null,
+      lastLogin: user.last_login || null,
+      profilePhoto: user.profile_photo || "",
+      experienceYears: user.experience_years || null,
+      createdAt: user.created_at || null,
       permissions,
       pagePermissions,
       pageAccess,

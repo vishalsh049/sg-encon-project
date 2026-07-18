@@ -2,6 +2,8 @@
   import { useParams } from "react-router-dom";
   import { buildApiUrl } from "../lib/api";
   import { hasPermission } from "../lib/session";
+  import { getPagePermission } from "../utils/access";
+  import { useUser } from "../context/UserContext";
   import axios from "axios";
   import PremiumDatePicker from "../components/PremiumDatePicker";
   import { Listbox } from "@headlessui/react";
@@ -59,9 +61,11 @@
           ring: "focus:border-indigo-400",
           file: "file:bg-indigo-600 hover:file:bg-indigo-700",
         };
-    const canUploadReports = true;
-    const canDeleteReports = true;
-    const canDownloadFiles = true;
+    const { user } = useUser();
+    const towerReportsPermission = getPagePermission(user, "tower-reports");
+    const canUploadReports = towerReportsPermission.edit;
+    const canDeleteReports = towerReportsPermission.delete;
+    const canDownloadFiles = towerReportsPermission.download;
     const allowedSiteTypes = useMemo(
       () =>
         [

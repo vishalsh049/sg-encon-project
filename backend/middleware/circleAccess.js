@@ -65,7 +65,7 @@ async function authMiddleware(req, res, next) {
     await ensureAccessTables();
     const decoded = jwt.verify(header.slice(7), JWT_SECRET);
     const rows = await query(
-      `SELECT id, name, username, email, designation, circle, domain, status, role_id
+      `SELECT id, name, username, email, designation, circle, domain, status, role_id, page_permissions
        FROM users
        WHERE id = ?
        LIMIT 1`,
@@ -86,6 +86,16 @@ async function authMiddleware(req, res, next) {
       return res.status(401).json({ message: "User not found or inactive" });
     }
 
+    let pagePermissions = [];
+    if (user.page_permissions) {
+      try {
+        const parsed = JSON.parse(user.page_permissions);
+        pagePermissions = Array.isArray(parsed) ? parsed : [];
+      } catch (_parseError) {
+        pagePermissions = [];
+      }
+    }
+
     req.authUser = {
       id: user.id,
       name: user.name,
@@ -97,6 +107,8 @@ async function authMiddleware(req, res, next) {
       circle: normalizeCircle(user.circle),
       domain: user.domain || "",
       status: user.status || "active",
+      pagePermissions,
+      pageAccess: pagePermissions.filter((p) => p.view).map((p) => p.page),
     };
 
     if (!req.authUser.circle) {

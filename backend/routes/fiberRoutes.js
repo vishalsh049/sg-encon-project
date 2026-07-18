@@ -19,6 +19,7 @@ const {
   uploadsDir,
   downloadZip
 } = require("../services/fiberInventoryService");
+const { requirePagePermission } = require("../middleware/pagePermission");
 
 const router = express.Router();
 
@@ -93,7 +94,7 @@ router.get("/latest-dataset", async (req, res) => {
   }
 });
 
-router.get("/uploads/:id/download", async (req, res) => {
+router.get("/uploads/:id/download", requirePagePermission("fiber-reports", "download"), async (req, res) => {
   if (!ensureDbConnection(res)) return;
 
   try {
@@ -147,9 +148,9 @@ return res.send(buffer);
   }
 });
 
-router.post("/uploads/download-zip", downloadZip);
+router.post("/uploads/download-zip", requirePagePermission("fiber-reports", "download"), downloadZip);
 
-router.post("/uploads", (req, res) => {
+router.post("/uploads", requirePagePermission("fiber-reports", "edit"), (req, res) => {
   if (!ensureDbConnection(res)) return;
 
   fiberUpload.single("file")(req, res, async (err) => {
@@ -191,7 +192,7 @@ router.post("/uploads", (req, res) => {
   });
 });
 
-router.put("/uploads/:id", async (req, res) => {
+router.put("/uploads/:id", requirePagePermission("fiber-reports", "edit"), async (req, res) => {
   if (!ensureDbConnection(res)) return;
 
   try {
@@ -210,7 +211,7 @@ router.put("/uploads/:id", async (req, res) => {
   }
 });
 
-router.delete("/uploads/:id", async (req, res) => {
+router.delete("/uploads/:id", requirePagePermission("fiber-reports", "delete"), async (req, res) => {
   if (!ensureDbConnection(res)) return;
 
   try {

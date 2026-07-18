@@ -1,5 +1,4 @@
 const express = require("express");
-const jwt = require("jsonwebtoken");
 const bcrypt = require("bcrypt");
 
 const {
@@ -7,113 +6,15 @@ ensureAccessTables,
 listUsers,
 query,
 } = require("../services/accessControl");
+const { authMiddleware } = require("../middleware/circleAccess");
+const { requirePagePermission } = require("../middleware/pagePermission");
 
 const router = express.Router();
-
-const JWT_SECRET =
-process.env.JWT_SECRET ||
-"SECRET_KEY";
-
-function getTokenFromRequest(req) {
-const header =
-req.headers.authorization || "";
-
-if (!header.startsWith("Bearer "))
-return null;
-
-return header.slice(7);
-}
-
-async function authMiddleware(
-req,
-res,
-next
-) {
-try {
-await ensureAccessTables();
-
-
-const token =
-  getTokenFromRequest(req);
-
-if (!token) {
-  return res.status(401).json({
-    message:
-      "Authentication required",
-  });
-}
-
-const decoded = jwt.verify(
-  token,
-  JWT_SECRET
-);
-
-const rows = await query(
-  `
-  SELECT
-    id,
-    name,
-    username,
-    email,
-    designation,
-    circle,
-    domain,
-    status,
-    page_permissions
-  FROM users
-  WHERE id = ?
-  LIMIT 1
-  `,
-  [decoded.id]
-);
-
-const user = rows[0];
-
-if (!user) {
-  return res.status(401).json({
-    message: "User not found",
-  });
-}
-
-req.authUser = {
-  id: user.id,
-  name: user.name,
-  username: user.username,
-  designation:
-    user.designation || "",
-  circle: user.circle || "",
-  domain: user.domain || "",
-  status:
-    user.status || "active",
-
-  pagePermissions:
-    user.page_permissions
-      ? JSON.parse(
-          user.page_permissions
-        )
-      : [],
-  pageAccess:
-    user.page_permissions
-      ? JSON.parse(
-          user.page_permissions
-        ).map((item) => item.page)
-      : [],
-};
-
-next();
-
-
-} catch (_error) {
-return res.status(401).json({
-message:
-"Invalid or expired token",
-});
-}
-}
 
 router.get(
 "/users",
 authMiddleware,
+requirePagePermission("users", "view"),
 async (_req, res) => {
 try {
 const users = await listUsers();
@@ -136,6 +37,7 @@ const users = await listUsers();
 router.post(
 "/users",
 authMiddleware,
+requirePagePermission("users", "edit"),
 async (req, res) => {
 try {
 const {
@@ -248,6 +150,7 @@ pagePermissions = [],
 router.put(
 "/users/:id",
 authMiddleware,
+requirePagePermission("users", "edit"),
 async (req, res) => {
 try {
 const userId = Number(
@@ -380,6 +283,7 @@ req.params.id
 router.put(
 "/users/:id/status",
 authMiddleware,
+requirePagePermission("users", "delete"),
 async (req, res) => {
 try {
 const userId = Number(
@@ -439,6 +343,7 @@ req.params.id
 router.delete(
 "/users/:id",
 authMiddleware,
+requirePagePermission("users", "delete"),
 async (req, res) => {
 try {
 const userId = Number(

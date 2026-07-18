@@ -9,6 +9,7 @@ const {
   authMiddleware,
   isAllCircle,
 } = require("../middleware/circleAccess");
+const { requirePagePermission } = require("../middleware/pagePermission");
 
 router.use(authMiddleware);
 
@@ -1724,7 +1725,7 @@ router.get("/enb/uptime-trend", async (req, res) => {
 });
 
 // ✅ Upload API with multer error handling
-router.post("/upload", (req, res) => {
+router.post("/upload", requirePagePermission("tower-reports", "edit"), (req, res) => {
   uploadAnyReportFiles(req, res, async (err) => {
 
     if (err) {
@@ -1930,7 +1931,7 @@ router.post("/upload", (req, res) => {
   });
 });
 
-router.post("/bulk-delete", async (req, res) => {
+router.post("/bulk-delete", requirePagePermission("tower-reports", "delete"), async (req, res) => {
   try {
 
     let { ids } = req.body;
@@ -2139,7 +2140,7 @@ const streamBulkExportRows = async function* (sql, params) {
   }
 };
 
-router.post("/download-bulk", express.urlencoded({ extended: false }), async (req, res) => {
+router.post("/download-bulk", requirePagePermission("tower-reports", "download"), express.urlencoded({ extended: false }), async (req, res) => {
   let workbook;
 
   try {
@@ -2324,7 +2325,7 @@ async function deleteUploadData(upload) {
 
 
 // ✅ SINGLE FILE DOWNLOAD
-router.get("/download/:id", async (req, res) => {
+router.get("/download/:id", requirePagePermission("tower-reports", "download"), async (req, res) => {
 
   try {
 
@@ -2449,7 +2450,7 @@ router.get("/circles", async (req, res) => {
   }
 });
 
-router.get("/export-excel", async (req, res) => {
+router.get("/export-excel", requirePagePermission("tower-reports", "download"), async (req, res) => {
 
   try {
 
@@ -2571,7 +2572,7 @@ router.get("/export-excel", async (req, res) => {
 
 });
 
-router.delete("/:id", async (req, res) => {
+router.delete("/:id", requirePagePermission("tower-reports", "delete"), async (req, res) => {
   try {
     const id = req.params.id;
 
@@ -2696,7 +2697,7 @@ router.delete("/:id", async (req, res) => {
   }
 });
 
-router.put("/:id", async (req, res) => {
+router.put("/:id", requirePagePermission("tower-reports", "edit"), async (req, res) => {
   try {
     const id = req.params.id;
     const { site_type, report_type, upload_type, uploaded_by, report_date } =

@@ -9,6 +9,7 @@ const {
   assertRowsAllowedCircle,
   isAllCircle,
 } = require("../middleware/circleAccess");
+const { requirePagePermission } = require("../middleware/pagePermission");
 
 const router = express.Router();
 const upload = multer({ dest: "uploads/" });
@@ -121,7 +122,7 @@ const chunkArray = (items, chunkSize) => {
   return chunks;
 };
 
-router.post("/upload", upload.single("file"), async (req, res) => {
+router.post("/upload", requirePagePermission("revenue", "edit"), upload.single("file"), async (req, res) => {
   let filePath;
 
   try {
@@ -329,7 +330,7 @@ router.post("/upload", upload.single("file"), async (req, res) => {
   }
 });
 
-router.post("/delete-bulk", async (req, res) => {
+router.post("/delete-bulk", requirePagePermission("revenue", "delete"), async (req, res) => {
   try {
     const ids = normalizeIds(req.body.ids);
 
@@ -395,7 +396,7 @@ router.get("/upload-history", async (req, res) => {
   }
 });
 
-router.post("/download-bulk", async (req, res) => {
+router.post("/download-bulk", requirePagePermission("revenue", "download"), async (req, res) => {
   try {
     const ids = normalizeIds(req.body.ids);
 
@@ -521,7 +522,7 @@ router.get("/data", async (req, res) => {
   }
 });
 
-router.get("/download/:fileId", async (req, res) => {
+router.get("/download/:fileId", requirePagePermission("revenue", "download"), async (req, res) => {
   try {
     const fileId = Number(req.params.fileId);
 

@@ -12,7 +12,8 @@ import {
   Database,
 } from "lucide-react";
 import logo from "../assets/logo.png";
-import { clearStoredSession, getStoredSession, hasPermission } from "../lib/session";
+import { clearStoredSession, hasPermission } from "../lib/session";
+import { useUser } from "../context/UserContext";
 import MenuItem from "./MenuItem";
 
 
@@ -53,8 +54,8 @@ function filterMenuByRole(items, role, sessionUser) {
 function Sidebar({ closeSidebar, collapsed, onExpandRequest }) {
   const location = useLocation();
   const navigate = useNavigate();
-  const role = localStorage.getItem("role") || "admin";
-  const sessionUser = useMemo(() => getStoredSession(), []);
+  const { user: sessionUser } = useUser();
+  const role = sessionUser?.roleName || localStorage.getItem("role") || "admin";
 
   const menu = useMemo(
     () =>

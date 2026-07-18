@@ -89,6 +89,13 @@ async function ensureAccessTablesOnce() {
   await ensureColumn("users", "status", "ENUM('active','inactive') DEFAULT 'active'");
   await ensureColumn("users", "created_at", "TIMESTAMP DEFAULT CURRENT_TIMESTAMP");
   await ensureColumn("users", "page_permissions", "LONGTEXT NULL");
+  await ensureColumn("users", "employee_id", "VARCHAR(60) NULL");
+  await ensureColumn("users", "department", "VARCHAR(120) NULL");
+  await ensureColumn("users", "mobile", "VARCHAR(20) NULL");
+  await ensureColumn("users", "date_of_joining", "DATE NULL");
+  await ensureColumn("users", "last_login", "DATETIME NULL");
+  await ensureColumn("users", "profile_photo", "VARCHAR(255) NULL");
+  await ensureColumn("users", "experience_years", "INT NULL");
 
   await query(`
     CREATE TABLE IF NOT EXISTS user_permissions (

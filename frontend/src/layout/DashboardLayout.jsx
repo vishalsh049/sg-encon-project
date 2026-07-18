@@ -1,9 +1,19 @@
 import { useEffect, useState } from "react";
-import { Outlet } from "react-router-dom";
+import { Outlet, useNavigate } from "react-router-dom";
 import { Menu, Moon, PanelLeftClose, PanelLeftOpen, Sun } from "lucide-react";
 import Sidebar from "../components/Sidebar";
 import { useUser } from "../context/UserContext";
+import { setStoredSession } from "../lib/session";
 import axios from "axios";
+
+function getInitials(name) {
+  const parts = String(name || "").trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return "U";
+  return parts
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("");
+}
 
 function DashboardLayout() {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -17,7 +27,8 @@ function DashboardLayout() {
   });
   const sidebarWidth = collapsed ? "4rem" : "14rem";
 
-  const { setUser } = useUser(); // ✅ HERE
+  const { user, setUser } = useUser();
+  const navigate = useNavigate();
 
   // ✅ USER LOAD
   useEffect(() => {
@@ -29,7 +40,12 @@ function DashboardLayout() {
             Authorization: token ? `Bearer ${token}` : "",
           },
         });
-        setUser(res.data);
+        // /api/me doesn't return the JWT itself — keep the token already
+        // held in the stored session so token-presence checks elsewhere
+        // (e.g. Dashboard.jsx) keep working after this refresh.
+        const refreshedUser = { ...res.data, token };
+        setUser(refreshedUser);
+        setStoredSession(refreshedUser);
       } catch (error) {
         console.error("Failed to load user", error);
       }
@@ -111,16 +127,20 @@ function DashboardLayout() {
                 {theme === "dark" ? <Sun size={18} /> : <Moon size={16} />}
               </button>
 
-              <div className="app-surface-soft flex items-center gap-2 px-1 md:px-3 py-1 md:py-2 shadow-none">
+              <button
+                type="button"
+                onClick={() => navigate("/dashboard/profile")}
+                className="app-surface-soft flex items-center gap-2 px-1 md:px-3 py-1 md:py-2 shadow-none transition hover:opacity-80"
+              >
                 <div className="flex h-6 w-6 md:h-10 md:w-10 items-center justify-center rounded-xl
                  md:rounded-2xl bg-primary text-xs md:text-sm font-semibold text-white">
-                  U
+                  {getInitials(user?.name)}
                 </div>
-                <div className="hidden md:block">
-                  <div className="text-sm font-semibold text-text-primary">User</div>
+                <div className="hidden md:block text-left">
+                  <div className="text-sm font-semibold text-text-primary">{user?.name || "User"}</div>
                   <div className="text-xs text-text-secondary">Dashboard Access</div>
                 </div>
-              </div>
+              </button>
             </div>
           </div>
         </header>

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { buildApiUrl } from "../lib/api";
 import { hasPermission } from "../lib/session";
+import { getPagePermission } from "../utils/access";
 import Select, { components as ReactSelectComponents } from "react-select";
 import { ChevronDown, Filter as FilterIcon, RefreshCcw, Sparkles, ChevronUp, Loader2,
   Globe, Cable, Users, Activity } from "lucide-react";
@@ -252,7 +253,7 @@ const renderOutsideLabel = ({ cx, cy, midAngle, outerRadius, payload }) => {
 function Dashboard() {
   const session = JSON.parse(localStorage.getItem("sessionUser"));
   const canViewDashboard =
-  session && session.token && hasPermission("dashboard.view");
+  session && session.token && getPagePermission(session, "dashboard").view;
  
 useEffect(() => {
   const session = JSON.parse(localStorage.getItem("sessionUser"));

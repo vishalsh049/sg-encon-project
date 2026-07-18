@@ -9,6 +9,7 @@ const {
   forbid,
   isAllCircle,
 } = require("../middleware/circleAccess");
+const { requirePagePermission } = require("../middleware/pagePermission");
 
 const query = (sql, params = []) =>
   new Promise((resolve, reject) => {
@@ -117,7 +118,7 @@ router.get("/", async (req, res) => {
 
 /* CREATE */
 
-router.post("/", async (req, res) => {
+router.post("/", requirePagePermission("Signoff", "edit"), async (req, res) => {
 
   try {
 
@@ -299,7 +300,7 @@ router.post("/", async (req, res) => {
   }
 });
 
-router.post("/bulk", async (req, res) => {
+router.post("/bulk", requirePagePermission("Signoff", "edit"), async (req, res) => {
 
   try {
 
@@ -422,7 +423,7 @@ router.post("/bulk", async (req, res) => {
 
 /* UPDATE */
 
-router.put("/:id", async (req, res) => {
+router.put("/:id", requirePagePermission("Signoff", "edit"), async (req, res) => {
 
   try {
 
@@ -540,7 +541,7 @@ router.put("/:id", async (req, res) => {
 
 /* DELETE */
 
-router.delete("/:id", async (req, res) => {
+router.delete("/:id", requirePagePermission("Signoff", "delete"), async (req, res) => {
 
   try {
 
@@ -572,7 +573,7 @@ router.delete("/:id", async (req, res) => {
 
 /* CREATE SIGNOFF REQUEST */
 
-router.post("/request", async (req, res) => {
+router.post("/request", requirePagePermission("Signoff", "edit"), async (req, res) => {
 
   console.log(
     "REQUEST BODY:",

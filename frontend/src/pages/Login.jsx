@@ -92,8 +92,8 @@ const handleLogin = async (e) => {
      const session = {
        ...(res.data.user || {}),
        token: res.data.token,
-       roleName: res.data.user?.roleName || "Admin",
-       permissions: res.data.user?.permissions || ["dashboard.view"],
+       roleName: res.data.user?.roleName || "Unassigned",
+       permissions: res.data.user?.permissions || [],
      };
      localStorage.setItem("token", res.data.token);
      setStoredSession(session);

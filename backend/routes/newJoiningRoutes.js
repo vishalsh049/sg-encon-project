@@ -17,6 +17,7 @@ const {
   forbid,
   isAllCircle,
 } = require("../middleware/circleAccess");
+const { requirePagePermission } = require("../middleware/pagePermission");
 
 const storage = multer.memoryStorage();
 
@@ -131,7 +132,7 @@ router.get("/", async (req, res) => {
 
 });
 
-router.post("/add-employee", async (req, res) => {
+router.post("/add-employee", requirePagePermission("New Joining", "edit"), async (req, res) => {
 
   try {
 
@@ -350,7 +351,7 @@ const rollbackTransaction = (connection) =>
     connection.rollback(() => resolve());
   });
 
-router.delete("/delete/:id", async (req, res) => {
+router.delete("/delete/:id", requirePagePermission("New Joining", "delete"), async (req, res) => {
 
   try {
 
@@ -382,7 +383,7 @@ router.delete("/delete/:id", async (req, res) => {
 
 });
 
-router.post("/bulk-delete", async (req, res) => {
+router.post("/bulk-delete", requirePagePermission("New Joining", "delete"), async (req, res) => {
 
   try {
 
@@ -455,7 +456,7 @@ router.post("/bulk-delete", async (req, res) => {
 
 });
 
-router.put("/update-status/:id", async (req, res) => {
+router.put("/update-status/:id", requirePagePermission("New Joining", "edit"), async (req, res) => {
 
   try {
 
@@ -497,7 +498,7 @@ WHERE ${filters.join(" AND ")}
 
 });
 
-router.put("/l2-status/:id", async (req, res) => {
+router.put("/l2-status/:id", requirePagePermission("New Joining", "edit"), async (req, res) => {
 
   try {
 
