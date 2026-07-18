@@ -3,7 +3,8 @@ import { Outlet, useNavigate } from "react-router-dom";
 import { Menu, Moon, PanelLeftClose, PanelLeftOpen, Sun } from "lucide-react";
 import Sidebar from "../components/Sidebar";
 import { useUser } from "../context/UserContext";
-import { setStoredSession } from "../lib/session";
+import { setStoredSession, clearStoredSession } from "../lib/session";
+import { buildApiUrl } from "../lib/api";
 import axios from "axios";
 
 function getInitials(name) {
@@ -35,11 +36,18 @@ function DashboardLayout() {
     const loadUser = async () => {
       try {
         const token = localStorage.getItem("token");
-        const res = await axios.get("/api/me", {
+        const res = await axios.get(buildApiUrl("/api/me"), {
           headers: {
             Authorization: token ? `Bearer ${token}` : "",
           },
         });
+        // Only accept a real user object — an HTML/error payload spread into
+        // the session would wipe name/roleName/pagePermissions and lock the
+        // user out of every ProtectedRoute page.
+        if (!res.data || typeof res.data !== "object" || !res.data.id) {
+          console.error("Unexpected /api/me response, keeping current session");
+          return;
+        }
         // /api/me doesn't return the JWT itself — keep the token already
         // held in the stored session so token-presence checks elsewhere
         // (e.g. Dashboard.jsx) keep working after this refresh.
@@ -48,6 +56,11 @@ function DashboardLayout() {
         setStoredSession(refreshedUser);
       } catch (error) {
         console.error("Failed to load user", error);
+        if (error.response?.status === 401) {
+          clearStoredSession();
+          localStorage.removeItem("token");
+          navigate("/login", { replace: true });
+        }
       }
     };
 
