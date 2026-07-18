@@ -1261,6 +1261,19 @@ function TablePanel({
 // Extracted verbatim from TablePanel so the fullscreen popup can reuse the
 // exact same category summary cards.
 function StatCardsRow({ groups, countLookup, getSignoffRow }) {
+
+  const getAvailableCount = (cmpName, roleKey) => {
+  const value = countLookup?.[cmpName]?.[roleKey];
+
+  if (typeof value === "number") {
+    // SCRUM
+    return value;
+  }
+
+  // PHYSICAL
+  return Number(value?.total || 0);
+};
+
   return (
     <div className="grid grid-cols-2 gap-1 md:grid-cols-5 xl:grid-cols-5 p-1 border-b border-slate-200 bg-slate-50">
 
@@ -1325,36 +1338,36 @@ if (card.key === "fttxPo") {
 {/* admin category calculate availability */}
      if (card.key === "admin") {
 
-  available +=
-    Number(countLookup?.[cmpName]?.state_leadership_team?.total || 0) +
-    Number(countLookup?.[cmpName]?.noc_executive?.total || 0) +
-    Number(countLookup?.[cmpName]?.analyst?.total || 0) +
-    Number(countLookup?.[cmpName]?.cmp_lead?.total || 0);
+ available +=
+  getAvailableCount(cmpName, "state_leadership_team") +
+  getAvailableCount(cmpName, "noc_executive") +
+  getAvailableCount(cmpName, "analyst") +
+  getAvailableCount(cmpName, "cmp_lead");
 
 }
 
 {/* utility category calculate availability */}
    if (card.key === "utility") {
 
-  available +=
-    Number(countLookup?.[cmpName]?.technician?.total || 0) +
-    Number(countLookup?.[cmpName]?.rigger?.total || 0) +
-    Number(countLookup?.[cmpName]?.utility_supervisor?.total || 0) +
-    Number(countLookup?.[cmpName]?.utility_engineer?.total || 0) +
-    Number(countLookup?.[cmpName]?.isp_engineer?.total || 0) +
-    Number(countLookup?.[cmpName]?.wh_incharge_cum_security?.total || 0);
+ available +=
+  getAvailableCount(cmpName, "technician") +
+  getAvailableCount(cmpName, "rigger") +
+  getAvailableCount(cmpName, "utility_supervisor") +
+  getAvailableCount(cmpName, "utility_engineer") +
+  getAvailableCount(cmpName, "isp_engineer") +
+  getAvailableCount(cmpName, "wh_incharge_cum_security");
 
 }
 {/* fiber category calculate availability */}
    if (card.key === "fiber") {
 
   available +=
-    Number(countLookup?.[cmpName]?.splicer?.total || 0) +
-    Number(countLookup?.[cmpName]?.assistant_splicer?.total || 0) +
-    Number(countLookup?.[cmpName]?.fiber_helper?.total || 0) +
-    Number(countLookup?.[cmpName]?.patroller?.total || 0) +
-    Number(countLookup?.[cmpName]?.fiber_supervisor?.total || 0) +
-    Number(countLookup?.[cmpName]?.fibre_engineer?.total || 0);
+  getAvailableCount(cmpName, "splicer") +
+  getAvailableCount(cmpName, "assistant_splicer") +
+  getAvailableCount(cmpName, "fiber_helper") +
+  getAvailableCount(cmpName, "patroller") +
+  getAvailableCount(cmpName, "fiber_supervisor") +
+  getAvailableCount(cmpName, "fibre_engineer");
 
 }
 
@@ -1362,19 +1375,19 @@ if (card.key === "fttxPo") {
     if (card.key === "fttx") {
 
   available +=
-    Number(countLookup?.[cmpName]?.fttx_splicer?.total || 0) +
-    Number(countLookup?.[cmpName]?.fttx_assistant_splicer?.total || 0) +
-    Number(countLookup?.[cmpName]?.fttx_supervisor?.total || 0) +
-    Number(countLookup?.[cmpName]?.fttx_helper?.total || 0);
+  getAvailableCount(cmpName, "fttx_splicer") +
+  getAvailableCount(cmpName, "fttx_assistant_splicer") +
+  getAvailableCount(cmpName, "fttx_supervisor") +
+  getAvailableCount(cmpName, "fttx_helper");
 
 }
 
 {/* fttxPo category calculate availability */}
    if (card.key === "fttxPo") {
 
-  available +=
-    Number(countLookup?.[cmpName]?.fttx_engineer?.total || 0) +
-    Number(countLookup?.[cmpName]?.fttx_technician?.total || 0);
+ available +=
+  getAvailableCount(cmpName, "fttx_engineer") +
+  getAvailableCount(cmpName, "fttx_technician");
 
 }
 
