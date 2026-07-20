@@ -67,6 +67,7 @@ const pageAccessList = [
  "HR Dashboard",
  "Physical",
  "Scrum",
+ "Scrum Dashboard",
  "New Joining",
  "Signoff",
 ],

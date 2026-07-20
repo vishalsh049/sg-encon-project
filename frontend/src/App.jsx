@@ -16,6 +16,7 @@ import FiberInventory from "./pages/FiberInventory";
 import Physical from "./pages/Physical";
 import PhysicalDashboard from "./pages/PhysicalDashboard";
 import Scrum from "./pages/Scrum";
+import ScrumDashboard from "./pages/ScrumDashboard";
 import BillingStatus from "./pages/BillingStatus";
 import BillingDashboard from "./pages/BillingDashboard";
 import Revenue from "./pages/Revenue";
@@ -121,6 +122,12 @@ function App() {
   <Route path="manpower/scrum" element={
     <ProtectedRoute page={"Scrum"}>
       <Scrum />
+    </ProtectedRoute>
+  } />
+
+  <Route path="manpower/scrum-dashboard" element={
+    <ProtectedRoute page={"Scrum Dashboard"}>
+      <ScrumDashboard />
     </ProtectedRoute>
   } />
 

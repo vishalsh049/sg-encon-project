@@ -11,6 +11,12 @@
       authMiddleware,
       isAllCircle,
     } = require("../middleware/circleAccess");
+    const {
+      buildScrumFilterClause,
+      buildLatestScrumBatchSubquery,
+      addLatestBatchParam,
+      scrumJobRoleCategorySql,
+    } = require("../utils/scrumDashboardShared");
 
     router.use(authMiddleware);
 
@@ -205,65 +211,6 @@
     });
 
     return summary;
-  };
-
-  const parseFilterList = (value) =>
-    String(value || "")
-      .split(",")
-      .map((item) => item.trim())
-      .filter(Boolean);
-
-  const buildScrumFilterClause = (req) => {
-    const filters = [`UPPER(TRIM(vendor)) = 'S G ENCON PVT LTD'`];
-    const params = [];
-
-    const circles = parseFilterList(req.query.circle);
-    const cmps = parseFilterList(req.query.cmp);
-    const domains = parseFilterList(req.query.domain);
-
-    if (!isAllCircle(req.authUser)) {
-      filters.push(`LOWER(TRIM(state)) = LOWER(TRIM(?))`);
-      params.push(req.authUser.circle);
-    }
-
-    if (circles.length) {
-      filters.push(`state IN (${circles.map(() => "?").join(",")})`);
-      params.push(...circles);
-    }
-
-    if (cmps.length) {
-      filters.push(`maintenance_point IN (${cmps.map(() => "?").join(",")})`);
-      params.push(...cmps);
-    }
-
-    if (domains.length) {
-      filters.push(`
-        CASE
-          WHEN LOWER(function_name) LIKE '%fttx%' THEN 'FTTx'
-          WHEN LOWER(function_name) LIKE '%fiber%' OR LOWER(function_name) LIKE '%fibre%' THEN 'Fiber'
-          WHEN LOWER(function_name) LIKE '%utility%' THEN 'Utility'
-          ELSE 'Others'
-        END IN (${domains.map(() => "?").join(",")})
-      `);
-      params.push(...domains);
-    }
-
-    return {
-      whereClause: `WHERE ${filters.join(" AND ")}`,
-      params,
-    };
-  };
-
-  const buildLatestScrumBatchSubquery = (req) => `
-    SELECT upload_batch_id
-    FROM scrum_manpower
-    ${isAllCircle(req.authUser) ? "" : "WHERE LOWER(TRIM(state)) = LOWER(TRIM(?))"}
-    ORDER BY uploaded_at DESC
-    LIMIT 1
-  `;
-
-  const addLatestBatchParam = (req, params) => {
-    if (!isAllCircle(req.authUser)) params.push(req.authUser.circle);
   };
 
     // ✅ 1. SCRUM COUNT (FIRST)
@@ -867,31 +814,8 @@ VALUES ?
   const { whereClause, params } = buildScrumFilterClause(req);
 
   const sql = `
-    SELECT 
-     CASE
-  WHEN job_role LIKE 'Analyst%' THEN 'Analyst'
-  WHEN job_role LIKE 'Assistant Splicer%' THEN 'Assistant Splicer'
-  WHEN job_role LIKE 'FTTx%' THEN 'FTTx'
-  WHEN job_role LIKE 'IBS%' THEN 'IBS'
-  WHEN job_role LIKE 'Large Facility%' THEN 'Large Facility'
-  WHEN job_role LIKE 'OMCR%' THEN 'OMCR'
-  WHEN job_role LIKE 'Patroller%' THEN 'Patroller'
-  WHEN job_role LIKE 'Splicer%' THEN 'Splicer'
-  WHEN job_role LIKE 'State%' THEN 'State'
-  WHEN job_role LIKE 'Utility%' THEN 'Utility'
-
-  WHEN job_role = 'CMP Lead' THEN 'CMP Lead'
-  WHEN job_role = 'Fibre Engineer' THEN 'Fibre Engineer'
-  WHEN job_role = 'Fibre Supervisor' THEN 'Fibre Supervisor'
-  WHEN job_role = 'ISP Engineer' THEN 'ISP Engineer'
-  WHEN job_role = 'MP Office staff' THEN 'MP Office staff'
-  WHEN job_role = 'Rigger' THEN 'Rigger'
-  WHEN job_role = 'SHQ Office Staff' THEN 'SHQ Office Staff'
-  WHEN job_role = 'Vendor SPOC' THEN 'Vendor SPOC'
-  WHEN job_role = 'Warehouse Incharge cum Security' THEN 'Warehouse Incharge cum Security'
-
-  ELSE job_role
-END AS category,
+    SELECT
+     ${scrumJobRoleCategorySql("job_role")} AS category,
       COUNT(*) AS total
     FROM scrum_manpower
     ${whereClause}

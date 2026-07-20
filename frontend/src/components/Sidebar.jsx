@@ -146,6 +146,14 @@ function Sidebar({ closeSidebar, collapsed, onExpandRequest }) {
 },
 
 {
+  key: "scrum-dashboard",
+  label: "SCRUM Dashboard",
+  path: "/dashboard/manpower/scrum-dashboard",
+  icon: BriefcaseBusiness,
+  accessPage: "Scrum Dashboard",
+},
+
+{
   key: "signoff",
   label: "Sign Off",
   path: "/dashboard/manpower/signoff",

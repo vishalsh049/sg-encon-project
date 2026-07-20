@@ -17,6 +17,7 @@ const {
   physicalRoleKeyCaseSql,
   scrumRoleKeyCaseSql,
 } = require("../utils/roleKeyMapping");
+const { makeEnsureIndex } = require("../utils/dbIndex");
 
 router.use(authMiddleware);
 
@@ -39,19 +40,8 @@ function getCircleScope(req, column = "circle") {
 // Drilldown employee lookups filter new_joining/scrum_manpower by cmp,
 // designation/job_role, status and circle — neither table has any index
 // beyond its primary key today, so at scale (50,000+ rows) those filters
-// would be full table scans. Safe/additive: CREATE INDEX is a no-op on an
-// existing index name (ER_DUP_KEYNAME is swallowed, same convention as
-// ensureColumn() in physicalRoutes.js), and adding an index never changes
-// query results — only the plan used to produce them.
-async function ensureIndex(table, indexName, columns) {
-  try {
-    await query(`CREATE INDEX ${indexName} ON ${table} (${columns})`);
-  } catch (error) {
-    if (error?.code !== "ER_DUP_KEYNAME") {
-      throw error;
-    }
-  }
-}
+// would be full table scans. Safe/additive, see utils/dbIndex.js.
+const ensureIndex = makeEnsureIndex(query);
 
 let drilldownIndexPromise = null;
 

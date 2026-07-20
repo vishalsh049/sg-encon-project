@@ -19,6 +19,7 @@ export const PAGE_ID_MAP = {
   "physical": "Physical",
   "physical dashboard": "Physical",
   "scrum": "Scrum",
+  "scrum-dashboard": "Scrum Dashboard",
   "new-joining": "New Joining",
 
   // Training

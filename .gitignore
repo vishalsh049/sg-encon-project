@@ -1,0 +1,24 @@
+# Dependencies
+node_modules/
+
+# Environment files (contain secrets / environment-specific config)
+.env
+.env.*
+!.env.example
+
+# Build output
+frontend/dist/
+dist/
+build/
+
+# Runtime upload storage (user-uploaded files, not source)
+backend/uploads/*
+!backend/uploads/.gitkeep
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS / editor
+.DS_Store
+Thumbs.db

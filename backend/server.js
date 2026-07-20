@@ -81,6 +81,7 @@ registerRoute("./routes/manpowerRoutes", "/api/manpower");
 registerRoute("./routes/physicalRoutes", "/api/physical");
 registerRoute("./routes/hrDashboard", "/api/physical");
 registerRoute("./routes/hrDashboardExport", "/api/hr-dashboard");
+registerRoute("./routes/scrumDashboard", "/api/scrum-dashboard");
 registerRoute("./routes/uptimeRoutes", "/api/site-uptime");
 registerRoute("./routes/reportRoutes", "/api/reports");
 registerRoute("./routes/accessRoutes", "/api/access");
