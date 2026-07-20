@@ -491,8 +491,8 @@ async function convertToEmployee(id, context = {}) {
   await query(
     `INSERT INTO new_joining (
       employee_code, employee_name, circle, cmp, designation, aadhaar_no,
-      nth_salary, joining_status, l2_status, employee_status
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      nth_salary, joining_status, l2_status, employee_status, uploaded_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
     [
       employeeCode,
       sanitizeText(employee.full_name),

@@ -18,6 +18,16 @@ const db = mysql.createPool({
   dateStrings: true,
 });
 
+// Every pooled connection must run in IST, otherwise NOW() stamps the MySQL
+// server's default timezone (usually UTC) on 9 of the 10 pool connections.
+db.on("connection", (connection) => {
+  connection.query("SET time_zone = '+05:30'", (err) => {
+    if (err) {
+      console.warn("⚠️ Failed to set time_zone on pooled connection:", err.message);
+    }
+  });
+});
+
 let connected = false;
 
 // ✅ Test connection once

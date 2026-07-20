@@ -254,9 +254,10 @@ router.post("/add-employee", requirePagePermission("New Joining", "edit"), async
          nth_salary,
          joining_status,
         l2_status,
-        employee_status
+        employee_status,
+        uploaded_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
       `,
       [
         finalEmployeeCode,
@@ -268,7 +269,7 @@ router.post("/add-employee", requirePagePermission("New Joining", "edit"), async
          nth_salary || 0,
         joining_status || "Pending",
         l2_status || "Pending",
-        employee_status || "Active",
+        employee_status || "Inactive",
       ]
     );
 
@@ -566,6 +567,27 @@ function getColumnValue(row, aliases) {
   return undefined;
 }
 
+const REQUIRED_EXCEL_HEADERS = [
+  "Employee Name",
+  "Designation",
+  "Circle",
+  "Cluster",
+  "Aadhar Number",
+  "L2 Status",
+];
+
+// Matching is case-insensitive and ignores extra spaces (normalizeHeaderKey
+// strips everything but letters/digits), but the header names themselves
+// must be present — no fuzzy/alias matching here, unlike getColumnValue.
+function findMissingExcelHeaders(actualHeaders) {
+  const normalizedActual = new Set(
+    (actualHeaders || []).map(normalizeHeaderKey)
+  );
+  return REQUIRED_EXCEL_HEADERS.filter(
+    (header) => !normalizedActual.has(normalizeHeaderKey(header))
+  );
+}
+
 router.post(
   "/upload-excel",
   upload.single("file"),
@@ -606,7 +628,16 @@ router.post(
       }
 
       // TEMP DEBUG: verify the exact headers XLSX parsed from the sheet
-      console.log("[UPLOAD-EXCEL] Headers:", Object.keys(rows[0]));
+      const actualHeaders = Object.keys(rows[0]);
+      console.log("[UPLOAD-EXCEL] Headers:", actualHeaders);
+
+      const missingHeaders = findMissingExcelHeaders(actualHeaders);
+      if (missingHeaders.length) {
+        return res.status(400).json({
+          success: false,
+          message: `Header not matching. Please correct the Excel headers. Missing/Invalid: ${missingHeaders.join(", ")}`,
+        });
+      }
 
       assertRowsAllowedCircle(
         req.authUser,
@@ -642,6 +673,10 @@ if (excelAadhaarNumbers.length) {
 
 const seenAadhaarInFile = new Set();
 let skippedDuplicates = 0;
+
+// One upload timestamp for the whole batch; mysql2 converts the Date using
+// the pool's +05:30 timezone so it lands as IST, same as NOW() elsewhere.
+const uploadedAt = new Date();
 
 const values = [];
 
@@ -755,7 +790,8 @@ values.push([
   nth_salary,
   joining_status,
   l2_status,
-  "Active",
+  "Inactive",
+  uploadedAt,
 ]);
 }
 
@@ -777,7 +813,8 @@ if (values.length) {
   nth_salary,
   joining_status,
   l2_status,
-  employee_status
+  employee_status,
+  uploaded_at
 
   )
     VALUES ?

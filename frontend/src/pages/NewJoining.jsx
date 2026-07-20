@@ -123,6 +123,36 @@ function formatDateTime(d) {
   }
 }
 
+const MONTH_NAMES = [
+  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+];
+
+// uploaded_at arrives as "YYYY-MM-DD HH:MM:SS" (dateStrings: true on the
+// backend pool); Safari cannot parse the space-separated form, so normalize
+// to ISO "T" before handing it to Date.
+function parseUploadedAt(value) {
+  if (!value) return null;
+  const normalized = String(value).trim().replace(" ", "T");
+  const parsed = new Date(normalized);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function formatUploadedAt(value) {
+  const parsed = parseUploadedAt(value);
+  if (!parsed) return null;
+  const hours24 = parsed.getHours();
+  const hours12 = hours24 % 12 || 12;
+  return {
+    date: `${String(parsed.getDate()).padStart(2, "0")}-${
+      MONTH_NAMES[parsed.getMonth()]
+    }-${parsed.getFullYear()}`,
+    time: `${String(hours12).padStart(2, "0")}:${String(
+      parsed.getMinutes()
+    ).padStart(2, "0")} ${hours24 >= 12 ? "PM" : "AM"}`,
+  };
+}
+
 function MetricCard({ icon: Icon, label, value, accent, note }) {
   return (
     <motion.div
@@ -205,7 +235,7 @@ function TableActionButton({
       type="button"
       disabled={disabled}
       onClick={onClick}
-      className={`inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-2xl px-3 py-2 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${className}`}
+      className={`inline-flex w-full items-center justify-center gap-1.5 whitespace-normal break-words rounded-2xl px-2 py-2 text-center text-xs font-semibold leading-tight transition disabled:cursor-not-allowed disabled:opacity-60 ${className}`}
     >
       {Icon ? <Icon className="h-3.5 w-3.5" /> : null}
       {children}
@@ -232,6 +262,8 @@ export default function NewJoining() {
   const [excelFile, setExcelFile] = useState(null);
   const [uploadingExcel, setUploadingExcel] = useState(false);
   const [savingEmployee, setSavingEmployee] = useState(false);
+  // null = existing default order (id DESC); "desc" = latest uploaded first
+  const [uploadedSort, setUploadedSort] = useState(null);
   const [now, setNow] = useState(() => new Date());
 
   const isAllCircleUser = useMemo(
@@ -309,7 +341,7 @@ export default function NewJoining() {
   nth_salary: "",
   joining_status: "Pending",
   l2_status: "Pending",
-  employee_status: "Active",
+  employee_status: "Inactive",
 });
 
   const [formErrors, setFormErrors] = useState({});
@@ -540,11 +572,13 @@ export default function NewJoining() {
       "L2 Status",
       "Joining Status",
       "Employee Status",
+      "Upload At",
     ];
     const csv = [
       header.join(","),
-      ...filteredData.map((row) =>
-        [
+      ...filteredData.map((row) => {
+        const uploaded = formatUploadedAt(row.uploaded_at);
+        return [
           row.employee_code || "",
           row.employee_name || "",
           row.circle || "",
@@ -555,10 +589,11 @@ export default function NewJoining() {
           row.l2_status || "",
           row.joining_status || "",
           row.employee_status || "",
+          uploaded ? `${uploaded.date} ${uploaded.time}` : "--",
         ]
           .map((value) => `"${String(value).replaceAll('"', '""')}"`)
-          .join(",")
-      ),
+          .join(",");
+      }),
     ].join("\n");
 
     // UTF-8 BOM so Excel opens the CSV as UTF-8 instead of ANSI (prevents
@@ -576,6 +611,25 @@ export default function NewJoining() {
     URL.revokeObjectURL(url);
   }, [filteredData]);
 
+  const sortedData = useMemo(() => {
+    if (!uploadedSort) return filteredData;
+
+    const getTime = (item) => {
+      const parsed = parseUploadedAt(item.uploaded_at);
+      return parsed ? parsed.getTime() : null;
+    };
+
+    return [...filteredData].sort((a, b) => {
+      const timeA = getTime(a);
+      const timeB = getTime(b);
+      // Records without uploaded_at always sink to the bottom
+      if (timeA === null && timeB === null) return 0;
+      if (timeA === null) return 1;
+      if (timeB === null) return -1;
+      return uploadedSort === "desc" ? timeB - timeA : timeA - timeB;
+    });
+  }, [filteredData, uploadedSort]);
+
   const totalPages = Math.max(1, Math.ceil(filteredData.length / pageSize));
 
   useEffect(() => {
@@ -584,7 +638,7 @@ export default function NewJoining() {
     }
   }, [currentPage, totalPages]);
 
-  const paginatedData = filteredData.slice(
+  const paginatedData = sortedData.slice(
     (currentPage - 1) * pageSize,
     currentPage * pageSize
   );
@@ -884,7 +938,7 @@ if (!confirmUpdate) return;
   nth_salary: "",
   joining_status: "Pending",
   l2_status: "Pending",
-  employee_status: "Active",
+  employee_status: "Inactive",
 });
 
     loadData();
@@ -1194,11 +1248,28 @@ loadData();
             </div>
           </div>
 
- <div className="w-full overflow-hidden">
+ <div className="w-full overflow-x-hidden">
    <table className="w-full table-fixed border-collapse">
+     {/* Percentage widths always sum to 100%, so the table fits the
+         container at any viewport — no horizontal scrollbar, ever.
+         Long content wraps (see break-words below) instead of overflowing. */}
+     <colgroup>
+       <col className="w-[3%]" />
+       <col className="w-[7%]" />
+       <col className="w-[13%]" />
+       <col className="w-[8%]" />
+       <col className="w-[10%]" />
+       <col className="w-[9%]" />
+       <col className="w-[9%]" />
+       <col className="w-[7%]" />
+       <col className="w-[8%]" />
+       <col className="w-[8%]" />
+       <col className="w-[8%]" />
+       <col className="w-[10%]" />
+     </colgroup>
      <thead>
       <tr className="bg-slate-50/90">
-       <td className="w-10 border-b border-slate-100 px-1 py-2 text-center">
+       <td className="w-10 border-b border-slate-100 px-1 py-2 text-center align-middle">
           <input
            type="checkbox"
            checked={
@@ -1219,8 +1290,7 @@ loadData();
                     "CMP / Cluster",
                     "Designation",
                     "Aadhaar Number",
-                    
-                    
+                    "Upload At",
                     "L2 Status",
                      "Joining Status",
                     "Employee Status",
@@ -1228,9 +1298,24 @@ loadData();
                   ].map((heading) => (
                     <th
                       key={heading}
-                      className="border-b border-slate-200 px-2 py-2 text-xs font-semibold whitespace-normal break-words text-slate-600"
+                      className="border-b border-slate-200 px-2 py-2 text-center align-middle text-sm font-semibold whitespace-normal break-words text-slate-600"
                     >
-                      {heading}
+                      {heading === "Upload At" ? (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setUploadedSort((prev) =>
+                              prev === "desc" ? "asc" : "desc"
+                            )
+                          }
+                          title="Sort by Upload At"
+                          className="text-xs font-semibold text-slate-600 transition hover:text-blue-600"
+                        >
+                          {heading}
+                        </button>
+                      ) : (
+                        heading
+                      )}
                     </th>
                   ))}
                 </tr>
@@ -1238,11 +1323,11 @@ loadData();
 
               <tbody>
                 {tableLoading ? (
-                  <LoadingSkeletonRows />
+                  <LoadingSkeletonRows cols={12} />
                 ) : filteredData.length === 0 ? (
                   <tr>
                     <td
-                      colSpan="11"
+                      colSpan="12"
                       className="px-4 py-20 text-center text-sm font-medium text-slate-400"
                     >
                       No Records Found
@@ -1254,7 +1339,7 @@ loadData();
                       key={item.id || index}
                       className="transition hover:bg-slate-50/70 border-b border-slate-200"
                     >
-                      <td className="border-b border-slate-100 px-4 py-2">
+                      <td className="border-b border-slate-100 px-4 py-3 align-middle">
                         <input
                           type="checkbox"
                           checked={selectedRows.includes(item.id)}
@@ -1263,30 +1348,47 @@ loadData();
                           className="h-3 w-3 rounded border-slate-300 text-blue-600 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-40"
                         />
                       </td>
-                      <td className="border-b border-slate-100 px-4 py-2 text-sm font-semibold text-blue-600">
+                      <td className="border-b border-slate-100 px-3 py-2 align-middle whitespace-normal break-words text-sm font-semibold text-blue-600">
                         {item.employee_code || "-"}
                       </td>
-                      <td className="border-b border-slate-100 px-4 py-2 text-sm font-semibold text-slate-800">
+                      <td className="border-b border-slate-100 px-3 py-2 align-middle whitespace-normal break-words text-sm font-semibold leading-snug text-slate-800">
                         {item.employee_name || "-"}
                       </td>
-                      <td className="border-b border-slate-100 px-4 py-2 text-sm text-slate-600">
+                      <td className="border-b border-slate-100 px-3 py-2 align-middle whitespace-normal break-words text-sm text-slate-600">
                         {item.circle || "-"}
                       </td>
-                      <td className="border-b border-slate-100 px-4 py-2 text-sm text-slate-600">
+                      <td className="border-b border-slate-100 px-3 py-2 align-middle whitespace-normal break-words text-sm text-slate-600">
                         {item.cmp || item.cluster || "-"}
                       </td>
-                      <td className="border-b border-slate-100 px-4 py-2 text-sm text-slate-600">
+                      <td className="border-b border-slate-100 px-3 py-2 align-middle whitespace-normal break-words text-sm text-slate-600">
                         {item.designation || "-"}
                       </td>
-                      <td className="border-b border-slate-100 px-4 py-2 text-sm text-slate-600">
+                      <td className="border-b border-slate-100 px-3 py-2 align-middle whitespace-normal break-words text-sm text-slate-600">
                         {item.aadhaar_no || "-"}
+                      </td>
+                      <td className="border-b border-slate-100 px-3 py-2 align-middle whitespace-normal break-words text-center text-sm text-slate-600">
+                        {(() => {
+                          const uploaded = formatUploadedAt(item.uploaded_at);
+                          return uploaded ? (
+                            <div className="leading-tight">
+                              <p className="break-words font-medium text-slate-700">
+                                {uploaded.date}
+                              </p>
+                              <p className="break-words text-xs text-slate-400">
+                                {uploaded.time}
+                              </p>
+                            </div>
+                          ) : (
+                            "--"
+                          );
+                        })()}
                       </td>
                     {/*   <td className="border-b border-slate-100 px-4 py-2 text-sm text-slate-600">
   ₹ {Number(item.nth_salary || 0).toLocaleString("en-IN")}
 </td>
 */}
                     
- <td className="relative border-b border-slate-100 px-4 py-2 overflow-visible">
+ <td className="relative border-b border-slate-100 px-3 py-2 align-middle overflow-visible">
 
  <div className="flex flex-col items-center gap-1">
 
@@ -1306,7 +1408,7 @@ loadData();
       <select
         value={item.l2_status || "Pending"}
         onChange={(e) => handleL2Approval(item.id, e.target.value)}
-       className="h-7 w-24 rounded-md border border-slate-200 bg-slate-50 px-1 text-[11px] font-medium">
+       className="h-7 w-full max-w-[110px] rounded-md border border-slate-200 bg-slate-50 px-1 text-[11px] font-medium">
         <option value="Pending">🟡 Pending</option>
         <option value="Approved">🟢 Approved</option>
         <option value="Rejected">🔴 Rejected</option>
@@ -1317,7 +1419,7 @@ loadData();
 
 </td>
 
-<td className="border-b border-slate-100 px-2 py-2 text-xs whitespace-normal break-words">
+<td className="border-b border-slate-100 px-3 py-2 align-middle text-xs whitespace-normal break-words">
 
   <StatusPill
     variant={
@@ -1332,7 +1434,7 @@ loadData();
   </StatusPill>
 
 </td>
-                      <td className="border-b border-slate-100 px-4 py-2 text-sm">
+                      <td className="border-b border-slate-100 px-3 py-2 align-middle text-sm">
                         <StatusPill
                           variant={
                             item.employee_status === "Inactive"
@@ -1343,7 +1445,7 @@ loadData();
                           {item.employee_status || "Active"}
                         </StatusPill>
                       </td>
-                      <td className="border-b border-slate-100 px-4 py-2">
+                      <td className="border-b border-slate-100 px-3 py-2 align-middle">
                       <div className="flex flex-col gap-2">
                          <TableActionButton
                          disabled={item.l2_status !== "Approved"}
