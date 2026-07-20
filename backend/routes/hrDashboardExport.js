@@ -1,8 +1,9 @@
 const express = require("express");
 const router = express.Router();
+const ExcelJS = require("exceljs");
 
 const { db } = require("../config/db");
-const { authMiddleware, addCircleFilter, isAllCircle } = require("../middleware/circleAccess");
+const { authMiddleware, addCircleFilter, canAccessCircle, isAllCircle } = require("../middleware/circleAccess");
 const {
   physicalDesignationColumns,
   scrumDesignationColumns,
@@ -11,6 +12,11 @@ const {
   buildFilteredGroups,
 } = require("../utils/hrDashboardExportShared");
 const { buildRagWorkbook } = require("../utils/hrDashboardWorkbook");
+const {
+  normalizeRoleSql,
+  physicalRoleKeyCaseSql,
+  scrumRoleKeyCaseSql,
+} = require("../utils/roleKeyMapping");
 
 router.use(authMiddleware);
 
@@ -29,6 +35,53 @@ function getCircleScope(req, column = "circle") {
     params: [req.authUser.circle],
   };
 }
+
+// Drilldown employee lookups filter new_joining/scrum_manpower by cmp,
+// designation/job_role, status and circle — neither table has any index
+// beyond its primary key today, so at scale (50,000+ rows) those filters
+// would be full table scans. Safe/additive: CREATE INDEX is a no-op on an
+// existing index name (ER_DUP_KEYNAME is swallowed, same convention as
+// ensureColumn() in physicalRoutes.js), and adding an index never changes
+// query results — only the plan used to produce them.
+async function ensureIndex(table, indexName, columns) {
+  try {
+    await query(`CREATE INDEX ${indexName} ON ${table} (${columns})`);
+  } catch (error) {
+    if (error?.code !== "ER_DUP_KEYNAME") {
+      throw error;
+    }
+  }
+}
+
+let drilldownIndexPromise = null;
+
+function ensureDrilldownIndexes() {
+  if (!drilldownIndexPromise) {
+    drilldownIndexPromise = Promise.all([
+      ensureIndex("new_joining", "idx_new_joining_circle", "circle"),
+      ensureIndex("new_joining", "idx_new_joining_cmp", "cmp"),
+      ensureIndex("new_joining", "idx_new_joining_designation", "designation"),
+      ensureIndex("new_joining", "idx_new_joining_joining_status", "joining_status"),
+      ensureIndex("scrum_manpower", "idx_scrum_state", "state"),
+      ensureIndex("scrum_manpower", "idx_scrum_maintenance_point", "maintenance_point"),
+      ensureIndex("scrum_manpower", "idx_scrum_job_role", "job_role"),
+      ensureIndex("scrum_manpower", "idx_scrum_status", "status"),
+      ensureIndex("scrum_manpower", "idx_scrum_vendor", "vendor"),
+      ensureIndex("scrum_manpower", "idx_scrum_upload_batch_id", "upload_batch_id"),
+      ensureIndex("scrum_manpower", "idx_scrum_uploaded_at", "uploaded_at"),
+    ]).catch((error) => {
+      drilldownIndexPromise = null;
+      throw error;
+    });
+  }
+  return drilldownIndexPromise;
+}
+
+// Warm the index migration at boot; requests still await it defensively
+// below in case boot-time creation hasn't finished yet.
+ensureDrilldownIndexes().catch((error) =>
+  console.error("Drilldown index warm-up failed (will retry on request):", error.message)
+);
 
 async function fetchSignoffRows(req) {
   const filters = [];
@@ -452,6 +505,430 @@ router.get("/export/scrum", async (req, res) => {
     console.error("Scrum RAG export error:", error);
     if (!res.headersSent) {
       res.status(500).json({ success: false, message: "Failed to generate export" });
+    } else {
+      res.destroy(error);
+    }
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Employee-level drilldown for a single designation/CMP cell of a RAG grid.
+// Additive feature — reuses the same "Available" definitions the RAG grids
+// already render from (fetchPhysicalActiveData / fetchScrumActiveData use
+// the identical UNION/latest-batch logic, just grouped+counted instead of
+// row-level), so drilldown numbers can never drift from what's on screen.
+// ---------------------------------------------------------------------------
+
+const DRILLDOWN_ROLE_KEYS = new Set(physicalDesignationColumns.map((c) => c.key));
+const DRILLDOWN_ROLE_LABELS = new Map(physicalDesignationColumns.map((c) => [c.key, c.label]));
+const DRILLDOWN_SORTABLE_COLUMNS = new Set([
+  "employee_name",
+  "employee_code",
+  "cmp",
+  "circle",
+  "employment_status",
+  "joining_status",
+  "uploaded_at",
+  "last_updated_at",
+]);
+
+function getDrilldownDepartment(roleKey) {
+  const group = categoryGroups.find((g) => g.roleKeys.includes(roleKey));
+  return group ? group.label : "Other";
+}
+
+// Row-level version of fetchPhysicalActiveData()'s UNION (physical ∪ deduped
+// new_joining), wrapped as a derived table so role_key can be filtered in an
+// outer WHERE (MySQL can't reference a SELECT-list alias at the same level).
+function buildPhysicalAvailableBaseSql(req) {
+  const physicalScope = getCircleScope(req, "p.circle");
+  const njScope = getCircleScope(req, "nj.circle");
+
+  const sql = `
+    (
+      SELECT
+        'physical' AS source,
+        p.employee_code AS employee_code,
+        p.employee_name AS employee_name,
+        ${physicalRoleKeyCaseSql(normalizeRoleSql("p.job_role"))} AS role_key,
+        p.circle AS circle,
+        p.cmp AS cmp,
+        p.cluster AS cluster,
+        p.employment_status AS employment_status,
+        'Joined' AS joining_status,
+        p.mobile_number AS mobile_number,
+        p.created_at AS uploaded_at,
+        p.uploaded_at AS last_updated_at
+      FROM physical p
+      WHERE COALESCE(p.is_deleted, 0) = 0
+        AND LOWER(TRIM(COALESCE(p.employment_status, ''))) = 'active'
+        AND p.cmp IS NOT NULL AND p.cmp <> ''
+        AND p.job_role IS NOT NULL AND p.job_role <> ''
+        ${physicalScope.sql}
+      UNION ALL
+      SELECT
+        'new_joining' AS source,
+        nj.employee_code AS employee_code,
+        nj.employee_name AS employee_name,
+        ${physicalRoleKeyCaseSql(normalizeRoleSql("nj.designation"))} AS role_key,
+        nj.circle AS circle,
+        nj.cmp AS cmp,
+        NULL AS cluster,
+        nj.employee_status AS employment_status,
+        nj.joining_status AS joining_status,
+        NULL AS mobile_number,
+        nj.created_at AS uploaded_at,
+        nj.uploaded_at AS last_updated_at
+      FROM new_joining nj
+      WHERE LOWER(TRIM(COALESCE(nj.joining_status, ''))) = 'joined'
+        AND nj.cmp IS NOT NULL AND nj.cmp <> ''
+        AND nj.designation IS NOT NULL AND nj.designation <> ''
+        AND NOT EXISTS (
+          SELECT 1 FROM physical dedupe
+          WHERE TRIM(COALESCE(nj.aadhaar_no, '')) <> ''
+            AND TRIM(COALESCE(dedupe.aadhaar_no, '')) = TRIM(nj.aadhaar_no)
+            AND COALESCE(dedupe.is_deleted, 0) = 0
+            AND LOWER(TRIM(COALESCE(dedupe.employment_status, ''))) = 'active'
+        )
+        ${njScope.sql}
+    )
+  `;
+
+  return { sql, params: [...physicalScope.params, ...njScope.params] };
+}
+
+// Row-level version of fetchScrumActiveData(): latest upload_batch_id is
+// scoped by req.authUser (not the clicked circle) so the popup's numbers
+// always match whichever batch the on-screen Scrum RAG grid is showing.
+function buildScrumAvailableBaseSql(req) {
+  const scope = getCircleScope(req, "sm.state");
+  const latestBatchParams = [];
+  const latestBatchSql = `
+    SELECT upload_batch_id
+    FROM scrum_manpower
+    ${isAllCircle(req.authUser) ? "" : "WHERE LOWER(TRIM(state)) = LOWER(TRIM(?))"}
+    ORDER BY uploaded_at DESC
+    LIMIT 1
+  `;
+  if (!isAllCircle(req.authUser)) latestBatchParams.push(req.authUser.circle);
+
+  const sql = `
+    (
+      SELECT
+        'scrum' AS source,
+        sm.jc_sap_id AS employee_code,
+        sm.resource_name AS employee_name,
+        ${scrumRoleKeyCaseSql(normalizeRoleSql("sm.job_role"))} AS role_key,
+        sm.state AS circle,
+        sm.maintenance_point AS cmp,
+        NULL AS cluster,
+        sm.status AS employment_status,
+        'Joined' AS joining_status,
+        sm.mobile AS mobile_number,
+        sm.uploaded_at AS uploaded_at,
+        sm.uploaded_at AS last_updated_at
+      FROM scrum_manpower sm
+      WHERE UPPER(TRIM(sm.vendor)) = 'S G ENCON PVT LTD'
+        AND UPPER(TRIM(COALESCE(sm.status, ''))) = 'ACTIVE'
+        AND sm.upload_batch_id = (${latestBatchSql})
+        AND sm.maintenance_point IS NOT NULL AND sm.maintenance_point <> ''
+        AND sm.job_role IS NOT NULL AND sm.job_role <> ''
+        ${scope.sql}
+    )
+  `;
+
+  return { sql, params: [...latestBatchParams, ...scope.params] };
+}
+
+// Builds the outer WHERE applied on top of the base "available" derived
+// table. `scopeOnly` (used for the summary cards) omits search/employeeCode/
+// employmentStatus/joiningStatus so the cards never drift from the RAG grid
+// while the user types into the popup's own filters.
+function buildDrilldownWhereParts({
+  roleKey,
+  explicitCircle,
+  cmp,
+  search,
+  employeeCode,
+  employmentStatus,
+  joiningStatus,
+}) {
+  const conditions = ["available.role_key = ?"];
+  const params = [roleKey];
+
+  if (explicitCircle) {
+    conditions.push("LOWER(TRIM(available.circle)) = LOWER(TRIM(?))");
+    params.push(explicitCircle);
+  }
+  if (cmp) {
+    conditions.push("LOWER(TRIM(available.cmp)) = LOWER(TRIM(?))");
+    params.push(cmp);
+  }
+  if (search) {
+    conditions.push("LOWER(available.employee_name) LIKE LOWER(?)");
+    params.push(`%${search}%`);
+  }
+  if (employeeCode) {
+    conditions.push("LOWER(available.employee_code) LIKE LOWER(?)");
+    params.push(`%${employeeCode}%`);
+  }
+  if (employmentStatus) {
+    conditions.push("LOWER(TRIM(available.employment_status)) = LOWER(TRIM(?))");
+    params.push(employmentStatus);
+  }
+  if (joiningStatus) {
+    conditions.push("LOWER(TRIM(available.joining_status)) = LOWER(TRIM(?))");
+    params.push(joiningStatus);
+  }
+
+  return { whereSql: `WHERE ${conditions.join(" AND ")}`, params };
+}
+
+// `signoff` only stores a scalar requirement target per (circle, cmp) — no
+// row-level data — so this is a plain aggregate, not part of the "available"
+// derived table above.
+async function fetchDrilldownRequired({ roleKey, explicitCircle, cmp, authUser }) {
+  if (cmp && explicitCircle) {
+    const rows = await query(
+      `SELECT COALESCE(${roleKey}, 0) AS required FROM signoff WHERE LOWER(TRIM(circle)) = LOWER(TRIM(?)) AND LOWER(TRIM(cmp)) = LOWER(TRIM(?))`,
+      [explicitCircle, cmp]
+    );
+    return Number(rows[0]?.required || 0);
+  }
+
+  const conditions = [];
+  const params = [];
+  if (explicitCircle) {
+    conditions.push("LOWER(TRIM(circle)) = LOWER(TRIM(?))");
+    params.push(explicitCircle);
+  } else if (!isAllCircle(authUser)) {
+    conditions.push("LOWER(TRIM(circle)) = LOWER(TRIM(?))");
+    params.push(authUser.circle);
+  }
+
+  const whereSql = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+  const rows = await query(`SELECT COALESCE(SUM(${roleKey}), 0) AS required FROM signoff ${whereSql}`, params);
+  return Number(rows[0]?.required || 0);
+}
+
+// Shared by GET /drilldown (JSON) and GET /drilldown/export (xlsx) so the two
+// endpoints can never disagree on filtering/scoping logic.
+async function runDrilldownQuery(req, { isExport = false } = {}) {
+  await ensureDrilldownIndexes();
+
+  const panel = String(req.query.panel || "").trim();
+  if (!["physical", "scrum"].includes(panel)) {
+    const error = new Error("Invalid panel. Expected 'physical' or 'scrum'.");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const roleKey = String(req.query.roleKey || "").trim();
+  if (!DRILLDOWN_ROLE_KEYS.has(roleKey)) {
+    const error = new Error("Invalid or unknown roleKey.");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const requestedCircle = String(req.query.circle || "").trim();
+  if (requestedCircle && !canAccessCircle(req.authUser, requestedCircle)) {
+    const error = new Error("You cannot access this circle's data.");
+    error.statusCode = 403;
+    throw error;
+  }
+
+  const cmp = String(req.query.cmp || "").trim();
+  const search = String(req.query.search || "").trim();
+  const employeeCode = String(req.query.employeeCode || "").trim();
+  const employmentStatus = String(req.query.employmentStatus || "").trim();
+  const joiningStatus = String(req.query.joiningStatus || "").trim();
+
+  const page = Math.max(1, Number(req.query.page || 1));
+  const pageSize = Math.min(isExport ? 10000 : 100, Math.max(1, Number(req.query.pageSize || 25)));
+
+  const sortBy = DRILLDOWN_SORTABLE_COLUMNS.has(String(req.query.sortBy || ""))
+    ? req.query.sortBy
+    : "employee_name";
+  const sortOrder = String(req.query.sortOrder || "asc").toLowerCase() === "desc" ? "DESC" : "ASC";
+
+  const base = panel === "physical" ? buildPhysicalAvailableBaseSql(req) : buildScrumAvailableBaseSql(req);
+
+  const scopeFilter = buildDrilldownWhereParts({ roleKey, explicitCircle: requestedCircle, cmp });
+  const fullFilter = buildDrilldownWhereParts({
+    roleKey,
+    explicitCircle: requestedCircle,
+    cmp,
+    search,
+    employeeCode,
+    employmentStatus,
+    joiningStatus,
+  });
+
+  const [required, summaryRows, countRows, rows] = await Promise.all([
+    fetchDrilldownRequired({ roleKey, explicitCircle: requestedCircle, cmp, authUser: req.authUser }),
+    query(
+      `
+      SELECT
+        COUNT(*) AS total_available,
+        SUM(CASE WHEN LOWER(TRIM(employment_status)) = 'active' THEN 1 ELSE 0 END) AS active_employees,
+        SUM(CASE WHEN LOWER(TRIM(employment_status)) <> 'active' THEN 1 ELSE 0 END) AS inactive_employees,
+        SUM(CASE WHEN LOWER(TRIM(joining_status)) = 'joined' THEN 1 ELSE 0 END) AS joined_employees,
+        SUM(CASE WHEN LOWER(TRIM(joining_status)) <> 'joined' THEN 1 ELSE 0 END) AS not_joined_employees
+      FROM ${base.sql} AS available
+      ${scopeFilter.whereSql}
+      `,
+      [...base.params, ...scopeFilter.params]
+    ),
+    query(
+      `SELECT COUNT(*) AS total FROM ${base.sql} AS available ${fullFilter.whereSql}`,
+      [...base.params, ...fullFilter.params]
+    ),
+    query(
+      `
+      SELECT source, employee_code, employee_name, circle, cmp, cluster,
+             employment_status, joining_status, mobile_number, uploaded_at, last_updated_at
+      FROM ${base.sql} AS available
+      ${fullFilter.whereSql}
+      ORDER BY ${sortBy} ${sortOrder}
+      LIMIT ? OFFSET ?
+      `,
+      [...base.params, ...fullFilter.params, pageSize, (page - 1) * pageSize]
+    ),
+  ]);
+
+  const summaryRow = summaryRows[0] || {};
+  const totalAvailable = Number(summaryRow.total_available || 0);
+  const gap = required - totalAvailable;
+  const designationLabel = DRILLDOWN_ROLE_LABELS.get(roleKey) || roleKey;
+  const department = getDrilldownDepartment(roleKey);
+
+  const data = rows.map((row) => ({
+    employeeCode: row.employee_code || "",
+    employeeName: row.employee_name || "",
+    designation: designationLabel,
+    circle: row.circle || "",
+    cmp: row.cmp || "",
+    cmpCluster: row.cluster || "",
+    department,
+    employmentStatus: row.employment_status || "",
+    joiningStatus: row.joining_status || "",
+    mobileNumber: row.mobile_number || "",
+    uploadedAt: row.uploaded_at || null,
+    lastUpdatedAt: row.last_updated_at || null,
+    source: row.source,
+  }));
+
+  const totalRecords = Number(countRows[0]?.total || 0);
+
+  return {
+    header: {
+      designation: designationLabel,
+      department,
+      circle: requestedCircle || null,
+      cmp: cmp || null,
+      required,
+      available: totalAvailable,
+      gap,
+    },
+    summary: {
+      totalRequired: required,
+      totalAvailable,
+      totalGap: gap,
+      activeEmployees: Number(summaryRow.active_employees || 0),
+      inactiveEmployees: Number(summaryRow.inactive_employees || 0),
+      joinedEmployees: Number(summaryRow.joined_employees || 0),
+      notJoinedEmployees: Number(summaryRow.not_joined_employees || 0),
+    },
+    data,
+    pagination: {
+      page,
+      pageSize,
+      totalRecords,
+      totalPages: Math.max(1, Math.ceil(totalRecords / pageSize)),
+    },
+  };
+}
+
+router.get("/drilldown", async (req, res) => {
+  try {
+    const payload = await runDrilldownQuery(req, { isExport: String(req.query.export || "") === "true" });
+    res.status(200).json({ success: true, ...payload });
+  } catch (error) {
+    console.error("HR dashboard drilldown error:", error);
+    res.status(error?.statusCode || 500).json({
+      success: false,
+      message: error.message || "Failed to load drilldown data",
+    });
+  }
+});
+
+const DRILLDOWN_EXPORT_COLUMNS = [
+  { key: "employeeCode", label: "Employee Code" },
+  { key: "employeeName", label: "Employee Name" },
+  { key: "designation", label: "Designation" },
+  { key: "circle", label: "Circle" },
+  { key: "cmp", label: "CMP / Cluster" },
+  { key: "department", label: "Department" },
+  { key: "employmentStatus", label: "Employment Status" },
+  { key: "joiningStatus", label: "Joining Status" },
+  { key: "mobileNumber", label: "Mobile Number" },
+  { key: "uploadedAt", label: "Uploaded At" },
+  { key: "lastUpdatedAt", label: "Last Updated" },
+];
+
+function buildDrilldownWorkbook({ header, summary, data }) {
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = "SG ENCON LTD";
+  workbook.created = new Date();
+
+  const worksheet = workbook.addWorksheet("Drilldown".slice(0, 31));
+
+  worksheet.addRow([`${header.designation} — ${header.department}`]);
+  worksheet.addRow([
+    `Circle: ${header.circle || "All"}`,
+    `CMP: ${header.cmp || "All"}`,
+    `Required: ${header.required}`,
+    `Available: ${header.available}`,
+    `Gap: ${header.gap}`,
+  ]);
+  worksheet.addRow([
+    `Active: ${summary.activeEmployees}`,
+    `Inactive: ${summary.inactiveEmployees}`,
+    `Joined: ${summary.joinedEmployees}`,
+    `Not Joined: ${summary.notJoinedEmployees}`,
+  ]);
+  worksheet.addRow([]);
+
+  const headerRow = worksheet.addRow(DRILLDOWN_EXPORT_COLUMNS.map((c) => c.label));
+  headerRow.font = { bold: true, color: { argb: "FFFFFFFF" } };
+  headerRow.eachCell((cell) => {
+    cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1E3A8A" } };
+  });
+
+  data.forEach((row) => {
+    worksheet.addRow(DRILLDOWN_EXPORT_COLUMNS.map((c) => row[c.key] ?? ""));
+  });
+
+  worksheet.columns.forEach((col, index) => {
+    const label = DRILLDOWN_EXPORT_COLUMNS[index]?.label || "";
+    col.width = Math.max(14, label.length + 4);
+  });
+
+  return workbook;
+}
+
+router.get("/drilldown/export", async (req, res) => {
+  try {
+    const payload = await runDrilldownQuery(req, { isExport: true });
+    const workbook = buildDrilldownWorkbook(payload);
+    await sendWorkbook(res, workbook, "Employee_Drilldown_Export");
+  } catch (error) {
+    console.error("HR dashboard drilldown export error:", error);
+    if (!res.headersSent) {
+      res.status(error?.statusCode || 500).json({
+        success: false,
+        message: error.message || "Failed to generate export",
+      });
     } else {
       res.destroy(error);
     }

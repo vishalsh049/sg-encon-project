@@ -30,6 +30,8 @@ router.use(authMiddleware);
 const EMPLOYEE_CODE_PREFIX = "SG";
 const EMPLOYEE_CODE_DIGITS = 6;
 
+const { resolveDesignation } = require("../constants/designations");
+
 async function findNextEmployeeCode() {
   const rows = await query(
     `SELECT employee_code FROM new_joining WHERE employee_code REGEXP '^SG[0-9]+$'`
@@ -198,6 +200,15 @@ router.post("/add-employee", requirePagePermission("New Joining", "edit"), async
       });
     }
 
+    const canonicalDesignation = resolveDesignation(designationValue);
+
+    if (!canonicalDesignation) {
+      return res.status(400).json({
+        success: false,
+        message: `Invalid Designation: "${designationValue}". Please use a valid designation from the approved list.`,
+      });
+    }
+
     if (!aadhaarValue) {
       return res.status(400).json({
         success: false,
@@ -264,7 +275,7 @@ router.post("/add-employee", requirePagePermission("New Joining", "edit"), async
         employeeNameValue,
         circleValue,
         cmpValue,
-        designationValue,
+        canonicalDesignation,
         aadhaarValue,
          nth_salary || 0,
         joining_status || "Pending",
@@ -680,7 +691,12 @@ const uploadedAt = new Date();
 
 const values = [];
 
-for (const row of rows) {
+for (let rowIndex = 0; rowIndex < rows.length; rowIndex++) {
+
+  const row = rows[rowIndex];
+  // +1 for the header row, +1 to convert the 0-based index to a 1-based
+  // Excel row number, so this matches the row a user sees in the sheet.
+  const excelRowNumber = rowIndex + 2;
 
   const employee_code = sanitizeText(
     row.employee_code ||
@@ -707,11 +723,20 @@ for (const row of rows) {
     ""
   );
 
-  const designation = sanitizeText(
+  const designationRaw = sanitizeText(
     row.designation ||
     row["Designation"] ||
     ""
   );
+
+  const designation = resolveDesignation(designationRaw);
+
+  if (!designation) {
+    return res.status(400).json({
+      success: false,
+      message: `Invalid Designation: "${designationRaw}" at Row ${excelRowNumber}. Please use a valid designation from the approved list.`,
+    });
+  }
 
   const aadhaar_no_raw =
     row.aadhaar_no ||

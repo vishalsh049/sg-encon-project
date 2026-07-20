@@ -18,6 +18,7 @@ import ValidationErrorModal from "../components/ValidationErrorModal";
   import * as XLSX from "xlsx";
   import { saveAs } from "file-saver";
   import { authFetch, buildApiUrl } from "../lib/api";
+  import useDesignationOptions from "../hooks/useDesignationOptions";
 
   function formatCircleTimestamp(value) {
     if (!value) return "Never Uploaded";
@@ -40,6 +41,32 @@ import ValidationErrorModal from "../components/ValidationErrorModal";
       .toUpperCase();
 
     return `${datePart}, ${timePart}`;
+  }
+
+  const UPLOADED_AT_MONTH_NAMES = [
+    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+  ];
+
+  // uploaded_at arrives as "YYYY-MM-DD HH:MM:SS" (dateStrings: true on the
+  // backend pool); Safari cannot parse the space-separated form, so normalize
+  // to ISO "T" before handing it to Date. Returns "--" for null/invalid values.
+  function formatUploadedAt(value) {
+    if (!value) return "--";
+
+    const normalized = String(value).trim().replace(" ", "T");
+    const parsed = new Date(normalized);
+    if (Number.isNaN(parsed.getTime())) return "--";
+
+    const day = String(parsed.getDate()).padStart(2, "0");
+    const month = UPLOADED_AT_MONTH_NAMES[parsed.getMonth()];
+    const year = parsed.getFullYear();
+    const hours24 = parsed.getHours();
+    const hours12 = hours24 % 12 || 12;
+    const minutes = String(parsed.getMinutes()).padStart(2, "0");
+    const ampm = hours24 >= 12 ? "PM" : "AM";
+
+    return `${day}-${month}-${year} ${String(hours12).padStart(2, "0")}:${minutes} ${ampm}`;
   }
 
   export default function Physical() {
@@ -1092,6 +1119,14 @@ if (!isValidAadhaar(aadhaar)) {
 
       const result = await response.json();
 
+      if (!response.ok || !result.success) {
+        alert(result.message || "Failed");
+        return;
+      }
+
+      // Only remove the source New Joining record once the Physical save has
+      // actually succeeded — deleting it unconditionally (even on a failed
+      // save) would silently lose the employee from both tables.
       const newJoiningEmployee =
     localStorage.getItem(
       "newJoiningEmployee"
@@ -1116,11 +1151,6 @@ if (!isValidAadhaar(aadhaar)) {
     );
 
   }
-
-      if (!response.ok || !result.success) {
-        alert(result.message || "Failed");
-        return;
-      }
 
     alert(
   employeeForm.id
@@ -1438,62 +1468,10 @@ Haryana: [
   ],
 };
 
-const jobRoleOptions = [
-  "Admin Head",
-  "Analyst-Fiber",
-  "Analyst-Fttx",
-  "Analyst-IPCOLO",
-  "Analyst-ISP", 
-  "Analyst-Material",
-  "Analyst-Planning",
-  "Analyst-PMO",
-  "Analyst-Power & Fuel",
-  "Analyst-Utility",
-  "Assistant Splicer",
-  "CMP LEAD",
-  "Commercial Executive",
-  "Commercial Lead",
-  "Energy Lead",
-  "Estate Executive",
-  "Fiber SME",
-  "Fibre Supervisor",
-  "FRT Helper",
-  "Fttx Assistant Splicer",
-  "Fttx Engineer",
-  "Fttx Helper",
-  "Fttx Lead",
-  "Fttx Splicer",
-  "Fttx Supervisor",
-  "Fttx Technician",
-  "HR Executive",
-  "ISP Engineer",
-  "Legal Executive",
-  "MIS Executive",
-  "Office Helper",
-  "OMCR Lead",
-  "OMCR Resources",
-  "Other Roles - Temporary Technician",
-  "Patroller",
-  "Project Technician",
-  "Rigger",
-  "Route Guard",
-  "Splicer",
-  "State Fiber SME",
-  "State HR Head",
-  "State HSEF Officer",
-  "State ISP SME",
-  "State Material Manager",
-  "State Operation Head",
-  "State Utility SME",
-  "Technician",
-  "Utility Helper",
-  "Utility Supervisor",
-  "Warehouse Helper",
-  "Warehouse Incharge Cum Security"
-].map(role => ({
-  value: role,
-  label: role
-}));
+// The approved Job Role list is fetched from the backend at runtime (see
+// useDesignationOptions / GET /api/designations) so it stays a single source
+// of truth shared with the New Joining page and the server-side validation.
+const { options: jobRoleOptions } = useDesignationOptions();
 
 const employmentStatusOptions = [
   { value: "Active", label: "Active" },
@@ -2249,6 +2227,9 @@ const inactiveCount =
   <th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-center text-xs font-bold
    uppercase tracking-wider text-slate-700 whitespace-nowrap">Employment Status</th>
 
+  <th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-center text-xs font-bold
+   uppercase tracking-wider text-slate-700 whitespace-nowrap">Uploaded At</th>
+
  <th
   className="
     sticky right-0 z-20
@@ -2357,7 +2338,11 @@ const inactiveCount =
   >
     {item.employment_status || "-"}
   </span>
-</td>  
+</td>
+
+  <td className="border-b border-r border-slate-200 px-4 py-2 text-sm text-slate-700 text-center whitespace-nowrap">
+    {formatUploadedAt(item.uploaded_at)}
+  </td>
 
    <td
   className="
@@ -2725,6 +2710,10 @@ records
         <Field label="PPRJ Code" value={viewEmployee.pprj_code} />
         <Field label="Employee Code" value={viewEmployee.employee_code} />
         <Field label="Employee Name" value={viewEmployee.employee_name} />
+        <Field
+          label="Uploaded At"
+          value={formatUploadedAt(viewEmployee.uploaded_at)}
+        />
       </div>
     </div>
 

@@ -31,6 +31,7 @@ import {
 } from "lucide-react";
 import { authFetch, buildApiUrl } from "../lib/api";
 import { getStoredSession } from "../lib/session";
+import useDesignationOptions from "../hooks/useDesignationOptions";
 
 const selectStyles = {
   control: (provided, state) => ({
@@ -88,6 +89,41 @@ const selectStyles = {
         : "white",
   }),
 };
+
+// The approved Designation list is fetched from the backend at runtime (see
+// useDesignationOptions / GET /api/designations) so it can never drift out of
+// sync with the server-side validation.
+
+function getDesignationSelectStyles(hasError) {
+  return {
+    ...selectStyles,
+    control: (provided, state) => ({
+      ...selectStyles.control(provided, state),
+      minHeight: "36px",
+      height: "36px",
+      borderRadius: "16px",
+      borderColor: hasError
+        ? "#ef4444"
+        : state.isFocused
+          ? "#bfdbfe"
+          : "rgba(226,232,240,0.8)",
+      boxShadow: hasError
+        ? "0 0 0 4px rgba(239,68,68,0.08)"
+        : state.isFocused
+          ? "0 0 0 4px rgba(59,130,246,0.08)"
+          : "none",
+    }),
+    valueContainer: (provided) => ({
+      ...provided,
+      height: "34px",
+      padding: "0 10px 0 30px",
+    }),
+    indicatorsContainer: (provided) => ({
+      ...provided,
+      height: "34px",
+    }),
+  };
+}
 
 function FilterField({ icon: Icon, label, children }) {
   return (
@@ -266,6 +302,8 @@ export default function NewJoining() {
   const [uploadedSort, setUploadedSort] = useState(null);
   const [now, setNow] = useState(() => new Date());
 
+  const { options: designationSelectOptions } = useDesignationOptions();
+
   const isAllCircleUser = useMemo(
     () => isAllCircleAccess(getStoredSession()?.circle),
     []
@@ -304,6 +342,7 @@ export default function NewJoining() {
       "Hissar",
       "Karnal",
       "Panipat",
+      "Palwal",
       "Rewari",
       "Rohtak",
     ],
@@ -1844,27 +1883,30 @@ loadData();
 
             <BadgeCheck
               size={14}
-              className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400"
+              className="pointer-events-none absolute left-2 top-1/2 z-10 -translate-y-1/2 text-slate-400"
             />
 
-        <input
-  ref={(el) => (employeeFieldRefs.current.designation = el)}
-  type="text"
-  placeholder="Select Designation"
-  value={employeeForm.designation || ""}
-  onChange={(e) => {
-    setEmployeeForm({
-      ...employeeForm,
-      designation: e.target.value,
-    });
-    clearFieldError("designation");
-  }}
-  className={`h-9 w-full rounded-2xl border bg-white pl-8 pr-4 text-xs outline-none transition focus:ring-4 ${
-    formErrors.designation
-      ? "border-red-500 focus:border-red-500 focus:ring-red-100"
-      : "border-slate-200 focus:border-indigo-500 focus:ring-indigo-100"
-  }`}
-/>
+            <Select
+              ref={(el) => (employeeFieldRefs.current.designation = el)}
+              styles={getDesignationSelectStyles(Boolean(formErrors.designation))}
+              placeholder="Select Designation"
+              options={designationSelectOptions}
+              value={
+                designationSelectOptions.find(
+                  (item) => item.value === employeeForm.designation
+                ) || null
+              }
+              onChange={(selected) => {
+                setEmployeeForm({
+                  ...employeeForm,
+                  designation: selected?.value || "",
+                });
+                clearFieldError("designation");
+              }}
+              isClearable
+              isSearchable
+              classNamePrefix="designation-select"
+            />
 
           </div>
 

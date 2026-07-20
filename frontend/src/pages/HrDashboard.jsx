@@ -1,4 +1,4 @@
-import React, { startTransition, useEffect, useMemo, useRef, useState } from "react";
+import React, { startTransition, useContext, useEffect, useMemo, useRef, useState } from "react";
 import {
   BriefcaseBusiness,
   CalendarRange,
@@ -26,6 +26,9 @@ import toast from "react-hot-toast";
 
 import { authFetch, buildApiUrl } from "../lib/api";
 import { getStoredSession } from "../lib/session";
+import { cmpGroups, circleLabelFromTitle } from "../lib/cmpGroups";
+import { HrDashboardCircleContext } from "../components/hrDashboard/hrDashboardCircleContext";
+import DrilldownModal from "../components/hrDashboard/DrilldownModal";
 
 const physicalDesignationColumns = [
   { key: "state_leadership_team", label: "State Leadership Team" },
@@ -53,63 +56,6 @@ const physicalDesignationColumns = [
 ];
 
 const scrumDesignationColumns = physicalDesignationColumns;
-
-const cmpGroups = [
-  {
-    title: "Delhi SHQ",
-    items: [
-      "Delhi SHQ",
-      "Delhi-1 (West)",
-      "Delhi-2 (South)",
-      "Delhi-3 (Central-East)",
-      "Delhi-4 (North)",
-      "Faridabad (NCR)",
-      "Ghaziabad (NCR)",
-      "Gurgaon (NCR)",
-      "Noida (NCR)",
-    ],
-  },
-  {
-    title: "Haryana SHQ",
-    items: [
-      "Haryana SHQ",
-      "Ambala",
-      "Hissar",
-      "Karnal",
-      "Panipat",
-      "Palwal",
-      "Rewari",
-      "Rohtak",
-    ],
-  },
-  {
-    title: "Punjab SHQ",
-    items: [
-      "Punjab SHQ",
-      "Amritsar",
-      "Bathinda",
-      "Chandigarh",
-      "Jalandhar",
-      "Ludhiana-1",
-      "Ludhiana-2",
-      "Pathankot",
-      "Patiala",
-      "Sangrur",
-    ],
-  },
-  {
-    title: "UP East SHQ",
-    items: [
-      "UP East SHQ",
-      "Allahabad",
-      "Azamgarh",
-      "Faizabad",
-      "Gorakhpur",
-      "Raibareilly",
-      "Varanasi",
-    ],
-  },
-];
 
 const statCardConfig = [
   {
@@ -170,11 +116,9 @@ const normalizeCircle = (value = "") =>
 const normalizeCmpName = (value = "") =>
   value.replace("Bhatinda", "Bathinda").trim().toLowerCase();
 
-// Circle label derived straight from the cmpGroups titles, so adding a new
-// circle group above automatically makes it a selectable circle everywhere
-// on this page — no separate circle list to keep in sync.
-const circleLabelFromTitle = (title = "") => title.replace(/\s*SHQ\s*$/i, "").trim();
-
+// Circle label derived straight from the cmpGroups titles (imported from
+// ../lib/cmpGroups), so adding a new circle group there automatically makes
+// it a selectable circle everywhere on this page.
 const allCircleLabels = cmpGroups.map((group) => circleLabelFromTitle(group.title));
 
 // A couple of circle names are stored inconsistently across the app
@@ -899,7 +843,13 @@ function HrDashboard() {
     })}`;
   }, [lastRefreshedAt]);
 
+  const circleContextValue = useMemo(
+    () => ({ isAllCircleUser, userCircleLabel, allowedCircleLabels }),
+    [isAllCircleUser, userCircleLabel, allowedCircleLabels]
+  );
+
   return (
+    <HrDashboardCircleContext.Provider value={circleContextValue}>
     <div className="min-h-screen">
     <div className="relative overflow-hidden rounded-[14px] border border-white/70 bg-[linear-gradient(96deg,_#4f46e5_0%,_#7c3aed_50%,_#a21caf_100%)] px-4 py-2 text-white md:px-4 md:py-2">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(255,255,255,0.22),_transparent_28%),radial-gradient(circle_at_bottom_right,_rgba(255,255,255,0.14),_transparent_24%)]" />
@@ -1147,6 +1097,7 @@ function HrDashboard() {
         />
       )}
     </div>
+    </HrDashboardCircleContext.Provider>
   );
 }
 
@@ -1447,7 +1398,25 @@ function RagTable({
   showJoining = false,
   fillHeight = false,
 }) {
+  // Employee-level drill-down popup for a designation / R / A / G cell.
+  // Self-contained here (rather than lifted to HrDashboard state) so none of
+  // the 3 call sites of <RagTable> need extra props threaded through them.
+  const [drilldown, setDrilldown] = useState(null);
+  const panel = showJoining ? "physical" : "scrum";
+
+  const openDrilldown = (column, circle, cmp, clickedMetric) => {
+    setDrilldown({
+      panel,
+      roleKey: column.key,
+      roleLabel: column.label,
+      circle: circle || "",
+      cmp: cmp || "",
+      clickedMetric,
+    });
+  };
+
   return (
+  <>
   <div
     id={panelId}
     className={`relative overflow-auto custom-scrollbar ${
@@ -1516,7 +1485,9 @@ function RagTable({
 <th
   key={column.key}
   colSpan={3}
- className="min-w-[180px] text-center py-2 font-semibold border-r-2 border-blue-300 bg-blue-200 text-blue-900"
+  onClick={() => openDrilldown(column, "", "", "designation")}
+  title={`View ${column.label} employees`}
+ className="min-w-[180px] cursor-pointer text-center py-2 font-semibold border-r-2 border-blue-300 bg-blue-200 text-blue-900 transition hover:bg-blue-300"
 >
     {column.label}
   </th>
@@ -1569,16 +1540,28 @@ function RagTable({
 
                     const totalGap = totalRequirement - totalAvailable;
 
+                    const totalCircle = circleLabelFromTitle(group.title);
+
                     return (
                       <React.Fragment key={column.key}>
-                        <td className="w-[55px] px-2 py-2 text-center bg-indigo-50 border-slate-300 font-bold border-y ">
+                        <td
+                          onClick={() => openDrilldown(column, totalCircle, "", "R")}
+                          title={`View ${column.label} employees — ${totalCircle}`}
+                          className="w-[55px] cursor-pointer px-2 py-2 text-center bg-indigo-50 border-slate-300 font-bold border-y hover:bg-indigo-100"
+                        >
                           {totalRequirement}
                         </td>
-                        <td className="w-[55px] px-2 py-2 text-center font-bold border-y bg-indigo-50 border-slate-300">
+                        <td
+                          onClick={() => openDrilldown(column, totalCircle, "", "A")}
+                          title={`View ${column.label} employees — ${totalCircle}`}
+                          className="w-[55px] cursor-pointer px-2 py-2 text-center font-bold border-y bg-indigo-50 border-slate-300 hover:bg-indigo-100"
+                        >
                           {totalAvailable}
                         </td>
                         <td
-                           className={`px-2 py-2 text-center font-bold border-r border-y bg-indigo-50 border-slate-300 ${
+                          onClick={() => openDrilldown(column, totalCircle, "", "G")}
+                          title={`View ${column.label} employees — ${totalCircle}`}
+                           className={`cursor-pointer px-2 py-2 text-center font-bold border-r border-y bg-indigo-50 border-slate-300 hover:bg-indigo-100 ${
 
                             totalGap <= 0 ? "text-emerald-600" : "text-red-500"
                           }`}
@@ -1635,13 +1618,23 @@ if (showJoining) {
 }
     const gap = requirement - available;
 
+  const rowCircle = circleLabelFromTitle(group.title);
+
   return (
     <React.Fragment key={column.key}>
-     <td className="w-[55px] px-2 py-2 text-center border-b border-slate-200">
+     <td
+       onClick={() => openDrilldown(column, rowCircle, cmpName, "R")}
+       title={`View ${column.label} employees — ${cmpName}`}
+       className="w-[55px] cursor-pointer px-2 py-2 text-center border-b border-slate-200 hover:bg-blue-100"
+     >
          {requirement}
       </td>
-    
- <td className="w-[55px] px-2 py-2 text-center border-b border-slate-200">
+
+ <td
+   onClick={() => openDrilldown(column, rowCircle, cmpName, "A")}
+   title={`View ${column.label} employees — ${cmpName}`}
+   className="w-[55px] cursor-pointer px-2 py-2 text-center border-b border-slate-200 hover:bg-blue-100"
+ >
 
   {showJoining ? (
 
@@ -1680,7 +1673,9 @@ if (showJoining) {
 </td>
 
  <td
-    className={`px-2 py-2 text-center font-bold border-r border-slate-300 ${
+    onClick={() => openDrilldown(column, rowCircle, cmpName, "G")}
+    title={`View ${column.label} employees — ${cmpName}`}
+    className={`cursor-pointer px-2 py-2 text-center font-bold border-r border-slate-300 hover:bg-blue-100 ${
 
     gap <= 0 ? "text-emerald-600" : "text-red-500"
   }`}
@@ -1699,6 +1694,12 @@ if (showJoining) {
           </tbody>
         </table>
       </div>
+  <DrilldownModal
+    isOpen={!!drilldown}
+    scope={drilldown}
+    onClose={() => setDrilldown(null)}
+  />
+  </>
   );
 }
 

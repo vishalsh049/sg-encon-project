@@ -94,6 +94,7 @@ registerRoute("./routes/meRoute", "/api");
 registerRoute("./routes/billingStatus", "/api");
 registerRoute("./routes/billingDashboard", "/api/billing");
 registerRoute("./routes/newJoiningRoutes", "/api/new-joining");
+registerRoute("./routes/designationsRoutes", "/api/designations");
 registerRoute("./routes/trainingRoutes", "/api/training");
 registerRoute("./routes/trainingDocumentRoutes", "/api/training-documents");
 registerRoute("./routes/trainingVerificationRoutes", "/api/training-verifications");

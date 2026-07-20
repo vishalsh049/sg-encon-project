@@ -26,6 +26,7 @@
       isPrivilegedPhysicalAdmin,
       setCachedValue,
     } = require("../services/physicalDomainService");
+    const { resolveDesignation } = require("../constants/designations");
 
     const router = express.Router();
     const storage = multer.memoryStorage();
@@ -271,6 +272,7 @@
         ["gtli", "VARCHAR(100) DEFAULT NULL"],
         ["nth_salary", "DECIMAL(12,2) DEFAULT 0"],
         ["remarks", "TEXT DEFAULT NULL"],
+        ["uploaded_at", "TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP"],
       ];
 
       for (const [column, definition] of physicalColumns) {
@@ -399,106 +401,7 @@
       );
     }
 
- const allowedJobRoles = [
-  "FTTx Technician",
-  "Technician",
-  "FTTx Engineer",
-  "Analyst",
-  "State Fiber SME",
-  "Fiber SME",
-  "Assistant Splicer",
-  "FTTx Splicer",
-  "Splicer",
-  "Rigger",
-  "Patroller",
-  "NOC Executive",
-  "ISP Engineer",
-  "Utility Supervisor",
-  "FTTx Supervisor",
-  "Fiber Supervisor",
-  "Commercial Lead",
-  "CMP Lead",
-  "FTTx Assistant Splicer",
-  "HSEF LEAD",
-  "Energy Lead",
-  "Circle Head",
-  "WAREHOUSE SECURITY GUARD",
-  "OMCR Lead",
-  "FRT Helper",
-  "Utility Helper",
-  "Office Helper",
-  "WH Helper",
-  "Commercial Executive",
-  "Project technician",
-  "Route Guard",
-  "FTTx Helper",
-  "State ISP SME",
-  "FTTx Lead",
-  "Estate Executive",
-  "HR Executive",
-  "State Utility SME",
-  "ADMIN LEAD",
-  "ODSC Supevisor",
-  "State HR Head",
-  "NOC LEAD",
-  "QUALITY & PLANING HEAD",
-  "UTILITY CO-ORODINATOR",
-  "OFFICE BOY",
-  "HR HEAD",
-  "PROJECT LEAD",
-  "FTTX SME",
-  "ASSISTANT HR MANAGER",
-  "MATERIAL LEAD",
-  "HR MANAGER",
-  "O & M HEAD",
-  "Fiber Engineer",
-  "Utility Engineer",
-  "State Planning Manager",
-  "Warehouse Incharge",
-  "State Operation Head",
-  "State Material Manager",
-  "State Energy Manager",
-  "Quality Lead",
-  "State Fiber Head",
-  "State HSEF Officer",
-  "State FTTx SME",
-  "Warehouse Incharge Cum Security",
-  "Warehouse Helper",
-  "MIS Executive",
-  "PROJECT MIS",  
-  "OMCR Resources",
-  "Analyst - Material",
-  "Analyst - Utility",
-  "Analyst - Planning",
-  "Analyst - Power & Fuel",
-  "Analyst - Ipcolo",
-  "Analyst - ISP",
-  "Analyst - PMO",
-  "Analyst - Fttx",
-  "Analyst - Fiber",
-  "Analyst - D2D",
-  "Analyst - HSEF",
-  "Asst Fiber SME",
-  "Utility SME",
-  "Utility MIS Coordinator",
-  "MIS Coordinator",
-  "Legal Executive",
-  "Legal Advisor",
-  "Project Head",
-  " ",
-  "Material Helper",
-  "Material Cordinator",
-  "Analyst MIS",
-  "Zonal Fiber SME"
-];
-
-const allowedJobRoleMap = new Map(
-  allowedJobRoles.map(role => [
-    normalizeJobRole(role),
-    role
-  ])
-);
-
+    
     const circleCmpMap = {
 
       Delhi: [
@@ -551,89 +454,6 @@ const allowedJobRoleMap = new Map(
 
     };
 
- function normalizeJobRole(role = "") {
-
-  // Plain normalization: lowercase, collapse hyphen/underscore/space
-  // variations into a single space. Applied both to the raw input and
-  // (again, defensively) to whatever the synonym map resolves to, so the
-  // returned key is always comparable to itself regardless of case or
-  // hyphenation — this keeps allowedJobRoleMap lookups (built the same way)
-  // consistent instead of mismatching on casing.
-  const normalizeText = (value) =>
-    String(value)
-      .trim()
-      .toLowerCase()
-      .replace(/[-_]/g, " ")
-      .replace(/\s+/g, " ")
-      .trim();
-
-  const normalized = normalizeText(role);
-
-  // Keys and values here must both be in the same plain-normalized form
-  // (lowercase, no hyphens) — values point at the normalized form of the
-  // canonical entry in allowedJobRoles, not its display casing.
-  const roleMap = {
-"commercial lead": "commercial lead",
-"hsef lead": "hsef lead",
-"analyst hsef": "analyst hsef",
-"cmp lead": "cmp lead",
-"fibre supervisor": "fiber supervisor",
-"fiber sme": "fiber sme",
-"mis executive": "mis executive",
-"project mis": "project mis",
-"fttx engineer": "fttx engineer",
-"circle head": "circle head",
-"warehouse security guard": "warehouse security guard",
-"office helper": "office helper",
-"commercial executive": "commercial executive",
-"project technician": "project technician",
-"route guard": "route guard",
-"fttx lead": "fttx lead",
-"admin lead": "admin lead",
-"odsc supevisor": "odsc supevisor",
-"noc lead": "noc lead",
-"quality & planing head": "quality & planing head",
-"utility co orodinator": "utility co orodinator",
-"office boy": "office boy",
-"hr head": "hr head",
-"project lead": "project lead",
-"fttx sme": "fttx sme",
-"assistant hr manager": "assistant hr manager",
-"material lead": "material lead",
-"hr manager": "hr manager",
-"o & m head": "o & m head",
-"fiber engineer": "fiber engineer",
-"utility engineer": "utility engineer",
-"state planning manager": "state planning manager",
-"warehouse incharge": "warehouse incharge",
-"state operation head": "state operation head",
-"state material manager": "state material manager",
-"state energy manager": "state energy manager",
-"analyst d2d": "analyst d2d",
-
-// --- Warehouse ---
-"wh incharge cum security": "warehouse incharge cum security",
-
-// --- Analyst spelling variant ---
-"anlayst mis": "analyst mis",
-
-// --- Material spelling variant ---
-"material coordinator": "material cordinator",
-
-// --- Correct spellings mapped to the typo'd canonical entries ---
-// (canonical names stay as-is because job_role is stored in that form)
-"odsc supervisor": "odsc supevisor",
-"utility coordinator": "utility co orodinator",
-"utility co ordinator": "utility co orodinator",
-"quality & planning head": "quality & planing head"
-
-};
-
-    const mapped = roleMap[normalized] || normalized;
-
-    return normalizeText(mapped);
-  }
-
     function mapPhysicalRow(row, reportId) {
 
       return [
@@ -668,10 +488,9 @@ const allowedJobRoleMap = new Map(
       row["Job Role_Actual_CMP Verify"]
     ),
 
-    // job_role
-  normalizeJobRole(
-    row["Job Role"]
-  ),
+    // job_role — already resolved to its canonical form by the validation
+    // pass in the upload-report handler before mapPhysicalRow runs.
+    toText(row["Job Role"]),
 
   // manpower_signoff_scope
   toText(
@@ -1618,14 +1437,12 @@ if (!jobRole) {
 
 } else {
 
-  const matchedRole = allowedJobRoleMap.get(
-    normalizeJobRole(jobRole)
-  );
+  const matchedRole = resolveDesignation(jobRole);
 
   if (!matchedRole) {
 
   validationErrors.push(
-    `❌ Row ${excelRowNumber} - ${employeeName} (${employeeCode}) : Invalid Job Role "${jobRole}"`
+    `❌ Row ${excelRowNumber} - ${employeeName} (${employeeCode}) : Invalid Designation: "${jobRole}" at Row ${excelRowNumber}. Please use a valid designation from the approved list.`
   );
 
   } else {
@@ -2080,6 +1897,20 @@ duplicateEmployees: duplicateEmployees
 
       }
 
+      // VALIDATE JOB ROLE (only when provided, to match the previous
+      // optional-field behaviour of this endpoint)
+      let canonicalJobRole = null;
+      const jobRoleInput = String(data.job_role || "").trim();
+      if (jobRoleInput) {
+        canonicalJobRole = resolveDesignation(jobRoleInput);
+        if (!canonicalJobRole) {
+          return res.status(400).json({
+            success: false,
+            message: `Invalid Designation: "${jobRoleInput}". Please use a valid designation from the approved list.`,
+          });
+        }
+      }
+
         // DUPLICATE CHECK
 
       const duplicateRows = await findDuplicateEmployees(query, data);
@@ -2133,7 +1964,8 @@ duplicateEmployees: duplicateEmployees
               pf_no,
               gtli,
               nth_salary,
-              remarks
+              remarks,
+              uploaded_at
 
             )
 
@@ -2142,7 +1974,7 @@ duplicateEmployees: duplicateEmployees
       ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
       ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
       ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-      ?, ?, ?
+      ?, ?, ?, ?, NOW()
 
       )
             `,
@@ -2157,7 +1989,7 @@ duplicateEmployees: duplicateEmployees
               data.father_name || "",
               data.function_name || "",
               data.job_role_actual_cmp_verify || "",
-              data.job_role || "",
+              canonicalJobRole || "",
               data.manpower_signoff_scope || "",
               data.scrum_job_role || "",
               data.cluster || "",
@@ -3570,6 +3402,20 @@ duplicateEmployees: duplicateEmployees
             return forbid(res);
           }
 
+          // VALIDATE JOB ROLE (only when provided, to match the previous
+          // optional-field behaviour of this endpoint)
+          let canonicalJobRole = null;
+          const jobRoleInput = String(data.job_role || "").trim();
+          if (jobRoleInput) {
+            canonicalJobRole = resolveDesignation(jobRoleInput);
+            if (!canonicalJobRole) {
+              return res.status(400).json({
+                success: false,
+                message: `Invalid Designation: "${jobRoleInput}". Please use a valid designation from the approved list.`,
+              });
+            }
+          }
+
         const duplicateRows = await findDuplicateEmployees(
           query,
           data,
@@ -3626,7 +3472,8 @@ duplicateEmployees: duplicateEmployees
               pf_no = ?,
               gtli = ?,
               nth_salary = ?,
-              remarks = ?
+              remarks = ?,
+              uploaded_at = NOW()
 
             WHERE id = ?
             `,
@@ -3641,7 +3488,7 @@ duplicateEmployees: duplicateEmployees
               data.father_name || "",
               data.function_name || "",
               data.job_role_actual_cmp_verify || "",
-              data.job_role || "",
+              canonicalJobRole || "",
               data.manpower_signoff_scope || "",
               data.scrum_job_role || "",
               data.cluster || "",
