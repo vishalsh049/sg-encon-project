@@ -75,27 +75,46 @@ function formatDateTime(value) {
   });
 }
 
-// 14 KPI cards per the approved spec. `metric` cards open the employee
+// Uploaded `status` values are free text, not a fixed enum — some read
+// literally "Deactivated". Display label only; the raw value is still what
+// gets sent to the backend for filtering/sorting, so behavior is unchanged.
+function displayStatus(value) {
+  if (!value) return value;
+  return /deactivat/i.test(String(value)) ? "Inactive" : value;
+}
+
+// KPI cards per the approved spec. `metric` cards open the employee
 // drilldown filtered by that pipeline bucket; `scrollTo` cards jump to the
 // matching summary table below (a "Total Circles" count isn't itself a
 // filterable employee subset — the Circle Wise Summary table is the real
 // breakdown); the two resource-dimension cards with no dedicated summary
 // table open the full (currently filtered) employee list instead.
+//
+// SAS Success / Confirm On Board / Pending / Rejected are computed on the
+// backend strictly from the uploaded `flow_description` value:
+//   SAS Success       -> flow_description = "SAS Success"
+//   Confirm On Board  -> flow_description = "Confirm on board"
+//   Pending           -> "Pending with CIDC" + "Pending with Level 1" + "Pending with Level 2"
+//   Rejected          -> "Rejected by CIDC" + "Rejected by Level 1" + "Rejected by Level 2"
+// See METRIC_CONDITIONS in backend/routes/scrumDashboard.js — the single
+// source of truth shared by this KPI row, every summary table below, and
+// the employee drilldown, so none of them can ever disagree.
 const kpiCardConfig = [
-  { key: "total", label: "Total Resources", icon: Users, tint: "from-blue-50 via-white to-blue-50/70 border-blue-100/80 text-blue-700", badge: "bg-blue-100/80 text-blue-700" },
- // { key: "active", label: "Active Resources", icon: UserCheck, tint: "from-emerald-50 via-white to-emerald-50/70 border-emerald-100/80 text-emerald-700", badge: "bg-emerald-100/80 text-emerald-700", metric: "active" },
- // { key: "deactivated", label: "Deactivated Resources", icon: UserX, tint: "from-rose-50 via-white to-rose-50/70 border-rose-100/80 text-rose-700", badge: "bg-rose-100/80 text-rose-700", metric: "deactivated" },
- // { key: "level1Approved", label: "Level 1 Approved", icon: ShieldCheck, tint: "from-sky-50 via-white to-sky-50/70 border-sky-100/80 text-sky-700", badge: "bg-sky-100/80 text-sky-700", metric: "level1Approved" },
- // { key: "level2Approved", label: "Level 2 Approved", icon: ShieldCheck, tint: "from-indigo-50 via-white to-indigo-50/70 border-indigo-100/80 text-indigo-700", badge: "bg-indigo-100/80 text-indigo-700", metric: "level2Approved" },
-  { key: "sasSuccess", label: "SAS Success", icon: CheckCircle2, tint: "from-teal-50 via-white to-teal-50/70 border-teal-100/80 text-teal-700", badge: "bg-teal-100/80 text-teal-700", metric: "sasSuccess" },
-  { key: "cobCompleted", label: "COB Completed", icon: ClipboardCheck, tint: "from-violet-50 via-white to-violet-50/70 border-violet-100/80 text-violet-700", badge: "bg-violet-100/80 text-violet-700", metric: "cobCompleted" },
-  { key: "pendingApproval", label: "Pending Approval", icon: Clock3, tint: "from-amber-50 via-white to-amber-50/70 border-amber-100/80 text-amber-700", badge: "bg-amber-100/80 text-amber-700", metric: "pendingApproval" },
- // { key: "totalCircles", label: "Total Circles", icon: Workflow, tint: "from-cyan-50 via-white to-cyan-50/70 border-cyan-100/80 text-cyan-700", badge: "bg-cyan-100/80 text-cyan-700", scrollTo: "circle" },
- // { key: "totalCmps", label: "Total CMPs", icon: Building2, tint: "from-blue-50 via-white to-blue-50/70 border-blue-100/80 text-blue-700", badge: "bg-blue-100/80 text-blue-700", scrollTo: "cmp" },
-  { key: "totalVendors", label: "Total Vendors", icon: BriefcaseBusiness, tint: "from-purple-50 via-white to-purple-50/70 border-purple-100/80 text-purple-700", badge: "bg-purple-100/80 text-purple-700", scrollTo: "vendor" },
- // { key: "totalJobRoles", label: "Total Job Roles", icon: UserCog, tint: "from-pink-50 via-white to-pink-50/70 border-pink-100/80 text-pink-700", badge: "bg-pink-100/80 text-pink-700", scrollTo: "jobRole" },
- // { key: "totalResourceTypes", label: "Total Resource Types", icon: Layers3, tint: "from-slate-50 via-white to-slate-50/70 border-slate-200/80 text-slate-700", badge: "bg-slate-100/80 text-slate-700" },
- // { key: "totalResourceCategories", label: "Total Resource Categories", icon: Tags, tint: "from-slate-50 via-white to-slate-50/70 border-slate-200/80 text-slate-700", badge: "bg-slate-100/80 text-slate-700" },
+  { key: "total", label: "Total Resources", icon: Users, tint: "from-blue-50 via-white to-blue-50/70 border-blue-100 dark:border-blue-500/20/80 text-blue-700 dark:text-blue-400", badge: "bg-blue-100 dark:bg-blue-500/15/80 text-blue-700 dark:text-blue-400" },
+ // { key: "active", label: "Active Resources", icon: UserCheck, tint: "from-emerald-50 via-white to-emerald-50/70 border-emerald-100 dark:border-emerald-500/20/80 text-emerald-700 dark:text-emerald-400", badge: "bg-emerald-100 dark:bg-emerald-500/15/80 text-emerald-700 dark:text-emerald-400", metric: "active" },
+ // { key: "deactivated", label: "Inactive Resources", icon: UserX, tint: "from-rose-50 via-white to-rose-50/70 border-rose-100 dark:border-rose-500/20/80 text-rose-700 dark:text-rose-400", badge: "bg-rose-100 dark:bg-rose-500/15/80 text-rose-700 dark:text-rose-400", metric: "deactivated" },
+ // { key: "level1Approved", label: "Level 1 Approved", icon: ShieldCheck, tint: "from-sky-50 via-white to-sky-50/70 border-sky-100 dark:border-sky-500/20/80 text-sky-700 dark:text-sky-400", badge: "bg-sky-100 dark:bg-sky-500/15/80 text-sky-700 dark:text-sky-400", metric: "level1Approved" },
+ // { key: "level2Approved", label: "Level 2 Approved", icon: ShieldCheck, tint: "from-indigo-50 via-white to-indigo-50/70 border-indigo-100 dark:border-indigo-500/20/80 text-indigo-700 dark:text-indigo-400", badge: "bg-indigo-100 dark:bg-indigo-500/15/80 text-indigo-700 dark:text-indigo-400", metric: "level2Approved" },
+  { key: "sasSuccess", label: "SAS Success", icon: CheckCircle2, tint: "from-teal-50 via-white to-teal-50/70 border-teal-100 dark:border-teal-500/20/80 text-teal-700 dark:text-teal-400", badge: "bg-teal-100 dark:bg-teal-500/15/80 text-teal-700 dark:text-teal-400", metric: "sasSuccess" },
+  { key: "cobCompleted", label: "Confirm On Board", icon: ClipboardCheck, tint: "from-violet-50 via-white to-violet-50/70 border-violet-100 dark:border-violet-500/20/80 text-violet-700 dark:text-violet-400", badge: "bg-violet-100 dark:bg-violet-500/15/80 text-violet-700 dark:text-violet-400", metric: "cobCompleted" },
+  { key: "pendingApproval", label: "Pending", icon: Clock3, tint: "from-amber-50 via-white to-amber-50/70 border-amber-100 dark:border-amber-500/20/80 text-amber-700 dark:text-amber-400", badge: "bg-amber-100 dark:bg-amber-500/15/80 text-amber-700 dark:text-amber-400", metric: "pendingApproval" },
+  { key: "rejected", label: "Rejected", icon: UserX, tint: "from-rose-50 via-white to-rose-50/70 border-rose-100 dark:border-rose-500/20/80 text-rose-700 dark:text-rose-400", badge: "bg-rose-100 dark:bg-rose-500/15/80 text-rose-700 dark:text-rose-400", metric: "rejected" },
+ // { key: "totalCircles", label: "Total Circles", icon: Workflow, tint: "from-cyan-50 via-white to-cyan-50/70 border-cyan-100 dark:border-cyan-500/20/80 text-cyan-700 dark:text-cyan-400", badge: "bg-cyan-100 dark:bg-cyan-500/15/80 text-cyan-700 dark:text-cyan-400", scrollTo: "circle" },
+ // { key: "totalCmps", label: "Total CMPs", icon: Building2, tint: "from-blue-50 via-white to-blue-50/70 border-blue-100 dark:border-blue-500/20/80 text-blue-700 dark:text-blue-400", badge: "bg-blue-100 dark:bg-blue-500/15/80 text-blue-700 dark:text-blue-400", scrollTo: "cmp" },
+  { key: "totalVendors", label: "Total Vendors", icon: BriefcaseBusiness, tint: "from-purple-50 via-white to-purple-50/70 border-purple-100 dark:border-purple-500/20/80 text-purple-700 dark:text-purple-400", badge: "bg-purple-100 dark:bg-purple-500/15/80 text-purple-700 dark:text-purple-400", scrollTo: "vendor" },
+ // { key: "totalJobRoles", label: "Total Job Roles", icon: UserCog, tint: "from-pink-50 via-white to-pink-50/70 border-pink-100 dark:border-pink-500/20/80 text-pink-700 dark:text-pink-400", badge: "bg-pink-100 dark:bg-pink-500/15/80 text-pink-700 dark:text-pink-400", scrollTo: "jobRole" },
+ // { key: "totalResourceTypes", label: "Total Resource Types", icon: Layers3, tint: "from-surface-muted via-white to-surface-muted/70 border-border-color/80 text-text-secondary", badge: "bg-surface-muted/80 text-text-secondary" },
+ // { key: "totalResourceCategories", label: "Total Resource Categories", icon: Tags, tint: "from-surface-muted via-white to-surface-muted/70 border-border-color/80 text-text-secondary", badge: "bg-surface-muted/80 text-text-secondary" },
 ];
 
 function KpiCard({ card, value, onClick }) {
@@ -112,7 +131,7 @@ function KpiCard({ card, value, onClick }) {
           <Icon className="h-3.5 w-3.5" />
         </span>
       </div>
-      <p className="mt-1 text-xl font-bold text-slate-900">{value ?? "—"}</p>
+      <p className="mt-1 text-xl font-bold text-text-primary">{value ?? "—"}</p>
     </button>
   );
 }
@@ -341,12 +360,13 @@ export default function ScrumDashboard() {
     { key: "circle", label: "Circle" },
     { key: "total", label: "Total Resources" },
     { key: "active", label: "Active" },
-    { key: "deactivated", label: "Deactivated" },
-    { key: "level1Approved", label: "Level 1 Approved" },
-    { key: "level2Approved", label: "Level 2 Approved" },
+    { key: "deactivated", label: "Inactive" },
+    { key: "pprjComplete", label: "PPRJ Complete" },
+    { key: "pprjPending", label: "PPRJ Pending" },
     { key: "sasSuccess", label: "SAS Success" },
-    { key: "cobCompleted", label: "COB Completed" },
+    { key: "cobCompleted", label: "Confirm On Board" },
     { key: "pending", label: "Pending" },
+    { key: "rejected", label: "Rejected" },
   ];
 
   const cmpSummaryColumns = [
@@ -354,28 +374,28 @@ export default function ScrumDashboard() {
     { key: "circle", label: "Circle" },
     { key: "total", label: "Total Resources" },
     { key: "active", label: "Active" },
-    { key: "deactivated", label: "Deactivated" },
-    { key: "pending", label: "Pending" },
+    { key: "deactivated", label: "Inactive" },
+   { key: "pprjComplete", label: "PPRJ Complete" }
   ];
 
   const vendorSummaryColumns = [
     { key: "vendor", label: "Vendor" },
     { key: "total", label: "Total Resources" },
     { key: "active", label: "Active" },
-    { key: "deactivated", label: "Deactivated" },
-    { key: "pending", label: "Pending" },
+    { key: "deactivated", label: "Inactive" },
+    { key: "pprjComplete", label: "PPRJ Complete" }
   ];
 
   const jobRoleSummaryColumns = [
     { key: "jobRole", label: "Job Role" },
     { key: "total", label: "Total Resources" },
     { key: "active", label: "Active" },
-    { key: "deactivated", label: "Deactivated" },
-    { key: "pending", label: "Pending" },
+    { key: "deactivated", label: "Inactive" },
+    { key: "pprjComplete", label: "PPRJ Complete" }
   ];
 
   const statusSummaryColumns = [
-    { key: "status", label: "Status" },
+    { key: "status", label: "Status", format: displayStatus },
     { key: "total", label: "Total Resources" },
   ];
 
@@ -402,7 +422,7 @@ export default function ScrumDashboard() {
               });
             }}
             title="View employees in this upload"
-            className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:border-indigo-300 hover:bg-indigo-50 hover:text-indigo-700"
+            className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-border-color text-text-muted hover:border-indigo-300 hover:dark:border-indigo-500/30 hover:bg-indigo-50 hover:dark:bg-indigo-500/10 hover:text-indigo-700 hover:dark:text-indigo-400"
           >
             <Eye className="h-3.5 w-3.5" />
           </button>
@@ -414,7 +434,7 @@ export default function ScrumDashboard() {
             }}
             disabled={downloadingFile === row.fileName}
             title="Download file"
-            className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:border-cyan-300 hover:bg-cyan-50 hover:text-cyan-700 disabled:opacity-50"
+            className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-border-color text-text-muted hover:border-cyan-300 hover:dark:border-cyan-500/30 hover:bg-cyan-50 hover:dark:bg-cyan-500/10 hover:text-cyan-700 hover:dark:text-cyan-400 disabled:opacity-50"
           >
             <Download className="h-3.5 w-3.5" />
           </button>
@@ -430,7 +450,7 @@ export default function ScrumDashboard() {
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(255,255,255,0.22),_transparent_28%),radial-gradient(circle_at_bottom_right,_rgba(255,255,255,0.14),_transparent_24%)]" />
           <div className="relative flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div className="flex items-start gap-4">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[18px] border border-white/20 bg-white/14 shadow-[inset_0_1px_0_rgba(255,255,255,0.2)] backdrop-blur-xl">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[18px] border border-white/20 bg-surface/14 shadow-[inset_0_1px_0_rgba(255,255,255,0.2)] backdrop-blur-xl">
                 <Layers3 className="h-4 w-4" />
               </div>
               <div>
@@ -448,26 +468,25 @@ export default function ScrumDashboard() {
                 type="button"
                 onClick={() => fetchAll()}
                 disabled={loading}
-                className="inline-flex items-center gap-2 rounded-[14px] border border-white/20 bg-white/20 px-4 py-2 text-sm font-semibold text-white backdrop-blur-sm transition hover:bg-white/30 disabled:cursor-not-allowed disabled:opacity-70"
+                className="inline-flex items-center gap-2 rounded-[14px] border border-white/20 bg-surface/20 px-4 py-2 text-sm font-semibold text-white backdrop-blur-sm transition hover:bg-surface/30 disabled:cursor-not-allowed disabled:opacity-70"
               >
                 <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-                Refresh
+                Refresh Page
               </button>
-              <span className="text-[11px] font-medium text-white/85">{lastRefreshedLabel}</span>
             </div>
           </div>
         </div>
 
-        <div className="rounded-[12px] border border-slate-200/70 bg-white/90 p-1 mt-1 backdrop-blur-xl">
-          <div className="grid grid-cols-2 gap-2 md:grid-cols-4 xl:grid-cols-8">
+        <div className="rounded-[12px] border border-border-color/70 bg-surface/90 p-1 mt-1 backdrop-blur-xl">
+          <div className="grid grid-cols-2 gap-2 md:grid-cols-7 xl:grid-cols-8">
             <div className="relative xl:col-span-2">
-              <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted" />
               <input
                 type="text"
                 placeholder="Search name, SAP ID, mobile, email..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="h-9 w-full rounded-[12px] border border-slate-200 bg-[linear-gradient(180deg,_#ffffff_0%,_#f8fafc_100%)] pl-11 pr-4 text-[13px] text-slate-700 outline-none transition focus:border-indigo-300 focus:ring-4 focus:ring-indigo-50"
+                className="h-9 w-full rounded-[12px] border border-border-color bg-[linear-gradient(180deg,_#ffffff_0%,_#f8fafc_100%)] pl-11 pr-4 text-[13px] text-text-secondary outline-none transition focus:border-indigo-300 focus:dark:border-indigo-500/30 focus:ring-4 focus:ring-indigo-50"
               />
             </div>
 
@@ -478,7 +497,7 @@ export default function ScrumDashboard() {
                 setCmp("");
               }}
               disabled={!isAllCircleUser}
-              className="h-9 w-full rounded-[12px] border border-slate-200 bg-[linear-gradient(180deg,_#ffffff_0%,_#f8fafc_100%)] px-3 text-[13px] text-slate-700 outline-none transition focus:border-indigo-300 focus:ring-4 focus:ring-indigo-50 disabled:cursor-not-allowed disabled:opacity-70"
+              className="h-9 w-full rounded-[12px] border border-border-color bg-[linear-gradient(180deg,_#ffffff_0%,_#f8fafc_100%)] px-3 text-[13px] text-text-secondary outline-none transition focus:border-indigo-300 focus:dark:border-indigo-500/30 focus:ring-4 focus:ring-indigo-50 disabled:cursor-not-allowed disabled:opacity-70"
             >
               {isAllCircleUser && <option value="">All Circles</option>}
               {allowedCircleLabels.map((label) => (
@@ -491,7 +510,7 @@ export default function ScrumDashboard() {
             <select
               value={cmp}
               onChange={(e) => setCmp(e.target.value)}
-              className="h-9 w-full rounded-[12px] border border-slate-200 bg-[linear-gradient(180deg,_#ffffff_0%,_#f8fafc_100%)] px-3 text-[13px] text-slate-700 outline-none transition focus:border-indigo-300 focus:ring-4 focus:ring-indigo-50"
+              className="h-9 w-full rounded-[12px] border border-border-color bg-[linear-gradient(180deg,_#ffffff_0%,_#f8fafc_100%)] px-3 text-[13px] text-text-secondary outline-none transition focus:border-indigo-300 focus:dark:border-indigo-500/30 focus:ring-4 focus:ring-indigo-50"
             >
               <option value="">All CMPs</option>
               {filteredCmpOptions.map((cmpName) => (
@@ -504,7 +523,7 @@ export default function ScrumDashboard() {
             <select
               value={vendor}
               onChange={(e) => setVendor(e.target.value)}
-              className="h-9 w-full rounded-[12px] border border-slate-200 bg-[linear-gradient(180deg,_#ffffff_0%,_#f8fafc_100%)] px-3 text-[13px] text-slate-700 outline-none transition focus:border-indigo-300 focus:ring-4 focus:ring-indigo-50"
+              className="h-9 w-full rounded-[12px] border border-border-color bg-[linear-gradient(180deg,_#ffffff_0%,_#f8fafc_100%)] px-3 text-[13px] text-text-secondary outline-none transition focus:border-indigo-300 focus:dark:border-indigo-500/30 focus:ring-4 focus:ring-indigo-50"
             >
               <option value="">All Vendors</option>
               {(filterOptions.vendors || []).map((v) => (
@@ -517,7 +536,7 @@ export default function ScrumDashboard() {
             <select
               value={jobRole}
               onChange={(e) => setJobRole(e.target.value)}
-              className="h-9 w-full rounded-[12px] border border-slate-200 bg-[linear-gradient(180deg,_#ffffff_0%,_#f8fafc_100%)] px-3 text-[13px] text-slate-700 outline-none transition focus:border-indigo-300 focus:ring-4 focus:ring-indigo-50"
+              className="h-9 w-full rounded-[12px] border border-border-color bg-[linear-gradient(180deg,_#ffffff_0%,_#f8fafc_100%)] px-3 text-[13px] text-text-secondary outline-none transition focus:border-indigo-300 focus:dark:border-indigo-500/30 focus:ring-4 focus:ring-indigo-50"
             >
               <option value="">All Job Roles</option>
               {(filterOptions.jobRoles || []).map((r) => (
@@ -530,12 +549,12 @@ export default function ScrumDashboard() {
             <select
               value={status}
               onChange={(e) => setStatus(e.target.value)}
-              className="h-9 w-full rounded-[12px] border border-slate-200 bg-[linear-gradient(180deg,_#ffffff_0%,_#f8fafc_100%)] px-3 text-[13px] text-slate-700 outline-none transition focus:border-indigo-300 focus:ring-4 focus:ring-indigo-50"
+              className="h-9 w-full rounded-[12px] border border-border-color bg-[linear-gradient(180deg,_#ffffff_0%,_#f8fafc_100%)] px-3 text-[13px] text-text-secondary outline-none transition focus:border-indigo-300 focus:dark:border-indigo-500/30 focus:ring-4 focus:ring-indigo-50"
             >
               <option value="">All Status</option>
               {(filterOptions.statuses || []).map((s) => (
                 <option key={s} value={s}>
-                  {s}
+                  {displayStatus(s)}
                 </option>
               ))}
             </select>
@@ -550,8 +569,8 @@ export default function ScrumDashboard() {
             </button>
           </div>
 
-          <div className="mt-2 grid grid-cols-1 gap-2 border-t border-slate-100 pt-2 sm:grid-cols-2 xl:grid-cols-4">
-            <div className="flex items-center gap-2 text-xs font-semibold text-slate-500">
+          <div className="mt-2 grid grid-cols-1 gap-2 border-t border-border-color pt-2 sm:grid-cols-3 xl:grid-cols-3">
+            <div className="flex items-center gap-2 text-xs font-semibold text-text-muted">
               <CalendarRange className="h-3.5 w-3.5" />
               Date Range (Profile Upload)
             </div>
@@ -560,7 +579,7 @@ export default function ScrumDashboard() {
           </div>
         </div>
 
-        <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-7">
+        <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6 xl:grid-cols-6">
           {kpiCardConfig.map((card) => (
             <KpiCard
               key={card.key}
@@ -640,7 +659,9 @@ export default function ScrumDashboard() {
               rows={statusSummary}
               loading={loading}
               defaultSortKey="total"
-              onRowClick={(row) => openDrilldown({ title: `${row.status} — Scrum Employees`, status: row.status })}
+              onRowClick={(row) =>
+                openDrilldown({ title: `${displayStatus(row.status)} — Scrum Employees`, status: row.status })
+              }
               onRefresh={() => fetchAll()}
               fileBase="Scrum_Status_Summary"
             />
@@ -661,23 +682,25 @@ export default function ScrumDashboard() {
         </div>
 
         <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-3">
-          <div className="rounded-[14px] border border-slate-200/70 bg-[linear-gradient(180deg,_#ffffff_0%,_#f8fafc_100%)] px-4 py-2">
-            <p className="text-sm font-semibold text-blue-600">How to Read</p>
-            <p className="mt-1 text-sm leading-6 text-slate-600">
-              Pending Approval = Active resources awaiting Level 1 sign-off. Deactivated combines any resource with a
-              deactivation date or a status marked deactivated.
+          <div className="rounded-[14px] border border-border-color/70 bg-[linear-gradient(180deg,_#ffffff_0%,_#f8fafc_100%)] px-4 py-2">
+            <p className="text-sm font-semibold text-blue-600 dark:text-blue-400">How to Read</p>
+            <p className="mt-1 text-sm leading-6 text-text-secondary">
+              SAS Success, Confirm On Board, Pending and Rejected are read directly from each resource's uploaded
+              Flow Description. Inactive combines any resource with a deactivation date or a status indicating the
+              resource is no longer active.
             </p>
           </div>
-          <div className="rounded-[14px] border border-slate-200/70 bg-[linear-gradient(180deg,_#ffffff_0%,_#f8fafc_100%)] px-4 py-2">
-            <p className="text-sm font-semibold text-violet-700">Approval Pipeline</p>
-            <p className="mt-1 text-sm leading-6 text-slate-600">
-              Level 1 → Level 2 → SAS Success → COB Completed reflects the order resources move through after profile
-              upload, driven entirely by the dated columns on each record.
+          <div className="rounded-[14px] border border-border-color/70 bg-[linear-gradient(180deg,_#ffffff_0%,_#f8fafc_100%)] px-4 py-2">
+            <p className="text-sm font-semibold text-violet-700 dark:text-violet-400">Approval Pipeline</p>
+            <p className="mt-1 text-sm leading-6 text-text-secondary">
+              Pending = "Pending with CIDC" + "Pending with Level 1" + "Pending with Level 2". Rejected = "Rejected by
+              CIDC" + "Rejected by Level 1" + "Rejected by Level 2". SAS Success and Confirm On Board are their own
+              exact Flow Description values.
             </p>
           </div>
-          <div className="rounded-[14px] border border-slate-200/70 bg-[linear-gradient(180deg,_#ffffff_0%,_#f8fafc_100%)] px-4 py-2">
-            <p className="text-sm font-semibold text-emerald-700">Always Latest Upload</p>
-            <p className="mt-1 text-sm leading-6 text-slate-600">
+          <div className="rounded-[14px] border border-border-color/70 bg-[linear-gradient(180deg,_#ffffff_0%,_#f8fafc_100%)] px-4 py-2">
+            <p className="text-sm font-semibold text-emerald-700 dark:text-emerald-400">Always Latest Upload</p>
+            <p className="mt-1 text-sm leading-6 text-text-secondary">
               Every number here reflects the most recently uploaded Scrum batch for your circle scope — upload a new
               file on the Scrum page and this dashboard updates automatically.
             </p>

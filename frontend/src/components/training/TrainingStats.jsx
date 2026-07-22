@@ -19,10 +19,10 @@ const CARDS = [
 
 function SkeletonCard() {
   return (
-    <div className="animate-pulse rounded-[18px] border border-slate-100 bg-white/85 px-4 py-4">
-      <div className="h-9 w-9 rounded-2xl bg-slate-100" />
-      <div className="mt-3 h-3 w-20 rounded bg-slate-100" />
-      <div className="mt-2 h-5 w-10 rounded bg-slate-100" />
+    <div className="animate-pulse rounded-[18px] border border-border-color bg-surface/85 px-4 py-4">
+      <div className="h-9 w-9 rounded-2xl bg-surface-muted" />
+      <div className="mt-3 h-3 w-20 rounded bg-surface-muted" />
+      <div className="mt-2 h-5 w-10 rounded bg-surface-muted" />
     </div>
   );
 }
@@ -52,7 +52,7 @@ export default function TrainingStats({ stats, loading }) {
           <motion.div
             key={card.key}
             whileHover={{ y: -3 }}
-            className="group relative overflow-hidden rounded-[18px] border border-white/70 bg-white/85 px-4 py-3 shadow-sm backdrop-blur-2xl"
+            className="group relative overflow-hidden rounded-[18px] border border-white/70 bg-surface/85 px-4 py-3 shadow-sm backdrop-blur-2xl"
           >
             <div
               className={`absolute inset-x-5 top-0 h-14 rounded-b-[32px] bg-gradient-to-br ${card.accent} opacity-20 blur-2xl transition duration-500 group-hover:opacity-30`}
@@ -63,8 +63,8 @@ export default function TrainingStats({ stats, loading }) {
               >
                 <Icon className="h-4 w-4" />
               </div>
-              <p className="mt-2.5 text-xs font-medium text-slate-500">{card.label}</p>
-              <p className="mt-0.5 text-xl font-semibold tracking-tight text-slate-900">
+              <p className="mt-2.5 text-xs font-medium text-text-muted">{card.label}</p>
+              <p className="mt-0.5 text-xl font-semibold tracking-tight text-text-primary">
                 {value}
               </p>
             </div>

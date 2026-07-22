@@ -27,7 +27,7 @@ export function ChartTooltip({ active, payload, label, chartData = [] }) {
               <span className="flex items-center gap-1 font-semibold text-text-primary">
                 {Number.isFinite(current) ? `${current.toFixed(2)}%` : "—"}
                 {diff != null && (
-                  <span className={trendUp ? "text-emerald-600" : trendDown ? "text-rose-600" : "text-text-muted"}>
+                  <span className={trendUp ? "text-emerald-600 dark:text-emerald-400" : trendDown ? "text-rose-600 dark:text-rose-400" : "text-text-muted"}>
                     {trendUp ? "▲" : trendDown ? "▼" : "–"}{Math.abs(diff).toFixed(2)}
                   </span>
                 )}

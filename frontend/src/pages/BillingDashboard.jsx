@@ -434,11 +434,11 @@ const dynamicBarSize =
       {/* TITLE */}
       <div>
 
-        <h1 className="text-[24px] font-semibold tracking-[-0.05em] text-slate-900">
+        <h1 className="text-[24px] font-semibold tracking-[-0.05em] text-text-primary">
           Billing Analytics
         </h1>
 
-        <div className="mt-1 text-sm text-slate-500 tracking-[0.01em]">
+        <div className="mt-1 text-sm text-text-muted tracking-[0.01em]">
           Real-time operational insights for revenue, PM loss, and penalty performance.
         </div>
 
@@ -456,14 +456,14 @@ const dynamicBarSize =
 
   <CalendarDays
     size={14}
-    className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+    className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted"
   />
 
   <select
     value={timeFilter}
     onChange={(e) => setTimeFilter(e.target.value)}
-    className="h-10 pl-9 pr-10 text-sm rounded-xl border border-slate-200 bg-white
-    text-slate-700 outline-none transition focus:border-indigo-400
+    className="h-10 pl-9 pr-10 text-sm rounded-xl border border-border-color bg-surface
+    text-text-secondary outline-none transition focus:border-indigo-400
     shadow-sm appearance-none"
   >
     <option value="3">Last 3 Months</option>
@@ -474,7 +474,7 @@ const dynamicBarSize =
   {/* CUSTOM DROPDOWN ICON */}
   <ChevronDown
     size={16}
-    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
+    className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none"
   />
 
 </div>
@@ -485,8 +485,8 @@ const dynamicBarSize =
   <select
     value={circleFilter}
     onChange={(e) => setCircleFilter(e.target.value)}
-    className="h-10 pl-4 pr-10 text-sm rounded-xl border border-slate-200 bg-white
-    text-slate-700 outline-none transition focus:border-indigo-400 shadow-sm appearance-none"
+    className="h-10 pl-4 pr-10 text-sm rounded-xl border border-border-color bg-surface
+    text-text-secondary outline-none transition focus:border-indigo-400 shadow-sm appearance-none"
   >
     <option value="">All Circles</option>
 
@@ -500,7 +500,7 @@ const dynamicBarSize =
   {/* CUSTOM DROPDOWN ICON */}
   <ChevronDown
     size={16}
-    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
+    className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none"
   />
 
 </div>
@@ -511,8 +511,8 @@ const dynamicBarSize =
   <select
     value={billingFilter}
     onChange={(e) => setBillingFilter(e.target.value)}
-    className="h-10 pl-4 pr-4 text-sm rounded-xl border border-slate-200 bg-white
-    text-slate-700 outline-none transition focus:border-indigo-400 shadow-sm appearance-none"
+    className="h-10 pl-4 pr-4 text-sm rounded-xl border border-border-color bg-surface
+    text-text-secondary outline-none transition focus:border-indigo-400 shadow-sm appearance-none"
   >
     <option value="">All Types</option>
 
@@ -525,7 +525,7 @@ const dynamicBarSize =
 
   <ChevronDown
     size={16}
-    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
+    className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none"
   />
 
 </div>
@@ -537,7 +537,7 @@ const dynamicBarSize =
             setCircleFilter("");
             setBillingFilter("");
           }}
-          className="h-10 px-4 rounded-xl border border-indigo-100 bg-indigo-50 text-indigo-700 text-sm font-medium transition hover:bg-indigo-100 flex items-center gap-2"
+          className="h-10 px-4 rounded-xl border border-indigo-100 dark:border-indigo-500/20 bg-indigo-50 dark:bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 text-sm font-medium transition hover:bg-indigo-100 hover:dark:bg-indigo-500/15 flex items-center gap-2"
         >
           <RefreshCcw size={14} />
           Reset
@@ -550,7 +550,7 @@ const dynamicBarSize =
   </div>
 
 </div>
-        <div className="rounded-[18px] bg-gray-100 border border-border-color/60 bg-white/40 
+        <div className="rounded-[18px] bg-surface-muted border border-border-color/60 bg-surface/40 
         backdrop-blur-xl shadow-panel p-4 overflow-hidden">
          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
 
@@ -562,32 +562,32 @@ const dynamicBarSize =
   {/* Header */}
   <div className="flex items-start justify-between">
     <div>
-      <div className="text-[11px] tracking-[0.35em] font-bold text-emerald-700 uppercase">
+      <div className="text-[11px] tracking-[0.35em] font-bold text-emerald-700 dark:text-emerald-400 uppercase">
         Revenue
       </div>
 
-      <div className="mt-2 text-sm tracking-[0.14em] text-slate-500">
+      <div className="mt-2 text-sm tracking-[0.14em] text-text-muted">
         Total Revenue
       </div>
 
-      <div className="mt-1 text-[22px] font-semibold tracking-[-0.05em] text-emerald-700">
+      <div className="mt-1 text-[22px] font-semibold tracking-[-0.05em] text-emerald-700 dark:text-emerald-400">
         ₹ {(Number(revenueKpi.totalRevenue || 0) / 10000000).toFixed(2)} Cr
       </div>
 
-      <div className="mt-2 text-emerald-600 text-xs">
+      <div className="mt-2 text-emerald-600 dark:text-emerald-400 text-xs">
         Synced from revenue KPI API
       </div>
     </div>
 
-    <div className="h-8 w-8 rounded-full border border-emerald-200 bg-emerald-50 flex items-center justify-center text-emerald-700">
+    <div className="h-8 w-8 rounded-full border border-emerald-200 dark:border-emerald-500/20 bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-center text-emerald-700 dark:text-emerald-400">
       <IndianRupee size={14} />
     </div>
   </div>
 
   {/* Trend */}
-  <div className="mt-4 rounded-2xl border border-slate-100 backdrop-blur-xl p-4">
+  <div className="mt-4 rounded-2xl border border-border-color backdrop-blur-xl p-4">
     <div className="flex items-center justify-between mb-4">
-      <div className="text-[10px] tracking-[0.28em] font-semibold uppercase text-emerald-700">
+      <div className="text-[10px] tracking-[0.28em] font-semibold uppercase text-emerald-700 dark:text-emerald-400">
         Revenue Trend
       </div>
 
@@ -665,82 +665,82 @@ data={revenueMonthlyTrend}
   </div>
 
  {/*  REVENUE Breakdown*/}
-<div className="mt-4 rounded-2xl border border-emerald-100 bg-emerald-50/20 backdrop-blur-xl p-4">
+<div className="mt-4 rounded-2xl border border-emerald-100 dark:border-emerald-500/20 bg-emerald-50 dark:bg-emerald-500/10/20 backdrop-blur-xl p-4">
 
   {/* Header */}
   <div className="flex items-center justify-between mb-4">
    <div className="flex items-start gap-3">
   
-  <div className="h-9 w-9 rounded-xl bg-emerald-100 flex items-center justify-center text-emerald-700">
+  <div className="h-9 w-9 rounded-xl bg-emerald-100 dark:bg-emerald-500/15 flex items-center justify-center text-emerald-700 dark:text-emerald-400">
     <IndianRupee size={14} />
   </div>
 
   <div>
-    <div className="text-[12px] font-semibold tracking-[0.26em] uppercase text-emerald-700">
+    <div className="text-[12px] font-semibold tracking-[0.26em] uppercase text-emerald-700 dark:text-emerald-400">
       Revenue Breakdown
     </div>
 
-    <div className="text-[12px] tracking-[0.10em] text-slate-400 mt-1">
+    <div className="text-[12px] tracking-[0.10em] text-text-muted mt-1">
       Domain-wise revenue distribution
     </div>
   </div>
 
 </div>
 
-    <div className="text-[10px] px-2 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100">
+    <div className="text-[10px] px-2 py-1 rounded-full bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-500/20">
       LIVE
     </div>
   </div>
 
  {/* PREMIUM GRID */}
-<div className="overflow-hidden rounded-lg border border-slate-100">
+<div className="overflow-hidden rounded-lg border border-border-color">
 
   {/* HEADER */}
-  <div className="grid grid-cols-3 bg-slate-50 border-b border-slate-100">
+  <div className="grid grid-cols-3 bg-surface-muted border-b border-border-color">
 
-    <div className="px-3 py-2 text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500">
+    <div className="px-3 py-2 text-[11px] font-bold uppercase tracking-[0.14em] text-text-muted">
       Domain
     </div>
 
-    <div className="px-3 py-2 text-[11px] font-bold uppercase tracking-[0.14em] text-emerald-700 border-l border-slate-100">
+    <div className="px-3 py-2 text-[11px] font-bold uppercase tracking-[0.14em] text-emerald-700 dark:text-emerald-400 border-l border-border-color">
       CM Revenue
     </div>
 
-    <div className="px-3 py-2 text-[11px] font-bold uppercase tracking-[0.14em] text-violet-700 border-l border-slate-100">
+    <div className="px-3 py-2 text-[11px] font-bold uppercase tracking-[0.14em] text-violet-700 dark:text-violet-400 border-l border-border-color">
       PM Revenue
     </div>
 
   </div>
 
   {/* FTTX */}
-  <div className="grid grid-cols-3 border-b border-slate-100">
+  <div className="grid grid-cols-3 border-b border-border-color">
 
-    <div className="p-3 text-xs font-semibold text-slate-700">
+    <div className="p-3 text-xs font-semibold text-text-secondary">
       FTTx
     </div>
 
-    <div className="p-3 text-xs font-semibold text-emerald-700 border-l border-slate-100">
+    <div className="p-3 text-xs font-semibold text-emerald-700 dark:text-emerald-400 border-l border-border-color">
       ₹ {(Number(summary?.fttx_cm || 0) / 10000000).toFixed(2)} Cr
     </div>
 
-    <div className="p-3 text-xs font-semibold text-violet-700 border-l border-slate-100">
+    <div className="p-3 text-xs font-semibold text-violet-700 dark:text-violet-400 border-l border-border-color">
       ₹ {(Number(summary?.fttx_pm || 0) / 10000000).toFixed(2)} Cr
     </div>
 
   </div>
 
   {/* FIBER */}
-  <div className="grid grid-cols-3 border-b border-slate-100">
+  <div className="grid grid-cols-3 border-b border-border-color">
 
-    <div className="p-3 text-xs font-semibold text-slate-700">
+    <div className="p-3 text-xs font-semibold text-text-secondary">
       Fiber
     </div>
 
-    <div className="p-3 text-xs font-semibold text-emerald-700 border-l border-slate-100">
+    <div className="p-3 text-xs font-semibold text-emerald-700 dark:text-emerald-400 border-l border-border-color">
       ₹ {(Number(summary?.fiber_cm || 0) / 10000000).toFixed(2)} Cr
     </div>
 
-    <div className="p-3 text-xs font-semibold text-violet-700 border-l border-slate-100">
+    <div className="p-3 text-xs font-semibold text-violet-700 dark:text-violet-400 border-l border-border-color">
       ₹ {(Number(summary?.fiber_pm || 0) / 10000000).toFixed(2)} Cr
     </div>
 
@@ -749,15 +749,15 @@ data={revenueMonthlyTrend}
   {/* TOWER */}
   <div className="grid grid-cols-3">
 
-    <div className="p-3 text-xs font-semibold text-slate-700">
+    <div className="p-3 text-xs font-semibold text-text-secondary">
       Tower
     </div>
 
-    <div className="p-3 text-xs font-semibold text-emerald-700 border-l border-slate-100">
+    <div className="p-3 text-xs font-semibold text-emerald-700 dark:text-emerald-400 border-l border-border-color">
       ₹ {(Number(summary?.tower_cm || 0) / 10000000).toFixed(2)} Cr
     </div>
 
-    <div className="p-3 text-xs font-semibold text-violet-700 border-l border-slate-100">
+    <div className="p-3 text-xs font-semibold text-violet-700 dark:text-violet-400 border-l border-border-color">
       ₹ {(Number(summary?.tower_pm || 0) / 10000000).toFixed(2)} Cr
     </div>
 
@@ -776,32 +776,32 @@ data={revenueMonthlyTrend}
   {/* Header */}
   <div className="flex items-start justify-between">
     <div>
-      <div className="text-[11px] tracking-[0.35em] font-bold text-indigo-700 uppercase">
+      <div className="text-[11px] tracking-[0.35em] font-bold text-indigo-700 dark:text-indigo-400 uppercase">
         PM Loss
       </div>
 
-      <div className="mt-2 text-sm tracking-[0.14em] text-slate-500">
+      <div className="mt-2 text-sm tracking-[0.14em] text-text-muted">
         Total PM Loss
       </div>
 
-      <div className="mt-1 text-[22px] font-semibold tracking-[-0.05em] text-indigo-700">
+      <div className="mt-1 text-[22px] font-semibold tracking-[-0.05em] text-indigo-700 dark:text-indigo-400">
         ₹ {(Number(summary?.pm_loss || 0) / 10000000).toFixed(2)} Cr
       </div>
 
-      <div className="mt-1 text-indigo-600 text-xs">
+      <div className="mt-1 text-indigo-600 dark:text-indigo-400 text-xs">
         Loss due to PM deductions
       </div>
     </div>
 
-    <div className="h-8 w-8 rounded-full border border-indigo-200 bg-indigo-50 flex items-center justify-center text-indigo-700">
+    <div className="h-8 w-8 rounded-full border border-indigo-200 dark:border-indigo-500/20 bg-indigo-50 dark:bg-indigo-500/10 flex items-center justify-center text-indigo-700 dark:text-indigo-400">
       <TrendingDown size={14} />
     </div>
   </div>
 
   {/* Trend */}
-  <div className="mt-4 rounded-2xl border border-slate-100 p-4">
+  <div className="mt-4 rounded-2xl border border-border-color p-4">
     <div className="flex items-center justify-between mb-4">
-      <div className="text-[11px] tracking-[0.28em] font-semibold uppercase text-indigo-700">
+      <div className="text-[11px] tracking-[0.28em] font-semibold uppercase text-indigo-700 dark:text-indigo-400">
         PM Loss Trend
       </div>
 
@@ -876,69 +876,69 @@ data={revenueMonthlyTrend}
   </div>
 
   {/* PM LOSS BREAKDOWN */}
-<div className="mt-4 rounded-2xl border border-indigo-100 bg-indigo-50/20 backdrop-blur-xl p-4">
+<div className="mt-4 rounded-2xl border border-indigo-100 dark:border-indigo-500/20 bg-indigo-50 dark:bg-indigo-500/10/20 backdrop-blur-xl p-4">
 
   {/* Header */}
   <div className="flex items-center justify-between mb-4">
     <div className="flex items-start gap-3">
 
-  <div className="h-9 w-9 rounded-xl bg-indigo-100 flex items-center justify-center text-indigo-700">
+  <div className="h-9 w-9 rounded-xl bg-indigo-100 dark:bg-indigo-500/15 flex items-center justify-center text-indigo-700 dark:text-indigo-400">
     <ChartColumn size={14} />
   </div>
 
   <div>
-    <div className="text-[12px] font-semibold tracking-[0.26em] uppercase text-indigo-700">
+    <div className="text-[12px] font-semibold tracking-[0.26em] uppercase text-indigo-700 dark:text-indigo-400">
       PM Loss Breakdown
     </div>
 
-    <div className="text-[12px] tracking-[0.10em]  text-slate-400 mt-1">
+    <div className="text-[12px] tracking-[0.10em]  text-text-muted mt-1">
       Domain-wise PM loss analysis
     </div>
   </div>
 
 </div>
 
-    <div className="text-[10px] px-2 py-1 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-100">
+    <div className="text-[10px] px-2 py-1 rounded-full bg-indigo-50 dark:bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-500/20">
       LIVE
     </div>
   </div>
 
-  <div className="overflow-hidden rounded-lg border border-slate-100">
+  <div className="overflow-hidden rounded-lg border border-border-color">
 
     {/* HEADER */}
-    <div className="grid grid-cols-2 bg-slate-50 border-b border-slate-100">
+    <div className="grid grid-cols-2 bg-surface-muted border-b border-border-color">
 
-      <div className="px-3 py-2 text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500">
+      <div className="px-3 py-2 text-[11px] font-bold uppercase tracking-[0.14em] text-text-muted">
         Domain
       </div>
 
-      <div className="px-3 py-2 text-[11px] font-bold uppercase tracking-[0.14em] text-indigo-700 border-l border-slate-100">
+      <div className="px-3 py-2 text-[11px] font-bold uppercase tracking-[0.14em] text-indigo-700 dark:text-indigo-400 border-l border-border-color">
         PM Loss
       </div>
 
     </div>
 
     {/* FTTX */}
-    <div className="grid grid-cols-2 border-b border-slate-100">
+    <div className="grid grid-cols-2 border-b border-border-color">
 
-      <div className="p-3 text-xs font-semibold text-slate-700">
+      <div className="p-3 text-xs font-semibold text-text-secondary">
         FTTx
       </div>
 
-      <div className="p-3 text-xs font-semibold text-indigo-700 border-l border-slate-100">
+      <div className="p-3 text-xs font-semibold text-indigo-700 dark:text-indigo-400 border-l border-border-color">
         ₹ {(Number(summary?.fttx_loss || 0) / 10000000).toFixed(2)} Cr
       </div>
 
     </div>
 
     {/* FIBER */}
-    <div className="grid grid-cols-2 border-b border-slate-100">
+    <div className="grid grid-cols-2 border-b border-border-color">
 
-      <div className="p-3 text-xs font-semibold text-slate-700">
+      <div className="p-3 text-xs font-semibold text-text-secondary">
         Fiber
       </div>
 
-      <div className="p-3 text-xs font-semibold text-indigo-700 border-l border-slate-100">
+      <div className="p-3 text-xs font-semibold text-indigo-700 dark:text-indigo-400 border-l border-border-color">
         ₹ {(Number(summary?.fiber_loss || 0) / 10000000).toFixed(2)} Cr
       </div>
 
@@ -947,11 +947,11 @@ data={revenueMonthlyTrend}
     {/* TOWER */}
     <div className="grid grid-cols-2">
 
-      <div className="p-3 text-xs font-semibold text-slate-700">
+      <div className="p-3 text-xs font-semibold text-text-secondary">
         Tower
       </div>
 
-      <div className="p-3 text-xs font-semibold text-indigo-700 border-l border-slate-100">
+      <div className="p-3 text-xs font-semibold text-indigo-700 dark:text-indigo-400 border-l border-border-color">
         ₹ {(Number(summary?.tower_loss || 0) / 10000000).toFixed(2)} Cr
       </div>
 
@@ -972,32 +972,32 @@ data={revenueMonthlyTrend}
   {/* Header */}
   <div className="flex items-start justify-between">
     <div>
-      <div className="text-[11px] tracking-[0.35em] font-bold text-rose-700 uppercase">
+      <div className="text-[11px] tracking-[0.35em] font-bold text-rose-700 dark:text-rose-400 uppercase">
         Penalties
       </div>
 
-      <div className="mt-2 text-sm tracking-[0.14em] text-slate-500">
+      <div className="mt-2 text-sm tracking-[0.14em] text-text-muted">
         Total Penalties
       </div>
 
-     <div className="mt-1 text-[22px] font-semibold tracking-[-0.05em] text-rose-700">
+     <div className="mt-1 text-[22px] font-semibold tracking-[-0.05em] text-rose-700 dark:text-rose-400">
   ₹ 1.85 Cr
 </div>
 
-      <div className="mt-1 text-rose-600 text-xs">
+      <div className="mt-1 text-rose-600 dark:text-rose-400 text-xs">
         Total penalties deducted
       </div>
     </div>
 
-    <div className="h-8 w-8 rounded-full border border-rose-200 bg-rose-50 flex items-center justify-center text-rose-700">
+    <div className="h-8 w-8 rounded-full border border-rose-200 dark:border-rose-500/20 bg-rose-50 dark:bg-rose-500/10 flex items-center justify-center text-rose-700 dark:text-rose-400">
       <AlertTriangle size={14} />
     </div>
   </div>
 
   {/* Trend */}
-  <div className="mt-4 rounded-2xl border border-slate-100 p-4">
+  <div className="mt-4 rounded-2xl border border-border-color p-4">
     <div className="flex items-center justify-between mb-4">
-      <div className="text-[11px] tracking-[0.28em] font-semibold uppercase text-rose-700">
+      <div className="text-[11px] tracking-[0.28em] font-semibold uppercase text-rose-700 dark:text-rose-400">
         Penalties Trend
       </div>
 
@@ -1072,82 +1072,82 @@ data={revenueMonthlyTrend}
   </div>
 
 {/* PENALTY BREAKDOWN */}
-<div className="mt-4 rounded-2xl border border-rose-100 bg-rose-50/10 backdrop-blur-xl p-4">
+<div className="mt-4 rounded-2xl border border-rose-100 dark:border-rose-500/20 bg-rose-50 dark:bg-rose-500/10/10 backdrop-blur-xl p-4">
 
   {/* Header */}
   <div className="flex items-center justify-between mb-4">
    <div className="flex items-start gap-3">
 
-  <div className="h-9 w-9 rounded-xl bg-rose-100 flex items-center justify-center text-rose-700">
+  <div className="h-9 w-9 rounded-xl bg-rose-100 dark:bg-rose-500/15 flex items-center justify-center text-rose-700 dark:text-rose-400">
     <PieChart size={14} />
   </div>
 
   <div>
-    <div className="text-[12px] font-semibold tracking-[0.26em] uppercase text-rose-700">
+    <div className="text-[12px] font-semibold tracking-[0.26em] uppercase text-rose-700 dark:text-rose-400">
       Penalty Breakdown
     </div>
 
-    <div className="text-[12px] tracking-[0.10em]  text-slate-400 mt-1 ">
+    <div className="text-[12px] tracking-[0.10em]  text-text-muted mt-1 ">
       Domain-wise penalty distribution
     </div>
   </div>
 
 </div>
 
-    <div className="text-[10px] px-2 py-1 rounded-full bg-rose-50 text-rose-700 border border-rose-100">
+    <div className="text-[10px] px-2 py-1 rounded-full bg-rose-50 dark:bg-rose-500/10 text-rose-700 dark:text-rose-400 border border-rose-100 dark:border-rose-500/20">
       LIVE
     </div>
   </div>
 
   {/* PREMIUM GRID */}
-  <div className="overflow-hidden rounded-lg border border-slate-100">
+  <div className="overflow-hidden rounded-lg border border-border-color">
 
     {/* HEADER */}
-    <div className="grid grid-cols-3 bg-slate-50 border-b border-slate-100">
+    <div className="grid grid-cols-3 bg-surface-muted border-b border-border-color">
 
-      <div className="px-3 py-2 text-[11px] font-bold uppercase tracking-[0.10em] text-slate-500">
+      <div className="px-3 py-2 text-[11px] font-bold uppercase tracking-[0.10em] text-text-muted">
         Domain
       </div>
 
-      <div className="px-3 py-2 text-[11px] font-bold uppercase tracking-[0.10em] text-rose-700 border-l border-slate-100">
+      <div className="px-3 py-2 text-[11px] font-bold uppercase tracking-[0.10em] text-rose-700 dark:text-rose-400 border-l border-border-color">
         KPI Penalty
       </div>
 
-      <div className="px-2 py-2 text-[11px] font-bold uppercase tracking-[0.10em] text-orange-600 border-l border-slate-100">
+      <div className="px-2 py-2 text-[11px] font-bold uppercase tracking-[0.10em] text-orange-600 dark:text-orange-400 border-l border-border-color">
         GEN Penalty
       </div>
 
     </div>
 
     {/* FTTX */}
-    <div className="grid grid-cols-3 border-b border-slate-100">
+    <div className="grid grid-cols-3 border-b border-border-color">
 
-      <div className="p-3 text-xs font-semibold text-slate-700">
+      <div className="p-3 text-xs font-semibold text-text-secondary">
         FTTx
       </div>
 
-      <div className="p-3 text-xs font-semibold text-rose-700 border-l border-slate-100">
+      <div className="p-3 text-xs font-semibold text-rose-700 dark:text-rose-400 border-l border-border-color">
         ₹ 0.35 Cr
       </div>
 
-      <div className="p-3 text-xs font-semibold text-orange-600 border-l border-slate-100">
+      <div className="p-3 text-xs font-semibold text-orange-600 dark:text-orange-400 border-l border-border-color">
         ₹ 0.30 Cr
       </div>
 
     </div>
 
     {/* FIBER */}
-    <div className="grid grid-cols-3 border-b border-slate-100">
+    <div className="grid grid-cols-3 border-b border-border-color">
 
-      <div className="p-3 text-xs font-semibold text-slate-700">
+      <div className="p-3 text-xs font-semibold text-text-secondary">
         Fiber
       </div>
 
-      <div className="p-3 text-xs font-semibold text-rose-700 border-l border-slate-100">
+      <div className="p-3 text-xs font-semibold text-rose-700 dark:text-rose-400 border-l border-border-color">
         ₹ 0.25 Cr
       </div>
 
-      <div className="p-3 text-xs font-semibold text-orange-600 border-l border-slate-100">
+      <div className="p-3 text-xs font-semibold text-orange-600 dark:text-orange-400 border-l border-border-color">
         ₹ 0.30 Cr
       </div>
 
@@ -1156,15 +1156,15 @@ data={revenueMonthlyTrend}
     {/* TOWER */}
     <div className="grid grid-cols-3">
 
-      <div className="p-3 text-xs font-semibold text-slate-700">
+      <div className="p-3 text-xs font-semibold text-text-secondary">
         Tower
       </div>
 
-      <div className="p-3 text-xs font-semibold text-rose-700 border-l border-slate-100">
+      <div className="p-3 text-xs font-semibold text-rose-700 dark:text-rose-400 border-l border-border-color">
         ₹ 0.40 Cr
       </div>
 
-      <div className="p-3 text-xs font-semibold text-orange-600 border-l border-slate-100">
+      <div className="p-3 text-xs font-semibold text-orange-600 dark:text-orange-400 border-l border-border-color">
         ₹ 0.25 Cr
       </div>
 
@@ -1177,7 +1177,7 @@ data={revenueMonthlyTrend}
 </div>
 
 {/* FULL SECTION SEPARATOR */}
-<div className="col-span-1 lg:col-span-3 border-b border-slate-200/90"></div>
+<div className="col-span-1 lg:col-span-3 border-b border-border-color/90"></div>
 
 <div className="col-span-1 lg:col-span-3">
 {/* Billing Insight */}
@@ -1187,7 +1187,7 @@ data={revenueMonthlyTrend}
   {/* HEADER */}
   <div className="flex items-center justify-between gap-3 mb-4 px-2">
 
-    <h3 className="text-[12px] font-semibold tracking-[0.30em] text-indigo-600 uppercase">
+    <h3 className="text-[12px] font-semibold tracking-[0.30em] text-indigo-600 dark:text-indigo-400 uppercase">
       Billing Insights
     </h3>
 
@@ -1202,71 +1202,71 @@ data={revenueMonthlyTrend}
     <div className="xl:col-span-3 space-y-2">
 
       {/* AVG */}
-      <div className="rounded-2xl border border-border-color/60 bg-white/70 backdrop-blur p-3">
+      <div className="rounded-2xl border border-border-color/60 bg-surface/70 backdrop-blur p-3">
 
         <div className="flex items-center justify-between">
 
-          <div className="text-[10px] font-semibold tracking-[0.30em] uppercase text-slate-500">
+          <div className="text-[10px] font-semibold tracking-[0.30em] uppercase text-text-muted">
             Avg Completion
           </div>
 
-          <div className="rounded-xl bg-emerald-500/10 border border-emerald-500/20 p-1 text-emerald-700">
+          <div className="rounded-xl bg-emerald-500/10 border border-emerald-500/20 p-1 text-emerald-700 dark:text-emerald-400">
             <Percent size={12} />
           </div>
 
         </div>
 
-        <div className="text-[18px] font-bold text-emerald-700">
+        <div className="text-[18px] font-bold text-emerald-700 dark:text-emerald-400">
           {avgCompletion}%
         </div>
 
       </div>
 
       {/* BEST */}
-      <div className="rounded-2xl border border-border-color/60 bg-white/70 backdrop-blur p-3">
+      <div className="rounded-2xl border border-border-color/60 bg-surface/70 backdrop-blur p-3">
 
         <div className="flex items-center justify-between">
 
-          <div className="text-[10px] font-semibold tracking-[0.24em] uppercase text-slate-500">
+          <div className="text-[10px] font-semibold tracking-[0.24em] uppercase text-text-muted">
             Best Month
           </div>
 
-          <div className="rounded-xl bg-emerald-500/10 border border-emerald-500/20 p-1 text-emerald-700">
+          <div className="rounded-xl bg-emerald-500/10 border border-emerald-500/20 p-1 text-emerald-700 dark:text-emerald-400">
             <TrendingUp size={12} />
           </div>
 
         </div>
 
-        <div className="text-[15px] font-semibold text-slate-800">
+        <div className="text-[15px] font-semibold text-text-primary">
           {bestMonth?.month || "-"}
         </div>
 
-        <div className="mt-1 text-xs font-semibold text-emerald-700">
+        <div className="mt-1 text-xs font-semibold text-emerald-700 dark:text-emerald-400">
           {bestMonth ? `${bestMonth.percent}% done` : ""}
         </div>
 
       </div>
 
       {/* WORST */}
-      <div className="rounded-2xl border border-border-color/60 bg-white/70 backdrop-blur p-3">
+      <div className="rounded-2xl border border-border-color/60 bg-surface/70 backdrop-blur p-3">
 
         <div className="flex items-center justify-between">
 
-          <div className="text-[10px] font-semibold tracking-[0.24em] uppercase text-slate-500">
+          <div className="text-[10px] font-semibold tracking-[0.24em] uppercase text-text-muted">
             Needs Attention
           </div>
 
-          <div className="rounded-xl bg-rose-500/10 border border-rose-500/20 p-1 text-rose-700">
+          <div className="rounded-xl bg-rose-500/10 border border-rose-500/20 p-1 text-rose-700 dark:text-rose-400">
             <TrendingDown size={12} />
           </div>
 
         </div>
 
-        <div className="text-[15px] font-semibold text-slate-800">
+        <div className="text-[15px] font-semibold text-text-primary">
           {worstMonth?.month || "-"}
         </div>
 
-        <div className="mt-1 text-xs font-semibold text-rose-600">
+        <div className="mt-1 text-xs font-semibold text-rose-600 dark:text-rose-400">
           {worstMonth ? `${worstMonth.percent}% done` : ""}
         </div>
 
@@ -1276,19 +1276,19 @@ data={revenueMonthlyTrend}
 
 {/* DONE VS PENDING TABLE */}
 
-<div className="xl:col-span-5 rounded-2xl border border-slate-200/80
- bg-gradient-to-br from-white to-slate-50/70 backdrop-blur-xl shadow-sm overflow-hidden">
+<div className="xl:col-span-5 rounded-2xl border border-border-color/80
+ bg-gradient-to-br from-white to-surface-muted/70 backdrop-blur-xl shadow-sm overflow-hidden">
 
   {/* HEADER */}
-  <div className="flex items-center justify-between px-4 pt-4 pb-2 border-b border-slate-100">
+  <div className="flex items-center justify-between px-4 pt-4 pb-2 border-b border-border-color">
 
     <div>
 
-      <div className="text-[11px] font-semibold tracking-[0.18em] uppercase text-slate-600">
+      <div className="text-[11px] font-semibold tracking-[0.18em] uppercase text-text-secondary">
         Done vs Pending
       </div>
 
-      <div className="text-xs text-slate-400">
+      <div className="text-xs text-text-muted">
         Circle-wise billing completion analytics
       </div>
 
@@ -1298,7 +1298,7 @@ data={revenueMonthlyTrend}
 
       <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
 
-      <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-700">
+      <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-400">
         Live
       </div>
 
@@ -1309,24 +1309,24 @@ data={revenueMonthlyTrend}
   {/* TABLE */}
   <div className="p-2">
 
-    <div className="overflow-hidden rounded-2xl border border-slate-100 bg-white/70">
+    <div className="overflow-hidden rounded-2xl border border-border-color bg-surface/70">
 
       {/* TABLE HEADER */}
-      <div className="grid grid-cols-4 bg-slate-50 border-b border-slate-100">
+      <div className="grid grid-cols-4 bg-surface-muted border-b border-border-color">
 
-        <div className="px-4 py-2 text-[11px] font-bold uppercase tracking-[0.20em] text-slate-500">
+        <div className="px-4 py-2 text-[11px] font-bold uppercase tracking-[0.20em] text-text-muted">
           Circle
         </div>
 
-        <div className="px-4 py-2 border-l border-slate-100 text-[11px] font-bold uppercase tracking-[0.20em] text-emerald-700">
+        <div className="px-4 py-2 border-l border-border-color text-[11px] font-bold uppercase tracking-[0.20em] text-emerald-700 dark:text-emerald-400">
           Done
         </div>
 
-        <div className="px-4 py-2 border-l border-slate-100 text-[11px] font-bold uppercase tracking-[0.20em] text-rose-600">
+        <div className="px-4 py-2 border-l border-border-color text-[11px] font-bold uppercase tracking-[0.20em] text-rose-600 dark:text-rose-400">
           Pending
         </div>
 
-        <div className="px-4 py-2 border-l border-slate-100 text-[11px] font-bold uppercase tracking-[0.20em] text-indigo-700">
+        <div className="px-4 py-2 border-l border-border-color text-[11px] font-bold uppercase tracking-[0.20em] text-indigo-700 dark:text-indigo-400">
           Total
         </div>
 
@@ -1362,40 +1362,40 @@ data={revenueMonthlyTrend}
 
           <div
             key={index}
-            className="grid grid-cols-4 border-b border-slate-100 last:border-b-0 hover:bg-slate-50/70 transition-all duration-200"
+            className="grid grid-cols-4 border-b border-border-color last:border-b-0 hover:bg-surface-muted/70 transition-all duration-200"
           >
 
             {/* CIRCLE */}
             <div className="px-4 py-2 flex items-center">
 
-              <div className="text-sm font-semibold text-slate-700">
+              <div className="text-sm font-semibold text-text-secondary">
                 {circle}
               </div>
 
             </div>
 
             {/* DONE */}
-            <div className="px-4 py-2 border-l border-slate-100 flex items-center">
+            <div className="px-4 py-2 border-l border-border-color flex items-center">
 
-              <div className="inline-flex items-center text-sm font-semibold text-emerald-700">
+              <div className="inline-flex items-center text-sm font-semibold text-emerald-700 dark:text-emerald-400">
                 {done}
               </div>
 
             </div>
 
             {/* PENDING */}
-            <div className="px-4 py-2 border-l border-slate-100 flex items-center">
+            <div className="px-4 py-2 border-l border-border-color flex items-center">
 
-              <div className="inline-flex items-center text-sm font-semibold text-rose-600">
+              <div className="inline-flex items-center text-sm font-semibold text-rose-600 dark:text-rose-400">
                 {pending}
               </div>
 
             </div>
 
             {/* TOTAL */}
-            <div className="px-4 py-2 border-l border-slate-100 flex items-center">
+            <div className="px-4 py-2 border-l border-border-color flex items-center">
 
-              <div className="inline-flex items-center  text-sm font-semibold text-indigo-700">
+              <div className="inline-flex items-center  text-sm font-semibold text-indigo-700 dark:text-indigo-400">
                 {total}
               </div>
 
@@ -1408,17 +1408,17 @@ data={revenueMonthlyTrend}
       })}
 
       {/* TOTAL ROW */}
-      <div className="grid grid-cols-4 bg-slate-50 border-t border-slate-200">
+      <div className="grid grid-cols-4 bg-surface-muted border-t border-border-color">
 
         {/* LABEL */}
-        <div className="px-4 py-1 text-sm font-semibold uppercase tracking-[0.10em] text-slate-700">
+        <div className="px-4 py-1 text-sm font-semibold uppercase tracking-[0.10em] text-text-secondary">
           Total
         </div>
 
         {/* DONE TOTAL */}
-        <div className="px-4 py-1 border-l border-slate-200">
+        <div className="px-4 py-1 border-l border-border-color">
 
-          <div className="inline-flex items-center text-sm font-semibold text-emerald-700">
+          <div className="inline-flex items-center text-sm font-semibold text-emerald-700 dark:text-emerald-400">
 
             {
               circleOptions.reduce((acc, circle) => {
@@ -1451,9 +1451,9 @@ data={revenueMonthlyTrend}
         </div>
 
         {/* PENDING TOTAL */}
-        <div className="px-4 py-1 border-l border-slate-200">
+        <div className="px-4 py-1 border-l border-border-color">
 
-          <div className="inline-flex items-center text-sm font-semibold text-rose-600">
+          <div className="inline-flex items-center text-sm font-semibold text-rose-600 dark:text-rose-400">
 
             {
               circleOptions.reduce((acc, circle) => {
@@ -1486,9 +1486,9 @@ data={revenueMonthlyTrend}
         </div>
 
         {/* GRAND TOTAL */}
-        <div className="px-4 py-1 border-l border-slate-200">
+        <div className="px-4 py-1 border-l border-border-color">
 
-          <div className="inline-flex items-center text-sm font-semibold text-indigo-700">
+          <div className="inline-flex items-center text-sm font-semibold text-indigo-700 dark:text-indigo-400">
 
             {
               circleOptions.reduce((acc, circle) => {
@@ -1525,18 +1525,18 @@ data={revenueMonthlyTrend}
 </div>
 
     {/* MONTHLY PROGRESS */}
-   <div className="xl:col-span-4 h-[290px] rounded-2xl border border-border-color/60 bg-white/60 backdrop-blur p-4 overflow-hidden">
+   <div className="xl:col-span-4 h-[290px] rounded-2xl border border-border-color/60 bg-surface/60 backdrop-blur p-4 overflow-hidden">
 
       {/* HEADER */}
       <div className="flex items-center justify-between mb-2">
 
         <div>
 
-          <div className="text-[11px] font-semibold tracking-[0.24em] uppercase text-cyan-700">
+          <div className="text-[11px] font-semibold tracking-[0.24em] uppercase text-cyan-700 dark:text-cyan-400">
             Monthly Progress
           </div>
 
-          <div className="text-xs text-slate-400">
+          <div className="text-xs text-text-muted">
             Completion overview
           </div>
 
@@ -1562,38 +1562,38 @@ data={revenueMonthlyTrend}
 
           const progressBg =
             item.percent >= 80
-              ? "bg-emerald-100"
+              ? "bg-emerald-100 dark:bg-emerald-500/15"
               : item.percent >= 60
-              ? "bg-indigo-100"
+              ? "bg-indigo-100 dark:bg-indigo-500/15"
               : item.percent >= 40
-              ? "bg-amber-100"
-              : "bg-rose-100";
+              ? "bg-amber-100 dark:bg-amber-500/15"
+              : "bg-rose-100 dark:bg-rose-500/15";
 
           const textColor =
             item.percent >= 80
-              ? "text-emerald-700"
+              ? "text-emerald-700 dark:text-emerald-400"
               : item.percent >= 60
-              ? "text-indigo-700"
+              ? "text-indigo-700 dark:text-indigo-400"
               : item.percent >= 40
-              ? "text-amber-700"
-              : "text-rose-700";
+              ? "text-amber-700 dark:text-amber-400"
+              : "text-rose-700 dark:text-rose-400";
 
           return (
 
             <div
               key={index}
-              className="rounded-2xl border border-border-color/50 bg-white/70 px-3 py-2"
+              className="rounded-2xl border border-border-color/50 bg-surface/70 px-3 py-2"
             >
 
               <div className="flex items-center justify-between mb-2">
 
                 <div>
 
-                  <div className="text-sm font-semibold text-slate-700">
+                  <div className="text-sm font-semibold text-text-secondary">
                     {item.month}
                   </div>
 
-                  <div className="text-xs text-slate-400 mt-1">
+                  <div className="text-xs text-text-muted mt-1">
                     {item.done} Done • {item.pending} Pending
                   </div>
 
@@ -1632,15 +1632,15 @@ data={revenueMonthlyTrend}
 </div>
 
 {/* FULL SECTION SEPARATOR */}
-<div className="col-span-1 lg:col-span-3 border-b border-slate-200/90"></div>
+<div className="col-span-1 lg:col-span-3 border-b border-border-color/90"></div>
 
 {/* CIRCLE PERFORMANCE RANKING */}
 <div className="col-span-1 lg:col-span-3 mt-4">
 
-  <div className="rounded-[24px] border border-amber-100 bg-gradient-to-br from-white to-amber-50/40 backdrop-blur-xl shadow-sm overflow-hidden">
+  <div className="rounded-[24px] border border-amber-100 dark:border-amber-500/20 bg-gradient-to-br from-white to-amber-50/40 backdrop-blur-xl shadow-sm overflow-hidden">
 
     {/* HEADER */}
-    <div className="flex items-center justify-between p-6 border-b border-amber-100">
+    <div className="flex items-center justify-between p-6 border-b border-amber-100 dark:border-amber-500/20">
 
       <div className="flex items-start gap-4">
 
@@ -1649,18 +1649,18 @@ data={revenueMonthlyTrend}
         </div>
 
         <div>
-          <div className="text-[13px] tracking-[0.28em] font-bold uppercase text-amber-700">
+          <div className="text-[13px] tracking-[0.28em] font-bold uppercase text-amber-700 dark:text-amber-400">
             Circle Performance Ranking
           </div>
 
-          <div className="mt-1 text-sm text-slate-500">
+          <div className="mt-1 text-sm text-text-muted">
             Revenue & operational efficiency leaderboard
           </div>
         </div>
 
       </div>
 
-      <div className="px-3 py-1 rounded-full border border-emerald-200 bg-emerald-50 text-emerald-700 text-xs font-semibold">
+      <div className="px-3 py-1 rounded-full border border-emerald-200 dark:border-emerald-500/20 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 text-xs font-semibold">
         LIVE PERFORMANCE
       </div>
 
@@ -1669,20 +1669,20 @@ data={revenueMonthlyTrend}
     {/* TABLE */}
     <div className="p-4">
 
-      <div className="overflow-hidden rounded-2xl border border-slate-100">
+      <div className="overflow-hidden rounded-2xl border border-border-color">
 
         {/* HEADER */}
-        <div className="grid grid-cols-3 bg-slate-50 border-b border-slate-100">
+        <div className="grid grid-cols-3 bg-surface-muted border-b border-border-color">
 
-          <div className="px-4 py-3 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">
+          <div className="px-4 py-3 text-[11px] font-bold uppercase tracking-[0.18em] text-text-muted">
             Rank
           </div>
 
-          <div className="px-4 py-3 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500 border-l border-slate-100">
+          <div className="px-4 py-3 text-[11px] font-bold uppercase tracking-[0.18em] text-text-muted border-l border-border-color">
             Circle
           </div>
 
-          <div className="px-4 py-3 text-[11px] font-bold uppercase tracking-[0.18em] text-emerald-700 border-l border-slate-100">
+          <div className="px-4 py-3 text-[11px] font-bold uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-400 border-l border-border-color">
             Revenue
           </div>
 
@@ -1693,7 +1693,7 @@ data={revenueMonthlyTrend}
 
           <div
             key={item.rank}
-            className="grid grid-cols-3 border-b border-slate-100 last:border-b-0 hover:bg-slate-50/70 transition"
+            className="grid grid-cols-3 border-b border-border-color last:border-b-0 hover:bg-surface-muted/70 transition"
           >
 
             {/* RANK */}
@@ -1711,7 +1711,7 @@ data={revenueMonthlyTrend}
               </div>
 
               {item.rank === 1 && (
-                <div className="px-2 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-100 text-[10px] font-bold uppercase">
+                <div className="px-2 py-1 rounded-full bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-100 dark:border-amber-500/20 text-[10px] font-bold uppercase">
                   Top
                 </div>
               )}
@@ -1719,18 +1719,18 @@ data={revenueMonthlyTrend}
             </div>
 
             {/* CIRCLE */}
-            <div className="px-4 py-4 border-l border-slate-100 flex items-center">
+            <div className="px-4 py-4 border-l border-border-color flex items-center">
 
-              <div className="font-semibold text-slate-700">
+              <div className="font-semibold text-text-secondary">
                 {item.circle}
               </div>
 
             </div>
 
             {/* REVENUE */}
-            <div className="px-4 py-4 border-l border-slate-100 flex items-center">
+            <div className="px-4 py-4 border-l border-border-color flex items-center">
 
-              <div className="font-semibold text-emerald-700">
+              <div className="font-semibold text-emerald-700 dark:text-emerald-400">
                 ₹ {item.revenue} Cr
               </div>
 

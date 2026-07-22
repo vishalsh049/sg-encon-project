@@ -360,16 +360,16 @@ export default function RevenuePage() {
               <h1 className="text-2xl sm:text-2xl font-bold bg-gradient-to-r from-blue-700 via-indigo-600 to-purple-700 text-transparent bg-clip-text">
                 Revenue Dashboard
               </h1>
-              <p className="text-slate-600 mt-1 text-sm">
+              <p className="text-text-secondary mt-1 text-sm">
                 Track, analyze and optimize revenue with precision tools and live data.
               </p>
             </div>
 
             <div className="flex items-center gap-3">
               {/* Live badge */}
-              <div className="hidden sm:flex items-center gap-2 px-3 py-2 rounded-2xl bg-white/70 backdrop-blur-xl border border-white/60 shadow-sm">
+              <div className="hidden sm:flex items-center gap-2 px-3 py-2 rounded-2xl bg-surface/70 backdrop-blur-xl border border-white/60 shadow-sm">
                 <span className="inline-flex items-center justify-center h-2.5 w-2.5 rounded-full bg-emerald-500 shadow-[0_0_0_4px_rgba(16,185,129,0.15)]" />
-                <span className="text-xs text-slate-700/90 font-semibold">Live</span>
+                <span className="text-xs text-text-secondary/90 font-semibold">Live</span>
               </div>
 
               {/* Upload Excel */}
@@ -390,15 +390,15 @@ export default function RevenuePage() {
 
           {/* ❌ ERROR */}
           {error && (
-            <p className="text-red-700 text-sm bg-red-100 border border-red-200 rounded-lg px-3 py-2">
+            <p className="text-red-700 dark:text-red-400 text-sm bg-red-100 dark:bg-red-500/15 border border-red-200 dark:border-red-500/20 rounded-lg px-3 py-2">
               {error}
             </p>
           )}
 
           {/* 🔄 LOADING */}
           {loading ? (
-            <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-6">
-              <p className="text-slate-700">Loading...</p>
+            <div className="bg-surface border border-border-color rounded-2xl shadow-sm p-6">
+              <p className="text-text-secondary">Loading...</p>
             </div>
           ) : (
             <>
@@ -407,25 +407,25 @@ export default function RevenuePage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-5">
                 {/* Card template */}
                 <div
-                  className="group relative p-5 rounded-[24px] bg-white/70 backdrop-blur-xl border border-white/60 shadow-[0_18px_45px_rgba(79,70,229,0.06)] hover:shadow-[0_28px_80px_rgba(99,102,241,0.14)] transition"
+                  className="group relative p-5 rounded-[24px] bg-surface/70 backdrop-blur-xl border border-white/60 shadow-[0_18px_45px_rgba(79,70,229,0.06)] hover:shadow-[0_28px_80px_rgba(99,102,241,0.14)] transition"
                 >
                   <div className="flex items-start justify-between">
                     <div>
-                      <p className="text-slate-700 text-sm font-semibold tracking-[0.10em]">Total Revenue</p>
+                      <p className="text-text-secondary text-sm font-semibold tracking-[0.10em]">Total Revenue</p>
                       <div className="mt-2 flex items-center gap-2">
-                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold bg-emerald-50/80 border border-emerald-100 text-emerald-700">
+                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold bg-emerald-50 dark:bg-emerald-500/10/80 border border-emerald-100 dark:border-emerald-500/20 text-emerald-700 dark:text-emerald-400">
                           +{pctFromSeed(Number(kpi.totalRevenue || 0) + 1)}
                         </span>
-                        <span className="text-xs text-slate-500">vs last period</span>
+                        <span className="text-xs text-text-muted">vs last period</span>
                       </div>
                     </div>
 
-                    <div className="h-9 w-9 rounded-2xl bg-gradient-to-br from-emerald-100 to-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-700 shadow-[0_16px_40px_rgba(16,185,129,0.14)]">
+                    <div className="h-9 w-9 rounded-2xl bg-gradient-to-br from-emerald-100 to-emerald-50 border border-emerald-200 dark:border-emerald-500/20 flex items-center justify-center text-emerald-700 dark:text-emerald-400 shadow-[0_16px_40px_rgba(16,185,129,0.14)]">
                       <IndianRupee size={16} />
                     </div>
                   </div>
 
-                  <h2 className="mt-2 text-[20px] font-semibold text-slate-900">
+                  <h2 className="mt-2 text-[20px] font-semibold text-text-primary">
                     {formatNumber(kpi.totalRevenue)}
                   </h2>
 
@@ -433,25 +433,25 @@ export default function RevenuePage() {
                 </div>
 
                 <div
-                  className="group relative p-5 rounded-[24px] bg-white/70 backdrop-blur-xl border border-white/60 shadow-[0_18px_45px_rgba(79,70,229,0.06)] hover:shadow-[0_28px_80px_rgba(99,102,241,0.14)] transition"
+                  className="group relative p-5 rounded-[24px] bg-surface/70 backdrop-blur-xl border border-white/60 shadow-[0_18px_45px_rgba(79,70,229,0.06)] hover:shadow-[0_28px_80px_rgba(99,102,241,0.14)] transition"
                 >
                   <div className="flex items-start justify-between">
                     <div>
-                      <p className="text-slate-700 text-sm font-semibold tracking-[0.10em]">Total FTTx</p>
+                      <p className="text-text-secondary text-sm font-semibold tracking-[0.10em]">Total FTTx</p>
                       <div className="mt-2 flex items-center gap-2">
-                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold bg-indigo-50/80 border border-indigo-100 text-indigo-700">
+                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold bg-indigo-50 dark:bg-indigo-500/10/80 border border-indigo-100 dark:border-indigo-500/20 text-indigo-700 dark:text-indigo-400">
                           +{pctFromSeed(Number(kpi.totalFTTx || 0) + 2)}
                         </span>
-                        <span className="text-xs text-slate-500">vs last period</span>
+                        <span className="text-xs text-text-muted">vs last period</span>
                       </div>
                     </div>
 
-                    <div className="h-9 w-9 rounded-2xl bg-gradient-to-br from-indigo-100 to-violet-50 border border-indigo-200 flex items-center justify-center text-indigo-700 shadow-[0_16px_40px_rgba(79,70,229,0.14)]">
+                    <div className="h-9 w-9 rounded-2xl bg-gradient-to-br from-indigo-100 to-violet-50 border border-indigo-200 dark:border-indigo-500/20 flex items-center justify-center text-indigo-700 dark:text-indigo-400 shadow-[0_16px_40px_rgba(79,70,229,0.14)]">
                       <Network size={16} />
                     </div>
                   </div>
 
-                  <h2 className="mt-2 text-[20px] font-semibold tracking-[-0.03em] text-slate-900">
+                  <h2 className="mt-2 text-[20px] font-semibold tracking-[-0.03em] text-text-primary">
                     {formatNumber(kpi.totalFTTx)}
                   </h2>
 
@@ -459,50 +459,50 @@ export default function RevenuePage() {
                 </div>
 
                 <div
-                  className="group relative p-5 rounded-[24px] bg-white/70 backdrop-blur-xl border border-white/60 shadow-[0_18px_45px_rgba(79,70,229,0.06)] hover:shadow-[0_28px_80px_rgba(99,102,241,0.14)] transition"
+                  className="group relative p-5 rounded-[24px] bg-surface/70 backdrop-blur-xl border border-white/60 shadow-[0_18px_45px_rgba(79,70,229,0.06)] hover:shadow-[0_28px_80px_rgba(99,102,241,0.14)] transition"
                 >
                   <div className="flex items-start justify-between">
                     <div>
-                      <p className="text-slate-700 text-sm font-semibold tracking-[0.10em]">Total Fiber</p>
+                      <p className="text-text-secondary text-sm font-semibold tracking-[0.10em]">Total Fiber</p>
                       <div className="mt-2 flex items-center gap-2">
-                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold bg-violet-50/80 border border-violet-100 text-violet-700">
+                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold bg-violet-50 dark:bg-violet-500/10/80 border border-violet-100 dark:border-violet-500/20 text-violet-700 dark:text-violet-400">
                           +{pctFromSeed(Number(kpi.totalFiber || 0) + 3)}
                         </span>
-                        <span className="text-xs text-slate-500">vs last period</span>
+                        <span className="text-xs text-text-muted">vs last period</span>
                       </div>
                     </div>
 
-                    <div className="h-9 w-9 rounded-2xl bg-gradient-to-br from-violet-100 to-purple-50 border border-violet-200 flex items-center justify-center text-violet-700 shadow-[0_16px_40px_rgba(139,92,246,0.14)]">
+                    <div className="h-9 w-9 rounded-2xl bg-gradient-to-br from-violet-100 to-purple-50 border border-violet-200 dark:border-violet-500/20 flex items-center justify-center text-violet-700 dark:text-violet-400 shadow-[0_16px_40px_rgba(139,92,246,0.14)]">
                       <Layers size={16} />
                     </div>
                   </div>
 
-                  <h2 className="mt-2 text-[20px] font-semibold tracking-[-0.03em] text-slate-900">
+                  <h2 className="mt-2 text-[20px] font-semibold tracking-[-0.03em] text-text-primary">
                     {formatNumber(kpi.totalFiber)}
                   </h2>
 
                 </div>
 
                 <div
-                  className="group relative p-5 rounded-[24px] bg-white/70 backdrop-blur-xl border border-white/60 shadow-[0_18px_45px_rgba(79,70,229,0.06)] hover:shadow-[0_28px_80px_rgba(99,102,241,0.14)] transition"
+                  className="group relative p-5 rounded-[24px] bg-surface/70 backdrop-blur-xl border border-white/60 shadow-[0_18px_45px_rgba(79,70,229,0.06)] hover:shadow-[0_28px_80px_rgba(99,102,241,0.14)] transition"
                 >
                   <div className="flex items-start justify-between">
                     <div>
-                      <p className="text-slate-700 text-sm font-semibold tracking-[0.10em]">Total Tower</p>
+                      <p className="text-text-secondary text-sm font-semibold tracking-[0.10em]">Total Tower</p>
                       <div className="mt-2 flex items-center gap-2">
-                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold bg-orange-50/80 border border-orange-100 text-orange-700">
+                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold bg-orange-50 dark:bg-orange-500/10/80 border border-orange-100 dark:border-orange-500/20 text-orange-700 dark:text-orange-400">
                           +{pctFromSeed(Number(kpi.totalTower || 0) + 4)}
                         </span>
-                        <span className="text-xs text-slate-500">vs last period</span>
+                        <span className="text-xs text-text-muted">vs last period</span>
                       </div>
                     </div>
 
-                    <div className="h-9 w-9 rounded-2xl bg-gradient-to-br from-orange-100 to-amber-50 border border-orange-200 flex items-center justify-center text-orange-700 shadow-[0_16px_40px_rgba(251,146,60,0.16)]">
+                    <div className="h-9 w-9 rounded-2xl bg-gradient-to-br from-orange-100 to-amber-50 border border-orange-200 dark:border-orange-500/20 flex items-center justify-center text-orange-700 dark:text-orange-400 shadow-[0_16px_40px_rgba(251,146,60,0.16)]">
                       <TowerControl size={16} />
                     </div>
                   </div>
 
-                  <h2 className="mt-2 text-[20px] font-semibold tracking-[-0.03em] text-slate-900">
+                  <h2 className="mt-2 text-[20px] font-semibold tracking-[-0.03em] text-text-primary">
                     {formatNumber(kpi.totalTower)}
                   </h2>
 
@@ -512,13 +512,13 @@ export default function RevenuePage() {
 
 
               {/* TOOLBAR: Search + filters + reset */}
-              <div className="bg-white/70 backdrop-blur-xl border border-white/60 rounded-[24px] shadow-[0_18px_45px_rgba(79,70,229,0.06)] p-4 sm:p-5 mb-4">
+              <div className="bg-surface/70 backdrop-blur-xl border border-white/60 rounded-[24px] shadow-[0_18px_45px_rgba(79,70,229,0.06)] p-4 sm:p-5 mb-4">
                 <div className="flex flex-col lg:flex-row gap-3 lg:items-center lg:justify-between">
                   <div className="flex-1 grid grid-cols-12 gap-3 items-center">
                     {/* Search */}
                     <div className="relative col-span-12 md:col-span-6">
                       <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
-                        <Search className="w-4 h-4 text-slate-400" />
+                        <Search className="w-4 h-4 text-text-muted" />
                       </div>
                       <input
                         value={searchQuery}
@@ -527,7 +527,7 @@ export default function RevenuePage() {
                           setCurrentPage(1);
                         }}
                         placeholder="Search by file name, circle, uploaded by..."
-                        className="w-full pl-10 pr-2 py-2 rounded-[18px] bg-white/80 border border-slate/60 text-slate-800 placeholder:text-slate-400 outline-none focus:ring-2 focus:ring-indigo-200"
+                        className="w-full pl-10 pr-2 py-2 rounded-[18px] bg-surface/80 border border-slate/60 text-text-primary placeholder:text-text-muted outline-none focus:ring-2 focus:ring-indigo-200"
                       />
                     </div>
 
@@ -540,7 +540,7 @@ export default function RevenuePage() {
                           setFilterDate(e.target.value);
                           setCurrentPage(1);
                         }}
-                        className="w-full px-3 py-2 rounded-[18px] bg-white/80 border border-slate/60 text-slate-800 outline-none focus:ring-2 focus:ring-indigo-200"
+                        className="w-full px-3 py-2 rounded-[18px] bg-surface/80 border border-slate/60 text-text-primary outline-none focus:ring-2 focus:ring-indigo-200"
                       />
                     </div>
 
@@ -552,7 +552,7 @@ export default function RevenuePage() {
                           setFilterCircle(e.target.value);
                           setCurrentPage(1);
                         }}
-                        className="w-full appearance-none px-3 py-2 rounded-[18px] bg-white/80 border border-slate/60 text-slate-800 outline-none focus:ring-2 focus:ring-indigo-200"
+                        className="w-full appearance-none px-3 py-2 rounded-[18px] bg-surface/80 border border-slate/60 text-text-primary outline-none focus:ring-2 focus:ring-indigo-200"
                       >
                         <option value="">All Circles</option>
                         {circles.map((c) => (
@@ -562,7 +562,7 @@ export default function RevenuePage() {
                         ))}
                       </select>
                       <div className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2">
-                        <ChevronDown className="w-4 h-4 text-slate-400" />
+                        <ChevronDown className="w-4 h-4 text-text-muted" />
                       </div>
                     </div>
                   </div>
@@ -571,7 +571,7 @@ export default function RevenuePage() {
                   <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-end">
                     <button
                       onClick={handleResetFilters}
-                      className="flex items-center justify-center gap-2 px-4 py-2 rounded-[18px] bg-white/80 border border-slate/60 text-slate-800 hover:bg-white transition shadow-sm"
+                      className="flex items-center justify-center gap-2 px-4 py-2 rounded-[18px] bg-surface/80 border border-slate/60 text-text-primary hover:bg-surface transition shadow-sm"
                     >
                       <RotateCcw size={14} />
                       Reset
@@ -580,14 +580,14 @@ export default function RevenuePage() {
                     <div className="flex gap-2">
                       <button
                         onClick={handleBulkDownload}
-                        className="px-4 py-2 rounded-[18px] bg-emerald-50/80 border border-emerald-200 text-emerald-700 hover:bg-emerald-100 transition shadow-sm flex items-center gap-2"
+                        className="px-4 py-2 rounded-[18px] bg-emerald-50 dark:bg-emerald-500/10/80 border border-emerald-200 dark:border-emerald-500/20 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 hover:dark:bg-emerald-500/15 transition shadow-sm flex items-center gap-2"
                       >
                         <Download size={14} />
                         Download Selected
                       </button>
                       <button
                         onClick={handleBulkDelete}
-                        className="px-4 py-2 rounded-[18px] bg-rose-50/80 border border-rose-200 text-rose-700 hover:bg-rose-100 transition shadow-sm flex items-center gap-2"
+                        className="px-4 py-2 rounded-[18px] bg-rose-50 dark:bg-rose-500/10/80 border border-rose-200 dark:border-rose-500/20 text-rose-700 dark:text-rose-400 hover:bg-rose-100 hover:dark:bg-rose-500/15 transition shadow-sm flex items-center gap-2"
                       >
                         <Trash2 size={14} />
                         Delete Selected
@@ -599,21 +599,21 @@ export default function RevenuePage() {
 
 
               {/* TABLE (Luxury) */}
-              <div className="rounded-[24px] border border-white/70 bg-white/60 backdrop-blur-xl shadow-[0_18px_45px_rgba(79,70,229,0.06)] overflow-hidden">
+              <div className="rounded-[24px] border border-white/70 bg-surface/60 backdrop-blur-xl shadow-[0_18px_45px_rgba(79,70,229,0.06)] overflow-hidden">
                 <div className="p-4 sm:p-4 border-b border-white/70 flex items-center justify-between">
                   <div>
-                    <h2 className="text-slate-900 font-semibold text-base">Revenue Data</h2>
-                    <p className="text-slate-600 text-xs">Manage uploads, download and delete revenue files.</p>
+                    <h2 className="text-text-primary font-semibold text-base">Revenue Data</h2>
+                    <p className="text-text-secondary text-xs">Manage uploads, download and delete revenue files.</p>
                   </div>
 
                   {/* Upload illustration (top-right) */}
                   <div className="hidden md:flex items-center gap-3">
-                    <div className="h-9 w-8 rounded-2xl bg-gradient-to-br from-blue-50 via-indigo-50 to-violet-50 border border-indigo-100 flex items-center justify-center shadow-[0_18px_40px_rgba(99,102,241,0.10)]">
-                      <FileUp size={16} className="text-indigo-700" />
+                    <div className="h-9 w-8 rounded-2xl bg-gradient-to-br from-blue-50 via-indigo-50 to-violet-50 border border-indigo-100 dark:border-indigo-500/20 flex items-center justify-center shadow-[0_18px_40px_rgba(99,102,241,0.10)]">
+                      <FileUp size={16} className="text-indigo-700 dark:text-indigo-400" />
                     </div>
                     <div className="text-right">
-                      <div className="text-[11px] font-bold tracking-[0.18em] uppercase text-slate-400">UPLOADS</div>
-                      <div className="text-xs font-semibold text-slate-700">Excel / CSV</div>
+                      <div className="text-[11px] font-bold tracking-[0.18em] uppercase text-text-muted">UPLOADS</div>
+                      <div className="text-xs font-semibold text-text-secondary">Excel / CSV</div>
                     </div>
                   </div>
                 </div>
@@ -621,7 +621,7 @@ export default function RevenuePage() {
 
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
-                    <thead className="bg-gradient-to-r from-indigo-500/10 via-blue-500/10 to-purple-500/10 text-slate-800">
+                    <thead className="bg-gradient-to-r from-indigo-500/10 via-blue-500/10 to-purple-500/10 text-text-primary">
                       <tr>
                         <th className="p-3 text-left w-[52px]">
                           <input
@@ -651,7 +651,7 @@ export default function RevenuePage() {
                           return (
                             <tr
                               key={row.file_id}
-                              className="border-b border-slate-100 hover:bg-slate-50 transition"
+                              className="border-b border-border-color hover:bg-surface-muted transition"
                             >
                               <td className="p-3">
                                 <input
@@ -668,7 +668,7 @@ export default function RevenuePage() {
                                 />
                               </td>
 
-                              <td className="p-3 text-slate-800">
+                              <td className="p-3 text-text-primary">
                              {row?.billing_month
   ? new Date(row.billing_month + "-01").toLocaleString("en-US", {
       month: "long",
@@ -677,19 +677,19 @@ export default function RevenuePage() {
   : "-"}
                               </td>
 
-                              <td className="p-3 text-slate-800">
+                              <td className="p-3 text-text-primary">
                                 <span className="inline-flex items-center gap-2">
                                   {row?.uploaded_by || "-"}
                                 </span>
                               </td>
 
-                              <td className="p-3 text-slate-800">
+                              <td className="p-3 text-text-primary">
                                 <span className="block max-w-[360px] truncate font-medium">
                                   {row?.file_name || "-"}
                                 </span>
                               </td>
 
-                              <td className="p-3 text-slate-800">
+                              <td className="p-3 text-text-primary">
                                 {row?.upload_time ? formatDateTime(row.upload_time) : "-"}
                               </td>
 
@@ -697,16 +697,16 @@ export default function RevenuePage() {
                                 <div className="flex items-center justify-center gap-2">
                                   <button
                                     onClick={() => handleDownload(row.file_id)}
-                                    className="group inline-flex items-center gap-2 px-3 py-1.5 text-sm rounded-xl bg-emerald-50/80 border border-emerald-200/80 text-emerald-800 hover:bg-emerald-100 transition shadow-[0_10px_25px_rgba(16,185,129,0.10)]"
+                                    className="group inline-flex items-center gap-2 px-3 py-1.5 text-sm rounded-xl bg-emerald-50 dark:bg-emerald-500/10/80 border border-emerald-200 dark:border-emerald-500/20/80 text-emerald-800 dark:text-emerald-300 hover:bg-emerald-100 hover:dark:bg-emerald-500/15 transition shadow-[0_10px_25px_rgba(16,185,129,0.10)]"
                                   >
-                                    <Download size={16} className="text-emerald-700/90" />
+                                    <Download size={16} className="text-emerald-700 dark:text-emerald-400/90" />
                                     Download
                                   </button>
                                   <button
                                     onClick={() => handleDelete(row.file_id)}
-                                    className="group inline-flex items-center gap-2 px-3 py-1.5 text-sm rounded-xl bg-rose-50/80 border border-rose-200/80 text-rose-800 hover:bg-rose-100 transition shadow-[0_10px_25px_rgba(244,63,94,0.10)]"
+                                    className="group inline-flex items-center gap-2 px-3 py-1.5 text-sm rounded-xl bg-rose-50 dark:bg-rose-500/10/80 border border-rose-200 dark:border-rose-500/20/80 text-rose-800 dark:text-rose-300 hover:bg-rose-100 hover:dark:bg-rose-500/15 transition shadow-[0_10px_25px_rgba(244,63,94,0.10)]"
                                   >
-                                    <Trash2 size={16} className="text-rose-700/90" />
+                                    <Trash2 size={16} className="text-rose-700 dark:text-rose-400/90" />
                                     Delete
                                   </button>
 
@@ -719,16 +719,16 @@ export default function RevenuePage() {
                         <tr>
                           <td colSpan="6" className="text-center p-8">
                             <div className="mx-auto max-w-md">
-                              <div className="w-12 h-12 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center mx-auto">
-                                <Search className="w-5 h-5 text-indigo-600" />
+                              <div className="w-12 h-12 rounded-2xl bg-indigo-50 dark:bg-indigo-500/10 border border-indigo-100 dark:border-indigo-500/20 flex items-center justify-center mx-auto">
+                                <Search className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
                               </div>
-                              <p className="mt-4 text-slate-900 font-semibold">No results found</p>
-                              <p className="text-slate-500 text-xs mt-1">
+                              <p className="mt-4 text-text-primary font-semibold">No results found</p>
+                              <p className="text-text-muted text-xs mt-1">
                                 Try clearing filters or changing your search query.
                               </p>
                               <button
                                 onClick={handleResetFilters}
-                                className="mt-4 px-4 py-2 rounded-xl bg-white border border-slate-200 text-slate-800 hover:bg-slate-50 transition shadow-sm"
+                                className="mt-4 px-4 py-2 rounded-xl bg-surface border border-border-color text-text-primary hover:bg-surface-muted transition shadow-sm"
                               >
                                 Reset filters
                               </button>
@@ -743,19 +743,19 @@ export default function RevenuePage() {
 
               {/* Pagination (Luxury) */}
               <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mt-4">
-                <div className="text-xs text-slate-600">
-                  Page <span className="text-slate-900 font-semibold">{currentPage}</span> of{" "}
-                  <span className="text-slate-900 font-semibold">{totalPages}</span>
+                <div className="text-xs text-text-secondary">
+                  Page <span className="text-text-primary font-semibold">{currentPage}</span> of{" "}
+                  <span className="text-text-primary font-semibold">{totalPages}</span>
                 </div>
 
-                <div className="flex items-center gap-2 bg-white/60 backdrop-blur-xl border border-white/60 rounded-[18px] px-2 py-2 shadow-[0_18px_45px_rgba(79,70,229,0.06)]">
+                <div className="flex items-center gap-2 bg-surface/60 backdrop-blur-xl border border-white/60 rounded-[18px] px-2 py-2 shadow-[0_18px_45px_rgba(79,70,229,0.06)]">
                   <button
                     onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
                     disabled={currentPage === 1}
                     className={`px-3 py-2 rounded-[16px] border text-sm transition shadow-sm ${
                       currentPage === 1
-                        ? "bg-white/60 border-white/70 text-slate-400 cursor-not-allowed"
-                        : "bg-white/80 border-white/70 text-slate-800 hover:bg-white"
+                        ? "bg-surface/60 border-white/70 text-text-muted cursor-not-allowed"
+                        : "bg-surface/80 border-white/70 text-text-primary hover:bg-surface"
                     }`}
                   >
                     Prev
@@ -781,8 +781,8 @@ export default function RevenuePage() {
                           onClick={() => setCurrentPage(page)}
                           className={`px-3 py-2 rounded-[16px] border text-sm transition shadow-sm ${
                             page === currentPage
-                              ? "bg-gradient-to-r from-blue-600/15 via-indigo-600/15 to-purple-600/15 border-indigo-300/70 text-indigo-800 shadow-[0_0_0_4px_rgba(99,102,241,0.18)]"
-                              : "bg-white/80 border-white/70 text-slate-800 hover:bg-white"
+                              ? "bg-gradient-to-r from-blue-600/15 via-indigo-600/15 to-purple-600/15 border-indigo-300 dark:border-indigo-500/30/70 text-indigo-800 dark:text-indigo-300 shadow-[0_0_0_4px_rgba(99,102,241,0.18)]"
+                              : "bg-surface/80 border-white/70 text-text-primary hover:bg-surface"
                           }`}
                         >
                           {page}
@@ -796,8 +796,8 @@ export default function RevenuePage() {
                     disabled={currentPage === totalPages}
                     className={`px-3 py-2 rounded-[16px] border text-sm transition shadow-sm ${
                       currentPage === totalPages
-                        ? "bg-white/60 border-white/70 text-slate-400 cursor-not-allowed"
-                        : "bg-white/80 border-white/70 text-slate-800 hover:bg-white"
+                        ? "bg-surface/60 border-white/70 text-text-muted cursor-not-allowed"
+                        : "bg-surface/80 border-white/70 text-text-primary hover:bg-surface"
                     }`}
                   >
                     Next
@@ -808,17 +808,17 @@ export default function RevenuePage() {
               {/* POPUP UPLOAD (UI only changes) */}
               {showUpload && (
                 <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50">
-                  <div className="bg-white/95 backdrop-blur-xl rounded-2xl p-6 w-[520px] sm:w-[560px] shadow-2xl border border-slate-200">
-                    <h2 className="text-xl font-semibold mb-1 text-slate-900">
+                  <div className="bg-surface/95 backdrop-blur-xl rounded-2xl p-6 w-[520px] sm:w-[560px] shadow-2xl border border-border-color">
+                    <h2 className="text-xl font-semibold mb-1 text-text-primary">
                       Upload Excel File
                     </h2>
-                    <p className="text-sm text-slate-600 mb-5">
+                    <p className="text-sm text-text-secondary mb-5">
                       Premium upload panel—no connectivity changes.
                     </p>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
                       <div>
-                        <label className="text-xs font-medium text-slate-700">
+                        <label className="text-xs font-medium text-text-secondary">
                          Billing Month 
                          </label>
                        <input
@@ -826,24 +826,24 @@ export default function RevenuePage() {
                       value={selectedDate}
                       onChange={(e) => setSelectedDate(e.target.value)}
                       placeholder="Select Month"
-                    className="w-full mt-1 px-3 py-2 rounded-xl bg-white border border-slate-200 text-slate-800 outline-none focus:ring-2 focus:ring-indigo-200"
+                    className="w-full mt-1 px-3 py-2 rounded-xl bg-surface border border-border-color text-text-primary outline-none focus:ring-2 focus:ring-indigo-200"
                         />
                       </div>
 
                       <div>
-                        <label className="text-xs font-medium text-slate-700">Uploaded By</label>
+                        <label className="text-xs font-medium text-text-secondary">Uploaded By</label>
                         <input
                           type="text"
                           placeholder="Enter person name"
                           value={uploadedBy}
                           onChange={(e) => setUploadedBy(e.target.value)}
-                          className="w-full mt-1 px-3 py-2 rounded-xl bg-white border border-slate-200 text-slate-800 outline-none focus:ring-2 focus:ring-indigo-200"
+                          className="w-full mt-1 px-3 py-2 rounded-xl bg-surface border border-border-color text-text-primary outline-none focus:ring-2 focus:ring-indigo-200"
                         />
                       </div>
                     </div>
 
                     <div
-                      className="border-2 border-dashed border-indigo-200 rounded-2xl p-6 text-center mb-4
+                      className="border-2 border-dashed border-indigo-200 dark:border-indigo-500/20 rounded-2xl p-6 text-center mb-4
                       bg-gradient-to-b from-indigo-50 to-white hover:from-indigo-100 transition"
                     >
                       <input
@@ -855,19 +855,19 @@ export default function RevenuePage() {
                       />
 
                       <label htmlFor="fileUpload" className="cursor-pointer">
-                        <p className="text-indigo-700 font-medium">Choose .xlsx / .csv file</p>
-                        <p className="text-xs text-slate-500 mt-1">Excel and CSV files only</p>
+                        <p className="text-indigo-700 dark:text-indigo-400 font-medium">Choose .xlsx / .csv file</p>
+                        <p className="text-xs text-text-muted mt-1">Excel and CSV files only</p>
                       </label>
 
                       {file && (
-                        <p className="mt-3 text-sm text-slate-700 truncate font-medium">
+                        <p className="mt-3 text-sm text-text-secondary truncate font-medium">
                           📄 {file.name}
                         </p>
                       )}
                     </div>
 
                     {uploadTime && (
-                      <div className="bg-slate-50 rounded-xl p-3 text-sm mb-4 border border-slate-200 text-slate-800">
+                      <div className="bg-surface-muted rounded-xl p-3 text-sm mb-4 border border-border-color text-text-primary">
                         ⏱ Uploaded At: {uploadTime}
                       </div>
                     )}
@@ -875,7 +875,7 @@ export default function RevenuePage() {
                     <div className="flex gap-3">
                       <button
                         onClick={() => setShowUpload(false)}
-                        className="w-full py-2.5 rounded-xl bg-white border border-slate-200 text-slate-800 hover:bg-slate-50 transition shadow-sm"
+                        className="w-full py-2.5 rounded-xl bg-surface border border-border-color text-text-primary hover:bg-surface-muted transition shadow-sm"
                       >
                         Cancel
                       </button>

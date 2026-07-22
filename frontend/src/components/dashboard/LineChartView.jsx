@@ -12,6 +12,15 @@ export default function LineChartView({ chartData, entities, hiddenEntities, var
   // labels on points near the top of the plot aren't clipped by the SVG edge.
   const topMargin = verticalLabels ? (isCompact ? 34 : 46) : 10;
 
+  // recharts places category ticks with a "point" scale, which pins the
+  // first/last point exactly at the plot's x=0 / x=width edge. A center-
+  // anchored value label (or a rotated one, which fans out sideways from its
+  // anchor) then draws partway outside the SVG's own bounds and gets clipped
+  // — this is what cuts off the first date's label/dot. XAxis `padding`
+  // reserves an inset at both ends of the scale so every point has room,
+  // without shrinking the plot for every point in between.
+  const edgePad = isCompact ? (verticalLabels ? 18 : 14) : (verticalLabels ? 26 : 20);
+
   const allVals = useMemo(() =>
     (chartData || []).flatMap(row => entities.map(e => Number(row[e])).filter(v => v > 0)),
     [chartData, entities]
@@ -33,9 +42,18 @@ export default function LineChartView({ chartData, entities, hiddenEntities, var
   return (
     <div className={isCompact ? "h-40 w-full" : "h-[360px] w-full"}>
       <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={chartData} margin={{ top: topMargin, right: isCompact ? 8 : 20, left: isCompact ? -24 : -8, bottom: 0 }}>
+        <LineChart data={chartData} margin={{ top: topMargin, right: isCompact ? 6 : 12, left: isCompact ? 2 : 4, bottom: 0 }}>
           <CartesianGrid strokeDasharray="2 2" stroke={theme.grid} vertical={false} />
-          <XAxis dataKey="date" tick={{ fontSize: isCompact ? 8 : 11, fill: theme.tick }} axisLine={false} tickLine={false} />
+          <XAxis
+            dataKey="date"
+            tick={{ fontSize: isCompact ? 8 : 11, fill: theme.tick }}
+            axisLine={false}
+            tickLine={false}
+            tickMargin={6}
+            padding={{ left: edgePad, right: edgePad }}
+            interval="preserveStartEnd"
+            minTickGap={isCompact ? 12 : 20}
+          />
           <YAxis
             domain={domain}
             ticks={ticks}

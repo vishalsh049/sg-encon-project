@@ -15,24 +15,24 @@ function Card({ title, aerialCount, ugCount, tone = "blue" }) {
   const toneStyles = {
     blue: {
       dot: "bg-blue-500",
-      chip: "bg-blue-50 text-blue-600",
-      aerial: "bg-blue-50/70 text-blue-700 shadow-sm",
-      ug: "bg-blue-100 text-blue-700 border border-blue-200", // 🔥 strong highlight
-      total: "text-blue-600",
+      chip: "bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400",
+      aerial: "bg-blue-50 dark:bg-blue-500/10/70 text-blue-700 dark:text-blue-400 shadow-sm",
+      ug: "bg-blue-100 dark:bg-blue-500/15 text-blue-700 dark:text-blue-400 border border-blue-200 dark:border-blue-500/20", // 🔥 strong highlight
+      total: "text-blue-600 dark:text-blue-400",
     },
     green: {
       dot: "bg-emerald-500",
-      chip: "bg-emerald-50 text-emerald-600",
-      aerial: "bg-emerald-50/60 text-emerald-700",
-      ug: "bg-emerald-100 text-emerald-700 border border-emerald-200",
-      total: "text-emerald-600",
+      chip: "bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
+      aerial: "bg-emerald-50 dark:bg-emerald-500/10/60 text-emerald-700 dark:text-emerald-400",
+      ug: "bg-emerald-100 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/20",
+      total: "text-emerald-600 dark:text-emerald-400",
     },
     gray: {
       dot: "bg-slate-400",
-      chip: "bg-slate-100 text-slate-600",
-      aerial: "bg-slate-100 text-slate-700",
-      ug: "bg-slate-100 text-slate-700 border border-slate-200",
-      total: "text-slate-700",
+      chip: "bg-surface-muted text-text-secondary",
+      aerial: "bg-surface-muted text-text-secondary",
+      ug: "bg-surface-muted text-text-secondary border border-border-color",
+      total: "text-text-secondary",
     },
   };
 
@@ -42,19 +42,19 @@ function Card({ title, aerialCount, ugCount, tone = "blue" }) {
     <motion.div
       whileHover={{ y: -4, scale: 1.01 }}
       transition={{ duration: 0.2 }}
-      className="group rounded-3xl border border-slate-200/70 bg-white/70 backdrop-blur-xl p-3 shadow-[0_8px_25px_rgba(0,0,0,0.05)] transition hover:shadow-[0_16px_40px_rgba(0,0,0,0.08)]"
+      className="group rounded-3xl border border-border-color/70 bg-surface/70 backdrop-blur-xl p-3 shadow-[0_8px_25px_rgba(0,0,0,0.05)] transition hover:shadow-[0_16px_40px_rgba(0,0,0,0.08)]"
     >
       {/* HEADER */}
       <div className="mb-2 flex items-center justify-between">
         <div>
           <div className="flex items-center gap-2">
             <span className={`h-2 w-2 rounded-full ${currentTone.dot}`} />
-            <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-400">
+            <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-text-muted">
               Fiber Segment
             </span>
           </div>
 
-          <h3 className="text-base font-semibold text-slate-900 mt-1">
+          <h3 className="text-base font-semibold text-text-primary mt-1">
             {title}
           </h3>
         </div>
@@ -68,7 +68,7 @@ function Card({ title, aerialCount, ugCount, tone = "blue" }) {
 
       {/* TOTAL (NEW 🔥) */}
       <div className="mb-2">
-        <p className="text-[10px] text-slate-400 uppercase tracking-wider">Total</p>
+        <p className="text-[10px] text-text-muted uppercase tracking-wider">Total</p>
         <p className={`text-xl font-bold tracking-tight ${currentTone.total}`}>
           {formatFiberValue(total)}
         </p>

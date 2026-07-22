@@ -18,6 +18,10 @@ const {
   scrumRoleKeyCaseSql,
 } = require("../utils/roleKeyMapping");
 const { makeEnsureIndex } = require("../utils/dbIndex");
+const {
+  buildLatestScrumBatchSubquery,
+  addLatestBatchParam,
+} = require("../utils/scrumDashboardShared");
 
 router.use(authMiddleware);
 
@@ -284,13 +288,11 @@ async function fetchScrumActiveData(req) {
 
   const whereClause = `WHERE ${filters.join(" AND ")}`;
 
-  const latestBatchSubquery = `
-    SELECT upload_batch_id
-    FROM scrum_manpower
-    ${isAllCircle(req.authUser) ? "" : "WHERE LOWER(TRIM(state)) = LOWER(TRIM(?))"}
-    ORDER BY uploaded_at DESC
-    LIMIT 1
-  `;
+  // Was a local copy of the old "one globally-latest batch" SQL. Now delegates
+  // to the shared helper so this export cannot drift from the HR / Scrum /
+  // Dashboard pages (it resolves the latest batch per circle for All-Circle
+  // users, and therefore returns 1..N ids — hence IN, not =).
+  const latestBatchSubquery = buildLatestScrumBatchSubquery(req);
 
   const rows = await query(
     `
@@ -348,7 +350,7 @@ async function fetchScrumActiveData(req) {
           ) AS normalized_job_role
         FROM scrum_manpower
         ${whereClause}
-          AND upload_batch_id = (
+          AND upload_batch_id IN (
             ${latestBatchSubquery}
           )
           AND UPPER(TRIM(COALESCE(status, ''))) = 'ACTIVE'
@@ -593,14 +595,9 @@ function buildPhysicalAvailableBaseSql(req) {
 function buildScrumAvailableBaseSql(req) {
   const scope = getCircleScope(req, "sm.state");
   const latestBatchParams = [];
-  const latestBatchSql = `
-    SELECT upload_batch_id
-    FROM scrum_manpower
-    ${isAllCircle(req.authUser) ? "" : "WHERE LOWER(TRIM(state)) = LOWER(TRIM(?))"}
-    ORDER BY uploaded_at DESC
-    LIMIT 1
-  `;
-  if (!isAllCircle(req.authUser)) latestBatchParams.push(req.authUser.circle);
+  // Second local copy of the same superseded SQL — also delegated now.
+  const latestBatchSql = buildLatestScrumBatchSubquery(req);
+  addLatestBatchParam(req, latestBatchParams);
 
   const sql = `
     (
@@ -620,7 +617,7 @@ function buildScrumAvailableBaseSql(req) {
       FROM scrum_manpower sm
       WHERE UPPER(TRIM(sm.vendor)) = 'S G ENCON PVT LTD'
         AND UPPER(TRIM(COALESCE(sm.status, ''))) = 'ACTIVE'
-        AND sm.upload_batch_id = (${latestBatchSql})
+        AND sm.upload_batch_id IN (${latestBatchSql})
         AND sm.maintenance_point IS NOT NULL AND sm.maintenance_point <> ''
         AND sm.job_role IS NOT NULL AND sm.job_role <> ''
         ${scope.sql}

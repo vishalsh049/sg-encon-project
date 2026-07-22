@@ -51,11 +51,11 @@ export default function Reports() {
   return (
     <div className="mx-auto max-w-7xl space-y-5 p-4 sm:p-6">
       <div>
-        <h1 className="flex items-center gap-2 text-xl font-semibold tracking-tight text-slate-900">
-          <FileSpreadsheet className="h-5 w-5 text-indigo-500" />
+        <h1 className="flex items-center gap-2 text-xl font-semibold tracking-tight text-text-primary">
+          <FileSpreadsheet className="h-5 w-5 text-indigo-500 dark:text-indigo-400" />
           Reports
         </h1>
-        <p className="mt-0.5 text-sm text-slate-500">
+        <p className="mt-0.5 text-sm text-text-muted">
           Export training data to Excel with any combination of filters.
         </p>
       </div>
@@ -63,8 +63,8 @@ export default function Reports() {
       <TrainingStats stats={stats} loading={loading} />
 
       {/* One-click presets */}
-      <div className="rounded-[20px] border border-slate-100 bg-white p-4 shadow-sm">
-        <h2 className="text-sm font-semibold text-slate-700">Quick Reports</h2>
+      <div className="rounded-[20px] border border-border-color bg-surface p-4 shadow-sm">
+        <h2 className="text-sm font-semibold text-text-secondary">Quick Reports</h2>
         <div className="mt-3 flex flex-wrap gap-2">
           {PRESETS.map((preset) => (
             <button
@@ -72,7 +72,7 @@ export default function Reports() {
               type="button"
               disabled={exporting !== null}
               onClick={() => runExport(preset.label, preset.filters)}
-              className="flex h-9 items-center gap-1.5 rounded-2xl border border-slate-200 bg-white px-3.5 text-sm font-medium text-slate-600 shadow-sm transition hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700 disabled:opacity-50"
+              className="flex h-9 items-center gap-1.5 rounded-2xl border border-border-color bg-surface px-3.5 text-sm font-medium text-text-secondary shadow-sm transition hover:border-emerald-300 hover:dark:border-emerald-500/30 hover:bg-emerald-50 hover:dark:bg-emerald-500/10 hover:text-emerald-700 hover:dark:text-emerald-400 disabled:opacity-50"
             >
               {exporting === preset.label ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -86,8 +86,8 @@ export default function Reports() {
       </div>
 
       {/* Custom report */}
-      <div className="rounded-[20px] border border-slate-100 bg-white p-4 shadow-sm">
-        <h2 className="text-sm font-semibold text-slate-700">Custom Report</h2>
+      <div className="rounded-[20px] border border-border-color bg-surface p-4 shadow-sm">
+        <h2 className="text-sm font-semibold text-text-secondary">Custom Report</h2>
         <div className="mt-3 space-y-3">
           <Filters
             value={filters}

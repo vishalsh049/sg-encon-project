@@ -328,26 +328,26 @@ export default function DrilldownModal({ isOpen, scope, onClose }) {
 
   const summaryCards = summary
     ? [
-        { label: "Total Required", value: summary.totalRequired, tint: "text-slate-800" },
-        { label: "Total Available", value: summary.totalAvailable, tint: "text-blue-700" },
-        { label: "Total Gap", value: summary.totalGap, tint: summary.totalGap > 0 ? "text-red-600" : "text-emerald-600" },
-        { label: "Active Employees", value: summary.activeEmployees, tint: "text-emerald-700" },
-        { label: "Inactive Employees", value: summary.inactiveEmployees, tint: "text-slate-500" },
-        { label: "Joined Employees", value: summary.joinedEmployees, tint: "text-violet-700" },
-        { label: "Not Joined Employees", value: summary.notJoinedEmployees, tint: "text-amber-600" },
+        { label: "Total Required", value: summary.totalRequired, tint: "text-text-primary" },
+        { label: "Total Available", value: summary.totalAvailable, tint: "text-blue-700 dark:text-blue-400" },
+        { label: "Total Gap", value: summary.totalGap, tint: summary.totalGap > 0 ? "text-red-600 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400" },
+        { label: "Active Employees", value: summary.activeEmployees, tint: "text-emerald-700 dark:text-emerald-400" },
+        { label: "Inactive Employees", value: summary.inactiveEmployees, tint: "text-text-muted" },
+        { label: "Joined Employees", value: summary.joinedEmployees, tint: "text-violet-700 dark:text-violet-400" },
+        { label: "Not Joined Employees", value: summary.notJoinedEmployees, tint: "text-amber-600 dark:text-amber-400" },
       ]
     : [];
 
   const modal = (
     <div
-      className={`fixed inset-0 z-[400] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm ${
+      className={`fixed inset-0 z-[400] flex items-center justify-center bg-overlay/60 backdrop-blur-sm ${
         isFullscreen ? "p-0" : "p-2 md:p-4"
       }`}
     >
       <style>{`@keyframes drilldownModalIn { from { opacity: 0; transform: scale(0.98); } to { opacity: 1; transform: scale(1); } }`}</style>
 
       <div
-        className={`flex min-h-0 flex-col overflow-hidden border border-white/40 bg-white/95 shadow-[0_40px_120px_rgba(15,23,42,0.5)] backdrop-blur-2xl ${
+        className={`flex min-h-0 flex-col overflow-hidden border border-white/40 bg-surface/95 shadow-[0_40px_120px_rgba(15,23,42,0.5)] backdrop-blur-2xl ${
           isFullscreen ? "h-full w-full rounded-none" : "h-[92vh] w-full max-w-6xl rounded-[18px]"
         }`}
         style={{ animation: "drilldownModalIn 0.2s ease" }}
@@ -355,7 +355,7 @@ export default function DrilldownModal({ isOpen, scope, onClose }) {
         <div className="bg-gradient-to-r from-indigo-600 via-blue-600 to-cyan-500 px-4 py-3 text-white">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-3">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[12px] border border-white/25 bg-white/15 backdrop-blur-xl">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[12px] border border-white/25 bg-surface/15 backdrop-blur-xl">
                 <Users className="h-4 w-4" />
               </div>
               <div>
@@ -370,13 +370,13 @@ export default function DrilldownModal({ isOpen, scope, onClose }) {
             </div>
 
             <div className="flex flex-wrap items-center gap-2 text-xs font-semibold">
-              <span className="rounded-lg border border-white/20 bg-white/15 px-3 py-1.5">
+              <span className="rounded-lg border border-white/20 bg-surface/15 px-3 py-1.5">
                 R {header?.required ?? "—"}
               </span>
-              <span className="rounded-lg border border-white/20 bg-white/15 px-3 py-1.5">
+              <span className="rounded-lg border border-white/20 bg-surface/15 px-3 py-1.5">
                 A {header?.available ?? "—"}
               </span>
-              <span className="rounded-lg border border-white/20 bg-white/15 px-3 py-1.5">
+              <span className="rounded-lg border border-white/20 bg-surface/15 px-3 py-1.5">
                 G {header?.gap ?? "—"}
               </span>
               <button
@@ -384,7 +384,7 @@ export default function DrilldownModal({ isOpen, scope, onClose }) {
                 onClick={fetchData}
                 disabled={loading}
                 title="Refresh"
-                className="inline-flex items-center gap-1.5 rounded-lg border border-white/20 bg-white/20 px-3 py-1.5 backdrop-blur-sm transition hover:bg-white/30 disabled:opacity-60"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-white/20 bg-surface/20 px-3 py-1.5 backdrop-blur-sm transition hover:bg-surface/30 disabled:opacity-60"
               >
                 <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
                 Refresh
@@ -393,7 +393,7 @@ export default function DrilldownModal({ isOpen, scope, onClose }) {
                 type="button"
                 onClick={() => setIsFullscreen((prev) => !prev)}
                 title="Toggle fullscreen"
-                className="inline-flex items-center gap-1.5 rounded-lg border border-white/20 bg-white/20 px-3 py-1.5 backdrop-blur-sm transition hover:bg-white/30"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-white/20 bg-surface/20 px-3 py-1.5 backdrop-blur-sm transition hover:bg-surface/30"
               >
                 {isFullscreen ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
               </button>
@@ -401,7 +401,7 @@ export default function DrilldownModal({ isOpen, scope, onClose }) {
                 type="button"
                 onClick={onClose}
                 title="Close (Esc)"
-                className="inline-flex items-center gap-1.5 rounded-lg border border-white/20 bg-white/20 px-3 py-1.5 backdrop-blur-sm transition hover:bg-white/35"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-white/20 bg-surface/20 px-3 py-1.5 backdrop-blur-sm transition hover:bg-surface/35"
               >
                 <X className="h-3.5 w-3.5" />
               </button>
@@ -410,7 +410,7 @@ export default function DrilldownModal({ isOpen, scope, onClose }) {
         </div>
 
         {showGapBanner && (
-          <div className="flex items-start gap-2 border-b border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-800">
+          <div className="flex items-start gap-2 border-b border-amber-200 dark:border-amber-500/20 bg-amber-50 dark:bg-amber-500/10 px-4 py-2 text-xs text-amber-800 dark:text-amber-300">
             <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
             <span>
               Gap of {header?.gap ?? 0} is a staffing shortfall — there are no employee records for a vacant seat.
@@ -420,10 +420,10 @@ export default function DrilldownModal({ isOpen, scope, onClose }) {
         )}
 
         {summary && (
-          <div className="grid grid-cols-2 gap-1.5 border-b border-slate-200 bg-slate-50 p-2 md:grid-cols-4 xl:grid-cols-7">
+          <div className="grid grid-cols-2 gap-1.5 border-b border-border-color bg-surface-muted p-2 md:grid-cols-4 xl:grid-cols-7">
             {summaryCards.map((card) => (
-              <div key={card.label} className="rounded-[10px] border border-slate-200 bg-white px-2.5 py-1.5">
-                <p className="truncate text-[0.6rem] font-semibold uppercase tracking-wide text-slate-500">
+              <div key={card.label} className="rounded-[10px] border border-border-color bg-surface px-2.5 py-1.5">
+                <p className="truncate text-[0.6rem] font-semibold uppercase tracking-wide text-text-muted">
                   {card.label}
                 </p>
                 <p className={`text-sm font-bold ${card.tint}`}>{card.value}</p>
@@ -432,10 +432,10 @@ export default function DrilldownModal({ isOpen, scope, onClose }) {
           </div>
         )}
 
-        <div className="border-b border-slate-200/80 bg-white/80 p-2 backdrop-blur-xl">
+        <div className="border-b border-border-color/80 bg-surface/80 p-2 backdrop-blur-xl">
           <div className="grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-6">
             <div className="relative">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-text-muted" />
               <input
                 type="text"
                 placeholder="Search Employee..."
@@ -444,12 +444,12 @@ export default function DrilldownModal({ isOpen, scope, onClose }) {
                   setSearch(e.target.value);
                   setPage(1);
                 }}
-                className="h-8 w-full rounded-[10px] border border-slate-200 bg-white pl-8 pr-3 text-xs text-slate-700 outline-none transition focus:border-indigo-300 focus:ring-4 focus:ring-indigo-50"
+                className="h-8 w-full rounded-[10px] border border-border-color bg-surface pl-8 pr-3 text-xs text-text-secondary outline-none transition focus:border-indigo-300 focus:dark:border-indigo-500/30 focus:ring-4 focus:ring-indigo-50"
               />
             </div>
 
             <div className="relative">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-text-muted" />
               <input
                 type="text"
                 placeholder="Search Employee Code..."
@@ -458,7 +458,7 @@ export default function DrilldownModal({ isOpen, scope, onClose }) {
                   setEmployeeCode(e.target.value);
                   setPage(1);
                 }}
-                className="h-8 w-full rounded-[10px] border border-slate-200 bg-white pl-8 pr-3 text-xs text-slate-700 outline-none transition focus:border-indigo-300 focus:ring-4 focus:ring-indigo-50"
+                className="h-8 w-full rounded-[10px] border border-border-color bg-surface pl-8 pr-3 text-xs text-text-secondary outline-none transition focus:border-indigo-300 focus:dark:border-indigo-500/30 focus:ring-4 focus:ring-indigo-50"
               />
             </div>
 
@@ -470,7 +470,7 @@ export default function DrilldownModal({ isOpen, scope, onClose }) {
                 setPage(1);
               }}
               disabled={!isAllCircleUser}
-              className="h-8 w-full rounded-[10px] border border-slate-200 bg-white px-2 text-xs text-slate-700 outline-none transition focus:border-indigo-300 focus:ring-4 focus:ring-indigo-50 disabled:cursor-not-allowed disabled:opacity-70"
+              className="h-8 w-full rounded-[10px] border border-border-color bg-surface px-2 text-xs text-text-secondary outline-none transition focus:border-indigo-300 focus:dark:border-indigo-500/30 focus:ring-4 focus:ring-indigo-50 disabled:cursor-not-allowed disabled:opacity-70"
             >
               {isAllCircleUser && <option value="">All Circles</option>}
               {allowedCircleLabels.map((label) => (
@@ -486,7 +486,7 @@ export default function DrilldownModal({ isOpen, scope, onClose }) {
                 setCmp(e.target.value);
                 setPage(1);
               }}
-              className="h-8 w-full rounded-[10px] border border-slate-200 bg-white px-2 text-xs text-slate-700 outline-none transition focus:border-indigo-300 focus:ring-4 focus:ring-indigo-50"
+              className="h-8 w-full rounded-[10px] border border-border-color bg-surface px-2 text-xs text-text-secondary outline-none transition focus:border-indigo-300 focus:dark:border-indigo-500/30 focus:ring-4 focus:ring-indigo-50"
             >
               <option value="">All CMPs</option>
               {cmpOptions.map((cmpName) => (
@@ -502,7 +502,7 @@ export default function DrilldownModal({ isOpen, scope, onClose }) {
                 setEmploymentStatus(e.target.value);
                 setPage(1);
               }}
-              className="h-8 w-full rounded-[10px] border border-slate-200 bg-white px-2 text-xs text-slate-700 outline-none transition focus:border-indigo-300 focus:ring-4 focus:ring-indigo-50"
+              className="h-8 w-full rounded-[10px] border border-border-color bg-surface px-2 text-xs text-text-secondary outline-none transition focus:border-indigo-300 focus:dark:border-indigo-500/30 focus:ring-4 focus:ring-indigo-50"
             >
               <option value="">All Employment Status</option>
               <option value="Active">Active</option>
@@ -515,7 +515,7 @@ export default function DrilldownModal({ isOpen, scope, onClose }) {
                 setJoiningStatus(e.target.value);
                 setPage(1);
               }}
-              className="h-8 w-full rounded-[10px] border border-slate-200 bg-white px-2 text-xs text-slate-700 outline-none transition focus:border-indigo-300 focus:ring-4 focus:ring-indigo-50"
+              className="h-8 w-full rounded-[10px] border border-border-color bg-surface px-2 text-xs text-text-secondary outline-none transition focus:border-indigo-300 focus:dark:border-indigo-500/30 focus:ring-4 focus:ring-indigo-50"
             >
               <option value="">All Joining Status</option>
               <option value="Joined">Joined</option>
@@ -527,7 +527,7 @@ export default function DrilldownModal({ isOpen, scope, onClose }) {
             <button
               type="button"
               onClick={resetFilters}
-              className="text-[11px] font-semibold text-indigo-600 transition hover:text-indigo-800"
+              className="text-[11px] font-semibold text-indigo-600 dark:text-indigo-400 transition hover:text-indigo-800 hover:dark:text-indigo-300"
             >
               Reset filters
             </button>
@@ -536,33 +536,33 @@ export default function DrilldownModal({ isOpen, scope, onClose }) {
               <button
                 type="button"
                 onClick={handleExportExcel}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] font-semibold text-slate-600 transition hover:bg-slate-50"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-border-color bg-surface px-2.5 py-1.5 text-[11px] font-semibold text-text-secondary transition hover:bg-surface-muted"
               >
-                <FileSpreadsheet className="h-3.5 w-3.5 text-emerald-600" />
+                <FileSpreadsheet className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
                 Export Excel
               </button>
               <button
                 type="button"
                 onClick={handlePrintOrPdf}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] font-semibold text-slate-600 transition hover:bg-slate-50"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-border-color bg-surface px-2.5 py-1.5 text-[11px] font-semibold text-text-secondary transition hover:bg-surface-muted"
               >
-                <FileDown className="h-3.5 w-3.5 text-red-500" />
+                <FileDown className="h-3.5 w-3.5 text-red-500 dark:text-red-400" />
                 Export PDF
               </button>
               <button
                 type="button"
                 onClick={handlePrintOrPdf}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] font-semibold text-slate-600 transition hover:bg-slate-50"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-border-color bg-surface px-2.5 py-1.5 text-[11px] font-semibold text-text-secondary transition hover:bg-surface-muted"
               >
-                <Download className="h-3.5 w-3.5 text-slate-500" />
+                <Download className="h-3.5 w-3.5 text-text-muted" />
                 Print
               </button>
               <button
                 type="button"
                 onClick={handleCopyData}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] font-semibold text-slate-600 transition hover:bg-slate-50"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-border-color bg-surface px-2.5 py-1.5 text-[11px] font-semibold text-text-secondary transition hover:bg-surface-muted"
               >
-                <Copy className="h-3.5 w-3.5 text-slate-500" />
+                <Copy className="h-3.5 w-3.5 text-text-muted" />
                 Copy Data
               </button>
             </div>
@@ -572,14 +572,14 @@ export default function DrilldownModal({ isOpen, scope, onClose }) {
         <div className="relative flex-1 overflow-auto custom-scrollbar" style={{ isolation: "isolate" }}>
           <table className="min-w-max w-full whitespace-nowrap border-collapse text-xs">
             <thead>
-              <tr className="sticky top-0 z-[10] bg-slate-100 text-[11px] font-bold uppercase text-slate-600">
+              <tr className="sticky top-0 z-[10] bg-surface-muted text-[11px] font-bold uppercase text-text-secondary">
                 {TABLE_COLUMNS.map((column) => {
                   const sortKey = SORT_COLUMNS.find((s) => s.key === column.key || s.label === column.label)?.key;
                   return (
                     <th
                       key={column.key}
-                      className={`border-b border-slate-300 px-3 py-2 text-left ${
-                        sortKey ? "cursor-pointer select-none hover:bg-slate-200" : ""
+                      className={`border-b border-border-strong px-3 py-2 text-left ${
+                        sortKey ? "cursor-pointer select-none hover:bg-surface-muted" : ""
                       }`}
                       onClick={sortKey ? () => toggleSort(sortKey) : undefined}
                     >
@@ -601,13 +601,13 @@ export default function DrilldownModal({ isOpen, scope, onClose }) {
             <tbody>
               {loading && !result ? (
                 <tr>
-                  <td colSpan={TABLE_COLUMNS.length} className="px-3 py-10 text-center text-slate-400">
+                  <td colSpan={TABLE_COLUMNS.length} className="px-3 py-10 text-center text-text-muted">
                     Loading employee details...
                   </td>
                 </tr>
               ) : !result?.data?.length ? (
                 <tr>
-                  <td colSpan={TABLE_COLUMNS.length} className="px-3 py-10 text-center text-slate-400">
+                  <td colSpan={TABLE_COLUMNS.length} className="px-3 py-10 text-center text-text-muted">
                     No employees match the current filters.
                   </td>
                 </tr>
@@ -615,13 +615,13 @@ export default function DrilldownModal({ isOpen, scope, onClose }) {
                 result.data.map((row, index) => (
                   <tr
                     key={`${row.employeeCode || "row"}-${index}`}
-                    className={`transition hover:bg-blue-50 ${index % 2 === 0 ? "bg-white" : "bg-slate-50"}`}
+                    className={`transition hover:bg-blue-50 hover:dark:bg-blue-500/10 ${index % 2 === 0 ? "bg-surface" : "bg-surface-muted"}`}
                   >
                     {TABLE_COLUMNS.map((column) => {
                       const raw = row[column.key];
                       const value = column.format ? column.format(raw) : raw || "—";
                       return (
-                        <td key={column.key} className="border-b border-slate-200 px-3 py-1.5 text-slate-700">
+                        <td key={column.key} className="border-b border-border-color px-3 py-1.5 text-text-secondary">
                           {value}
                         </td>
                       );
@@ -633,7 +633,7 @@ export default function DrilldownModal({ isOpen, scope, onClose }) {
           </table>
         </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-200 bg-slate-50 px-4 py-2 text-xs text-slate-600">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border-color bg-surface-muted px-4 py-2 text-xs text-text-secondary">
           <span>
             {pagination
               ? `Showing ${pagination.totalRecords === 0 ? 0 : (pagination.page - 1) * pagination.pageSize + 1}–${Math.min(
@@ -647,7 +647,7 @@ export default function DrilldownModal({ isOpen, scope, onClose }) {
               type="button"
               disabled={!pagination || pagination.page <= 1}
               onClick={() => setPage((prev) => Math.max(1, prev - 1))}
-              className="rounded-lg border border-slate-200 bg-white px-3 py-1 font-semibold text-slate-600 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-lg border border-border-color bg-surface px-3 py-1 font-semibold text-text-secondary transition hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-50"
             >
               Prev
             </button>
@@ -658,7 +658,7 @@ export default function DrilldownModal({ isOpen, scope, onClose }) {
               type="button"
               disabled={!pagination || pagination.page >= pagination.totalPages}
               onClick={() => setPage((prev) => prev + 1)}
-              className="rounded-lg border border-slate-200 bg-white px-3 py-1 font-semibold text-slate-600 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-lg border border-border-color bg-surface px-3 py-1 font-semibold text-text-secondary transition hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-50"
             >
               Next
             </button>

@@ -45,10 +45,10 @@ function formatTimestamp(value) {
 
 function SectionCard({ title, subtitle, children, className = "" }) {
   return (
-    <div className={`rounded-2xl border border-slate-200 bg-white p-4 shadow-sm ${className}`.trim()}>
+    <div className={`rounded-2xl border border-border-color bg-surface p-4 shadow-sm ${className}`.trim()}>
       <div className="mb-2">
-        <h3 className="text-lg font-semibold text-slate-900">{title}</h3>
-        {subtitle ? <p className="text-sm text-slate-500">{subtitle}</p> : null}
+        <h3 className="text-lg font-semibold text-text-primary">{title}</h3>
+        {subtitle ? <p className="text-sm text-text-muted">{subtitle}</p> : null}
       </div>
       {children}
     </div>
@@ -57,14 +57,14 @@ function SectionCard({ title, subtitle, children, className = "" }) {
 
 function StatCard({ title, value, subtitle, icon: Icon, accent }) {
   return (
-    <div className={`w-full rounded-2xl border border-slate-200 bg-gradient-to-br ${accent} p-2 shadow-sm`}>
+    <div className={`w-full rounded-2xl border border-border-color bg-gradient-to-br ${accent} p-2 shadow-sm`}>
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-sm font-medium text-slate-600">{title}</p>
-          <p className="mt-1 text-xl font-semibold text-slate-900">{value}</p>
-          {subtitle ? <p className="mt-1 text-sm text-slate-500">{subtitle}</p> : null}
+          <p className="text-sm font-medium text-text-secondary">{title}</p>
+          <p className="mt-1 text-xl font-semibold text-text-primary">{value}</p>
+          {subtitle ? <p className="mt-1 text-sm text-text-muted">{subtitle}</p> : null}
         </div>
-        <div className="rounded-xl bg-white/70 p-2 text-slate-700">
+        <div className="rounded-xl bg-surface/70 p-2 text-text-secondary">
           <Icon size={18} />
         </div>
       </div>
@@ -73,31 +73,31 @@ function StatCard({ title, value, subtitle, icon: Icon, accent }) {
 }
 
 const ITEM_TONES = {
-  Complete: "text-emerald-600",
-  Pending: "text-amber-600",
-  Exempted: "text-slate-500",
-  Active: "text-emerald-600",
-  "Active Employees": "text-emerald-600",
-  Inactive: "text-rose-600",
-  "Inactive Employees": "text-rose-600",
-  "Not Applicable": "text-slate-500",
+  Complete: "text-emerald-600 dark:text-emerald-400",
+  Pending: "text-amber-600 dark:text-amber-400",
+  Exempted: "text-text-muted",
+  Active: "text-emerald-600 dark:text-emerald-400",
+  "Active Employees": "text-emerald-600 dark:text-emerald-400",
+  Inactive: "text-rose-600 dark:text-rose-400",
+  "Inactive Employees": "text-rose-600 dark:text-rose-400",
+  "Not Applicable": "text-text-muted",
 };
 
 function TableShell({ title, subtitle, searchValue, onSearchChange, columns, rows, onRowClick, onSortChange, page, totalPages, onPageChange, totalRecords, emptyMessage, loading, exportLabel, onExport }) {
   return (
     <SectionCard title={title} subtitle={subtitle} className="overflow-hidden">
       <div className="mb-2 flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
-        <div className="flex items-center gap-2 text-sm text-slate-500">
+        <div className="flex items-center gap-2 text-sm text-text-muted">
           <span>{totalRecords} records</span>
           {exportLabel ? (
-            <button type="button" onClick={onExport} className="flex items-center gap-1 rounded-lg border border-slate-200 px-2.5 py-1.5 font-medium text-slate-700">
+            <button type="button" onClick={onExport} className="flex items-center gap-1 rounded-lg border border-border-color px-2.5 py-1.5 font-medium text-text-secondary">
               <Download size={14} />
               {exportLabel}
             </button>
           ) : null}
         </div>
-        <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
-          <Search size={14} className="text-slate-400" />
+        <div className="flex items-center gap-2 rounded-xl border border-border-color bg-surface-muted px-3 py-2">
+          <Search size={14} className="text-text-muted" />
           <input value={searchValue} onChange={(event) => onSearchChange(event.target.value)} placeholder="Search table" className="w-40 bg-transparent text-sm outline-none" />
         </div>
       </div>
@@ -105,23 +105,23 @@ function TableShell({ title, subtitle, searchValue, onSearchChange, columns, row
       {loading ? (
         <div className="space-y-2">
           {[...Array(4)].map((_, index) => (
-            <div key={index} className="h-10 animate-pulse rounded-xl bg-slate-100" />
+            <div key={index} className="h-10 animate-pulse rounded-xl bg-surface-muted" />
           ))}
         </div>
       ) : rows.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-5 text-sm text-slate-500">{emptyMessage}</div>
+        <div className="rounded-2xl border border-dashed border-border-color bg-surface-muted p-5 text-sm text-text-muted">{emptyMessage}</div>
       ) : (
         <>
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-slate-200 text-sm">
-              <thead className="bg-slate-50">
+            <table className="min-w-full divide-y divide-border-color text-sm">
+              <thead className="bg-surface-muted">
                 <tr>
                   {columns.map((column) => (
-                    <th key={column.key} className="px-3 py-2 text-left font-semibold text-slate-700">
+                    <th key={column.key} className="px-3 py-2 text-left font-semibold text-text-secondary">
                       {column.sortable ? (
                         <button type="button" onClick={() => onSortChange(column.key)} className="flex items-center gap-1">
                           {column.label}
-                          <ArrowUpDown size={13} className="text-slate-400" />
+                          <ArrowUpDown size={13} className="text-text-muted" />
                         </button>
                       ) : (
                         column.label
@@ -130,11 +130,11 @@ function TableShell({ title, subtitle, searchValue, onSearchChange, columns, row
                   ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 bg-white">
+              <tbody className="divide-y divide-border-color bg-surface">
                 {rows.map((row) => (
-                  <tr key={row.id} onClick={() => onRowClick(row)} className="cursor-pointer transition hover:bg-slate-50">
+                  <tr key={row.id} onClick={() => onRowClick(row)} className="cursor-pointer transition hover:bg-surface-muted">
                     {columns.map((column) => (
-                      <td key={`${row.id}-${column.key}`} className="px-3 py-2 text-slate-700">
+                      <td key={`${row.id}-${column.key}`} className="px-3 py-2 text-text-secondary">
                         {column.render ? column.render(row) : row[column.key] ?? "-"}
                       </td>
                     ))}
@@ -144,13 +144,13 @@ function TableShell({ title, subtitle, searchValue, onSearchChange, columns, row
             </table>
           </div>
 
-          <div className="mt-4 flex items-center justify-between text-sm text-slate-500">
+          <div className="mt-4 flex items-center justify-between text-sm text-text-muted">
             <span>Page {page} of {Math.max(totalPages, 1)}</span>
             <div className="flex items-center gap-2">
-              <button type="button" onClick={() => onPageChange(Math.max(1, page - 1))} disabled={page === 1} className="rounded-lg border border-slate-200 px-2.5 py-1.5 disabled:cursor-not-allowed disabled:opacity-50">
+              <button type="button" onClick={() => onPageChange(Math.max(1, page - 1))} disabled={page === 1} className="rounded-lg border border-border-color px-2.5 py-1.5 disabled:cursor-not-allowed disabled:opacity-50">
                 <ChevronLeft size={14} />
               </button>
-              <button type="button" onClick={() => onPageChange(Math.min(totalPages, page + 1))} disabled={page >= totalPages} className="rounded-lg border border-slate-200 px-2.5 py-1.5 disabled:cursor-not-allowed disabled:opacity-50">
+              <button type="button" onClick={() => onPageChange(Math.min(totalPages, page + 1))} disabled={page >= totalPages} className="rounded-lg border border-border-color px-2.5 py-1.5 disabled:cursor-not-allowed disabled:opacity-50">
                 <ChevronRight size={14} />
               </button>
             </div>
@@ -599,31 +599,31 @@ export default function PhysicalDashboard() {
   ];
 
   return (
-    <div className="min-h-screen bg-slate-50 p-4 lg:p-4">
+    <div className="min-h-screen bg-surface-muted p-4 lg:p-4">
       <div className="mx-auto max-w-8xl space-y-4">
-        <div className=" top-0 z-20 rounded-3xl border border-slate-200 bg-white/95 p-4 shadow-sm backdrop-blur">
+        <div className=" top-0 z-20 rounded-3xl border border-border-color bg-surface/95 p-4 shadow-sm backdrop-blur">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
-              <div className="flex items-center gap-1 text-sm font-medium text-indigo-600">
+              <div className="flex items-center gap-1 text-sm font-medium text-indigo-600 dark:text-indigo-400">
                 <FileText size={12} />
                 Physical Analytics Dashboard
               </div>
-              <h1 className="mt-1 text-lg font-semibold text-slate-900">Employee document tracking</h1>
-              <p className="mt-1 text-sm text-slate-500">Permission-aware insights for circles, CMPs, roles, documents, and employment status.</p>
+              <h1 className="mt-1 text-lg font-semibold text-text-primary">Employee document tracking</h1>
+              <p className="mt-1 text-sm text-text-muted">Permission-aware insights for circles, CMPs, roles, documents, and employment status.</p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-500">
+              <div className="rounded-xl border border-border-color bg-surface-muted px-3 py-2 text-sm text-text-muted">
                 Last updated: {lastUpdated ? formatTimestamp(lastUpdated) : "Loading..."}
               </div>
               <button type="button" onClick={refreshDashboard} className="flex items-center gap-2 rounded-xl bg-indigo-600 px-3 py-2 text-sm font-semibold text-white">
                 <RefreshCcw size={16} />
                 Refresh
               </button>
-              <button type="button" onClick={exportAllTables} className="flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700">
+              <button type="button" onClick={exportAllTables} className="flex items-center gap-2 rounded-xl border border-border-color px-3 py-2 text-sm font-semibold text-text-secondary">
                 <Download size={16} />
                 Export Excel
               </button>
-              <button type="button" onClick={() => navigate("/dashboard/manpower/physical")} className="flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700">
+              <button type="button" onClick={() => navigate("/dashboard/manpower/physical")} className="flex items-center gap-2 rounded-xl border border-border-color px-3 py-2 text-sm font-medium text-text-secondary">
                 <ArrowLeft size={16} />
                 Back to Physical
               </button>
@@ -631,27 +631,27 @@ export default function PhysicalDashboard() {
           </div>
 
           <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-4 xl:grid-cols-5">
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-2 xl:col-span-1">
-              <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Circle</label>
-              <select value={filters.circle} onChange={(event) => setFilters((prev) => ({ ...prev, circle: event.target.value, cmp: "" }))} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm">
+            <div className="rounded-2xl border border-border-color bg-surface-muted p-2 xl:col-span-1">
+              <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-text-muted">Circle</label>
+              <select value={filters.circle} onChange={(event) => setFilters((prev) => ({ ...prev, circle: event.target.value, cmp: "" }))} className="w-full rounded-xl border border-border-color bg-surface px-3 py-2 text-sm">
                 <option value="">All circles</option>
                 {filterOptions.circles.map((circle) => (
                   <option key={circle} value={circle}>{circle}</option>
                 ))}
               </select>
             </div>
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-2 xl:col-span-1">
-              <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">CMP</label>
-              <select value={filters.cmp} onChange={(event) => setFilters((prev) => ({ ...prev, cmp: event.target.value }))} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm">
+            <div className="rounded-2xl border border-border-color bg-surface-muted p-2 xl:col-span-1">
+              <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-text-muted">CMP</label>
+              <select value={filters.cmp} onChange={(event) => setFilters((prev) => ({ ...prev, cmp: event.target.value }))} className="w-full rounded-xl border border-border-color bg-surface px-3 py-2 text-sm">
                 <option value="">All CMPs</option>
                 {filterOptions.cmps.map((cmp) => (
                   <option key={cmp} value={cmp}>{cmp}</option>
                 ))}
               </select>
             </div>
-          {/*  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-2 xl:col-span-1">
-              <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Job Role</label>
-              <select value={filters.jobRole} onChange={(event) => setFilters((prev) => ({ ...prev, jobRole: event.target.value }))} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm">
+          {/*  <div className="rounded-2xl border border-border-color bg-surface-muted p-2 xl:col-span-1">
+              <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-text-muted">Job Role</label>
+              <select value={filters.jobRole} onChange={(event) => setFilters((prev) => ({ ...prev, jobRole: event.target.value }))} className="w-full rounded-xl border border-border-color bg-surface px-3 py-2 text-sm">
                 <option value="">All roles</option>
                 {filterOptions.jobRoles.map((role) => (
                   <option key={role} value={role}>{role}</option>
@@ -659,18 +659,18 @@ export default function PhysicalDashboard() {
               </select>
             </div>
              */}
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-2 xl:col-span-1">
-              <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Employment Status</label>
-              <select value={filters.employmentStatus} onChange={(event) => setFilters((prev) => ({ ...prev, employmentStatus: event.target.value }))} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm">
+            <div className="rounded-2xl border border-border-color bg-surface-muted p-2 xl:col-span-1">
+              <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-text-muted">Employment Status</label>
+              <select value={filters.employmentStatus} onChange={(event) => setFilters((prev) => ({ ...prev, employmentStatus: event.target.value }))} className="w-full rounded-xl border border-border-color bg-surface px-3 py-2 text-sm">
                 <option value="">All status</option>
                 {filterOptions.employmentStatuses.map((status) => (
                   <option key={status} value={status}>{status}</option>
                 ))}
               </select>
             </div>
-         {/*    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-2 xl:col-span-1">
-              <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">PPRJ Status</label>
-              <select value={filters.pprjStatus} onChange={(event) => setFilters((prev) => ({ ...prev, pprjStatus: event.target.value }))} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm">
+         {/*    <div className="rounded-2xl border border-border-color bg-surface-muted p-2 xl:col-span-1">
+              <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-text-muted">PPRJ Status</label>
+              <select value={filters.pprjStatus} onChange={(event) => setFilters((prev) => ({ ...prev, pprjStatus: event.target.value }))} className="w-full rounded-xl border border-border-color bg-surface px-3 py-2 text-sm">
                 <option value="">All PPRJ status</option>
                 {filterOptions.pprjStatuses.map((status) => (
                   <option key={status} value={status}>{status}</option>
@@ -678,11 +678,11 @@ export default function PhysicalDashboard() {
               </select>
             </div>
             */}
-           <div className="rounded-2xl border border-slate-200 bg-slate-50 p-2 xl:col-span-2">
-              <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Date Range (DOJ)</label>
+           <div className="rounded-2xl border border-border-color bg-surface-muted p-2 xl:col-span-2">
+              <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-text-muted">Date Range (DOJ)</label>
               <div className="grid grid-cols-2 gap-2">
-                <input type="date" value={filters.dateFrom} onChange={(event) => setFilters((prev) => ({ ...prev, dateFrom: event.target.value }))} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" />
-                <input type="date" value={filters.dateTo} onChange={(event) => setFilters((prev) => ({ ...prev, dateTo: event.target.value }))} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" />
+                <input type="date" value={filters.dateFrom} onChange={(event) => setFilters((prev) => ({ ...prev, dateFrom: event.target.value }))} className="w-full rounded-xl border border-border-color bg-surface px-3 py-2 text-sm" />
+                <input type="date" value={filters.dateTo} onChange={(event) => setFilters((prev) => ({ ...prev, dateTo: event.target.value }))} className="w-full rounded-xl border border-border-color bg-surface px-3 py-2 text-sm" />
               </div>
             </div>
           </div>
@@ -692,19 +692,19 @@ export default function PhysicalDashboard() {
           <div className="space-y-4">
             <div className="grid gap-2 lg:grid-cols-6">
               {[...Array(6)].map((_, index) => (
-                <div key={index} className="h-24 animate-pulse rounded-2xl bg-slate-200" />
+                <div key={index} className="h-24 animate-pulse rounded-2xl bg-surface-muted" />
               ))}
             </div>
             <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-3">
               {[...Array(6)].map((_, index) => (
-                <div key={index} className="h-40 animate-pulse rounded-2xl bg-slate-200" />
+                <div key={index} className="h-40 animate-pulse rounded-2xl bg-surface-muted" />
               ))}
             </div>
           </div>
         ) : error ? (
-          <div className="rounded-2xl border border-rose-200 bg-rose-50 p-6 text-sm text-rose-700">{error}</div>
+          <div className="rounded-2xl border border-rose-200 dark:border-rose-500/20 bg-rose-50 dark:bg-rose-500/10 p-6 text-sm text-rose-700 dark:text-rose-400">{error}</div>
         ) : !data ? (
-          <div className="rounded-2xl border border-slate-200 bg-white p-10 text-center text-slate-500">No analytics data available yet.</div>
+          <div className="rounded-2xl border border-border-color bg-surface p-10 text-center text-text-muted">No analytics data available yet.</div>
         ) : (
           <>
             <div className="grid gap-2 lg:grid-cols-5">
@@ -716,18 +716,18 @@ export default function PhysicalDashboard() {
             <SectionCard title="Enterprise Document Tracking" subtitle="Click any count to see the employees behind it. Each field appears exactly once.">
               <div className="grid gap-3 md:grid-cols-4 xl:grid-cols-6">
                 {documentCards.map((card) => (
-                  <div key={card.key} className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
-                    <h4 className="mb-2 text-sm font-semibold text-slate-900">{card.title}</h4>
+                  <div key={card.key} className="rounded-2xl border border-border-color bg-surface-muted p-3">
+                    <h4 className="mb-2 text-sm font-semibold text-text-primary">{card.title}</h4>
                     <div className="grid gap-2">
                       {card.items.map((item) => (
                         <button
                           key={`${card.key}-${item.label}`}
                           type="button"
                           onClick={() => openDrilldown(`${card.title} — ${item.label}`, item.metric, item.field, item.drillValue)}
-                          className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-3 py-2 text-left text-sm transition hover:border-indigo-300 hover:shadow-sm"
+                          className="flex items-center justify-between rounded-xl border border-border-color bg-surface px-3 py-2 text-left text-sm transition hover:border-indigo-300 hover:dark:border-indigo-500/30 hover:shadow-sm"
                         >
-                          <span className={`font-medium ${ITEM_TONES[item.label] || "text-slate-700"}`}>{item.label}</span>
-                          <span className="font-semibold text-slate-900">{formatNumber(item.count)}</span>
+                          <span className={`font-medium ${ITEM_TONES[item.label] || "text-text-secondary"}`}>{item.label}</span>
+                          <span className="font-semibold text-text-primary">{formatNumber(item.count)}</span>
                         </button>
                       ))}
                     </div>
@@ -761,16 +761,16 @@ export default function PhysicalDashboard() {
       </div>
 
       {drilldown.open ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4">
-          <div className="flex max-h-[90vh] w-full max-w-7xl flex-col rounded-3xl bg-white shadow-2xl">
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-5 py-4 print:hidden">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-overlay/60 p-4">
+          <div className="flex max-h-[90vh] w-full max-w-7xl flex-col rounded-3xl bg-surface shadow-2xl">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border-color px-5 py-4 print:hidden">
               <div>
-                <h3 className="text-lg font-semibold text-slate-900">{drilldown.title || "Employee details"}</h3>
-                <p className="text-sm text-slate-500">{formatNumber(drilldown.total)} employees match this selection</p>
+                <h3 className="text-lg font-semibold text-text-primary">{drilldown.title || "Employee details"}</h3>
+                <p className="text-sm text-text-muted">{formatNumber(drilldown.total)} employees match this selection</p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
-                  <Search size={14} className="text-slate-400" />
+                <div className="flex items-center gap-2 rounded-xl border border-border-color bg-surface-muted px-3 py-2">
+                  <Search size={14} className="text-text-muted" />
                   <input
                     value={drilldown.search}
                     onChange={(event) => setDrilldown((prev) => ({ ...prev, search: event.target.value }))}
@@ -778,17 +778,17 @@ export default function PhysicalDashboard() {
                     className="w-52 bg-transparent text-sm outline-none"
                   />
                 </div>
-                <button type="button" disabled={drilldown.exporting} onClick={() => exportDrilldown("xlsx")} className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 disabled:opacity-50">
+                <button type="button" disabled={drilldown.exporting} onClick={() => exportDrilldown("xlsx")} className="rounded-xl border border-border-color px-3 py-2 text-sm font-medium text-text-secondary disabled:opacity-50">
                   {drilldown.exporting ? "Exporting..." : "Export Excel"}
                 </button>
-                <button type="button" disabled={drilldown.exporting} onClick={() => exportDrilldown("csv")} className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 disabled:opacity-50">
+                <button type="button" disabled={drilldown.exporting} onClick={() => exportDrilldown("csv")} className="rounded-xl border border-border-color px-3 py-2 text-sm font-medium text-text-secondary disabled:opacity-50">
                   Export CSV
                 </button>
-                <button type="button" onClick={() => window.print()} className="flex items-center gap-1 rounded-xl border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700">
+                <button type="button" onClick={() => window.print()} className="flex items-center gap-1 rounded-xl border border-border-color px-3 py-2 text-sm font-medium text-text-secondary">
                   <Printer size={14} />
                   Print
                 </button>
-                <button type="button" onClick={() => setDrilldown((prev) => ({ ...prev, open: false }))} className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700">
+                <button type="button" onClick={() => setDrilldown((prev) => ({ ...prev, open: false }))} className="rounded-xl border border-border-color px-3 py-2 text-sm font-medium text-text-secondary">
                   Close
                 </button>
               </div>
@@ -797,45 +797,45 @@ export default function PhysicalDashboard() {
               {drilldown.loading ? (
                 <div className="space-y-2">
                   {[...Array(6)].map((_, index) => (
-                    <div key={index} className="h-10 animate-pulse rounded-xl bg-slate-100" />
+                    <div key={index} className="h-10 animate-pulse rounded-xl bg-surface-muted" />
                   ))}
                 </div>
               ) : drilldown.rows.length === 0 ? (
-                <div className="text-sm text-slate-500">No employees found for this selection.</div>
+                <div className="text-sm text-text-muted">No employees found for this selection.</div>
               ) : (
                 <div className="space-y-3">
-                  <div className="overflow-x-auto rounded-2xl border border-slate-200">
-                    <table className="min-w-full divide-y divide-slate-200 text-sm">
-                      <thead className="bg-slate-50">
+                  <div className="overflow-x-auto rounded-2xl border border-border-color">
+                    <table className="min-w-full divide-y divide-border-color text-sm">
+                      <thead className="bg-surface-muted">
                         <tr>
                           {drilldownColumns.map((column) => (
-                            <th key={column.key} className="whitespace-nowrap px-3 py-2 text-left font-semibold text-slate-700">
+                            <th key={column.key} className="whitespace-nowrap px-3 py-2 text-left font-semibold text-text-secondary">
                               {column.sortable ? (
                                 <button type="button" onClick={() => toggleDrilldownSort(column.key)} className="flex items-center gap-1">
                                   {column.label}
-                                  <ArrowUpDown size={13} className="text-slate-400" />
+                                  <ArrowUpDown size={13} className="text-text-muted" />
                                 </button>
                               ) : (
                                 column.label
                               )}
                             </th>
                           ))}
-                          <th className="whitespace-nowrap px-3 py-2 text-left font-semibold text-slate-700">Missing Field(s)</th>
+                          <th className="whitespace-nowrap px-3 py-2 text-left font-semibold text-text-secondary">Missing Field(s)</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-slate-100 bg-white">
+                      <tbody className="divide-y divide-border-color bg-surface">
                         {drilldown.rows.map((row) => (
-                          <tr key={row.id} className="hover:bg-slate-50">
+                          <tr key={row.id} className="hover:bg-surface-muted">
                             {drilldownColumns.map((column) => (
-                              <td key={`${row.id}-${column.key}`} className="whitespace-nowrap px-3 py-2 text-slate-700">
+                              <td key={`${row.id}-${column.key}`} className="whitespace-nowrap px-3 py-2 text-text-secondary">
                                 {row[column.key] || "-"}
                               </td>
                             ))}
                             <td className="px-3 py-2">
                               {row.missing_fields ? (
-                                <span className="text-xs font-medium text-amber-700">{row.missing_fields}</span>
+                                <span className="text-xs font-medium text-amber-700 dark:text-amber-400">{row.missing_fields}</span>
                               ) : (
-                                <span className="text-xs font-medium text-emerald-600">All documents complete</span>
+                                <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400">All documents complete</span>
                               )}
                             </td>
                           </tr>
@@ -843,13 +843,13 @@ export default function PhysicalDashboard() {
                       </tbody>
                     </table>
                   </div>
-                  <div className="flex items-center justify-between text-sm text-slate-500 print:hidden">
+                  <div className="flex items-center justify-between text-sm text-text-muted print:hidden">
                     <span>Page {drilldown.page} of {Math.max(drilldown.totalPages, 1)}</span>
                     <div className="flex items-center gap-2">
-                      <button type="button" onClick={() => loadDrilldownPage(drilldown.page - 1)} disabled={drilldown.page === 1} className="rounded-lg border border-slate-200 px-2.5 py-1.5 disabled:cursor-not-allowed disabled:opacity-50">
+                      <button type="button" onClick={() => loadDrilldownPage(drilldown.page - 1)} disabled={drilldown.page === 1} className="rounded-lg border border-border-color px-2.5 py-1.5 disabled:cursor-not-allowed disabled:opacity-50">
                         <ChevronLeft size={14} />
                       </button>
-                      <button type="button" onClick={() => loadDrilldownPage(drilldown.page + 1)} disabled={drilldown.page >= drilldown.totalPages} className="rounded-lg border border-slate-200 px-2.5 py-1.5 disabled:cursor-not-allowed disabled:opacity-50">
+                      <button type="button" onClick={() => loadDrilldownPage(drilldown.page + 1)} disabled={drilldown.page >= drilldown.totalPages} className="rounded-lg border border-border-color px-2.5 py-1.5 disabled:cursor-not-allowed disabled:opacity-50">
                         <ChevronRight size={14} />
                       </button>
                     </div>

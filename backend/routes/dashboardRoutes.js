@@ -1,6 +1,3 @@
-    let cacheData = null;
-    let lastFetchTime = 0;
-
     const express = require("express");
     const router = express.Router();
     const { db, isConnected } = require("../config/db");
@@ -8,6 +5,14 @@
     const { getLatestFiberSummary } = require("../services/fiberInventoryService");
     const dashboardController = require("../controllers/dashboardController");
     const { isAllCircle } = require("../middleware/circleAccess");
+    // Reused so the Dashboard's scrum numbers are produced by the exact same
+    // scoping rules (own-vendor rows, requester's circle, latest upload batch)
+    // as the Scrum / HR pages, instead of a second divergent definition.
+    const {
+      buildScrumFilterClause,
+      buildLatestScrumBatchSubquery,
+      addLatestBatchParam,
+    } = require("../utils/scrumDashboardShared");
 
     const query = util.promisify(db.query).bind(db);
 
@@ -40,21 +45,6 @@
         ? req.query.circle ? String(req.query.circle) : ""
         : req.authUser.circle;
 
-    const mockStats = {
-      totalSites: 0,
-      totalFiber: 0,
-      totalManpower: 0,
-      totalScrum: 0,
-      fiberBreakdown: [],
-      siteBreakdown: [],
-      manpowerBreakdown: [],
-      domainBreakdown: [],
-      latestUploadDate: null,
-      uptimeData: [],
-      monthlyData: [],
-      mock: true,
-    };
-
     // Latest enb count by MAX(date), optional circle/cmp filters
     router.get("/enb", async (req, res) => {
       
@@ -68,8 +58,6 @@
       const circle = getRequestCircle(req);
       const cmp = req.query.cmp ? String(req.query.cmp) : "";
       const domain = req.query.domain ? String(req.query.domain) : "";
-
-      const selectedDate = req.query.date;
 
       const filters = [];
       const params = [];
@@ -111,7 +99,10 @@
   `;
 
       try {
-        const rows = await query(sql, params);
+        // whereClause is interpolated twice (inner file_id subquery + outer
+        // filter), so the bind params have to be supplied twice as well —
+        // otherwise MySQL rejects the statement on any filtered request.
+        const rows = await query(sql, [...params, ...params]);
         const row = rows && rows[0] ? rows[0] : null;
 
         res.json({ enbCount: Number(row?.enbCount || 0) });
@@ -233,6 +224,7 @@
 
       const circle = getRequestCircle(req);
       const cmp = req.query.cmp ? String(req.query.cmp) : "";
+      const domain = req.query.domain ? String(req.query.domain) : "";
 
       const filters = [];
       const params = [];
@@ -257,14 +249,14 @@
 
       addFilter("circle", circle);
       addFilter("cmp", cmp);
-      addFilter("domain", domain); 
+      addFilter("domain", domain);
 
       const whereClause = filters.length ? `AND ${filters.join(" AND ")}` : "";
 
       const sql = `
-        SELECT 
+        SELECT
           MAX(date) AS latestDate,
-          COUNT(*) AS totalRecords                              
+          COUNT(*) AS totalRecords
         FROM esc
         WHERE file_id = (
           SELECT file_id
@@ -391,8 +383,17 @@
 
       try {
         const rows = await query(sql, params);
+        const row = rows && rows[0] ? rows[0] : null;
+
+        // The query selects latestDate/totalRecords/averageValue — reading a
+        // non-existent `iscCount` column made this endpoint always answer 0.
         res.json({
-          iscCount: Number(rows[0]?.iscCount || 0),
+          latestDate: row?.latestDate || null,
+          iscCount: Number(row?.totalRecords || 0),
+          totalRecords: Number(row?.totalRecords || 0),
+          previousCount: Number(row?.previousCount || 0),
+          averageValue:
+            row?.averageValue == null ? null : Number(row.averageValue),
         });
       } catch (err) {
         console.error("ISC count error:", err);
@@ -467,8 +468,17 @@
 
       try {
         const rows = await query(sql, params);
+        const row = rows && rows[0] ? rows[0] : null;
+
+        // Same fix as /isc: the response was reading a column the query
+        // never selects, so the count was hard-stuck at 0.
         res.json({
-          oscCount: Number(rows[0]?.oscCount || 0),
+          latestDate: row?.latestDate || null,
+          oscCount: Number(row?.totalRecords || 0),
+          totalRecords: Number(row?.totalRecords || 0),
+          previousCount: Number(row?.previousCount || 0),
+          averageValue:
+            row?.averageValue == null ? null : Number(row.averageValue),
         });
       } catch (err) {
         console.error("OSC count error:", err);
@@ -675,488 +685,133 @@
 
 
       if (!isConnected()) {
-        // Return safe fallback so UI can render while DB issue is fixed
         return res.status(503).json({
           message:
             "Backend cannot reach the database. Please verify DB host/credentials or firewall rules.",
-          ...mockStats,
         });
       }
 
-      const { cmp, domain } = req.query;
+      const { cmp } = req.query;
       const circle = getRequestCircle(req);
       const siteFilters = [];
       const siteParams = [];
-      const manpowerFilters = [];
-      const manpowerParams = [];
 
       addInFilter(siteFilters, siteParams, "circle", circle);
       addInFilter(siteFilters, siteParams, "cmp", cmp);
 
-      addInFilter(manpowerFilters, manpowerParams, "state", circle);
-      addInFilter(manpowerFilters, manpowerParams, "maintenance_point", cmp);
-
-      const domainArr = parseList(domain);
-      if (domainArr.length) {
-        manpowerFilters.push(`
-          CASE
-            WHEN LOWER(function_name) LIKE '%fiber%' THEN 'Fiber'
-            WHEN LOWER(function_name) LIKE '%fttx%' THEN 'FTTx'
-            WHEN LOWER(function_name) LIKE '%utility%' THEN 'Utility'
-            ELSE 'Others'
-          END IN (${domainArr.map(() => "?").join(",")})
-        `);
-        manpowerParams.push(...domainArr);
-      }
+      // Scrum manpower scope, identical to the Scrum/HR pages: own-vendor rows
+      // only, the requester's circle, the selected circle/cmp/domain filters,
+      // and only the latest upload batch. /stats previously counted every
+      // vendor and every historical batch, so the manpower numbers on this
+      // page could never agree with the manpower pages.
+      const scrumScope = buildScrumFilterClause(req);
+      const scrumWhere = `
+        ${scrumScope.whereClause}
+        AND upload_batch_id IN (${buildLatestScrumBatchSubquery(req)})
+      `;
+      const buildScrumParams = () => {
+        const params = [...scrumScope.params];
+        addLatestBatchParam(req, params);
+        return params;
+      };
 
       const buildSiteAnd = () =>
         siteFilters.length ? ` AND (${siteFilters.join(" AND ")})` : "";
 
-      const buildManpowerWhere = () =>
-        manpowerFilters.length ? `WHERE ${manpowerFilters.join(" AND ")}` : "";
+      // Every site type is expressed as one { sql, params } fragment. Both the
+      // "Total Active Sites" card and the "Site Types" list are derived from
+      // this single list, so the card is always exactly the sum of the rows the
+      // user can see. (Previously the total came from a separate 11-way UNION
+      // reading different tables than the breakdown, so the two could disagree,
+      // and the bind params were repeated a hard-coded 11 / 5 times — which
+      // silently broke whenever a site type was added or removed.)
+      //
+      // ORDER BY is `date, file_id` and deliberately omits created_at: adding
+      // created_at makes the ordering unusable by idx_<table>_date_file, which
+      // turned this subquery into a full scan + filesort of the whole table
+      // (3.1M rows on enb). file_id is the upload timestamp, so it breaks ties
+      // in exactly the same order created_at did — verified to select the
+      // identical file_id on every populated table.
+      const siteFragment = (label, table) => ({
+        sql: `SELECT '${label}' AS type, COUNT(*) AS count, MAX(date) AS latestDate
+              FROM ${table}
+              WHERE file_id = (
+                SELECT file_id
+                FROM ${table}
+                ORDER BY date DESC, file_id DESC
+                LIMIT 1
+              )
+              ${buildSiteAnd()}`,
+        params: [...siteParams],
+      });
 
-      const buildLatestFileIdSubquery = (
-        tableName,
-        orderByClause = "date DESC, created_at DESC, file_id DESC"
-      ) => `
-        SELECT file_id
-        FROM ${tableName}
-        ORDER BY ${orderByClause}
-        LIMIT 1
-      `;
+      // Every type reads its own raw table. The previous code sourced AG1/AG2/
+      // ILA/GNB/GSC/WIFI (and the unfiltered ESC/ISC/OSC/HPODSC) from
+      // report_uploads instead, which has two consequences: report_uploads has
+      // no rows at all for AG1/AG2/ILA/GSC/WIFI, so AG2 (15,717 sites) and ILA
+      // (524) were dropped from the dashboard entirely; and its totals are
+      // pre-aggregated, so GNB reported the same 25,024 no matter which circle
+      // was selected. Raw and report_uploads counts were verified identical for
+      // every type that has upload rows, so nothing else moves.
+      const siteFragments = [
+        siteFragment("ENB", "enb"),
+        siteFragment("ESC", "esc"),
+        siteFragment("ISC", "isc"),
+        siteFragment("OSC", "osc"),
+        siteFragment("HPODSC", "hpodsc"),
+        siteFragment("AG1", "ag1"),
+        siteFragment("AG2", "ag2"),
+        siteFragment("ILA", "ila"),
+        siteFragment("GNB", "gnb"),
+        siteFragment("GSC", "gsc"),
+        siteFragment("WIFI", "wifi"),
+      ];
 
-      const buildLatestCountSql = (tableName, orderByClause) => `
-        SELECT COUNT(*) AS count
-        FROM ${tableName}
-        WHERE file_id = (
-          ${buildLatestFileIdSubquery(tableName, orderByClause)}
-        )
-        ${buildSiteAnd()}
-      `;
+      const siteQuery = siteFragments.map((f) => f.sql).join("\n UNION ALL \n");
+      const siteQueryParams = siteFragments.flatMap((f) => f.params);
 
-      const buildLatestKpiSumSql = (
-        tableName,
-        orderByClause = "created_at DESC, file_id DESC"
-      ) => `
-        SELECT COALESCE(SUM(kpi_value), 0) AS count
-        FROM ${tableName}
-        WHERE file_id = (
-          ${buildLatestFileIdSubquery(tableName, orderByClause)}
-        )
-        ${buildSiteAnd()}
-      `;
-
-      const escCountSql = buildLatestCountSql("esc");
-      const iscCountSql = buildLatestCountSql("isc");
-      const oscCountSql = buildLatestCountSql("osc");
-      const hpodscCountSql = buildLatestCountSql("hpodsc");
-
-      const ag1CountSql = buildLatestKpiSumSql("ag1");
-      const ag2CountSql = buildLatestKpiSumSql("ag2");
-      const ilaCountSql = buildLatestKpiSumSql("ila");
-      const gnbCountSql = buildLatestCountSql("gnb");
-      const gscCountSql = buildLatestKpiSumSql("gsc");
-      const wifiCountSql = buildLatestKpiSumSql("wifi");
-
-      const escSiteSql = siteFilters.length
-        ? `SELECT 'ESC' AS type, COUNT(*) AS count, MAX(date) AS latestDate
-    FROM esc
-    WHERE file_id = (
-      SELECT file_id FROM esc
-      WHERE date = (SELECT MAX(date) FROM esc)
-      ORDER BY created_at DESC, file_id DESC
-      LIMIT 1
-    )
-    ${buildSiteAnd()}`
-        : `SELECT 'ESC' AS type, COALESCE(latest.total_records, 0) AS count, latest.report_date AS latestDate
-    FROM (
-      SELECT total_records, report_date
-      FROM report_uploads
-      WHERE UPPER(TRIM(site_type)) = 'ESC'
-      ORDER BY report_date DESC, uploaded_at DESC, id DESC
-      LIMIT 1
-    ) latest`;
-
-      const iscSiteSql = siteFilters.length
-        ? `SELECT 'ISC' AS type, COUNT(*) AS count, MAX(date) AS latestDate
-    FROM isc
-    WHERE file_id = (
-      SELECT file_id FROM isc
-      WHERE date = (SELECT MAX(date) FROM isc)
-      ORDER BY created_at DESC, file_id DESC
-      LIMIT 1
-    )
-    ${buildSiteAnd()}`
-        : `SELECT 'ISC' AS type, COALESCE(latest.total_records, 0) AS count, latest.report_date AS latestDate
-    FROM (
-      SELECT total_records, report_date
-      FROM report_uploads
-      WHERE UPPER(TRIM(site_type)) = 'ISC'
-      ORDER BY report_date DESC, uploaded_at DESC, id DESC
-      LIMIT 1
-    ) latest`;
-
-      const oscSiteSql = siteFilters.length
-  ? `SELECT 'OSC' AS type, COUNT(*) AS count, MAX(date) AS latestDate
-FROM osc
-WHERE file_id = (
-  SELECT file_id
-  FROM osc
-  ORDER BY date DESC, created_at DESC, file_id DESC
-  LIMIT 1
-)
-${buildSiteAnd()}`
-  : `SELECT 'OSC' AS type, COALESCE(latest.total_records, 0) AS count, latest.report_date AS latestDate
-FROM (
-  SELECT total_records, report_date
-  FROM report_uploads
-  WHERE UPPER(TRIM(site_type)) = 'OSC'
-  ORDER BY report_date DESC, uploaded_at DESC, id DESC
-  LIMIT 1
-) latest`;
-
-     const hpodscSiteSql = siteFilters.length
-  ? `SELECT 'HPODSC' AS type, COUNT(*) AS count, MAX(date) AS latestDate
-FROM hpodsc
-WHERE file_id = (
-  SELECT file_id
-  FROM hpodsc
-  ORDER BY date DESC, created_at DESC, file_id DESC
-  LIMIT 1
-)
-${buildSiteAnd()}`
-  : `SELECT 'HPODSC' AS type, COALESCE(latest.total_records, 0) AS count, latest.report_date AS latestDate
-FROM (
-  SELECT total_records, report_date
-  FROM report_uploads
-  WHERE UPPER(TRIM(site_type)) = 'HPODSC'
-  ORDER BY report_date DESC, uploaded_at DESC, id DESC
-  LIMIT 1
-) latest`;
-
-      // 🔥 MAIN STATS (Total Active Sites = ENB + ESC + ISC + OSC + HPODSC latest)
-    const siteCountQuery = `
-    SELECT SUM(count) AS totalSites
-    FROM (
-
-  SELECT COUNT(*) AS count
-  FROM enb
-  WHERE file_id = (
-    SELECT file_id
-    FROM enb
-    ORDER BY date DESC, created_at DESC, file_id DESC
-    LIMIT 1
-  )
-
-    ${buildSiteAnd()}
-
-      UNION ALL
-      ${escCountSql}
-
-      UNION ALL
-      ${iscCountSql}
-
-      UNION ALL
-      ${oscCountSql}
-
-      UNION ALL
-      ${hpodscCountSql}
-
-      -- 🔥 NEW TYPES
-      UNION ALL
-      ${ag1CountSql}
-
-      UNION ALL
-      ${ag2CountSql}
-
-      UNION ALL
-      ${ilaCountSql}
-
-      UNION ALL
-      ${gnbCountSql}
-
-      UNION ALL
-      ${gscCountSql}
-
-      UNION ALL
-      ${wifiCountSql}
-
-    ) AS total
-    `;
-
-  const manpowerActiveQuery = `
-    SELECT COUNT(*) AS totalManpower
-    FROM scrum_manpower
-    ${buildManpowerWhere()}
-  `;
-
-  const manpowerTotalQuery = `
-    SELECT COUNT(*) AS totalScrum
-    FROM scrum_manpower
-    ${buildManpowerWhere()}
-  `;
-
-      // 🔥 SITE TYPES (Only ENB, ESC, ISC, OSC, HPODSC)
-    const siteQuery = `
-
-  SELECT 
-    'ENB' AS type,
-    COUNT(*) AS count,
-    MAX(date) AS latestDate
-  FROM enb
-  WHERE file_id = (
-    SELECT file_id
-    FROM enb
-    ORDER BY date DESC, created_at DESC, file_id DESC
-    LIMIT 1
-  )
-  ${buildSiteAnd()}
-
-
-    UNION ALL
-    ${escSiteSql}
-
-    UNION ALL
-    ${iscSiteSql}
-
-    UNION ALL
-    ${oscSiteSql}
-
-    UNION ALL
-    ${hpodscSiteSql}
-
-    -- 🔥 NEW TYPES
-
-    UNION ALL
-    SELECT 
-    'AG1' AS type,
-    COALESCE(latest.total_records, 0) AS count,
-    latest.report_date AS latestDate
-  FROM (
-    SELECT total_records, report_date
-    FROM report_uploads
-    WHERE UPPER(TRIM(site_type)) = 'AG1'
-    ORDER BY report_date DESC, uploaded_at DESC, id DESC
-    LIMIT 1
-  ) latest
-
-    UNION ALL
-    SELECT 
-    'AG2' AS type,
-    COALESCE(latest.total_records, 0) AS count,
-    latest.report_date AS latestDate
-  FROM (
-    SELECT total_records, report_date
-    FROM report_uploads
-    WHERE UPPER(TRIM(site_type)) = 'AG2'
-    ORDER BY report_date DESC, uploaded_at DESC, id DESC
-    LIMIT 1
-  ) latest
-
-    UNION ALL
-  SELECT 
-    'ILA' AS type,
-    COALESCE(latest.total_records, 0) AS count,
-    latest.report_date AS latestDate
-  FROM (
-    SELECT total_records, report_date
-    FROM report_uploads
-    WHERE UPPER(TRIM(site_type)) = 'ILA'
-    ORDER BY report_date DESC, uploaded_at DESC, id DESC
-    LIMIT 1
-  ) latest
-
-    UNION ALL
-    SELECT 
-    'GNB' AS type,
-    COALESCE(latest.total_records, 0) AS count,
-    latest.report_date AS latestDate
-  FROM (
-    SELECT total_records, report_date
-    FROM report_uploads
-    WHERE UPPER(TRIM(site_type)) = 'GNB'
-    ORDER BY report_date DESC, uploaded_at DESC, id DESC
-    LIMIT 1
-  ) latest
-
-    UNION ALL
-    SELECT 
-    'GSC' AS type,
-    COALESCE(latest.total_records, 0) AS count,
-    latest.report_date AS latestDate
-  FROM (
-    SELECT total_records, report_date
-    FROM report_uploads
-    WHERE UPPER(TRIM(site_type)) = 'GSC'
-    ORDER BY report_date DESC, uploaded_at DESC, id DESC
-    LIMIT 1
-  ) latest
-
-    UNION ALL
-    SELECT 
-    'WIFI' AS type,
-    COALESCE(latest.total_records, 0) AS count,
-    latest.report_date AS latestDate
-  FROM (
-    SELECT total_records, report_date
-    FROM report_uploads
-    WHERE UPPER(TRIM(site_type)) = 'WIFI'
-    ORDER BY report_date DESC, uploaded_at DESC, id DESC
-    LIMIT 1
-  ) latest
-
-    `;
-
-      // 🔥 MANPOWER ROLES
-    const latestUploadDateQueryV2 = `
-      SELECT DATE(MAX(uploaded_at)) AS latestDate
-      FROM report_uploads
-    `;
-
-    const siteCountQueryV2 = `
-      SELECT COALESCE(SUM(total_records), 0) AS totalSites
-      FROM report_uploads
-      WHERE DATE(uploaded_at) = (
-        SELECT DATE(MAX(uploaded_at)) FROM report_uploads
-      )
-    `;
-
-    const siteQueryV2 = `
-      SELECT
-        UPPER(TRIM(site_type)) AS type,
-        SUM(COALESCE(total_records, 0)) AS count,
-        MAX(report_date) AS latestDate
-      FROM report_uploads
-      WHERE DATE(uploaded_at) = (
-        SELECT DATE(MAX(uploaded_at)) FROM report_uploads
-      )
-        AND site_type IS NOT NULL
-        AND TRIM(site_type) <> ''
-      GROUP BY UPPER(TRIM(site_type))
-      ORDER BY type
-    `;
-
-    const distinctSiteTypesQueryV2 = `
-      SELECT DISTINCT UPPER(TRIM(site_type)) AS site_type
-      FROM report_uploads
-      WHERE site_type IS NOT NULL AND TRIM(site_type) <> ''
-      ORDER BY site_type
-    `;
-
-      // 🔥 UPTIME (WEEKLY)
-      const uptimeQuery = `
-      SELECT 
-        DAYNAME(date) AS day,
-        ROUND(AVG(uptime), 2) AS uptime
-      FROM site_uptime
-      WHERE date >= CURDATE() - INTERVAL 7 DAY
-      GROUP BY DAYNAME(date)
-    `;
-
-      // 🔥 UPTIME (MONTHLY)
-    const monthlyQuery = `
-      SELECT 
-        WEEK(date) AS week,
-        ROUND(AVG(uptime), 2) AS uptime
-      FROM site_uptime
-      WHERE date >= CURDATE() - INTERVAL 1 MONTH
-      GROUP BY WEEK(date)
-    `;   
-
-    // ✅ DOMAIN BREAKDOWN (FOR PIE CHART)
-  const domainQuery = `
-  SELECT 
-    CASE 
-      WHEN LOWER(function_name) LIKE '%fiber%' THEN 'Fiber'
-      WHEN LOWER(function_name) LIKE '%fttx%' THEN 'FTTx'
-      WHEN LOWER(function_name) LIKE '%utility%' THEN 'Utility'
-      ELSE 'Others'
-    END AS name,
-    COUNT(*) AS value
-  FROM scrum_manpower
-  ${buildManpowerWhere()}
-  GROUP BY name
-`;
-
-    const manpowerBreakdownQuery = `
-      SELECT
-        CASE
-          WHEN TRIM(COALESCE(function_name, '')) = '' THEN 'Others'
-          ELSE TRIM(function_name)
-        END AS function,
-        COUNT(*) AS count
+      // Total and active in one pass instead of two identical queries — the
+      // old code ran the same COUNT(*) twice and labelled the results
+      // "totalManpower" and "totalScrum", so the two cards always matched.
+      const manpowerCountQuery = `
+        SELECT
+          COUNT(*) AS totalScrum,
+          SUM(CASE WHEN LOWER(TRIM(COALESCE(status, ''))) = 'active' THEN 1 ELSE 0 END) AS totalManpower
         FROM scrum_manpower
-        ${buildManpowerWhere()}
+        ${scrumWhere}
+      `;
+
+      const manpowerBreakdownQuery = `
+        SELECT
+          CASE
+            WHEN TRIM(COALESCE(function_name, '')) = '' THEN 'Others'
+            ELSE TRIM(function_name)
+          END AS function,
+          COUNT(*) AS count
+        FROM scrum_manpower
+        ${scrumWhere}
         GROUP BY function
         ORDER BY count DESC, function ASC
-         `;
+      `;
 
-    // ✅ FIBER INVENTORY QUERY
       try {
-        const siteCountFilterGroupCount = 11;
-        const siteBreakdownFilterGroupCount = 5;
-        const repeatedSiteCountParams = siteFilters.length
-          ? Array.from({ length: siteCountFilterGroupCount }, () => siteParams).flat()
-          : [];
-        const repeatedSiteBreakdownParams = siteFilters.length
-          ? Array.from({ length: siteBreakdownFilterGroupCount }, () => siteParams).flat()
-          : [];
-
-        const [
-          latestUploadDateResult,
-          siteCountResult,
-          manpowerActiveResult,
-          manpowerTotalResult,
-          siteResult,
-          distinctSiteTypesResult,
-          uptimeResult,
-          monthlyResult,
-          fiberSummary,
-          domainResult,
-          manpowerBreakdownResult
-        ] =
-        
-        await Promise.all([
-          query(latestUploadDateQueryV2),
-          query(siteCountQuery, repeatedSiteCountParams),
-          query(manpowerActiveQuery, manpowerParams),
-          query(manpowerTotalQuery, manpowerParams),
-          query(siteQuery, repeatedSiteBreakdownParams),
-          query(distinctSiteTypesQueryV2),
-          query(uptimeQuery),
-          query(monthlyQuery),
-          getLatestFiberSummary(req.authUser),
-          query(domainQuery, manpowerParams),
-          query(manpowerBreakdownQuery, manpowerParams)
-    ]);
-
-        const latestDate = latestUploadDateResult[0]?.latestDate || null;
-        console.log("Latest Date:", latestDate);
-        console.log("Query Result:", siteResult);
-        console.log(
-          "Distinct Site Types:",
-          distinctSiteTypesResult.map((row) => row.site_type)
-        );
-
-        const uptimeData = uptimeResult.map((item) => ({
-          day: item.day,
-          uptime: Number(item.uptime),
-        }));
-
-        const monthlyData = monthlyResult.map((item) => ({
-          day: "Week " + item.week,
-          uptime: Number(item.uptime),
-        }));
+        // 4 round-trips instead of 11. The removed queries were either never
+        // read by any client (site_uptime weekly/monthly, domain breakdown) or
+        // only ever fed a console.log (latest upload date, distinct site types).
+        const [siteResult, manpowerCountResult, manpowerBreakdownResult, fiberSummary] =
+          await Promise.all([
+            query(siteQuery, siteQueryParams),
+            query(manpowerCountQuery, buildScrumParams()),
+            query(manpowerBreakdownQuery, buildScrumParams()),
+            // Circle selection now reaches the fiber summary too — the fiber
+            // card and total previously ignored the dashboard filters entirely.
+            getLatestFiberSummary(req.authUser, { circles: parseList(circle) }),
+          ]);
 
         const siteBreakdown = (siteResult || []).map((item) => ({
           type: item?.type ? String(item.type).trim() : "",
           count: Number(item?.count || 0),
           latestDate: item?.latestDate || null,
-        }));
-
-        const domainBreakdown = (domainResult || []).map((item) => ({
-          name: item?.name ? String(item.name).trim() : "Others",
-          value: Number(item?.value || 0),
         }));
 
         const manpowerBreakdown = (manpowerBreakdownResult || []).map((item) => ({
@@ -1177,103 +832,108 @@ FROM (
           0
         );
 
-        const responseData = {
-          totalSites: Number(siteCountResult[0]?.totalSites || 0),
+        res.json({
+          // Sum of exactly the rows returned in siteBreakdown, so the card can
+          // never disagree with the list beneath it.
+          totalSites: siteBreakdown.reduce((sum, item) => sum + item.count, 0),
           totalFiber: Number(totalFiber || 0),
-          totalManpower: Number(manpowerActiveResult[0]?.totalManpower || 0),
-          totalScrum: Number(manpowerTotalResult[0]?.totalScrum || 0),
+          totalManpower: Number(manpowerCountResult[0]?.totalManpower || 0),
+          totalScrum: Number(manpowerCountResult[0]?.totalScrum || 0),
           fiberBreakdown,
           siteBreakdown,
           manpowerBreakdown,
-          latestUploadDate: fiberSummary?.latestUpload?.date || latestDate,
-          uptimeData,
-          monthlyData,
-          domainBreakdown,
-        };
-
-    cacheData = responseData;
-    lastFetchTime = Date.now();
-
-    res.json(responseData);
+          latestUploadDate: fiberSummary?.latestUpload?.date || null,
+        });
       } catch (err) {
         console.error("Dashboard stats error:", err);
+        // No mock payload here: a client that receives zeros for a failed query
+        // renders them as real values. Fail loudly instead.
         res.status(500).json({
           message:
             err?.code === "ER_NO_SUCH_TABLE"
               ? `Missing table: ${err.sqlMessage}`
               : err?.message || "Dashboard query failed",
-          ...mockStats,
         });
       }
 
     });
 
-    // UPTIME TREND API
+    // UPTIME TREND API — powers the Dashboard "Uptime Trend" card.
+    // Supports ?type=last7|monthly|yearly and real circle/cmp filters.
+    const UPTIME_TREND_CIRCLES = ["Punjab", "Haryana", "Delhi", "Uttar Pradesh (East)"];
+    const UPTIME_TREND_TYPES = ["last7", "monthly", "yearly"];
 
-  router.get("/uptime-trend", async (req, res) => {
-    try {
-    const filters = [];
-    const params = [];
+    router.get("/uptime-trend", async (req, res) => {
+      if (!isConnected()) {
+        return res.status(503).json({
+          message: "Backend cannot reach the database. Please verify DB host/credentials or firewall rules.",
+          type: "last7",
+          rows: [],
+        });
+      }
 
-    addInFilter(filters, params, "circle", getRequestCircle(req));
-    addInFilter(filters, params, "cmp", req.query.cmp);
+      const type = UPTIME_TREND_TYPES.includes(req.query.type) ? req.query.type : "last7";
 
-    const whereClause = [
-      "availability IS NOT NULL",
-      ...(filters.length ? [filters.join(" AND ")] : []),
-    ].join(" AND ");
+      try {
+        const circlePlaceholders = UPTIME_TREND_CIRCLES.map(() => "?").join(",");
 
-    /* const sql = `
-    SELECT 
-      date,
-      AVG(availability) AS uptime
-    FROM enb
-    WHERE ${whereClause}
-    GROUP BY date
-    ORDER BY date ASC
-  `;
+        let periodSelect;
+        let periodGroupBy;
 
-      const rows = await query(sql, params);
+        const filters = [
+          "availability IS NOT NULL",
+          `circle IN (${circlePlaceholders})`,
+        ];
+        const params = [...UPTIME_TREND_CIRCLES];
 
-      res.json(rows);
+        if (type === "yearly") {
+          // One bucket per calendar year, across all available years.
+          periodSelect = "YEAR(date)";
+          periodGroupBy = "YEAR(date)";
+        } else if (type === "monthly") {
+          // Jan..Dec of the latest data year.
+          periodSelect = "DATE_FORMAT(date, '%Y-%m-01')";
+          periodGroupBy = "YEAR(date), MONTH(date)";
+          filters.push(
+            `YEAR(date) = (SELECT YEAR(MAX(date)) FROM enb WHERE circle IN (${circlePlaceholders}))`
+          );
+          params.push(...UPTIME_TREND_CIRCLES);
+        } else {
+          // Latest 7 days of real data, anchored to MAX(date).
+          periodSelect = "DATE(date)";
+          periodGroupBy = "DATE(date)";
+          filters.push(
+            `date >= (SELECT MAX(date) FROM enb WHERE circle IN (${circlePlaceholders})) - INTERVAL 6 DAY`
+          );
+          params.push(...UPTIME_TREND_CIRCLES);
+        }
 
-    } catch (err) {
-      console.error("Uptime trend error:", err);
-      res.status(500).json({ error: "Server error" });
-    }
-      */
+        addInFilter(filters, params, "circle", getRequestCircle(req));
+        addInFilter(filters, params, "cmp", req.query.cmp);
 
-     const sql = `
-      SELECT
-          DATE(date) AS date,
-          circle,
-          ROUND(AVG(availability),2) AS uptime
-      FROM enb
-      WHERE availability IS NOT NULL
-      AND circle IN (
-          'Punjab',
-          'Haryana',
-          'Delhi',
-          'Uttar Pradesh (East)'
-      )
-     AND DATE(date) >= (
-    SELECT DATE(MAX(date)) - INTERVAL 6 DAY
-    FROM enb
-)
+        const sql = `
+          SELECT
+            ${periodSelect} AS period,
+            circle,
+            ROUND(AVG(availability), 2) AS uptime
+          FROM enb
+          WHERE ${filters.join(" AND ")}
+          GROUP BY ${periodGroupBy}, circle
+          ORDER BY period ASC, circle ASC
+        `;
 
-GROUP BY DATE(date), circle
-ORDER BY DATE(date), circle;
-    `;
+        const rows = await query(sql, params);
 
-    const rows = await query(sql);
-
-    res.json(rows);
-
-  } catch (err) {
-    console.error("Uptime trend error:", err);
-    res.status(500).json({ error: "Server error" });
-  }
-  });
+        res.json({ type, rows });
+      } catch (err) {
+        console.error("Uptime trend error:", err);
+        res.status(500).json({
+          message: err?.code === "ER_NO_SUCH_TABLE" ? `Missing table: ${err.sqlMessage}` : err?.message || "Uptime trend query failed",
+          type,
+          rows: [],
+        });
+      }
+    });
 
   router.get("/reports-summary", dashboardController.getReportsSummary);
   router.get("/tower-recent", dashboardController.getTowerRecent);

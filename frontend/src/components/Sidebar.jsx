@@ -138,6 +138,14 @@ function Sidebar({ closeSidebar, collapsed, onExpandRequest }) {
 },
 
 {
+  key: "scrum-dashboard",
+  label: "SCRUM Dashboard",
+  path: "/dashboard/manpower/scrum-dashboard",
+  icon: BriefcaseBusiness,
+  accessPage: "Scrum Dashboard",
+},
+
+{
   key: "scrum",
   label: "SCRUM",
   path: "/dashboard/manpower/scrum",
@@ -145,13 +153,7 @@ function Sidebar({ closeSidebar, collapsed, onExpandRequest }) {
   accessPage: "Scrum",
 },
 
-{
-  key: "scrum-dashboard",
-  label: "SCRUM Dashboard",
-  path: "/dashboard/manpower/scrum-dashboard",
-  icon: BriefcaseBusiness,
-  accessPage: "Scrum Dashboard",
-},
+
 
 {
   key: "signoff",

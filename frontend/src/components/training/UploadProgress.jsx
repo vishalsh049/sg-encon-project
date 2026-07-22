@@ -9,24 +9,24 @@ export default function UploadProgress({ state, fileName, message }) {
 
   const config = {
     uploading: {
-      icon: <Loader2 className="h-4 w-4 animate-spin text-blue-500" />,
+      icon: <Loader2 className="h-4 w-4 animate-spin text-blue-500 dark:text-blue-400" />,
       text: `Uploading ${fileName || "file"}…`,
-      className: "border-blue-100 bg-blue-50/60 text-blue-700",
+      className: "border-blue-100 dark:border-blue-500/20 bg-blue-50 dark:bg-blue-500/10/60 text-blue-700 dark:text-blue-400",
     },
     success: {
-      icon: <CheckCircle2 className="h-4 w-4 text-emerald-500" />,
+      icon: <CheckCircle2 className="h-4 w-4 text-emerald-500 dark:text-emerald-400" />,
       text: message || `${fileName || "File"} uploaded successfully`,
-      className: "border-emerald-100 bg-emerald-50/60 text-emerald-700",
+      className: "border-emerald-100 dark:border-emerald-500/20 bg-emerald-50 dark:bg-emerald-500/10/60 text-emerald-700 dark:text-emerald-400",
     },
     error: {
-      icon: <XCircle className="h-4 w-4 text-rose-500" />,
+      icon: <XCircle className="h-4 w-4 text-rose-500 dark:text-rose-400" />,
       text: message || "Upload failed",
-      className: "border-rose-100 bg-rose-50/60 text-rose-700",
+      className: "border-rose-100 dark:border-rose-500/20 bg-rose-50 dark:bg-rose-500/10/60 text-rose-700 dark:text-rose-400",
     },
   }[state] || {
-    icon: <UploadCloud className="h-4 w-4 text-slate-400" />,
+    icon: <UploadCloud className="h-4 w-4 text-text-muted" />,
     text: message || "",
-    className: "border-slate-100 bg-slate-50 text-slate-600",
+    className: "border-border-color bg-surface-muted text-text-secondary",
   };
 
   return (

@@ -228,7 +228,7 @@
   SUM(CASE WHEN status!='Active' THEN 1 ELSE 0 END) as inactive
 FROM scrum_manpower 
 ${whereClause}
-AND upload_batch_id = (
+AND upload_batch_id IN (
   ${buildLatestScrumBatchSubquery(req)}
 )
   `;
@@ -251,21 +251,25 @@ AND upload_batch_id = (
 
         if (batchResult.length === 0) return res.json([]);
 
-        const batchId = batchResult[0].upload_batch_id;
+        // An All-Circle user gets one latest batch per circle, so every id has
+        // to be matched — taking only the first would drop all circles but one.
+        const batchIds = batchResult.map((row) => row.upload_batch_id);
+        const placeholders = batchIds.map(() => "?").join(",");
 
-      const circleSql = isAllCircle(req.authUser)
-        ? ""
-        : " AND LOWER(TRIM(state)) = LOWER(TRIM(?))";
-      const params = [batchId, "S G ENCON PVT LTD"];
-      if (!isAllCircle(req.authUser)) params.push(req.authUser.circle);
-      db.query(
-    `SELECT * FROM scrum_manpower WHERE upload_batch_id = ? AND UPPER(TRIM(vendor)) = ?${circleSql}`,
-    params,
-    (err, result) => {
-      if (err) return res.status(500).json(err);
-      res.json(result);
-    }
-  );
+        const circleSql = isAllCircle(req.authUser)
+          ? ""
+          : " AND LOWER(TRIM(state)) = LOWER(TRIM(?))";
+        const params = [...batchIds, "S G ENCON PVT LTD"];
+        if (!isAllCircle(req.authUser)) params.push(req.authUser.circle);
+
+        db.query(
+          `SELECT * FROM scrum_manpower WHERE upload_batch_id IN (${placeholders}) AND UPPER(TRIM(vendor)) = ?${circleSql}`,
+          params,
+          (queryErr, result) => {
+            if (queryErr) return res.status(500).json(queryErr);
+            res.json(result);
+          }
+        );
       });
     });
 
@@ -324,7 +328,7 @@ AND upload_batch_id = (
         SELECT function_name
         FROM scrum_manpower
         ${whereClause}
-          AND upload_batch_id = (
+          AND upload_batch_id IN (
   ${buildLatestScrumBatchSubquery(req)}
           )
       `;
@@ -819,7 +823,7 @@ VALUES ?
       COUNT(*) AS total
     FROM scrum_manpower
     ${whereClause}
-      AND upload_batch_id = (
+      AND upload_batch_id IN (
   ${buildLatestScrumBatchSubquery(req)}
 )
     GROUP BY category
@@ -899,7 +903,7 @@ VALUES ?
             ) AS normalized_job_role
           FROM scrum_manpower
           ${whereClause}
-            AND upload_batch_id = (
+            AND upload_batch_id IN (
               ${buildLatestScrumBatchSubquery(req)}
             )
             AND UPPER(TRIM(COALESCE(status, ''))) = 'ACTIVE'

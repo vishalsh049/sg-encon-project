@@ -119,16 +119,17 @@ const handleLogin = async (e) => {
 };
 
   return (
-    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-gradient-to-br from-slate-100 via-blue-50 to-indigo-100 px-6">
+    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-gradient-to-br from-surface-muted via-blue-50 to-indigo-100 px-6 dark:from-slate-950 dark:via-slate-900 dark:to-indigo-950">
       <div className="
 w-full
 max-w-md
 rounded-3xl
-bg-white/90
+bg-surface/90
 backdrop-blur-xl
 border
-border-white/60
+border-border-color
 shadow-[0_25px_60px_rgba(15,23,42,.15)]
+dark:shadow-[0_25px_60px_rgba(0,0,0,.5)]
 px-10
 py-12
 ">
@@ -143,11 +144,11 @@ py-12
         />
     </div>
 
-    <p className="mt-2 text-sm text-slate-500">
+    <p className="mt-2 text-sm text-text-muted">
         Enterprise Management Portal
     </p>
 
-<p className="mt-1 text-center text-sm text-slate-500">
+<p className="mt-1 text-center text-sm text-text-muted">
   Sign in to continue to your dashboard
 </p>
 
@@ -161,7 +162,7 @@ py-12
           ) : null}
 
          <div>
-  <label className="mb-2 block text-sm font-semibold text-slate-700">
+  <label className="mb-2 block text-sm font-semibold text-text-secondary">
     Username or Email
   </label>
 
@@ -175,17 +176,17 @@ py-12
 w-full
 rounded-xl
 border
-border-slate-200
-bg-slate-50
+border-border-color
+bg-surface-muted
 px-5
 py-4
-text-slate-700
-placeholder:text-slate-400
+text-text-secondary
+placeholder:text-text-muted
 outline-none
 transition-all
 duration-200
 focus:border-indigo-600
-focus:bg-white
+focus:bg-surface
 focus:ring-4
 focus:ring-indigo-100
 "
@@ -193,7 +194,7 @@ focus:ring-indigo-100
 </div>
 
     <div>
-  <label className="mb-2 block text-sm font-semibold text-slate-700">
+  <label className="mb-2 block text-sm font-semibold text-text-secondary">
     Password
   </label>
 
@@ -207,12 +208,12 @@ focus:ring-indigo-100
         w-full
         rounded-xl
         border
-        border-slate-200
-        bg-slate-50
+        border-border-color
+        bg-surface-muted
         py-4
         pl-5
         pr-14
-        text-slate-700
+        text-text-secondary
         outline-none
         transition
         focus:border-indigo-500
@@ -231,8 +232,8 @@ focus:ring-indigo-100
         flex
         items-center
         justify-center
-        text-slate-500
-        hover:text-indigo-600
+        text-text-muted
+        hover:text-indigo-600 hover:dark:text-indigo-400
       "
     >
       {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
@@ -260,8 +261,8 @@ disabled:opacity-50
             {loading ? "Signing in..." : "Login"}
           </button>
         </form>
-<div className="mt-10 border-t border-slate-200 pt-4">
-  <div className="flex items-center justify-between text-xs text-slate-500">
+<div className="mt-10 border-t border-border-color pt-4">
+  <div className="flex items-center justify-between text-xs text-text-muted">
     <span>© 2026 SG Encon Ltd.</span>
     <span>Version 2.0 Enterprise</span>
   </div>

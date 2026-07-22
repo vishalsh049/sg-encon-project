@@ -5,7 +5,7 @@ const STATUS_OPTIONS = ["Pending", "Under Review", "Approved", "Rejected", "Conv
 function Field({ icon: Icon, label, children }) {
   return (
     <div className="min-w-[150px] flex-1">
-      <label className="mb-1 flex items-center gap-1 px-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+      <label className="mb-1 flex items-center gap-1 px-1 text-[11px] font-semibold uppercase tracking-wide text-text-muted">
         {Icon ? <Icon className="h-3 w-3" /> : null}
         {label}
       </label>
@@ -15,7 +15,7 @@ function Field({ icon: Icon, label, children }) {
 }
 
 const inputClass =
-  "h-10 w-full rounded-2xl border border-slate-200 bg-white px-3 text-sm text-slate-700 shadow-sm outline-none transition focus:border-blue-300 focus:ring-4 focus:ring-blue-100";
+  "h-10 w-full rounded-2xl border border-border-color bg-surface px-3 text-sm text-text-secondary shadow-sm outline-none transition focus:border-blue-300 focus:dark:border-blue-500/30 focus:ring-4 focus:ring-blue-100";
 
 /**
  * Filter row: status, training batch, registration date range.
@@ -77,7 +77,7 @@ export default function Filters({ value, onChange, batches = [], onReset }) {
       <button
         type="button"
         onClick={onReset}
-        className="flex h-10 items-center gap-1.5 rounded-2xl border border-slate-200 bg-white px-3 text-sm font-medium text-slate-600 shadow-sm transition hover:bg-slate-50"
+        className="flex h-10 items-center gap-1.5 rounded-2xl border border-border-color bg-surface px-3 text-sm font-medium text-text-secondary shadow-sm transition hover:bg-surface-muted"
       >
         <RotateCcw className="h-3.5 w-3.5" />
         Reset

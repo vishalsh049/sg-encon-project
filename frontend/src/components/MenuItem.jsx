@@ -32,7 +32,7 @@ function MenuItem({
         className={[
           "flex h-7 w-6 shrink-0 items-center justify-center rounded-2xl transition-colors",
           isActive
-            ? "bg-white/15"
+            ? "bg-surface/15"
             : "bg-surface-muted text-text-secondary group-hover:bg-surface-elevated",
         ].join(" ")}
       >
@@ -57,7 +57,7 @@ function MenuItem({
           {item.badge ? (
             <span
               className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
-                isActive ? "bg-white/15 text-white" : "bg-surface-elevated text-primary"
+                isActive ? "bg-surface/15 text-white" : "bg-surface-elevated text-primary"
               }`}
             >
               {item.badge}

@@ -15,10 +15,10 @@ const COLUMNS = [
 
 function SkeletonRows({ rows = 6 }) {
   return Array.from({ length: rows }).map((_, index) => (
-    <tr key={index} className="animate-pulse border-b border-slate-50">
+    <tr key={index} className="animate-pulse border-b border-border-color">
       {COLUMNS.map((column) => (
         <td key={column.key} className="px-4 py-3.5">
-          <div className="h-3.5 w-24 rounded bg-slate-100" />
+          <div className="h-3.5 w-24 rounded bg-surface-muted" />
         </td>
       ))}
     </tr>
@@ -63,18 +63,18 @@ export default function EmployeeTable({
   };
 
   return (
-    <div className="overflow-hidden rounded-[20px] border border-slate-100 bg-white shadow-sm">
+    <div className="overflow-hidden rounded-[20px] border border-border-color bg-surface shadow-sm">
       {/* Desktop table */}
       <div className="hidden overflow-x-auto md:block">
         <table className="w-full min-w-[860px] text-left text-sm">
           <thead>
-            <tr className="border-b border-slate-100 bg-slate-50/70 text-[11px] uppercase tracking-wide text-slate-400">
+            <tr className="border-b border-border-color bg-surface-muted/70 text-[11px] uppercase tracking-wide text-text-muted">
               {COLUMNS.map((column) => (
                 <th
                   key={column.key}
                   onClick={() => toggleSort(column)}
                   className={`px-4 py-3 font-semibold ${
-                    column.sortable ? "cursor-pointer select-none hover:text-slate-600" : ""
+                    column.sortable ? "cursor-pointer select-none hover:text-text-secondary" : ""
                   }`}
                 >
                   <span className="inline-flex items-center gap-1">
@@ -103,22 +103,22 @@ export default function EmployeeTable({
               rows.map((row) => (
                 <tr
                   key={row.id}
-                  className="cursor-pointer border-b border-slate-50 transition hover:bg-blue-50/40"
+                  className="cursor-pointer border-b border-border-color transition hover:bg-blue-50 hover:dark:bg-blue-500/10/40"
                   onClick={() => openProfile(row)}
                 >
                   <td className="px-4 py-3.5">
-                    <p className="font-semibold text-slate-800">{row.full_name}</p>
-                    <p className="text-xs text-slate-400">
+                    <p className="font-semibold text-text-primary">{row.full_name}</p>
+                    <p className="text-xs text-text-muted">
                       {row.employee_code || row.email || `#${row.id}`}
                     </p>
                   </td>
-                  <td className="px-4 py-3.5 text-slate-600">{row.mobile || "—"}</td>
-                  <td className="px-4 py-3.5 font-mono text-xs text-slate-600">
+                  <td className="px-4 py-3.5 text-text-secondary">{row.mobile || "—"}</td>
+                  <td className="px-4 py-3.5 font-mono text-xs text-text-secondary">
                     {row.aadhaar_no || "—"}
                   </td>
-                  <td className="px-4 py-3.5 text-slate-600">{row.training_batch || "—"}</td>
-                  <td className="px-4 py-3.5 text-slate-600">{row.circle || "—"}</td>
-                  <td className="px-4 py-3.5 text-slate-600">{formatDate(row.created_at)}</td>
+                  <td className="px-4 py-3.5 text-text-secondary">{row.training_batch || "—"}</td>
+                  <td className="px-4 py-3.5 text-text-secondary">{row.circle || "—"}</td>
+                  <td className="px-4 py-3.5 text-text-secondary">{formatDate(row.created_at)}</td>
                   <td className="px-4 py-3.5">
                     <StatusBadge status={row.status} />
                   </td>
@@ -136,7 +136,7 @@ export default function EmployeeTable({
               <tr>
                 <td
                   colSpan={COLUMNS.length + (actions ? 1 : 0)}
-                  className="px-4 py-14 text-center text-sm text-slate-400"
+                  className="px-4 py-14 text-center text-sm text-text-muted"
                 >
                   No candidates found for the current filters.
                 </td>
@@ -150,7 +150,7 @@ export default function EmployeeTable({
       <div className="space-y-3 p-3 md:hidden">
         {loading ? (
           Array.from({ length: 4 }).map((_, index) => (
-            <div key={index} className="h-28 animate-pulse rounded-2xl bg-slate-100" />
+            <div key={index} className="h-28 animate-pulse rounded-2xl bg-surface-muted" />
           ))
         ) : rows.length ? (
           rows.map((row) => (
@@ -162,14 +162,14 @@ export default function EmployeeTable({
             />
           ))
         ) : (
-          <p className="py-10 text-center text-sm text-slate-400">
+          <p className="py-10 text-center text-sm text-text-muted">
             No candidates found for the current filters.
           </p>
         )}
       </div>
 
       {/* Pagination */}
-      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 px-4 py-3 text-sm text-slate-500">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border-color px-4 py-3 text-sm text-text-muted">
         <span>
           {total ? `${(page - 1) * pageSize + 1}–${Math.min(page * pageSize, total)} of ${total}` : "0 records"}
         </span>
@@ -178,7 +178,7 @@ export default function EmployeeTable({
             type="button"
             disabled={page <= 1}
             onClick={() => onPageChange(page - 1)}
-            className="flex h-8 w-8 items-center justify-center rounded-xl border border-slate-200 transition enabled:hover:bg-slate-50 disabled:opacity-40"
+            className="flex h-8 w-8 items-center justify-center rounded-xl border border-border-color transition enabled:hover:bg-surface-muted disabled:opacity-40"
           >
             <ChevronLeft className="h-4 w-4" />
           </button>
@@ -189,7 +189,7 @@ export default function EmployeeTable({
             type="button"
             disabled={page >= totalPages}
             onClick={() => onPageChange(page + 1)}
-            className="flex h-8 w-8 items-center justify-center rounded-xl border border-slate-200 transition enabled:hover:bg-slate-50 disabled:opacity-40"
+            className="flex h-8 w-8 items-center justify-center rounded-xl border border-border-color transition enabled:hover:bg-surface-muted disabled:opacity-40"
           >
             <ChevronRight className="h-4 w-4" />
           </button>

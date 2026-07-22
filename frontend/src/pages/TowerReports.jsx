@@ -50,13 +50,13 @@
     const accent =
       normalizedCategory === "fiber"
         ? {
-          badge: "bg-emerald-50 text-emerald-700",
+          badge: "bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
           button: "bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-300",
           ring: "focus:border-emerald-400",
           file: "file:bg-emerald-600 hover:file:bg-emerald-700",
         }
         : {
-          badge: "bg-indigo-50 text-indigo-700",
+          badge: "bg-indigo-50 dark:bg-indigo-500/10 text-indigo-700 dark:text-indigo-400",
           button: "bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300",
           ring: "focus:border-indigo-400",
           file: "file:bg-indigo-600 hover:file:bg-indigo-700",
@@ -96,7 +96,7 @@
       ESC: { label: "ESC", bg: "from-amber-100 to-amber-50", icon: Layers, highlight: true },
       HPODSC: { label: "HPODSC", bg: "from-rose-100 to-rose-50", icon: Activity, highlight: true },
       OSC: { label: "OSC", bg: "from-lime-100 to-lime-50", icon: BarChart3, highlight: true },
-      GSC: { label: "GSC", bg: "from-slate-100 to-slate-50", icon: Layers, highlight: true },
+      GSC: { label: "GSC", bg: "from-surface-muted to-surface-muted", icon: Layers, highlight: true },
     };
 
     const today = useMemo(() => {
@@ -796,7 +796,7 @@
       return allowedSiteTypes.map((site) => {
         const meta = siteTypeMeta[site.value] || {
           label: site.label,
-          bg: "from-slate-100 to-slate-50",
+          bg: "from-surface-muted to-surface-muted",
           icon: BarChart3,
         };
         const metric = snapshot[site.value];
@@ -813,17 +813,17 @@
     const primaryButtonClass =
       "inline-flex h-10 items-center justify-center gap-2 rounded-full border border-transparent px-5 text-sm font-semibold text-white shadow-[0_20px_60px_rgba(76,78,255,0.22)] transition duration-200 disabled:cursor-not-allowed disabled:opacity-50";
     const secondaryButtonClass =
-      "inline-flex h-10 items-center justify-center gap-2 rounded-full border border-slate-300 bg-white px-5 text-sm font-medium text-slate-700 shadow-sm transition duration-200 hover:border-slate-400 hover:bg-slate-50";
+      "inline-flex h-10 items-center justify-center gap-2 rounded-full border border-border-strong bg-surface px-5 text-sm font-medium text-text-secondary shadow-sm transition duration-200 hover:border-border-strong hover:bg-surface-muted";
     const tableActionClass =
-      "inline-flex h-9 w-9 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-600 transition hover:bg-slate-50 shadow-sm";
+      "inline-flex h-9 w-9 items-center justify-center rounded-2xl border border-border-color bg-surface text-text-secondary transition hover:bg-surface-muted shadow-sm";
     const formFieldClass =
-      "rounded-2xl border border-slate-200/80 bg-slate-50 px-6 py-6 shadow-[0_24px_70px_rgba(15,23,42,0.08)]";
+      "rounded-2xl border border-border-color/80 bg-surface-muted px-6 py-6 shadow-[0_24px_70px_rgba(15,23,42,0.08)]";
     const inputControlClass =
-      "peer h-12 w-full rounded-2xl border border-slate-200/80 bg-white px-4 pl-12 text-sm text-slate-900 shadow-[inset_0_1px_2px_rgba(15,23,42,0.08)] outline-none transition duration-200 focus:border-violet-400 focus:ring-2 focus:ring-violet-100";
+      "peer h-12 w-full rounded-2xl border border-border-color/80 bg-surface px-4 pl-12 text-sm text-text-primary shadow-[inset_0_1px_2px_rgba(15,23,42,0.08)] outline-none transition duration-200 focus:border-violet-400 focus:ring-2 focus:ring-violet-100";
 
     {/* main return */ }
     return (
-    <div className="min-h-screen w-full pb-20 text-slate-900 -mt-2">
+    <div className="min-h-screen w-full pb-20 text-text-primary -mt-2">
     
       <div className=" top-0 z-30 mb-2 overflow-hidden rounded-[22px] px-5 py-4 backdrop-blur-xl 
           bg-[linear-gradient(135deg,rgba(219,234,254,0.82),rgba(255,255,255,0.9),rgba(237,233,254,0.9))] 
@@ -845,10 +845,10 @@
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="min-w-0 space-y-2">
         <div className="space-y-0">
-            <h1 className="text-xl font-semibold tracking-[-0.03em] text-slate-950">
+            <h1 className="text-xl font-semibold tracking-[-0.03em] text-text-primary">
                   Tower Performance Dashboard
             </h1>
-            <p className="text-sm text-slate-500">
+            <p className="text-sm text-text-muted">
                   Real-Time Performance Monitoring & Operational Insights
             </p>
         </div>
@@ -879,7 +879,7 @@
               <button
                 onClick={handleBulkDelete}
                 disabled={selectedIds.length === 0}
-                className={`${secondaryButtonClass} border-transparent bg-red-50 text-red-700 shadow-sm hover:bg-red-100 disabled:opacity-40`}
+                className={`${secondaryButtonClass} border-transparent bg-red-50 dark:bg-red-500/10 text-red-700 dark:text-red-400 shadow-sm hover:bg-red-100 hover:dark:bg-red-500/15 disabled:opacity-40`}
               >
                 <Trash2 size={16} />
                 Delete
@@ -889,7 +889,7 @@
                   setExportPopupOpen(true);
                 }}
                 disabled={downloading}
-                className={`${secondaryButtonClass} border-transparent bg-emerald-50 text-emerald-700 shadow-sm hover:bg-emerald-100 disabled:opacity-40`}
+                className={`${secondaryButtonClass} border-transparent bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 shadow-sm hover:bg-emerald-100 hover:dark:bg-emerald-500/15 disabled:opacity-40`}
               >
                 {downloading ? (
                   <>
@@ -915,19 +915,19 @@
                 return (
                   <div
                     key={item.type}
-                    className={`rounded-[18px] border border-white/85 bg-white/90 px-4 py-2 transition duration-200
+                    className={`rounded-[18px] border border-white/85 bg-surface/90 px-4 py-2 transition duration-200
                       hover:-translate-y-0.5 hover:shadow-soft ${item.highlight ? "ring-1 ring-indigo-100" : ""}`}>
                     <div className="flex items-center justify-between gap-4">
                       <div className="">
-                        <p className="text-[11px] mt-1 font-semibold uppercase tracking-[0.2em] text-slate-500">
+                        <p className="text-[11px] mt-1 font-semibold uppercase tracking-[0.2em] text-text-muted">
                           {item.label}
                         </p>
-                        <h2 className={`text-lg font-semibold tracking-[-0.03em] ${item.highlight ? "text-slate-950" : "text-slate-900"}`}>
+                        <h2 className={`text-lg font-semibold tracking-[-0.03em] ${item.highlight ? "text-text-primary" : "text-text-primary"}`}>
                           {item.count}
                         </h2>
-                        <p className="text-xs text-slate-400">Date: {item.date}</p>
+                        <p className="text-xs text-text-muted">Date: {item.date}</p>
                       </div>
-                      <div className={`flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br ${item.bg} text-slate-900`}>
+                      <div className={`flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br ${item.bg} text-text-primary`}>
                         <Icon size={16} />
                       </div>
                     </div>
@@ -936,21 +936,21 @@
               })}
             </div>
 
-            <div className="rounded-[18px] border border-white/80 bg-white/85 p-4 backdrop-blur-xl">
+            <div className="rounded-[18px] border border-white/80 bg-surface/85 p-4 backdrop-blur-xl">
 
               <div className="space-y-4">
                 <div>
-                  <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.06em] text-slate-500">
+                  <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.06em] text-text-muted">
                     Search Reports, Date, Reports, Site Types, Uploaded By...
                   </label>
-                  <div className="flex h-10 items-center gap-3 overflow-hidden rounded-xl border border-slate-200/70 bg-white px-3 text-sm text-slate-700 transition focus-within:ring-2 focus-within:ring-sky-200">
-                    <Search size={16} className="text-slate-400" />
+                  <div className="flex h-10 items-center gap-3 overflow-hidden rounded-xl border border-border-color/70 bg-surface px-3 text-sm text-text-secondary transition focus-within:ring-2 focus-within:ring-sky-200">
+                    <Search size={16} className="text-text-muted" />
                     <input
                       type="text"
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
                       placeholder="Search by file name, site type, report type..."
-                      className="w-full border-0 bg-transparent text-sm text-slate-700 outline-none placeholder:text-slate-400"
+                      className="w-full border-0 bg-transparent text-sm text-text-secondary outline-none placeholder:text-text-muted"
                     />
                   </div>
                 </div>
@@ -973,24 +973,24 @@
                       <div className="relative">
 
                         {/* Button */}
-                        <Listbox.Button className="w-full h-11 rounded-xl border border-slate-200 bg-white px-4
-      text-sm text-left flex items-center justify-between hover:border-sky-300 focus:ring-2 focus:ring-sky-100 transition">
+                        <Listbox.Button className="w-full h-11 rounded-xl border border-border-color bg-surface px-4
+      text-sm text-left flex items-center justify-between hover:border-sky-300 hover:dark:border-sky-500/30 focus:ring-2 focus:ring-sky-100 transition">
                           <span className="truncate">
                             {filterSiteType
                               ? allowedSiteTypes.find((s) => s.value === filterSiteType)?.label
                               : "All Site Types"}
                           </span>
-                          <ChevronDown size={16} className="text-slate-400" />
+                          <ChevronDown size={16} className="text-text-muted" />
                         </Listbox.Button>
 
                         {/* Dropdown */}
-                        <Listbox.Options className="absolute z-50 mt-2 w-full rounded-2xl bg-white border border-slate-200 p-1">
+                        <Listbox.Options className="absolute z-50 mt-2 w-full rounded-2xl bg-surface border border-border-color p-1">
 
                           {/* Default Option */}
                           <Listbox.Option
                             value=""
                             className={({ active }) =>
-                              `cursor-pointer rounded-xl px-3 py-2 text-sm ${active ? "bg-slate-100 text-slate-900" : "text-slate-600"
+                              `cursor-pointer rounded-xl px-3 py-2 text-sm ${active ? "bg-surface-muted text-text-primary" : "text-text-secondary"
                               }`
                             }
                           >
@@ -1003,7 +1003,7 @@
                               key={site.value}
                               value={site.value}
                               className={({ active }) =>
-                                `cursor-pointer rounded-xl px-3 py-2 text-sm ${active ? "bg-slate-100 text-slate-900" : "text-slate-600"
+                                `cursor-pointer rounded-xl px-3 py-2 text-sm ${active ? "bg-surface-muted text-text-primary" : "text-text-secondary"
                                 }`
                               }
                             >
@@ -1023,22 +1023,22 @@
                       <div className="relative">
 
                         <Listbox.Button
-                          className="w-full h-11 rounded-xl border border-slate-200 bg-white px-4 text-sm text-left flex items-center justify-between hover:border-sky-300 focus:ring-2 focus:ring-sky-100 transition"
+                          className="w-full h-11 rounded-xl border border-border-color bg-surface px-4 text-sm text-left flex items-center justify-between hover:border-sky-300 hover:dark:border-sky-500/30 focus:ring-2 focus:ring-sky-100 transition"
                         >
                           {filterCircle || "All Circles"}
-                          <ChevronDown size={16} className="text-slate-400" />
+                          <ChevronDown size={16} className="text-text-muted" />
                         </Listbox.Button>
 
                         <Listbox.Options
-                          className="absolute z-50 mt-2 w-full rounded-xl bg-white p-1 max-h-60 overflow-auto"
+                          className="absolute z-50 mt-2 w-full rounded-xl bg-surface p-1 max-h-60 overflow-auto"
                         >
 
                           <Listbox.Option
                             value=""
                             className={({ active }) =>
                               `cursor-pointer rounded-xl px-3 py-2 text-sm ${active
-                                ? "bg-slate-100 text-slate-900"
-                                : "text-slate-600"
+                                ? "bg-surface-muted text-text-primary"
+                                : "text-text-secondary"
                               }`
                             }
                           >
@@ -1052,8 +1052,8 @@
                                 value={circle}
                                 className={({ active }) =>
                                   `cursor-pointer rounded-xl px-3 py-2 text-sm ${active
-                                    ? "bg-slate-100 text-slate-900"
-                                    : "text-slate-600"
+                                    ? "bg-surface-muted text-text-primary"
+                                    : "text-text-secondary"
                                   }`
                                 }
                               >
@@ -1072,20 +1072,20 @@
                       <div className="relative">
 
                         {/* Button */}
-                        <Listbox.Button className="w-full h-11 rounded-xl bg-white border border-slate-200 px-4 text-sm text-left flex items-center
-      justify-between hover:border-sky-300 focus:ring-2 focus:ring-sky-100 transition">
+                        <Listbox.Button className="w-full h-11 rounded-xl bg-surface border border-border-color px-4 text-sm text-left flex items-center
+      justify-between hover:border-sky-300 hover:dark:border-sky-500/30 focus:ring-2 focus:ring-sky-100 transition">
                           {reportOptions.find(o => o.value === filterReportType)?.label || "All Report Types"}
-                          <ChevronDown size={16} className="text-slate-400" />
+                          <ChevronDown size={16} className="text-text-muted" />
                         </Listbox.Button>
 
                         {/* Dropdown */}
-                        <Listbox.Options className="absolute z-50 mt-2 w-full rounded-2xl bg-white shadow-[0_20px_60px_rgba(0,0,0,0.08)] p-1">
+                        <Listbox.Options className="absolute z-50 mt-2 w-full rounded-2xl bg-surface shadow-[0_20px_60px_rgba(0,0,0,0.08)] p-1">
                           {reportOptions.map((option) => (
                             <Listbox.Option
                               key={option.value}
                               value={option.value}
                               className={({ active }) =>
-                                `cursor-pointer rounded-xl px-3 py-2 text-sm ${active ? "bg-slate-100 text-slate-900" : "text-slate-600"
+                                `cursor-pointer rounded-xl px-3 py-2 text-sm ${active ? "bg-surface-muted text-text-primary" : "text-text-secondary"
                                 }`
                               }
                             >
@@ -1107,26 +1107,26 @@
                       <div className="relative">
 
                         <Listbox.Button
-                          className="w-full h-11 rounded-xl bg-white border border-slate-200 px-4 text-sm text-left shadow-sm flex items-center justify-between hover:border-sky-300 focus:ring-2 focus:ring-sky-100 transition"
+                          className="w-full h-11 rounded-xl bg-surface border border-border-color px-4 text-sm text-left shadow-sm flex items-center justify-between hover:border-sky-300 hover:dark:border-sky-500/30 focus:ring-2 focus:ring-sky-100 transition"
                         >
                           {filterUploadedBy || " Uploaded By"}
 
                           <ChevronDown
                             size={16}
-                            className="text-slate-400"
+                            className="text-text-muted"
                           />
                         </Listbox.Button>
 
                         <Listbox.Options
-                          className="absolute z-50 mt-2 w-full rounded-xl bg-white p-1 max-h-60 overflow-auto"
+                          className="absolute z-50 mt-2 w-full rounded-xl bg-surface p-1 max-h-60 overflow-auto"
                         >
 
                           <Listbox.Option
                             value=""
                             className={({ active }) =>
                               `cursor-pointer rounded-xl px-3 py-2 text-sm ${active
-                                ? "bg-slate-100 text-slate-900"
-                                : "text-slate-600"
+                                ? "bg-surface-muted text-text-primary"
+                                : "text-text-secondary"
                               }`
                             }
                           >
@@ -1145,8 +1145,8 @@
                               value={name}
                               className={({ active }) =>
                                 `cursor-pointer rounded-xl px-3 py-2 text-sm ${active
-                                  ? "bg-slate-100 text-slate-900"
-                                  : "text-slate-600"
+                                  ? "bg-surface-muted text-text-primary"
+                                  : "text-text-secondary"
                                 }`
                               }
                             >
@@ -1169,7 +1169,7 @@
                         setFilterCircle("");
                         setFilterUploadedBy("");
                       }}
-                      className={`${secondaryButtonClass} w-full justify-center border-slate-200 border rounded-xl bg-slate-50 text-slate-600 hover:bg-slate-100`}
+                      className={`${secondaryButtonClass} w-full justify-center border-border-color border rounded-xl bg-surface-muted text-text-secondary hover:bg-surface-muted`}
                     >
                       <RotateCcw size={16} />
                       Reset
@@ -1180,17 +1180,17 @@
             </div>
           </div>
 
-          <div className="overflow-hidden rounded-[24px] border border-white/80 bg-white/90 ">
+          <div className="overflow-hidden rounded-[24px] border border-white/80 bg-surface/90 ">
             <div className="overflow-x-auto">
-              <table className="min-w-full text-left text-sm text-slate-600">
+              <table className="min-w-full text-left text-sm text-text-secondary">
                 <thead>
-                  <tr className="bg-slate-50/90 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+                  <tr className="bg-surface-muted/90 text-[11px] font-semibold uppercase tracking-[0.14em] text-text-muted">
                     <th className="px-4 py-3">
                       <input
                         type="checkbox"
                         onChange={handleSelectAll}
                         checked={allFilteredSelected}
-                        className="h-3 w-3 rounded border-slate-300"
+                        className="h-3 w-3 rounded border-border-strong"
                       />
                     </th>
                     <th className="px-4 py-3">Date</th>
@@ -1203,54 +1203,54 @@
                     <th className="px-4 py-3">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100">
+                <tbody className="divide-y divide-border-color">
                   {tableLoading ? (
                     <tr>
-                      <td className="px-4 py-8 text-sm text-slate-500" colSpan={9}>
+                      <td className="px-4 py-8 text-sm text-text-muted" colSpan={9}>
                         Loading...
                       </td>
                     </tr>
                   ) : filteredRows.length ? (
                     paginatedRows.map((row) => (
-                      <tr key={row.id} className="transition duration-150 hover:bg-slate-50/70">
+                      <tr key={row.id} className="transition duration-150 hover:bg-surface-muted/70">
                         <td className="px-4 py-3">
                           <input
                             type="checkbox"
                             checked={selectedIds.includes(row.id)}
                             onChange={() => handleSelect(row.id)}
-                            className="h-3 w-3 rounded border-slate-300"
+                            className="h-3 w-3 rounded border-border-strong"
                           />
                         </td>
-                        <td className="px-4 py-3 text-sm text-slate-700">
+                        <td className="px-4 py-3 text-sm text-text-secondary">
                           {formatDateOnly(row.report_date)}
                         </td>
-                        <td className="px-4 py-3 text-sm text-slate-700">
+                        <td className="px-4 py-3 text-sm text-text-secondary">
                           <span
                             className={`inline-flex items-center rounded-full px-3 py-1 text-[11px] font-semibold ${row.site_type === "ENB"
-                              ? "bg-indigo-100 text-indigo-700 ring-1 ring-indigo-100"
-                              : "bg-slate-100 text-slate-700 ring-1 ring-slate-200"
+                              ? "bg-indigo-100 dark:bg-indigo-500/15 text-indigo-700 dark:text-indigo-400 ring-1 ring-indigo-100"
+                              : "bg-surface-muted text-text-secondary ring-1 ring-border-strong"
                               }`}>
                             {row.site_type || "-"}
                           </span>
                         </td>
-                        <td className="px-4 py-3 text-sm text-slate-700">
+                        <td className="px-4 py-3 text-sm text-text-secondary">
                           {row.report_type || "-"}
                         </td>
-                        <td className="px-4 py-3 text-sm text-slate-700">
+                        <td className="px-4 py-3 text-sm text-text-secondary">
                           {row.upload_type || "-"}
                         </td>
-                        <td className="px-4 py-3 text-sm text-slate-700">
+                        <td className="px-4 py-3 text-sm text-text-secondary">
                           {row.uploaded_by || "-"}
                         </td>
-                        <td className="max-w-[260px] px-4 py-3 text-sm text-slate-700">
+                        <td className="max-w-[260px] px-4 py-3 text-sm text-text-secondary">
                           <span className="block truncate">{row.file_name || "-"}</span>
                           {row.file_missing ? (
-                            <div className="mt-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-amber-700">
+                            <div className="mt-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-amber-700 dark:text-amber-400">
                               File missing
                             </div>
                           ) : null}
                         </td>
-                        <td className="whitespace-nowrap px-4 py-3 text-sm text-slate-700">
+                        <td className="whitespace-nowrap px-4 py-3 text-sm text-text-secondary">
                           {formatTimestamp(row.uploaded_at)}
                         </td>
                         <td className="px-4 py-3">
@@ -1277,7 +1277,7 @@
                             {canDeleteReports ? (
                               <button
                                 onClick={() => handleDelete(row.id)}
-                                className={`${tableActionClass} text-red-500 hover:bg-red-50`}
+                                className={`${tableActionClass} text-red-500 dark:text-red-400 hover:bg-red-50 hover:dark:bg-red-500/10`}
                                 title="Delete"
                               >
                                 <Trash2 size={14} />
@@ -1289,7 +1289,7 @@
                     ))
                   ) : (
                     <tr>
-                      <td className="px-4 py-8 text-sm text-slate-500" colSpan={9}>
+                      <td className="px-4 py-8 text-sm text-text-muted" colSpan={9}>
                         No reports uploaded yet.
                       </td>
                     </tr>
@@ -1302,14 +1302,14 @@
 
 
         <div className="fixed bottom-0 left-0 right-0 z-50 md:left-[var(--sidebar-width)]">
-          <div className="w-full border-t border-slate-200/80 bg-white/90 px-3 py-1 backdrop-blur md:px-4">
+          <div className="w-full border-t border-border-color/80 bg-surface/90 px-3 py-1 backdrop-blur md:px-4">
 
             <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
 
               {/* LEFT */}
-              <div className="text-sm text-slate-500">
+              <div className="text-sm text-text-muted">
                 Total files:
-                <span className="ml-1 font-medium text-slate-900">
+                <span className="ml-1 font-medium text-text-primary">
                   {totalFiles}
                 </span>
               </div>
@@ -1317,12 +1317,12 @@
               {/* RIGHT */}
               <div className="flex flex-wrap items-center justify-end gap-2 rounded-lg px-4 py-2">
 
-                <span className="text-sm text-slate-500">Show</span>
+                <span className="text-sm text-text-muted">Show</span>
 
                 <select
                   value={pageSize}
                   onChange={(e) => setPageSize(Number(e.target.value))}
-                  className="h-8 rounded-md border border-slate-200 bg-white px-2 text-sm text-slate-700"
+                  className="h-8 rounded-md border border-border-color bg-surface px-2 text-sm text-text-secondary"
                 >
                   {[10, 15, 30, 50, 100].map((size) => (
                     <option key={size} value={size}>{size}</option>
@@ -1332,12 +1332,12 @@
                 <button
                   onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
                   disabled={currentPage === 1}
-                  className="inline-flex h-8 items-center rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-600 shadow-sm disabled:opacity-50"
+                  className="inline-flex h-8 items-center rounded-md border border-border-color bg-surface px-3 text-sm text-text-secondary shadow-sm disabled:opacity-50"
                 >
                   Prev
                 </button>
 
-                <span className="text-sm text-slate-600">
+                <span className="text-sm text-text-secondary">
                   Page {currentPage} of {totalPages}
                 </span>
 
@@ -1346,7 +1346,7 @@
                     setCurrentPage((prev) => Math.min(totalPages, prev + 1))
                   }
                   disabled={currentPage === totalPages}
-                  className="inline-flex h-8 items-center rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-600 shadow-sm disabled:opacity-50"
+                  className="inline-flex h-8 items-center rounded-md border border-border-color bg-surface px-3 text-sm text-text-secondary shadow-sm disabled:opacity-50"
                 >
                   Next
                 </button>
@@ -1358,14 +1358,14 @@
 
         {modalOpen ? (
           <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto px-4 py-6">
-            <div className="absolute inset-0 bg-slate-950/30 backdrop-blur-xl" />
-            <div className="relative z-10 mx-auto flex w-full max-w-[750px] max-h-[90vh] flex-col rounded-[20px] border border-slate-200/80 bg-white shadow-[0_30px_90px_rgba(15,23,42,0.12)] animate-modal-enter overflow-hidden">
-              <div className="flex items-center justify-between gap-4 border-b border-slate-200/70 px-6 py-5">
+            <div className="absolute inset-0 bg-overlay/30 backdrop-blur-xl" />
+            <div className="relative z-10 mx-auto flex w-full max-w-[750px] max-h-[90vh] flex-col rounded-[20px] border border-border-color/80 bg-surface shadow-[0_30px_90px_rgba(15,23,42,0.12)] animate-modal-enter overflow-hidden">
+              <div className="flex items-center justify-between gap-4 border-b border-border-color/70 px-6 py-5">
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">
+                  <p className="text-xs font-semibold uppercase tracking-[0.24em] text-text-muted">
                     {categoryLabel} Reports
                   </p>
-                  <h2 className="mt-2 text-xl font-semibold tracking-[-0.03em] text-slate-950">
+                  <h2 className="mt-2 text-xl font-semibold tracking-[-0.03em] text-text-primary">
                     {editingId ? "Edit Report" : "Upload Reports"}
                   </h2>
                 </div>
@@ -1374,7 +1374,7 @@
                     closeDuplicateDialog();
                     setModalOpen(false);
                   }}
-                  className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-sm transition duration-200 hover:bg-slate-100"
+                  className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-border-color bg-surface text-text-secondary shadow-sm transition duration-200 hover:bg-surface-muted"
                   aria-label="Close modal"
                 >
                   <span className="text-xl leading-none">×</span>
@@ -1386,8 +1386,8 @@
  <div
   className={`rounded-3xl border px-4 py-3 text-sm shadow-sm whitespace-pre-line ${
     modalMessageType === "error"
-      ? "border-red-200 bg-red-50 text-red-700"
-      : "border-emerald-200 bg-emerald-50 text-emerald-700"
+      ? "border-red-200 dark:border-red-500/20 bg-red-50 dark:bg-red-500/10 text-red-700 dark:text-red-400"
+      : "border-emerald-200 dark:border-emerald-500/20 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
   }`}
 >
   {modalMessage}
@@ -1395,8 +1395,8 @@
     ) : null}
 
                 {modalLoadingText ? (
-                  <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600 shadow-sm">
-                    <span className="h-2.5 w-2.5 animate-spin rounded-full border border-slate-400 border-t-transparent" />
+                  <div className="inline-flex items-center gap-2 rounded-full border border-border-color bg-surface-muted px-3 py-2 text-sm text-text-secondary shadow-sm">
+                    <span className="h-2.5 w-2.5 animate-spin rounded-full border border-border-strong border-t-transparent" />
                     {modalLoadingText}
                   </div>
                 ) : null}
@@ -1415,7 +1415,7 @@
                       }}
                       className={`flex-1 rounded-xl py-2 text-sm font-medium transition ${uploadType === "single"
                         ? "bg-blue-600 text-white"
-                        : "bg-slate-100 text-slate-700"
+                        : "bg-surface-muted text-text-secondary"
                         }`}
                     >
                       Single Upload
@@ -1432,7 +1432,7 @@
                       }}
                       className={`flex-1 rounded-xl py-2 text-sm font-medium transition ${uploadType === "bulk"
                         ? "bg-green-600 text-white"
-                        : "bg-slate-100 text-slate-700"
+                        : "bg-surface-muted text-text-secondary"
                         }`}
                     >
                       Bulk Upload
@@ -1449,7 +1449,7 @@
 
                         {/* DATE */}
                         <div className="relative">
-                          <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
+                          <span className="absolute left-4 top-1/2 -translate-y-1/2 text-text-muted">
                             <Calendar size={18} />
                           </span>
 
@@ -1470,7 +1470,7 @@
 
                         {/* UPLOADED BY */}
                         <div className="relative">
-                          <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
+                          <span className="absolute left-4 top-1/2 -translate-y-1/2 text-text-muted">
                             <User size={18} />
                           </span>
 
@@ -1479,14 +1479,14 @@
                             value={uploadedBy}
                             onChange={(e) => setUploadedBy(e.target.value)}
                             placeholder="Enter uploader name"
-                            className="h-10 w-full rounded-2xl border border-slate-200 bg-white pl-12 pr-4 text-sm
+                            className="h-10 w-full rounded-2xl border border-border-color bg-surface pl-12 pr-4 text-sm
         outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-100"
                           />
                         </div>
 
                         {/* SITE TYPE */}
                         <div className="relative">
-                          <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
+                          <span className="absolute left-4 top-1/2 -translate-y-1/2 text-text-muted">
                             <Layers size={18} />
                           </span>
 
@@ -1494,11 +1494,11 @@
                             <div className="relative">
 
                               {/* BUTTON */}
-                              <Listbox.Button className="w-full h-10 rounded-2xl border border-slate-200 bg-white pl-4 pr-4 text-sm text-left shadow-sm flex items-center justify-between hover:border-violet-300 focus:ring-2 focus:ring-violet-100 transition">
+                              <Listbox.Button className="w-full h-10 rounded-2xl border border-border-color bg-surface pl-4 pr-4 text-sm text-left shadow-sm flex items-center justify-between hover:border-violet-300 hover:dark:border-violet-500/30 focus:ring-2 focus:ring-violet-100 transition">
 
                                 {/* ICON + TEXT */}
                                 <div className="flex items-center gap-2">
-                                  <Layers size={16} className="text-slate-400" />
+                                  <Layers size={16} className="text-text-muted" />
                                   <span>
                                     {siteType
                                       ? allowedSiteTypes.find((s) => s.value === siteType)?.label
@@ -1506,18 +1506,18 @@
                                   </span>
                                 </div>
 
-                                <ChevronDown size={16} className="text-slate-400" />
+                                <ChevronDown size={16} className="text-text-muted" />
                               </Listbox.Button>
 
                               {/* DROPDOWN */}
-                              <Listbox.Options className="absolute z-50 mt-2 w-full rounded-2xl bg-white border border-slate-200 shadow-[0_20px_60px_rgba(15,23,42,0.12)] p-1 max-h-60 overflow-auto">
+                              <Listbox.Options className="absolute z-50 mt-2 w-full rounded-2xl bg-surface border border-border-color shadow-[0_20px_60px_rgba(15,23,42,0.12)] p-1 max-h-60 overflow-auto">
 
                                 {allowedSiteTypes.map((site) => (
                                   <Listbox.Option
                                     key={site.value}
                                     value={site.value}
                                     className={({ active }) =>
-                                      `cursor-pointer rounded-xl px-3 py-2 text-sm ${active ? "bg-violet-50 text-violet-700" : "text-slate-600"
+                                      `cursor-pointer rounded-xl px-3 py-2 text-sm ${active ? "bg-violet-50 dark:bg-violet-500/10 text-violet-700 dark:text-violet-400" : "text-text-secondary"
                                       }`
                                     }
                                   >
@@ -1535,36 +1535,36 @@
 
                         {/* REPORT TYPE */}
                         <div className="relative">
-                          <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
+                          <span className="absolute left-4 top-1/2 -translate-y-1/2 text-text-muted">
                             <FileText size={18} />
                           </span>
 
                           <Listbox value={reportType} onChange={setReportType}>
                             <div className="relative">
 
-                              <Listbox.Button className="w-full h-10 rounded-2xl border border-slate-200 bg-white pl-4 pr-4 text-sm text-left shadow-sm flex items-center justify-between hover:border-violet-300 focus:ring-2 focus:ring-violet-100 transition">
+                              <Listbox.Button className="w-full h-10 rounded-2xl border border-border-color bg-surface pl-4 pr-4 text-sm text-left shadow-sm flex items-center justify-between hover:border-violet-300 hover:dark:border-violet-500/30 focus:ring-2 focus:ring-violet-100 transition">
 
                                 <div className="flex items-center gap-2">
-                                  <FileText size={16} className="text-slate-400" />
+                                  <FileText size={16} className="text-text-muted" />
                                   <span>
                                     {reportType || "Select Report Type"}
                                   </span>
                                 </div>
 
-                                <ChevronDown size={16} className="text-slate-400" />
+                                <ChevronDown size={16} className="text-text-muted" />
                               </Listbox.Button>
 
-                              <Listbox.Options className="absolute z-50 mt-2 w-full rounded-2xl bg-white border border-slate-200 shadow-[0_20px_60px_rgba(15,23,42,0.12)] p-1">
+                              <Listbox.Options className="absolute z-50 mt-2 w-full rounded-2xl bg-surface border border-border-color shadow-[0_20px_60px_rgba(15,23,42,0.12)] p-1">
 
-                                <Listbox.Option value="" className="px-3 py-2 text-sm text-slate-600">
+                                <Listbox.Option value="" className="px-3 py-2 text-sm text-text-secondary">
                                   Select Report Type
                                 </Listbox.Option>
 
-                                <Listbox.Option value="Outage" className="px-3 py-2 text-sm hover:bg-violet-50 cursor-pointer">
+                                <Listbox.Option value="Outage" className="px-3 py-2 text-sm hover:bg-violet-50 hover:dark:bg-violet-500/10 cursor-pointer">
                                   Outage Report
                                 </Listbox.Option>
 
-                                <Listbox.Option value="Performance" className="px-3 py-2 text-sm hover:bg-violet-50 cursor-pointer">
+                                <Listbox.Option value="Performance" className="px-3 py-2 text-sm hover:bg-violet-50 hover:dark:bg-violet-500/10 cursor-pointer">
                                   Performance Report
                                 </Listbox.Option>
 
@@ -1592,7 +1592,7 @@
                                 link.click();
                                 document.body.removeChild(link);
                               }}
-                              className="mt-1 inline-flex items-center gap-2 rounded-xl border border-violet-200 bg-violet-50 px-4 py-2 text-sm font-medium text-violet-700 hover:bg-violet-100 transition"
+                              className="mt-1 inline-flex items-center gap-2 rounded-xl border border-violet-200 dark:border-violet-500/20 bg-violet-50 dark:bg-violet-500/10 px-4 py-2 text-sm font-medium text-violet-700 dark:text-violet-400 hover:bg-violet-100 hover:dark:bg-violet-500/15 transition"
                             >
                               <Download size={16} />
                               Download {siteType} Format
@@ -1608,28 +1608,28 @@
                         {/* Header */}
                         <div className="flex items-center gap-4">
                           <div>
-                            <div className="text-sm font-semibold text-slate-900">File Upload</div>
-                            <p className="text-sm text-slate-500">
+                            <div className="text-sm font-semibold text-text-primary">File Upload</div>
+                            <p className="text-sm text-text-muted">
                               Drag & drop or browse your Excel / CSV report.
                             </p>
                           </div>
-                          <div className="h-px flex-1 bg-slate-200/80" />
+                          <div className="h-px flex-1 bg-surface-muted/80" />
                         </div>
 
                         {/* Upload Box */}
-                        <div className="relative rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center transition duration-200 hover:border-violet-300 hover:bg-white shadow-sm">
+                        <div className="relative rounded-2xl border border-dashed border-border-strong bg-surface-muted px-6 py-10 text-center transition duration-200 hover:border-violet-300 hover:dark:border-violet-500/30 hover:bg-surface shadow-sm">
 
                           {/* Icon */}
-                          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-gradient-to-br from-violet-100 to-indigo-100 text-violet-600 shadow-sm">
+                          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-gradient-to-br from-violet-100 to-indigo-100 text-violet-600 dark:text-violet-400 shadow-sm">
                             <Upload size={26} />
                           </div>
 
                           {/* Text */}
                           <div className="mt-4 space-y-1">
-                            <p className="text-sm font-semibold text-slate-900">
+                            <p className="text-sm font-semibold text-text-primary">
                               Click or drag file to upload
                             </p>
-                            <p className="text-xs text-slate-500">
+                            <p className="text-xs text-text-muted">
                               Supported: .xlsx, .xls, .xlsb, .csv
                             </p>
                           </div>
@@ -1644,7 +1644,7 @@
 
                           {/* File Name */}
                           {file && (
-                            <div className="mt-4 rounded-2xl bg-white border border-slate-200 px-4 py-2 text-sm text-slate-700">
+                            <div className="mt-4 rounded-2xl bg-surface border border-border-color px-4 py-2 text-sm text-text-secondary">
                               {file.name}
                             </div>
                           )}
@@ -1665,7 +1665,7 @@
                           <Listbox value={siteType} onChange={setSiteType}>
                             <div className="relative">
 
-                              <Listbox.Button className="w-full h-10 rounded-2xl border border-slate-200 bg-white px-4 text-left flex items-center justify-between">
+                              <Listbox.Button className="w-full h-10 rounded-2xl border border-border-color bg-surface px-4 text-left flex items-center justify-between">
                                 <span>
                                   {siteType || "Select Site Type"}
                                 </span>
@@ -1673,14 +1673,14 @@
                                 <ChevronDown size={16} />
                               </Listbox.Button>
 
-                              <Listbox.Options className="absolute z-50 mt-2 w-full rounded-2xl bg-white border p-1">
+                              <Listbox.Options className="absolute z-50 mt-2 w-full rounded-2xl bg-surface border p-1">
 
                                 {allowedSiteTypes.map((site) => (
 
                                   <Listbox.Option
                                     key={site.value}
                                     value={site.value}
-                                    className="px-3 py-2 cursor-pointer hover:bg-slate-100"
+                                    className="px-3 py-2 cursor-pointer hover:bg-surface-muted"
                                   >
 
                                     {site.label}
@@ -1704,7 +1704,7 @@
 
                             <div className="relative">
 
-                              <Listbox.Button className="w-full h-10 rounded-2xl border border-slate-200 bg-white px-4 flex items-center justify-between">
+                              <Listbox.Button className="w-full h-10 rounded-2xl border border-border-color bg-surface px-4 flex items-center justify-between">
 
                                 <span>
 
@@ -1716,11 +1716,11 @@
 
                               </Listbox.Button>
 
-                              <Listbox.Options className="absolute z-50 mt-2 w-full rounded-2xl bg-white border p-1">
+                              <Listbox.Options className="absolute z-50 mt-2 w-full rounded-2xl bg-surface border p-1">
 
                                 <Listbox.Option
                                   value="Outage"
-                                  className="px-3 py-2 cursor-pointer hover:bg-slate-100"
+                                  className="px-3 py-2 cursor-pointer hover:bg-surface-muted"
                                 >
 
                                   Outage
@@ -1729,7 +1729,7 @@
 
                                 <Listbox.Option
                                   value="Performance"
-                                  className="px-3 py-2 cursor-pointer hover:bg-slate-100"
+                                  className="px-3 py-2 cursor-pointer hover:bg-surface-muted"
                                 >
 
                                   Performance
@@ -1761,21 +1761,21 @@
 
                         <div className="flex items-center gap-4">
                           <div>
-                            <div className="text-sm font-semibold text-slate-900">
+                            <div className="text-sm font-semibold text-text-primary">
                               Bulk File Upload
                             </div>
 
-                            <p className="text-sm text-slate-500">
+                            <p className="text-sm text-text-muted">
                               Select multiple Excel reports
                             </p>
                           </div>
 
-                          <div className="h-px flex-1 bg-slate-200" />
+                          <div className="h-px flex-1 bg-surface-muted" />
                         </div>
 
-                        <div className="relative rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center">
+                        <div className="relative rounded-2xl border border-dashed border-border-strong bg-surface-muted px-6 py-10 text-center">
 
-                          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-gradient-to-br from-violet-100 to-indigo-100 text-violet-600">
+                          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-gradient-to-br from-violet-100 to-indigo-100 text-violet-600 dark:text-violet-400">
                             <Upload size={26} />
                           </div>
 
@@ -1784,7 +1784,7 @@
                               Click or drag files to upload
                             </p>
 
-                            <p className="text-xs text-slate-500">
+                            <p className="text-xs text-text-muted">
                               Supported: .xlsx .xls .xlsb .csv
                             </p>
                           </div>
@@ -1800,7 +1800,7 @@
                         </div>
 
                         {bulkFiles.length > 0 && (
-                          <div className="max-h-44 overflow-y-auto rounded-2xl border border-slate-200 bg-white p-3">
+                          <div className="max-h-44 overflow-y-auto rounded-2xl border border-border-color bg-surface p-3">
 
                             {bulkFiles.map((file, index) => (
                               <div
@@ -1809,7 +1809,7 @@
                               >
                                 <span>{file.name}</span>
 
-                                <span className="text-green-600">
+                                <span className="text-green-600 dark:text-green-400">
                                   Ready
                                 </span>
                               </div>
@@ -1827,7 +1827,7 @@
 
                 </section>
 
-                <div className="sticky bottom-0 flex flex-col gap-3 border-t border-slate-200/70 bg-white px-4 py-4 sm:flex-row sm:items-center sm:justify-end">
+                <div className="sticky bottom-0 flex flex-col gap-3 border-t border-border-color/70 bg-surface px-4 py-4 sm:flex-row sm:items-center sm:justify-end">
 
                   {!uploading && (
                     <button
@@ -1871,32 +1871,32 @@
         ) : null}
 
         {duplicateDialog.open ? (
-          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/45 px-4">
-            <div className="w-full max-w-xl rounded-[20px] border border-slate-200 bg-white p-6 shadow-[0_30px_90px_rgba(15,23,42,0.18)]">
+          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-overlay/45 px-4">
+            <div className="w-full max-w-xl rounded-[20px] border border-border-color bg-surface p-6 shadow-[0_30px_90px_rgba(15,23,42,0.18)]">
               <div className="space-y-2">
-                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">
+                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-text-muted">
                   Duplicate Report Check
                 </p>
-                <h3 className="text-xl font-semibold text-slate-950">
+                <h3 className="text-xl font-semibold text-text-primary">
                   {duplicateDialog.mode === "bulk"
                     ? "Existing reports found"
                     : "Report already exists for this date"}
                 </h3>
-                <p className="text-sm text-slate-600">
+                <p className="text-sm text-text-secondary">
                   {duplicateDialog.mode === "bulk"
                     ? "The following reports already exist. Choose how you want to continue."
                     : "A report already exists for the selected Site Type, Report Type, and Date."}
                 </p>
               </div>
 
-              <div className="mt-5 max-h-72 space-y-3 overflow-y-auto rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <div className="mt-5 max-h-72 space-y-3 overflow-y-auto rounded-2xl border border-border-color bg-surface-muted p-4">
                 {duplicateDialog.duplicates.map((item, index) => (
                   <div
                     key={`${item.fileName}-${item.report_date}-${index}`}
-                    className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm"
+                    className="rounded-2xl border border-border-color bg-surface px-4 py-3 text-sm text-text-secondary shadow-sm"
                   >
-                    <div className="font-medium text-slate-900">{item.fileName}</div>
-                    <div className="mt-1 text-slate-500">Date: {item.report_date}</div>
+                    <div className="font-medium text-text-primary">{item.fileName}</div>
+                    <div className="mt-1 text-text-muted">Date: {item.report_date}</div>
                   </div>
                 ))}
               </div>
@@ -1914,7 +1914,7 @@
                   <>
                     <button
                       onClick={() => handleDuplicateAction("skip")}
-                      className="inline-flex h-10 items-center justify-center rounded-full border border-amber-200 bg-amber-50 px-5 text-sm font-medium text-amber-700 transition hover:bg-amber-100 disabled:opacity-50"
+                      className="inline-flex h-10 items-center justify-center rounded-full border border-amber-200 dark:border-amber-500/20 bg-amber-50 dark:bg-amber-500/10 px-5 text-sm font-medium text-amber-700 dark:text-amber-400 transition hover:bg-amber-100 hover:dark:bg-amber-500/15 disabled:opacity-50"
                       disabled={uploading}
                     >
                       Skip Existing
@@ -1944,7 +1944,7 @@
         {exportPopupOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
 
-            <div className="bg-white rounded-2xl p-6 w-[450px]">
+            <div className="bg-surface rounded-2xl p-6 w-[450px]">
 
               <h3 className="text-xl font-semibold mb-5">
                 Export Reports
@@ -1953,7 +1953,7 @@
               <div className="space-y-4">
 
                 <div>
-                  <label className="block text-sm font-medium text-slate-600 mb-2">
+                  <label className="block text-sm font-medium text-text-secondary mb-2">
                     From Date
                   </label>
 
@@ -1966,7 +1966,7 @@
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-slate-600 mb-2">
+                  <label className="block text-sm font-medium text-text-secondary mb-2">
                     To Date
                   </label>
 

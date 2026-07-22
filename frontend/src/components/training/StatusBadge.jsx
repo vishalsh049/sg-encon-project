@@ -1,17 +1,17 @@
 const STYLES = {
   // Employee statuses
-  "pending": "bg-amber-50 text-amber-700 ring-amber-200",
-  "under review": "bg-sky-50 text-sky-700 ring-sky-200",
-  "approved": "bg-emerald-50 text-emerald-700 ring-emerald-200",
-  "rejected": "bg-rose-50 text-rose-700 ring-rose-200",
-  "converted": "bg-indigo-50 text-indigo-700 ring-indigo-200",
+  "pending": "bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-400 ring-amber-200",
+  "under review": "bg-sky-50 dark:bg-sky-500/10 text-sky-700 dark:text-sky-400 ring-sky-200",
+  "approved": "bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 ring-emerald-200",
+  "rejected": "bg-rose-50 dark:bg-rose-500/10 text-rose-700 dark:text-rose-400 ring-rose-200",
+  "converted": "bg-indigo-50 dark:bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 ring-indigo-200",
   // Document verification statuses
-  "verified": "bg-emerald-50 text-emerald-700 ring-emerald-200",
+  "verified": "bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 ring-emerald-200",
 };
 
 export default function StatusBadge({ status, className = "" }) {
   const key = String(status || "").trim().toLowerCase();
-  const style = STYLES[key] || "bg-slate-100 text-slate-600 ring-slate-200";
+  const style = STYLES[key] || "bg-surface-muted text-text-secondary ring-border-strong";
 
   return (
     <span

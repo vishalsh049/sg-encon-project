@@ -61,18 +61,18 @@ export default function Documents() {
     <div className="mx-auto max-w-7xl space-y-4 p-4 sm:p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="flex items-center gap-2 text-xl font-semibold tracking-tight text-slate-900">
-            <FileText className="h-5 w-5 text-indigo-500" />
+          <h1 className="flex items-center gap-2 text-xl font-semibold tracking-tight text-text-primary">
+            <FileText className="h-5 w-5 text-indigo-500 dark:text-indigo-400" />
             Documents
           </h1>
-          <p className="mt-0.5 text-sm text-slate-500">
+          <p className="mt-0.5 text-sm text-text-muted">
             All candidate documents from Google Drive and HR uploads.
           </p>
         </div>
         <button
           type="button"
           onClick={load}
-          className="flex h-9 items-center gap-1.5 rounded-2xl border border-slate-200 bg-white px-3 text-sm font-medium text-slate-600 shadow-sm transition hover:bg-slate-50"
+          className="flex h-9 items-center gap-1.5 rounded-2xl border border-border-color bg-surface px-3 text-sm font-medium text-text-secondary shadow-sm transition hover:bg-surface-muted"
         >
           <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
           Refresh
@@ -80,7 +80,7 @@ export default function Documents() {
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
-        <div className="flex rounded-2xl border border-slate-200 bg-white p-1 shadow-sm">
+        <div className="flex rounded-2xl border border-border-color bg-surface p-1 shadow-sm">
           {STATUS_TABS.map((tab) => (
             <button
               key={tab || "all"}
@@ -92,7 +92,7 @@ export default function Documents() {
               className={`rounded-xl px-3 py-1.5 text-xs font-semibold transition ${
                 status === tab
                   ? "bg-indigo-600 text-white shadow"
-                  : "text-slate-500 hover:bg-slate-50"
+                  : "text-text-muted hover:bg-surface-muted"
               }`}
             >
               {tab || "All"}
@@ -109,11 +109,11 @@ export default function Documents() {
         />
       </div>
 
-      <div className="overflow-hidden rounded-[20px] border border-slate-100 bg-white shadow-sm">
+      <div className="overflow-hidden rounded-[20px] border border-border-color bg-surface shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full min-w-[760px] text-left text-sm">
             <thead>
-              <tr className="border-b border-slate-100 bg-slate-50/70 text-[11px] uppercase tracking-wide text-slate-400">
+              <tr className="border-b border-border-color bg-surface-muted/70 text-[11px] uppercase tracking-wide text-text-muted">
                 <th className="px-4 py-3 font-semibold">Candidate</th>
                 <th className="px-4 py-3 font-semibold">Document</th>
                 <th className="px-4 py-3 font-semibold">File</th>
@@ -125,34 +125,34 @@ export default function Documents() {
             <tbody>
               {loading ? (
                 Array.from({ length: 6 }).map((_, index) => (
-                  <tr key={index} className="animate-pulse border-b border-slate-50">
+                  <tr key={index} className="animate-pulse border-b border-border-color">
                     {Array.from({ length: 6 }).map((__, cell) => (
                       <td key={cell} className="px-4 py-3.5">
-                        <div className="h-3.5 w-24 rounded bg-slate-100" />
+                        <div className="h-3.5 w-24 rounded bg-surface-muted" />
                       </td>
                     ))}
                   </tr>
                 ))
               ) : rows.length ? (
                 rows.map((doc) => (
-                  <tr key={doc.id} className="border-b border-slate-50 transition hover:bg-blue-50/40">
+                  <tr key={doc.id} className="border-b border-border-color transition hover:bg-blue-50 hover:dark:bg-blue-500/10/40">
                     <td className="px-4 py-3.5">
                       <Link
                         to={`/dashboard/training/employees/${doc.training_employee_id}`}
-                        className="font-semibold text-slate-800 hover:text-indigo-600"
+                        className="font-semibold text-text-primary hover:text-indigo-600 hover:dark:text-indigo-400"
                       >
                         {doc.full_name}
                       </Link>
-                      <p className="text-xs text-slate-400">{doc.mobile}</p>
+                      <p className="text-xs text-text-muted">{doc.mobile}</p>
                     </td>
-                    <td className="px-4 py-3.5 text-slate-600">{prettyType(doc.document_type)}</td>
-                    <td className="max-w-[220px] truncate px-4 py-3.5 text-xs text-slate-500">
+                    <td className="px-4 py-3.5 text-text-secondary">{prettyType(doc.document_type)}</td>
+                    <td className="max-w-[220px] truncate px-4 py-3.5 text-xs text-text-muted">
                       {doc.file_name || "—"}
                     </td>
                     <td className="px-4 py-3.5">
                       <StatusBadge status={doc.verification_status} />
                     </td>
-                    <td className="px-4 py-3.5 text-xs text-slate-500">
+                    <td className="px-4 py-3.5 text-xs text-text-muted">
                       {doc.verified_by || "—"}
                     </td>
                     <td className="px-4 py-3.5">
@@ -160,7 +160,7 @@ export default function Documents() {
                         <button
                           type="button"
                           onClick={() => setPreview(doc)}
-                          className="flex h-8 w-8 items-center justify-center rounded-xl border border-slate-200 text-slate-500 transition hover:bg-slate-50"
+                          className="flex h-8 w-8 items-center justify-center rounded-xl border border-border-color text-text-muted transition hover:bg-surface-muted"
                           title="Preview"
                         >
                           <Eye className="h-3.5 w-3.5" />
@@ -169,7 +169,7 @@ export default function Documents() {
                           type="button"
                           disabled={downloadingId === doc.id}
                           onClick={() => handleDownload(doc)}
-                          className="flex h-8 w-8 items-center justify-center rounded-xl border border-slate-200 text-slate-500 transition hover:bg-slate-50 disabled:opacity-50"
+                          className="flex h-8 w-8 items-center justify-center rounded-xl border border-border-color text-text-muted transition hover:bg-surface-muted disabled:opacity-50"
                           title="Download"
                         >
                           <Download className="h-3.5 w-3.5" />
@@ -180,7 +180,7 @@ export default function Documents() {
                 ))
               ) : (
                 <tr>
-                  <td colSpan={6} className="px-4 py-14 text-center text-sm text-slate-400">
+                  <td colSpan={6} className="px-4 py-14 text-center text-sm text-text-muted">
                     No documents found.
                   </td>
                 </tr>
@@ -189,7 +189,7 @@ export default function Documents() {
           </table>
         </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 px-4 py-3 text-sm text-slate-500">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border-color px-4 py-3 text-sm text-text-muted">
           <span>
             {total
               ? `${(page - 1) * pageSize + 1}–${Math.min(page * pageSize, total)} of ${total}`
@@ -200,7 +200,7 @@ export default function Documents() {
               type="button"
               disabled={page <= 1}
               onClick={() => setPage(page - 1)}
-              className="flex h-8 w-8 items-center justify-center rounded-xl border border-slate-200 transition enabled:hover:bg-slate-50 disabled:opacity-40"
+              className="flex h-8 w-8 items-center justify-center rounded-xl border border-border-color transition enabled:hover:bg-surface-muted disabled:opacity-40"
             >
               <ChevronLeft className="h-4 w-4" />
             </button>
@@ -211,7 +211,7 @@ export default function Documents() {
               type="button"
               disabled={page >= totalPages}
               onClick={() => setPage(page + 1)}
-              className="flex h-8 w-8 items-center justify-center rounded-xl border border-slate-200 transition enabled:hover:bg-slate-50 disabled:opacity-40"
+              className="flex h-8 w-8 items-center justify-center rounded-xl border border-border-color transition enabled:hover:bg-surface-muted disabled:opacity-40"
             >
               <ChevronRight className="h-4 w-4" />
             </button>

@@ -43,7 +43,7 @@ export default function BarChartView({ chartData, entities, hiddenEntities, vari
   return (
     <div>
       {capped && (
-        <p className="mb-1 px-1 text-[10px] font-medium text-amber-600">
+        <p className="mb-1 px-1 text-[10px] font-medium text-amber-600 dark:text-amber-400">
           Bar view limited to the last {BAR_CAP} days — switch to Line/Area for the full range.
         </p>
       )}

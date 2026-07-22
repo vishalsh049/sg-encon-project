@@ -213,15 +213,15 @@ export default function EmployeeProfile() {
   if (loading) {
     return (
       <div className="mx-auto max-w-6xl space-y-4 p-4 sm:p-6">
-        <div className="h-28 animate-pulse rounded-[22px] bg-slate-100" />
-        <div className="h-64 animate-pulse rounded-[22px] bg-slate-100" />
+        <div className="h-28 animate-pulse rounded-[22px] bg-surface-muted" />
+        <div className="h-64 animate-pulse rounded-[22px] bg-surface-muted" />
       </div>
     );
   }
 
   if (!employee) {
     return (
-      <div className="mx-auto max-w-6xl p-6 text-center text-sm text-slate-500">
+      <div className="mx-auto max-w-6xl p-6 text-center text-sm text-text-muted">
         Training record not found.
       </div>
     );
@@ -279,7 +279,7 @@ export default function EmployeeProfile() {
               type="button"
               disabled={busy}
               onClick={handleDelete}
-              className="flex h-9 w-9 items-center justify-center rounded-2xl border border-rose-200 text-rose-500 transition hover:bg-rose-50 disabled:opacity-50"
+              className="flex h-9 w-9 items-center justify-center rounded-2xl border border-rose-200 dark:border-rose-500/20 text-rose-500 dark:text-rose-400 transition hover:bg-rose-50 hover:dark:bg-rose-500/10 disabled:opacity-50"
               title="Delete record"
             >
               <Trash2 className="h-4 w-4" />
@@ -292,13 +292,13 @@ export default function EmployeeProfile() {
         {/* Details */}
         <div className="space-y-4 lg:col-span-2">
           {FIELD_GROUPS.map((group) => (
-            <div key={group.title} className="rounded-[20px] border border-slate-100 bg-white p-4 shadow-sm">
-              <h2 className="text-sm font-semibold text-slate-700">{group.title}</h2>
+            <div key={group.title} className="rounded-[20px] border border-border-color bg-surface p-4 shadow-sm">
+              <h2 className="text-sm font-semibold text-text-secondary">{group.title}</h2>
               <dl className="mt-3 grid grid-cols-1 gap-x-6 gap-y-2.5 sm:grid-cols-2">
                 {group.fields.map(([key, label]) => (
                   <div key={key} className="flex justify-between gap-3 text-sm">
-                    <dt className="text-slate-400">{label}</dt>
-                    <dd className="text-right font-medium text-slate-700">
+                    <dt className="text-text-muted">{label}</dt>
+                    <dd className="text-right font-medium text-text-secondary">
                       {formatValue(key, employee[key])}
                     </dd>
                   </div>
@@ -308,10 +308,10 @@ export default function EmployeeProfile() {
           ))}
 
           {/* Documents */}
-          <div className="rounded-[20px] border border-slate-100 bg-white p-4 shadow-sm">
+          <div className="rounded-[20px] border border-border-color bg-surface p-4 shadow-sm">
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-              <h2 className="flex items-center gap-1.5 text-sm font-semibold text-slate-700">
-                <FileText className="h-4 w-4 text-slate-400" />
+              <h2 className="flex items-center gap-1.5 text-sm font-semibold text-text-secondary">
+                <FileText className="h-4 w-4 text-text-muted" />
                 Documents ({documents.length})
               </h2>
               {!isConverted ? (
@@ -319,7 +319,7 @@ export default function EmployeeProfile() {
                   <select
                     value={uploadType}
                     onChange={(event) => setUploadType(event.target.value)}
-                    className="h-8 rounded-xl border border-slate-200 bg-white px-2 text-xs text-slate-600 outline-none"
+                    className="h-8 rounded-xl border border-border-color bg-surface px-2 text-xs text-text-secondary outline-none"
                   >
                     {(documentTypes.length ? documentTypes : ["other"]).map((type) => (
                       <option key={type} value={type}>
@@ -353,14 +353,14 @@ export default function EmployeeProfile() {
 
         {/* Sidebar: verification history + activity log */}
         <div className="space-y-4">
-          <div className="rounded-[20px] border border-slate-100 bg-white p-4 shadow-sm">
-            <h2 className="text-sm font-semibold text-slate-700">Verification History</h2>
+          <div className="rounded-[20px] border border-border-color bg-surface p-4 shadow-sm">
+            <h2 className="text-sm font-semibold text-text-secondary">Verification History</h2>
             <div className="mt-3 space-y-2.5">
               {verifications.length ? (
                 verifications.map((entry) => (
-                  <div key={entry.id} className="rounded-xl bg-slate-50 p-2.5 text-xs">
+                  <div key={entry.id} className="rounded-xl bg-surface-muted p-2.5 text-xs">
                     <div className="flex items-center justify-between gap-2">
-                      <span className="font-semibold text-slate-700">
+                      <span className="font-semibold text-text-secondary">
                         {entry.document_type
                           ? entry.document_type.replace(/_/g, " ")
                           : "Profile"}
@@ -368,36 +368,36 @@ export default function EmployeeProfile() {
                       <StatusBadge status={entry.action} />
                     </div>
                     {entry.remarks ? (
-                      <p className="mt-1 text-slate-500">{entry.remarks}</p>
+                      <p className="mt-1 text-text-muted">{entry.remarks}</p>
                     ) : null}
-                    <p className="mt-1 text-slate-400">
+                    <p className="mt-1 text-text-muted">
                       {entry.verified_by} · {String(entry.created_at || "").replace("T", " ").slice(0, 19)}
                     </p>
                   </div>
                 ))
               ) : (
-                <p className="py-4 text-center text-xs text-slate-400">No verifications yet.</p>
+                <p className="py-4 text-center text-xs text-text-muted">No verifications yet.</p>
               )}
             </div>
           </div>
 
-          <div className="rounded-[20px] border border-slate-100 bg-white p-4 shadow-sm">
-            <h2 className="flex items-center gap-1.5 text-sm font-semibold text-slate-700">
-              <Activity className="h-4 w-4 text-slate-400" />
+          <div className="rounded-[20px] border border-border-color bg-surface p-4 shadow-sm">
+            <h2 className="flex items-center gap-1.5 text-sm font-semibold text-text-secondary">
+              <Activity className="h-4 w-4 text-text-muted" />
               Activity Log
             </h2>
             <div className="mt-3 space-y-2">
               {logs.length ? (
                 logs.map((log) => (
-                  <div key={log.id} className="border-l-2 border-indigo-100 pl-2.5 text-xs">
-                    <p className="font-semibold text-slate-600">{log.action}</p>
-                    <p className="text-slate-400">
+                  <div key={log.id} className="border-l-2 border-indigo-100 dark:border-indigo-500/20 pl-2.5 text-xs">
+                    <p className="font-semibold text-text-secondary">{log.action}</p>
+                    <p className="text-text-muted">
                       {log.performed_by} · {String(log.created_at || "").replace("T", " ").slice(0, 19)}
                     </p>
                   </div>
                 ))
               ) : (
-                <p className="py-4 text-center text-xs text-slate-400">No activity yet.</p>
+                <p className="py-4 text-center text-xs text-text-muted">No activity yet.</p>
               )}
             </div>
           </div>

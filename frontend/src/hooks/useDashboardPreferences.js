@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { isChartType } from "../utils/chartTypes";
 
 const STORAGE_KEY = "kpiDashboardPrefs";
 
@@ -16,7 +17,15 @@ function loadPrefs() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return DEFAULT_PREFS;
-    return { ...DEFAULT_PREFS, ...JSON.parse(raw) };
+    const stored = { ...DEFAULT_PREFS, ...JSON.parse(raw) };
+
+    // A user whose last view was a since-removed chart type (area / heatmap /
+    // combo / sparkline / kpi-comparison) would otherwise be stuck on a blank
+    // dashboard forever, because the persisted value is restored on every load.
+    if (!isChartType(stored.chartType)) stored.chartType = DEFAULT_PREFS.chartType;
+    if (!Array.isArray(stored.collapsedCards)) stored.collapsedCards = [];
+
+    return stored;
   } catch {
     return DEFAULT_PREFS;
   }

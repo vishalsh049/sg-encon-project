@@ -92,12 +92,12 @@ const handleView = (item) => {
 };
 
 const Field = ({ label, value }) => (
-  <div className="rounded-lg bg-white border border-slate-100 p-3">
-    <div className="text-xs uppercase tracking-wide text-slate-500">
+  <div className="rounded-lg bg-surface border border-border-color p-3">
+    <div className="text-xs uppercase tracking-wide text-text-muted">
       {label}
     </div>
 
-    <div className="mt-1 text-sm font-semibold text-slate-900">
+    <div className="mt-1 text-sm font-semibold text-text-primary">
       {value || "-"}
     </div>
   </div>
@@ -1504,14 +1504,15 @@ const signoffOptions = [
 ];
 
 const selectStyles = {
-  control: (provided) => ({
+  control: (provided, state) => ({
     ...provided,
     minHeight: "36px",
     height: "36px",
     borderRadius: "8px",
-    borderColor: "#e2e8f0",
-    boxShadow: "none",
+    borderColor: state.isFocused ? "rgb(var(--color-primary))" : "rgb(var(--color-border))",
+    boxShadow: state.isFocused ? "0 0 0 3px rgba(99,102,241,0.15)" : "none",
     fontSize: "13px",
+    backgroundColor: "rgb(var(--color-surface))",
   }),
 
   valueContainer: (provided) => ({
@@ -1529,6 +1530,7 @@ const selectStyles = {
     ...provided,
     zIndex: 99999,
     marginTop: 2,
+    backgroundColor: "rgb(var(--color-surface-elevated))",
   }),
 
   menuList: (provided) => ({
@@ -1540,25 +1542,42 @@ const selectStyles = {
   input: (provided) => ({
     ...provided,
     fontSize: "12px",
+    color: "rgb(var(--color-text-primary))",
+  }),
+
+  singleValue: (provided) => ({
+    ...provided,
+    color: "rgb(var(--color-text-primary))",
+  }),
+
+  placeholder: (provided) => ({
+    ...provided,
+    color: "rgb(var(--color-text-muted))",
   }),
 
   option: (provided, state) => ({
     ...provided,
     fontSize: "13px",
     cursor: "pointer",
+    color: state.isSelected ? "#ffffff" : "rgb(var(--color-text-primary))",
+    backgroundColor: state.isSelected
+      ? "rgb(var(--color-primary))"
+      : state.isFocused
+        ? "rgba(99,102,241,0.1)"
+        : "rgb(var(--color-surface-elevated))",
   }),
 };
 
 const CustomMenuList = (props) => {
   return (
     <div>
-      <div className="p-2 border-b bg-white sticky top-0 z-10">
+      <div className="p-2 border-b border-border-color bg-surface sticky top-0 z-10">
         <input
           type="text"
           placeholder="Search Job Role..."
           value={jobRoleSearch}
           onChange={(e) => setJobRoleSearch(e.target.value)}
-          className="w-full rounded border px-3 py-2 text-xs outline-none"
+          className="w-full rounded border border-border-color bg-surface text-text-primary px-3 py-2 text-xs outline-none"
         />
       </div>
 
@@ -1662,11 +1681,11 @@ const inactiveCount =
             {/* Header */}
             <div className="mx-auto flex w-full max-w-7xl items-center justify-between gap-4">
               <div>
-             <h1 className="text-lg font-semibold tracking-tight text-slate-900">
+             <h1 className="text-lg font-semibold tracking-tight text-text-primary">
   Manpower - Physical
 </h1>
 
-<p className=" text-sm text-slate-500">
+<p className=" text-sm text-text-muted">
   Enterprise employee registry with secure premium experience
 </p>
           
@@ -1719,13 +1738,13 @@ const inactiveCount =
       group
       flex items-center gap-2
       rounded-lg
-      border border-slate-200
-      bg-white
+      border border-border-color
+      bg-surface
       px-4
       py-2
       text-[13px]
       font-semibold
-      text-slate-700
+      text-text-secondary
     "
   >
     <BarChart3 size={16} />
@@ -1736,7 +1755,7 @@ const inactiveCount =
             </div>
 
 {/* Filters and Actions Row */ }
-<div className="mt-2 flex items-center gap-3 rounded-xl bg-white p-1">
+<div className="mt-2 flex items-center gap-3 rounded-xl bg-surface p-1">
 
   {/* Search */}
   <input
@@ -1747,7 +1766,7 @@ const inactiveCount =
   setSearch(e.target.value);
   setCurrentPage(1);
 }}  
-    className="h-9 flex-1 rounded-lg border border-slate-200 px-4 text-[13px] outline-none focus:border-blue-500"
+    className="h-9 flex-1 rounded-lg border border-border-color px-4 text-[13px] outline-none focus:border-blue-500"
   />
 
   {/* Circle */}
@@ -1825,7 +1844,7 @@ const inactiveCount =
 
   <button
   onClick={resetFilters}
-  className="flex items-center gap-2 h-9 rounded-lg border border-slate-400 bg-white px-3 text-sm font-semibold text-slate-700 transition-all hover:bg-slate-700 hover:text-white"
+  className="flex items-center gap-2 h-9 rounded-lg border border-border-strong bg-surface px-3 text-sm font-semibold text-text-secondary transition-all hover:bg-slate-700 hover:text-white"
 >
   <RotateCcw size={16} />
   Reset
@@ -1839,13 +1858,13 @@ const inactiveCount =
 
     {/* Total Employees */}
 
-  <div className="lg:col-span-2 rounded-xl border border-slate-100 bg-white px-3 py-2 shadow-sm hover:shadow-lg transition-all">
+  <div className="lg:col-span-2 rounded-xl border border-border-color bg-surface px-3 py-2 shadow-sm hover:shadow-lg transition-all">
 
-      <div className="text-[13px] font-semibold text-slate-500">
+      <div className="text-[13px] font-semibold text-text-muted">
         Total Employees
       </div>
 
-      <div className="text-lg mt-1 font-semibold text-slate-900">
+      <div className="text-lg mt-1 font-semibold text-text-primary">
         {jobRoles.reduce((sum, item) => sum + item.total, 0)}
       </div>
 
@@ -1854,36 +1873,36 @@ const inactiveCount =
 
     {/* Employment Status */}
 
- <div className="lg:col-span-3 rounded-xl border border-slate-100 bg-white px-4 py-2 shadow-sm hover:shadow-lg transition-all">
+ <div className="lg:col-span-3 rounded-xl border border-border-color bg-surface px-4 py-2 shadow-sm hover:shadow-lg transition-all">
 
     <div className="mb-1 flex items-center justify-between">
 
-      <h2 className="text-[13px] font-semibold text-slate-700">
+      <h2 className="text-[13px] font-semibold text-text-secondary">
         Employment Status
       </h2>
 
     </div>
 
-  <div className="flex flex-wrap items-center justify-between rounded-lg bg-slate-50 px-4 py-1 gap-3">
+  <div className="flex flex-wrap items-center justify-between rounded-lg bg-surface-muted px-4 py-1 gap-3">
 
   <div className="flex items-center gap-2">
-    <span className="text-sm font-medium text-slate-600">
+    <span className="text-sm font-medium text-text-secondary">
       Active:
     </span>
 
-  <span className="text-sm font-semibold text-emerald-600">
+  <span className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">
   {activeCount}
 </span>
   </div>
 
-  <div className="h-4 w-px bg-slate-200" />
+  <div className="h-4 w-px bg-surface-muted" />
 
   <div className="flex items-center gap-2">
-    <span className="text-sm font-medium text-slate-600">
+    <span className="text-sm font-medium text-text-secondary">
       Inactive:
     </span>
 
-  <span className="text-sm font-semibold text-red-600">
+  <span className="text-sm font-semibold text-red-600 dark:text-red-400">
   {inactiveCount}
 </span>
   </div>
@@ -1895,10 +1914,10 @@ const inactiveCount =
 
     {/* Circle Wise Count */}
 
-  <div className="lg:col-span-7 rounded-xl border border-slate-100 bg-white px-4 py-2 shadow-sm hover:shadow-lg transition-all">
+  <div className="lg:col-span-7 rounded-xl border border-border-color bg-surface px-4 py-2 shadow-sm hover:shadow-lg transition-all">
       <div className="mb-1 flex items-center justify-between">
 
-        <h2 className="text-[13px] font-semibold text-slate-800">
+        <h2 className="text-[13px] font-semibold text-text-primary">
           Circle Wise Count
         </h2>
 
@@ -1910,14 +1929,14 @@ const inactiveCount =
 
           <div
             key={index}
-            className="flex items-center justify-between rounded-lg border border-slate-100 bg-gradient-to-r from-slate-50 to-white px-2 py-1 hover:shadow-md transition-all"
+            className="flex items-center justify-between rounded-lg border border-border-color bg-gradient-to-r from-surface-muted to-white px-2 py-1 hover:shadow-md transition-all"
           >
 
-            <span className="text-[13px] font-semibold text-slate-700">
+            <span className="text-[13px] font-semibold text-text-secondary">
               {item.circle}
             </span>
 
-            <span className="text-[13px] font-semibold text-emerald-600">
+            <span className="text-[13px] font-semibold text-emerald-600 dark:text-emerald-400">
               {item.total}
             </span>
 
@@ -1937,12 +1956,12 @@ const inactiveCount =
 
   <div className="mx-auto mt-2 w-full max-w-7xl">
 
-    <div className="rounded-[18px] border border-slate-100 bg-white px-4 py-3 shadow-sm hover:shadow-lg transition-all">
+    <div className="rounded-[18px] border border-border-color bg-surface px-4 py-3 shadow-sm hover:shadow-lg transition-all">
 
       <div className="mb-2 flex items-center justify-between">
 
-        <h2 className="flex items-center gap-2 text-[13px] font-semibold text-slate-800">
-          <Clock size={15} className="text-indigo-500" />
+        <h2 className="flex items-center gap-2 text-[13px] font-semibold text-text-primary">
+          <Clock size={15} className="text-indigo-500 dark:text-indigo-400" />
           Circle Wise Last Updated
         </h2>
 
@@ -1954,16 +1973,16 @@ const inactiveCount =
 
           <div
             key={index}
-            className="flex items-center justify-between gap-2 rounded-xl border border-slate-100 bg-gradient-to-r from-slate-50 to-white px-3 py-2"
+            className="flex items-center justify-between gap-2 rounded-xl border border-border-color bg-gradient-to-r from-surface-muted to-white px-3 py-2"
           >
 
-            <span className="text-[13px] font-semibold text-slate-700">
+            <span className="text-[13px] font-semibold text-text-secondary">
               {item.circle}
             </span>
 
             <span
               className={`text-[12px] font-medium ${
-                item.lastUpdatedAt ? "text-emerald-600" : "text-amber-600"
+                item.lastUpdatedAt ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400"
               }`}
             >
               {formatCircleTimestamp(item.lastUpdatedAt)}
@@ -1984,15 +2003,15 @@ const inactiveCount =
   {/* Job Role Document Average
   <div className="mx-auto mt-3 w-full max-w-7xl">
 
-    <div className="rounded-[22px] border border-white/70 bg-white/100 px-4 py-3 backdrop-blur-xl">
+    <div className="rounded-[22px] border border-white/70 bg-surface/100 px-4 py-3 backdrop-blur-xl">
 
       <div className="mb-2 flex items-center justify-between">
 
-        <h2 className="text-md font-semibold text-slate-900">
+        <h2 className="text-md font-semibold text-text-primary">
           Job Role Document Average
         </h2>
 
-        <div className="text-xs text-slate-500">
+        <div className="text-xs text-text-muted">
           Aadhaar + UAN + ESIC Average
         </div>
 
@@ -2006,16 +2025,16 @@ const inactiveCount =
 
             <div
               key={index}
-              className="rounded-2xl bg-slate-50 px-4 py-3"
+              className="rounded-2xl bg-surface-muted px-4 py-3"
             >
 
               <div className="flex items-center justify-between">
 
-                <span className="text-sm font-semibold text-slate-800">
+                <span className="text-sm font-semibold text-text-primary">
                   {item.role_group}
                 </span>
 
-                <span className="text-sm font-bold text-emerald-600">
+                <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400">
                   {item.document_average}%
                 </span>
 
@@ -2023,32 +2042,32 @@ const inactiveCount =
 
               <div className="mt-2 grid grid-cols-3 gap-2 text-center">
 
-                <div className="rounded-xl bg-white py-2">
-                  <div className="text-xs text-slate-500">
+                <div className="rounded-xl bg-surface py-2">
+                  <div className="text-xs text-text-muted">
                     Aadhaar
                   </div>
 
-                  <div className="text-sm font-semibold text-blue-600">
+                  <div className="text-sm font-semibold text-blue-600 dark:text-blue-400">
                     {item.aadhaar_count}
                   </div>
                 </div>
 
-                <div className="rounded-xl bg-white py-2">
-                  <div className="text-xs text-slate-500">
+                <div className="rounded-xl bg-surface py-2">
+                  <div className="text-xs text-text-muted">
                     UAN
                   </div>
 
-                  <div className="text-sm font-semibold text-purple-600">
+                  <div className="text-sm font-semibold text-purple-600 dark:text-purple-400">
                     {item.uan_count}
                   </div>
                 </div>
 
-                <div className="rounded-xl bg-white py-2">
-                  <div className="text-xs text-slate-500">
+                <div className="rounded-xl bg-surface py-2">
+                  <div className="text-xs text-text-muted">
                     ESIC
                   </div>
 
-                  <div className="text-sm font-semibold text-orange-600">
+                  <div className="text-sm font-semibold text-orange-600 dark:text-orange-400">
                     {item.esic_count}
                   </div>
                 </div>
@@ -2076,15 +2095,15 @@ const inactiveCount =
 
   <div className="mx-auto mt-2 w-full max-w-7xl">
 
-    <div className="rounded-[18px] border border-white/70 bg-white/100 px-4 py-2 backdrop-blur-xl">
+    <div className="rounded-[18px] border border-white/70 bg-surface/100 px-4 py-2 backdrop-blur-xl">
 
       <div className="mb-2 flex items-center justify-between">
 
-        <h2 className="text-sm font-semibold text-slate-900">
+        <h2 className="text-sm font-semibold text-text-primary">
           Job Roles
         </h2>
 
-        <div className="text-xs text-slate-500">
+        <div className="text-xs text-text-muted">
           Role Wise Count
         </div>
 
@@ -2098,14 +2117,14 @@ const inactiveCount =
 
           <div
             key={index}
-            className="flex items-center justify-between rounded-2xl bg-slate-50 px-3 py-1"
+            className="flex items-center justify-between rounded-2xl bg-surface-muted px-3 py-1"
           >
 
-            <span className="text-[14px]  text-slate-700">
+            <span className="text-[14px]  text-text-secondary">
               {role.role_group}
             </span>
 
-            <span className="text-[13px] font-medium text-blue-600">
+            <span className="text-[13px] font-medium text-blue-600 dark:text-blue-400">
               {role.total}
             </span>
 
@@ -2124,18 +2143,18 @@ const inactiveCount =
 
      {/* Table Section */}
       <div className="mx-auto mt-2 w-full max-w-7xl">
-       <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+       <div className="overflow-hidden rounded-xl border border-border-color bg-surface shadow-sm">
         
-  <div className="flex items-center justify-between border-b border-slate-100 px-4 py-2">
+  <div className="flex items-center justify-between border-b border-border-color px-4 py-2">
 
   {/* Left Side */}
   <div className="flex items-center gap-3">
 
-  <h2 className="text-md font-semibold text-slate-900">
+  <h2 className="text-md font-semibold text-text-primary">
     Employee Records
   </h2>
 
-  <span className="rounded-md bg-blue-50 px-2 py-1.5 text-xs font-semibold text-blue-700">
+  <span className="rounded-md bg-blue-50 dark:bg-blue-500/10 px-2 py-1.5 text-xs font-semibold text-blue-700 dark:text-blue-400">
     {totalRecords} Records
   </span>
 
@@ -2146,7 +2165,7 @@ const inactiveCount =
 
     <button
       onClick={handleExportExcel}
-      className="h-8 flex items-center gap-2 rounded-lg border border-emerald-500 bg-white px-3 text-[14px] font-semibold text-emerald-600 hover:bg-emerald-600 hover:text-white"
+      className="h-8 flex items-center gap-2 rounded-lg border border-emerald-500 bg-surface px-3 text-[14px] font-semibold text-emerald-600 dark:text-emerald-400 hover:bg-emerald-600 hover:text-white"
     >
       <Download size={14} />
       Export
@@ -2158,7 +2177,7 @@ const inactiveCount =
         selectedRows.length === 0 ||
         bulkDeleting
       }
-      className="h-8 flex items-center gap-2 rounded-lg border border-red-500 bg-white px-3 text-[14px] font-semibold text-red-600 hover:bg-red-600 hover:text-white disabled:opacity-50"
+      className="h-8 flex items-center gap-2 rounded-lg border border-red-500 bg-surface px-3 text-[14px] font-semibold text-red-600 dark:text-red-400 hover:bg-red-600 hover:text-white disabled:opacity-50"
     >
       <Trash2 size={14} />
       Delete ({selectedRows.length})
@@ -2172,7 +2191,7 @@ const inactiveCount =
   <div>
   <table className="w-max min-w-full border-separate border border-spacing-0">
  
- <thead className=" bg-white">
+ <thead className=" bg-surface">
     <tr>
 
     <th className="px-3 py-2">
@@ -2186,59 +2205,59 @@ const inactiveCount =
     />
   </th>
 
-   <th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-center text-xs font-bold 
-                  uppercase tracking-wider text-slate-700 whitespace-nowrap">
+   <th className="border-b border-r border-border-color bg-surface px-4 py-3 text-center text-xs font-bold 
+                  uppercase tracking-wider text-text-secondary whitespace-nowrap">
         Circle</th>
 
-  <th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-center text-xs font-bold
-   uppercase tracking-wider text-slate-700 whitespace-nowrap">CMP</th>
+  <th className="border-b border-r border-border-color bg-surface px-4 py-3 text-center text-xs font-bold
+   uppercase tracking-wider text-text-secondary whitespace-nowrap">CMP</th>
 <th
-  className="border-b border-r border-slate-200 bg-white px-4 py-3 text-center text-xs font-bold uppercase tracking-wider text-slate-700 whitespace-nowrap"
+  className="border-b border-r border-border-color bg-surface px-4 py-3 text-center text-xs font-bold uppercase tracking-wider text-text-secondary whitespace-nowrap"
 >
   PPRJ Status
 </th>
 <th
-  className="border-b border-r border-slate-200 bg-white px-4 py-3 text-center text-xs font-bold uppercase tracking-wider text-slate-700 whitespace-nowrap"
+  className="border-b border-r border-border-color bg-surface px-4 py-3 text-center text-xs font-bold uppercase tracking-wider text-text-secondary whitespace-nowrap"
 >
   PPRJ Code
 </th>
 
-  <th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-center text-xs font-bold 
-  uppercase tracking-wider text-slate-700 whitespace-nowrap">Employee Code</th>
+  <th className="border-b border-r border-border-color bg-surface px-4 py-3 text-center text-xs font-bold 
+  uppercase tracking-wider text-text-secondary whitespace-nowrap">Employee Code</th>
       
-  <th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-center text-xs font-bold 
-  uppercase tracking-wider text-slate-700 whitespace-nowrap">Employee Name</th>
+  <th className="border-b border-r border-border-color bg-surface px-4 py-3 text-center text-xs font-bold 
+  uppercase tracking-wider text-text-secondary whitespace-nowrap">Employee Name</th>
 
-  <th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-center text-xs font-bold
-   uppercase tracking-wider text-slate-700 whitespace-nowrap">Job Role</th>
+  <th className="border-b border-r border-border-color bg-surface px-4 py-3 text-center text-xs font-bold
+   uppercase tracking-wider text-text-secondary whitespace-nowrap">Job Role</th>
 
-  <th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-center text-xs font-bold
-   uppercase tracking-wider text-slate-700 whitespace-nowrap">Mobile Number</th>
+  <th className="border-b border-r border-border-color bg-surface px-4 py-3 text-center text-xs font-bold
+   uppercase tracking-wider text-text-secondary whitespace-nowrap">Mobile Number</th>
 
    <th
-  className="border-b border-r border-slate-200 bg-white px-4 py-3 text-center text-xs font-bold uppercase tracking-wider text-slate-700 whitespace-nowrap"
+  className="border-b border-r border-border-color bg-surface px-4 py-3 text-center text-xs font-bold uppercase tracking-wider text-text-secondary whitespace-nowrap"
 >
   Aadhaar No
 </th>
 
-  <th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-center text-xs font-bold
-   uppercase tracking-wider text-slate-700 whitespace-nowrap">Date Of Joining</th>
+  <th className="border-b border-r border-border-color bg-surface px-4 py-3 text-center text-xs font-bold
+   uppercase tracking-wider text-text-secondary whitespace-nowrap">Date Of Joining</th>
 
-  <th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-center text-xs font-bold
-   uppercase tracking-wider text-slate-700 whitespace-nowrap">Employment Status</th>
+  <th className="border-b border-r border-border-color bg-surface px-4 py-3 text-center text-xs font-bold
+   uppercase tracking-wider text-text-secondary whitespace-nowrap">Employment Status</th>
 
-  <th className="border-b border-r border-slate-200 bg-white px-4 py-3 text-center text-xs font-bold
-   uppercase tracking-wider text-slate-700 whitespace-nowrap">Uploaded At</th>
+  <th className="border-b border-r border-border-color bg-surface px-4 py-3 text-center text-xs font-bold
+   uppercase tracking-wider text-text-secondary whitespace-nowrap">Uploaded At</th>
 
  <th
   className="
     sticky right-0 z-20
-    border-b border-l border-slate-200
-    bg-white
+    border-b border-l border-border-color
+    bg-surface
     px-4 py-3
     text-center
     text-xs font-bold uppercase
-    tracking-wider text-slate-700
+    tracking-wider text-text-secondary
   "
 >
   Actions
@@ -2257,7 +2276,7 @@ const inactiveCount =
         className="h-[240px] text-center align-middle"
       >
         <div className="flex items-center justify-center h-full w-[70em]">
-          <span className="text-sm font-semibold text-slate-400">
+          <span className="text-sm font-semibold text-text-muted">
             Loading Reports...
           </span>
         </div>
@@ -2268,10 +2287,10 @@ const inactiveCount =
       <tr>
       <td
     colSpan="100"
-    className="py-24 text-center text-sm font-medium w-[70em] text-slate-400"
+    className="py-24 text-center text-sm font-medium w-[70em] text-text-muted"
   >
     <div className="flex items-center justify-center h-full w-[80em]">
-          <span className="text-sm font-semibold text-slate-400">
+          <span className="text-sm font-semibold text-text-muted">
             No Records Found
           </span>
         </div>
@@ -2281,10 +2300,10 @@ const inactiveCount =
       paginatedData.map((item, index) => (
       <tr
       key={index}
-      className={`group transition-all duration-200 hover:bg-blue-50 ${
+      className={`group transition-all duration-200 hover:bg-blue-50 hover:dark:bg-blue-500/10 ${
       index % 2 === 0
-      ? "bg-white"
-      : "bg-slate-50"
+      ? "bg-surface"
+      : "bg-surface-muted"
      }`}
 >
       <td className="px-3 py-2">
@@ -2295,60 +2314,60 @@ const inactiveCount =
     />
   </td>
 
-  <td className="border-b border-r border-slate-200 px-4 py-2 text-sm text-slate-700 text-center whitespace-nowrap">
+  <td className="border-b border-r border-border-color px-4 py-2 text-sm text-text-secondary text-center whitespace-nowrap">
     {item.circle || "-"}</td>
-  <td className="border-b border-r border-slate-200 px-4 py-2 text-sm text-slate-700 text-center whitespace-nowrap">
+  <td className="border-b border-r border-border-color px-4 py-2 text-sm text-text-secondary text-center whitespace-nowrap">
     {item.cmp || "-"}</td>
-   <td className="border-b border-r border-slate-200 px-4 py-2 text-center whitespace-nowrap">
+   <td className="border-b border-r border-border-color px-4 py-2 text-center whitespace-nowrap">
   <span
     className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${
       item.pprj_status === "Active"
-        ? "bg-green-100 text-green-700"
+        ? "bg-green-100 dark:bg-green-500/15 text-green-700 dark:text-green-400"
         : item.pprj_status === "Inactive"
-        ? "bg-red-100 text-red-700"
+        ? "bg-red-100 dark:bg-red-500/15 text-red-700 dark:text-red-400"
         : item.pprj_status === "Pending"
-        ? "bg-amber-100 text-amber-700"
-        : "bg-slate-100 text-slate-700"
+        ? "bg-amber-100 dark:bg-amber-500/15 text-amber-700 dark:text-amber-400"
+        : "bg-surface-muted text-text-secondary"
     }`}
   >
     {item.pprj_status || "-"}
   </span>
 </td>
-    <td className="border-b border-r border-slate-200 px-4 py-2 text-sm text-center text-slate-700 whitespace-nowrap">
+    <td className="border-b border-r border-border-color px-4 py-2 text-sm text-center text-text-secondary whitespace-nowrap">
   {item.pprj_code || "-"}
 </td>
-  <td className="border-b border-r border-slate-200 px-4 py-2 text-sm text-slate-700 text-center whitespace-nowrap">{item.employee_code || "-"}</td>
-  <td className="border-b border-r border-slate-200 px-4 py-2 text-sm text-slate-700 text-center whitespace-nowrap">{item.employee_name || "-"}</td>  
-  <td className="border-b border-r border-slate-200 px-4 py-2 text-sm text-slate-700 text-center whitespace-nowrap">{item.job_role || "-"}</td>
-  <td className="border-b border-r border-slate-200 px-4 py-2 text-sm text-slate-700 text-center whitespace-nowrap">{item.mobile_number || "-"}</td>
-  <td className="border-b border-r border-slate-200 px-4 py-2 text-sm text-slate-700 text-center whitespace-nowrap">
+  <td className="border-b border-r border-border-color px-4 py-2 text-sm text-text-secondary text-center whitespace-nowrap">{item.employee_code || "-"}</td>
+  <td className="border-b border-r border-border-color px-4 py-2 text-sm text-text-secondary text-center whitespace-nowrap">{item.employee_name || "-"}</td>  
+  <td className="border-b border-r border-border-color px-4 py-2 text-sm text-text-secondary text-center whitespace-nowrap">{item.job_role || "-"}</td>
+  <td className="border-b border-r border-border-color px-4 py-2 text-sm text-text-secondary text-center whitespace-nowrap">{item.mobile_number || "-"}</td>
+  <td className="border-b border-r border-border-color px-4 py-2 text-sm text-text-secondary text-center whitespace-nowrap">
   {item.aadhaar_no || "-"}
 </td>
-  <td className="border-b border-r border-slate-200 px-4 py-2 text-sm text-slate-700 text-center whitespace-nowrap">{item.date_of_joining
+  <td className="border-b border-r border-border-color px-4 py-2 text-sm text-text-secondary text-center whitespace-nowrap">{item.date_of_joining
     ? new Date(item.date_of_joining)
         .toLocaleDateString("en-GB")
     : "-"}</td>
-<td className="border-b border-r border-slate-200 px-4 py-2 text-center whitespace-nowrap">
+<td className="border-b border-r border-border-color px-4 py-2 text-center whitespace-nowrap">
   <span
       className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${
       item.employment_status === "Active"
-        ? "bg-green-100 text-green-700"
-        : "bg-red-100 text-red-700"
+        ? "bg-green-100 dark:bg-green-500/15 text-green-700 dark:text-green-400"
+        : "bg-red-100 dark:bg-red-500/15 text-red-700 dark:text-red-400"
     }`}
   >
     {item.employment_status || "-"}
   </span>
 </td>
 
-  <td className="border-b border-r border-slate-200 px-4 py-2 text-sm text-slate-700 text-center whitespace-nowrap">
+  <td className="border-b border-r border-border-color px-4 py-2 text-sm text-text-secondary text-center whitespace-nowrap">
     {formatUploadedAt(item.uploaded_at)}
   </td>
 
    <td
   className="
     sticky right-0
-    border-b border-l border-slate-200
-    bg-white
+    border-b border-l border-border-color
+    bg-surface
     px-4 py-2
   "
 >
@@ -2363,13 +2382,13 @@ const inactiveCount =
         group
         flex h-9 w-9 items-center justify-center
         rounded-xl
-        border border-slate-200
-        bg-white
-        text-slate-600
+        border border-border-color
+        bg-surface
+        text-text-secondary
         transition-all
-        hover:border-indigo-200
-        hover:bg-indigo-50
-        hover:text-indigo-600
+        hover:border-indigo-200 hover:dark:border-indigo-500/20
+        hover:bg-indigo-50 hover:dark:bg-indigo-500/10
+        hover:text-indigo-600 hover:dark:text-indigo-400
       "
     >
       <Eye size={16} />
@@ -2383,13 +2402,13 @@ const inactiveCount =
         group
         flex h-9 w-9 items-center justify-center
         rounded-xl
-        border border-slate-200
-        bg-white
-        text-slate-600
+        border border-border-color
+        bg-surface
+        text-text-secondary
         transition-all
-        hover:border-blue-200
-        hover:bg-blue-50
-        hover:text-blue-600
+        hover:border-blue-200 hover:dark:border-blue-500/20
+        hover:bg-blue-50 hover:dark:bg-blue-500/10
+        hover:text-blue-600 hover:dark:text-blue-400
       "
     >
       <Pencil size={16} />
@@ -2408,19 +2427,19 @@ const inactiveCount =
                   </div>
                 </div>
               </div>
-  <div className="flex items-center justify-between border-t border-slate-100 px-6 py-4">
+  <div className="flex items-center justify-between border-t border-border-color px-6 py-4">
 
-  <div className="text-sm text-slate-600">
+  <div className="text-sm text-text-secondary">
   Showing
-  <span className="mx-1 font-semibold text-slate-900">
+  <span className="mx-1 font-semibold text-text-primary">
     {startRecord}
   </span>
   to
-  <span className="mx-1 font-semibold text-slate-900">
+  <span className="mx-1 font-semibold text-text-primary">
     {endRecord}
   </span>
  of
-<span className="mx-1 font-semibold text-slate-900">
+<span className="mx-1 font-semibold text-text-primary">
   {totalRecords}
 </span>
 records
@@ -2428,7 +2447,7 @@ records
 
     <div className="flex items-center gap-2">
 
-      <span className="text-sm text-slate-500">
+      <span className="text-sm text-text-muted">
         Show
       </span>
 
@@ -2438,7 +2457,7 @@ records
     setPageSize(Number(e.target.value));
     setCurrentPage(1);
   }}
-  className="rounded-lg border border-slate-200 px-2 py-1 text-sm"
+  className="rounded-lg border border-border-color px-2 py-1 text-sm"
 >
   {[10, 20, 50, 100, 200, 300, 400, 500, 750, 1000].map((size) => (
     <option key={size} value={size}>
@@ -2454,12 +2473,12 @@ records
           )
         }
         disabled={currentPage === 1}
-        className="rounded-lg border border-slate-200 px-3 py-1 text-sm disabled:opacity-40"
+        className="rounded-lg border border-border-color px-3 py-1 text-sm disabled:opacity-40"
       >
         Prev
       </button>
 
-      <span className="text-sm text-slate-600">
+      <span className="text-sm text-text-secondary">
         {currentPage} / {totalPages || 1}
       </span>
 
@@ -2472,7 +2491,7 @@ records
         disabled={
     currentPage >= totalPages
   }
-        className="rounded-lg border border-slate-200 px-3 py-1 text-sm disabled:opacity-40"
+        className="rounded-lg border border-border-color px-3 py-1 text-sm disabled:opacity-40"
       >
         Next
       </button>
@@ -2495,24 +2514,24 @@ records
     {showUploadModal && (
 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md p-4">
 
-  <div className="w-full max-w-lg overflow-visible rounded-3xl bg-white shadow-[0_20px_60px_rgba(0,0,0,0.15)]">
+  <div className="w-full max-w-lg overflow-visible rounded-3xl bg-surface shadow-[0_20px_60px_rgba(0,0,0,0.15)]">
 
     {/* Header */}
     <div className="flex items-center justify-between border-b px-7 py-5">
 
       <div>
-        <h2 className="text-2xl font-bold text-slate-900">
+        <h2 className="text-2xl font-bold text-text-primary">
           Upload Report
         </h2>
 
-        <p className="mt-1 text-sm text-slate-500">
+        <p className="mt-1 text-sm text-text-muted">
           Upload manpower physical report
         </p>
       </div>
 
       <button
         onClick={() => setShowUploadModal(false)}
-        className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-xl text-slate-500 hover:bg-red-50 hover:text-red-600"
+        className="flex h-10 w-10 items-center justify-center rounded-full bg-surface-muted text-xl text-text-muted hover:bg-red-50 hover:dark:bg-red-500/10 hover:text-red-600 hover:dark:text-red-400"
       >
         ×
       </button>
@@ -2523,7 +2542,7 @@ records
 
       {/* Date */}
       <div>
-        <label className="mb-2 block text-sm font-semibold text-slate-700">
+        <label className="mb-2 block text-sm font-semibold text-text-secondary">
           Report Date
         </label>
 
@@ -2544,7 +2563,7 @@ records
 
       {/* Uploaded By */}
       <div>
-        <label className="mb-2 block text-sm font-semibold text-slate-700">
+        <label className="mb-2 block text-sm font-semibold text-text-secondary">
           Uploaded By
         </label>
 
@@ -2553,7 +2572,7 @@ records
           value={uploadedBy}
           onChange={(e)=>setUploadedBy(e.target.value)}
           placeholder="Enter uploaded by"
-          className="w-full rounded-2xl border border-slate-200 px-5 py-3 outline-none focus:border-indigo-500"
+          className="w-full rounded-2xl border border-border-color px-5 py-3 outline-none focus:border-indigo-500"
         />
       </div>
 
@@ -2562,7 +2581,7 @@ records
 
         <div className="mb-3 flex items-center justify-between">
 
-          <label className="text-sm font-semibold text-slate-700">
+          <label className="text-sm font-semibold text-text-secondary">
             Excel File
           </label>
 
@@ -2576,15 +2595,15 @@ records
 
         </div>
 
-        <label className="flex cursor-pointer flex-col items-center justify-center rounded-3xl border-2 border-dashed border-slate-300 bg-slate-50 p-8 hover:border-indigo-500">
+        <label className="flex cursor-pointer flex-col items-center justify-center rounded-3xl border-2 border-dashed border-border-strong bg-surface-muted p-8 hover:border-indigo-500">
 
-          <div className="text-sm font-semibold text-slate-700">
+          <div className="text-sm font-semibold text-text-secondary">
             {reportFile
               ? reportFile.name
               : "Choose Excel File"}
           </div>
 
-          <div className="mt-1 text-xs text-slate-400">
+          <div className="mt-1 text-xs text-text-muted">
             XLSX / XLS / CSV
           </div>
 
@@ -2602,11 +2621,11 @@ records
     </div>
 
     {/* Footer */}
-    <div className="flex justify-end gap-3 border-t bg-slate-50 px-7 py-5">
+    <div className="flex justify-end gap-3 border-t bg-surface-muted px-7 py-5">
 
       <button
         onClick={()=>setShowUploadModal(false)}
-        className="rounded-2xl border border-slate-200 bg-white px-6 py-3 font-semibold text-slate-700"
+        className="rounded-2xl border border-border-color bg-surface px-6 py-3 font-semibold text-text-secondary"
       >
         Cancel
       </button>
@@ -2636,27 +2655,27 @@ records
     max-h-[90vh]
     overflow-y-auto
     rounded-2xl
-    bg-white
+    bg-surface
     shadow-2xl
     custom-scrollbar
   "
 >
 
   {/* Header */}
-  <div className="sticky top-0 z-10 flex items-center justify-between border-b bg-white px-6 py-3">
+  <div className="sticky top-0 z-10 flex items-center justify-between border-b bg-surface px-6 py-3">
     <div>
-  <h2 className="text-xl font-bold text-slate-900">
+  <h2 className="text-xl font-bold text-text-primary">
     {viewEmployee.employee_name}
   </h2>
 
-  <p className="text-sm text-slate-500">
+  <p className="text-sm text-text-muted">
     {viewEmployee.employee_code} • {viewEmployee.job_role}
   </p>
 </div>
 
     <button
       onClick={() => setViewEmployee(null)}
-      className="h-10 w-10 rounded-full bg-slate-100 text-xl hover:bg-red-100"
+      className="h-10 w-10 rounded-full bg-surface-muted text-xl hover:bg-red-100 hover:dark:bg-red-500/15"
     >
       ×
     </button>
@@ -2667,29 +2686,29 @@ records
 {/* Top Quick Info Row 
     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
 
-  <div className="rounded-xl bg-blue-50 px-4 py-2">
-    <div className="text-xs text-slate-500">
+  <div className="rounded-xl bg-blue-50 dark:bg-blue-500/10 px-4 py-2">
+    <div className="text-xs text-text-muted">
       Employee Code
     </div>
-    <div className="text-md font-bold text-blue-700">
+    <div className="text-md font-bold text-blue-700 dark:text-blue-400">
       {viewEmployee.employee_code || "-"}
     </div>
   </div>
 
-  <div className="rounded-xl bg-green-50 px-4 py-2">
-    <div className="text-xs text-slate-500">
+  <div className="rounded-xl bg-green-50 dark:bg-green-500/10 px-4 py-2">
+    <div className="text-xs text-text-muted">
       Employment Status
     </div>
-    <div className="text-md font-bold text-green-700">
+    <div className="text-md font-bold text-green-700 dark:text-green-400">
       {viewEmployee.employment_status || "-"}
     </div>
   </div>
 
-  <div className="rounded-xl bg-violet-50 px-4 py-2">
-    <div className="text-xs text-slate-500">
+  <div className="rounded-xl bg-violet-50 dark:bg-violet-500/10 px-4 py-2">
+    <div className="text-xs text-text-muted">
       Mobile Number
     </div>
-    <div className="text-md font-bold text-violet-700">
+    <div className="text-md font-bold text-violet-700 dark:text-violet-400">
       {viewEmployee.mobile_number || "-"}
     </div>
   </div>
@@ -2698,8 +2717,8 @@ records
 </div> */}
 
     {/* Organization Details */}
-    <div className="rounded-xl border border-violet-100 bg-violet-50/30 px-4 py-2">
-      <h3 className="mb-1 text-sm font-semibold text-violet-700">
+    <div className="rounded-xl border border-violet-100 dark:border-violet-500/20 bg-violet-50 dark:bg-violet-500/10/30 px-4 py-2">
+      <h3 className="mb-1 text-sm font-semibold text-violet-700 dark:text-violet-400">
         Organization Details
       </h3>
 
@@ -2718,8 +2737,8 @@ records
     </div>
 
     {/* Personal & Role Information */}
-    <div className="rounded-xl border border-blue-100 bg-blue-50/30 px-4 py-2">
-      <h3 className="mb-1 text-sm font-semibold text-blue-700">
+    <div className="rounded-xl border border-blue-100 dark:border-blue-500/20 bg-blue-50 dark:bg-blue-500/10/30 px-4 py-2">
+      <h3 className="mb-1 text-sm font-semibold text-blue-700 dark:text-blue-400">
         Personal & Role Information
       </h3>
 
@@ -2763,8 +2782,8 @@ records
     </div>
 
     {/* Work & Reporting Information */}
-    <div className="rounded-xl border border-indigo-100 bg-indigo-50/30 px-4 py-2">
-      <h3 className="mb-1 text-sm font-semibold text-indigo-700">
+    <div className="rounded-xl border border-indigo-100 dark:border-indigo-500/20 bg-indigo-50 dark:bg-indigo-500/10/30 px-4 py-2">
+      <h3 className="mb-1 text-sm font-semibold text-indigo-700 dark:text-indigo-400">
         Work & Reporting Information
       </h3>
 
@@ -2794,8 +2813,8 @@ records
     </div>
 
     {/* Additional Information */}
-    <div className="rounded-xl border border-emerald-100 bg-emerald-50/30 px-4 py-2">
-      <h3 className="mb-1 text-sm font-semibold text-emerald-700">
+    <div className="rounded-xl border border-emerald-100 dark:border-emerald-500/20 bg-emerald-50 dark:bg-emerald-500/10/30 px-4 py-2">
+      <h3 className="mb-1 text-sm font-semibold text-emerald-700 dark:text-emerald-400">
         Additional Information
       </h3>
 
@@ -2815,11 +2834,11 @@ records
       </div>
 
       <div className="mt-2">
-        <div className="mb-1 text-xs font-semibold text-slate-500">
+        <div className="mb-1 text-xs font-semibold text-text-muted">
           Remarks
         </div>
 
-        <div className="rounded-xl bg-white p-4 border">
+        <div className="rounded-xl bg-surface p-4 border">
           {viewEmployee.remarks || "-"}
         </div>
       </div>
@@ -2841,7 +2860,7 @@ records
     w-full
     max-w-7xl
     rounded-[18px]
-    bg-white
+    bg-surface
     px-4
     py-4
     shadow-2xl
@@ -2851,7 +2870,7 @@ records
   "
 >
 
-        <div className="mb-2 flex items-start justify-between border-b border-slate-200 pb-2">
+        <div className="mb-2 flex items-start justify-between border-b border-border-color pb-2">
 
        <div className="flex items-start gap-4">
 
@@ -2862,16 +2881,16 @@ records
     from-indigo-100
     to-violet-100
   ">
-    <UserPlus className="h-6 w-6 text-indigo-600" />
+    <UserPlus className="h-6 w-6 text-indigo-600 dark:text-indigo-400" />
   </div>
 
   <div>
 
-    <h2 className="text-lg font-semibold tracking-tight text-slate-900">
+    <h2 className="text-lg font-semibold tracking-tight text-text-primary">
       Add Employee
     </h2>
 
-    <p className=" text-sm text-slate-500">
+    <p className=" text-sm text-text-muted">
       Manually add employee details to the system
     </p>
 
@@ -2881,7 +2900,7 @@ records
 
  <button
     onClick={() => setShowEmployeeModal(false)}
-    className="h-10 w-10 rounded-full bg-slate-100 text-xl text-slate-600 hover:bg-red-100 hover:text-red-600"
+    className="h-10 w-10 rounded-full bg-surface-muted text-xl text-text-secondary hover:bg-red-100 hover:dark:bg-red-500/15 hover:text-red-600 hover:dark:text-red-400"
   >
             ×
    </button>
@@ -2891,16 +2910,16 @@ records
      <div className="space-y-2">
 
   {/* Organization Details */}
-  <div className="rounded-xl border border-violet-100 bg-gradient-to-br from-violet-50/60 to-white p-3">
+  <div className="rounded-xl border border-violet-100 dark:border-violet-500/20 bg-gradient-to-br from-violet-50/60 to-white p-3">
 
-    <h3 className="mb-2 text-sm font-semibold text-violet-700">
+    <h3 className="mb-2 text-sm font-semibold text-violet-700 dark:text-violet-400">
       Organization Details
     </h3>
 
     <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-6">
 
       <div>
-        <label className="mb-1 block text-xs px-1 font-semibold text-slate-700">
+        <label className="mb-1 block text-xs px-1 font-semibold text-text-secondary">
           Circle *
         </label>
 
@@ -2908,7 +2927,7 @@ records
   name="circle"
   value={employeeForm.circle}
   onChange={handleEmployeeChange}
-  className="w-full rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs"
+  className="w-full rounded-lg border border-border-color bg-surface px-4 py-2 text-xs"
 >
   <option value="">Select Circle</option>
 
@@ -2921,7 +2940,7 @@ records
       </div>
 
       <div>
-        <label className="mb-1 block text-xs px-1 font-semibold text-slate-700">
+        <label className="mb-1 block text-xs px-1 font-semibold text-text-secondary">
           CMP *
         </label>
 
@@ -2930,7 +2949,7 @@ records
   value={employeeForm.cmp}
   onChange={handleEmployeeChange}
   disabled={!employeeForm.circle}
-  className="w-full rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs outline-none focus:border-violet-500 disabled:bg-slate-100 disabled:cursor-not-allowed"
+  className="w-full rounded-lg border border-border-color bg-surface px-4 py-2 text-xs outline-none focus:border-violet-500 disabled:bg-surface-muted disabled:cursor-not-allowed"
 >
   {!employeeForm.circle ? (
     <option value="">First Select Circle</option>
@@ -2949,7 +2968,7 @@ records
       </div>
 
       <div>
-        <label className="mb-1 block text-xs px-1 font-semibold text-slate-700">
+        <label className="mb-1 block text-xs px-1 font-semibold text-text-secondary">
           PPRJ Status
         </label>
 
@@ -2972,7 +2991,7 @@ records
       </div>
 
       <div>
-        <label className="mb-1 block text-xs px-1 font-semibold text-slate-700">
+        <label className="mb-1 block text-xs px-1 font-semibold text-text-secondary">
           PPRJ Code
         </label>
 
@@ -2982,12 +3001,12 @@ records
           value={employeeForm.pprj_code}
           onChange={handleEmployeeChange}
           placeholder="Enter PPRJ Code"
-          className="w-full rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs outline-none focus:border-violet-500"
+          className="w-full rounded-lg border border-border-color bg-surface px-4 py-2 text-xs outline-none focus:border-violet-500"
         />
       </div>
 
       <div>
-        <label className="mb-1 block text-xs px-1 font-semibold text-slate-700">
+        <label className="mb-1 block text-xs px-1 font-semibold text-text-secondary">
           Employee Code
         </label>
 
@@ -2997,12 +3016,12 @@ records
           value={employeeForm.employee_code}
           onChange={handleEmployeeChange}
           placeholder="Enter Employee Code"
-          className="w-full rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs outline-none focus:border-violet-500"
+          className="w-full rounded-lg border border-border-color bg-surface px-4 py-2 text-xs outline-none focus:border-violet-500"
         />
       </div>
 
       <div>
-        <label className="mb-1 block text-xs px-1 font-semibold text-slate-700">
+        <label className="mb-1 block text-xs px-1 font-semibold text-text-secondary">
           Employee Name *
         </label>
 
@@ -3012,7 +3031,7 @@ records
           value={employeeForm.employee_name}
           onChange={handleEmployeeChange}
           placeholder="Enter Employee Name"
-          className="w-full rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs outline-none focus:border-violet-500"
+          className="w-full rounded-lg border border-border-color bg-surface px-4 py-2 text-xs outline-none focus:border-violet-500"
         />
       </div>
 
@@ -3022,9 +3041,9 @@ records
 
  {/* Personal & Role Information */}
 
-<div className="rounded-xl border border-blue-100 bg-gradient-to-br from-blue-50/60 to-white p-3">
+<div className="rounded-xl border border-blue-100 dark:border-blue-500/20 bg-gradient-to-br from-blue-50/60 to-white p-3">
 
-  <h3 className="mb-2 text-sm font-semibold text-blue-700">
+  <h3 className="mb-2 text-sm font-semibold text-blue-700 dark:text-blue-400">
     Personal & Role Information
   </h3>
 
@@ -3032,7 +3051,7 @@ records
 
     {/* Father Name */}
     <div>
-      <label className="mb-1 block text-xs px-1 font-semibold text-slate-700">
+      <label className="mb-1 block text-xs px-1 font-semibold text-text-secondary">
         Father Name
       </label>
 
@@ -3042,13 +3061,13 @@ records
         value={employeeForm.father_name}
         onChange={handleEmployeeChange}
         placeholder="Enter Father Name"
-        className="w-full rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs outline-none focus:border-violet-500"
+        className="w-full rounded-lg border border-border-color bg-surface px-4 py-2 text-xs outline-none focus:border-violet-500"
       />
     </div>
 
     {/* Function Name */}
     <div>
-      <label className="mb-1 block text-xs px-1 font-semibold text-slate-700">
+      <label className="mb-1 block text-xs px-1 font-semibold text-text-secondary">
         Function Name
       </label>
 
@@ -3058,13 +3077,13 @@ records
         value={employeeForm.function_name}
         onChange={handleEmployeeChange}
         placeholder="Enter Function Name"
-        className="w-full rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs outline-none focus:border-violet-500"
+        className="w-full rounded-lg border border-border-color bg-surface px-4 py-2 text-xs outline-none focus:border-violet-500"
       />
     </div>
 
     {/* Job Role Actual CMP Verify */}
     {/* <div>
-      <label className="mb-1 block text-xs px-1 font-semibold text-slate-700">
+      <label className="mb-1 block text-xs px-1 font-semibold text-text-secondary">
         Job Role Actual Cmp Verify
       </label>
 
@@ -3097,7 +3116,7 @@ onChange={(selected) =>
 
     {/* Job Role */}
     <div>
-      <label className="mb-1 block text-xs px-1 font-semibold text-slate-700">
+      <label className="mb-1 block text-xs px-1 font-semibold text-text-secondary">
         Job Role
       </label>
 
@@ -3132,7 +3151,7 @@ onChange={(selected) =>
 
     {/* Signoff Scope */}
     <div>
-      <label className="mb-1 block text-xs px-1 font-semibold text-slate-700">
+      <label className="mb-1 block text-xs px-1 font-semibold text-text-secondary">
         Manpower Signoff Scope
       </label>
 
@@ -3156,7 +3175,7 @@ onChange={(selected) =>
 
     {/* Scrum Role */}
     <div>
-      <label className="mb-1 block text-xs px-1 font-semibold text-slate-700">
+      <label className="mb-1 block text-xs px-1 font-semibold text-text-secondary">
         Scrum Job Role
       </label>
 
@@ -3187,7 +3206,7 @@ onChange={(selected) =>
 
     {/* Cluster */}
   {/*   <div>
-      <label className="mb-1 block text-xs px-1 font-semibold text-slate-700">
+      <label className="mb-1 block text-xs px-1 font-semibold text-text-secondary">
         Cluster
       </label>
 
@@ -3197,7 +3216,7 @@ onChange={(selected) =>
         value={employeeForm.cluster}
         onChange={handleEmployeeChange}
         placeholder="Enter Cluster"
-        className="w-full rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs outline-none focus:border-violet-500"
+        className="w-full rounded-lg border border-border-color bg-surface px-4 py-2 text-xs outline-none focus:border-violet-500"
       />
     </div>
 
@@ -3205,7 +3224,7 @@ onChange={(selected) =>
 
     {/* Mobile Number */}
     <div>
-      <label className="mb-1 block text-xs px-1 font-semibold text-slate-700">
+      <label className="mb-1 block text-xs px-1 font-semibold text-text-secondary">
         Mobile Number
       </label>
 
@@ -3215,13 +3234,13 @@ onChange={(selected) =>
         value={employeeForm.mobile_number}
         onChange={handleEmployeeChange}
         placeholder="Enter Mobile Number"
-        className="w-full rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs outline-none focus:border-violet-500"
+        className="w-full rounded-lg border border-border-color bg-surface px-4 py-2 text-xs outline-none focus:border-violet-500"
       />
     </div>
 
     {/* DOB */}
     <div>
-      <label className="mb-1 block text-xs px-1 font-semibold text-slate-700">
+      <label className="mb-1 block text-xs px-1 font-semibold text-text-secondary">
         Dob
       </label>
 
@@ -3230,13 +3249,13 @@ onChange={(selected) =>
         name="dob"
         value={employeeForm.dob}
         onChange={handleEmployeeChange}
-        className="w-full rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs outline-none focus:border-violet-500"
+        className="w-full rounded-lg border border-border-color bg-surface px-4 py-2 text-xs outline-none focus:border-violet-500"
       />
     </div>
 
     {/* Age */}
     <div>
-      <label className="mb-1 block text-xs px-1 font-semibold text-slate-700">
+      <label className="mb-1 block text-xs px-1 font-semibold text-text-secondary">
         Age
       </label>
 
@@ -3246,13 +3265,13 @@ onChange={(selected) =>
         value={employeeForm.age}
         onChange={handleEmployeeChange}
         placeholder="Enter Age"
-        className="w-full rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs outline-none focus:border-violet-500"
+        className="w-full rounded-lg border border-border-color bg-surface px-4 py-2 text-xs outline-none focus:border-violet-500"
       />
     </div>
 
     {/* Date Of Joining */}
     <div>
-      <label className="mb-1 block text-xs px-1 font-semibold text-slate-700">
+      <label className="mb-1 block text-xs px-1 font-semibold text-text-secondary">
         Date Of Joining
       </label>
 
@@ -3261,13 +3280,13 @@ onChange={(selected) =>
         name="date_of_joining"
         value={employeeForm.date_of_joining}
         onChange={handleEmployeeChange}
-        className="w-full rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs outline-none focus:border-violet-500"
+        className="w-full rounded-lg border border-border-color bg-surface px-4 py-2 text-xs outline-none focus:border-violet-500"
       />
     </div>
 
     {/* Employment Status */}
     <div>
-      <label className="mb-1 block text-xs px-1 font-semibold text-slate-700">
+      <label className="mb-1 block text-xs px-1 font-semibold text-text-secondary">
         Employment Status
       </label>
 
@@ -3295,9 +3314,9 @@ onChange={(selected) =>
 
 {/* Work & Reporting Information */}
 
-<div className="rounded-2xl border border-indigo-100 bg-gradient-to-br from-indigo-50/60 to-white p-3">
+<div className="rounded-2xl border border-indigo-100 dark:border-indigo-500/20 bg-gradient-to-br from-indigo-50/60 to-white p-3">
 
-  <h3 className="mb-2 text-sm font-semibold text-indigo-700">
+  <h3 className="mb-2 text-sm font-semibold text-indigo-700 dark:text-indigo-400">
     Work & Reporting Information
   </h3>
 
@@ -3305,7 +3324,7 @@ onChange={(selected) =>
 
     {/* Resigned Date */}
     <div>
-      <label className="mb-1 block text-xs px-1 font-semibold text-slate-700">
+      <label className="mb-1 block text-xs px-1 font-semibold text-text-secondary">
         Resigned Date
       </label>
 
@@ -3314,13 +3333,13 @@ onChange={(selected) =>
         name="resigned_date"
         value={employeeForm.resigned_date}
         onChange={handleEmployeeChange}
-        className="w-full rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs outline-none focus:border-violet-500"
+        className="w-full rounded-lg border border-border-color bg-surface px-4 py-2 text-xs outline-none focus:border-violet-500"
       />
     </div>
 
     {/* Last Working Date */}
     <div>
-      <label className="mb-1 block text-xs px-1 font-semibold text-slate-700">
+      <label className="mb-1 block text-xs px-1 font-semibold text-text-secondary">
         Last Working Date
       </label>
 
@@ -3329,13 +3348,13 @@ onChange={(selected) =>
         name="last_working_date"
         value={employeeForm.last_working_date}
         onChange={handleEmployeeChange}
-        className="w-full rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs outline-none focus:border-violet-500"
+        className="w-full rounded-lg border border-border-color bg-surface px-4 py-2 text-xs outline-none focus:border-violet-500"
       />
     </div>
 
     {/* RM Code */}
     <div>
-      <label className="mb-1 block text-xs px-1 font-semibold text-slate-700">
+      <label className="mb-1 block text-xs px-1 font-semibold text-text-secondary">
         RM Code
       </label>
 
@@ -3345,13 +3364,13 @@ onChange={(selected) =>
         value={employeeForm.rm_code}
         onChange={handleEmployeeChange}
         placeholder="Enter RM Code"
-        className="w-full rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs outline-none focus:border-violet-500"
+        className="w-full rounded-lg border border-border-color bg-surface px-4 py-2 text-xs outline-none focus:border-violet-500"
       />
     </div>
 
     {/* Reporting Manager */}
     <div>
-      <label className="mb-1 block text-xs px-1 font-semibold text-slate-700">
+      <label className="mb-1 block text-xs px-1 font-semibold text-text-secondary">
         Reporting Manager
       </label>
 
@@ -3361,13 +3380,13 @@ onChange={(selected) =>
         value={employeeForm.reporting_manager}
         onChange={handleEmployeeChange}
         placeholder="Enter Reporting Manager"
-        className="w-full rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs outline-none focus:border-violet-500"
+        className="w-full rounded-lg border border-border-color bg-surface px-4 py-2 text-xs outline-none focus:border-violet-500"
       />
     </div>
 
     {/* Company Email */}
     <div>
-      <label className="mb-1 block text-xs px-1 font-semibold text-slate-700">
+      <label className="mb-1 block text-xs px-1 font-semibold text-text-secondary">
         Company Email Id
       </label>
 
@@ -3377,13 +3396,13 @@ onChange={(selected) =>
         value={employeeForm.company_email_id}
         onChange={handleEmployeeChange}
         placeholder="Enter Email Id"
-        className="w-full rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs outline-none focus:border-violet-500"
+        className="w-full rounded-lg border border-border-color bg-surface px-4 py-2 text-xs outline-none focus:border-violet-500"
       />
     </div>
 
     {/* Laptop Status */}
     <div>
-      <label className="mb-1 block text-xs px-1 font-semibold text-slate-700">
+      <label className="mb-1 block text-xs px-1 font-semibold text-text-secondary">
         Laptop Status
       </label>
 
@@ -3413,9 +3432,9 @@ onChange={(selected) =>
 
 {/* Additional Information */}
 
-<div className="rounded-2xl border border-emerald-100 bg-gradient-to-br from-emerald-50/60 to-white p-3">
+<div className="rounded-2xl border border-emerald-100 dark:border-emerald-500/20 bg-gradient-to-br from-emerald-50/60 to-white p-3">
 
-  <h3 className="mb-2 text-sm font-semibold text-emerald-700">
+  <h3 className="mb-2 text-sm font-semibold text-emerald-700 dark:text-emerald-400">
     Additional Information
   </h3>
 
@@ -3423,7 +3442,7 @@ onChange={(selected) =>
 
     {/* IFSC Code */}
     <div>
-      <label className="mb-1 block text-xs px-1 font-semibold text-slate-700">
+      <label className="mb-1 block text-xs px-1 font-semibold text-text-secondary">
         IFSC Code
       </label>
 
@@ -3433,13 +3452,13 @@ onChange={(selected) =>
         value={employeeForm.ifsc_code}
         onChange={handleEmployeeChange}
         placeholder="Enter IFSC Code"
-        className="w-full rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs outline-none focus:border-violet-500"
+        className="w-full rounded-lg border border-border-color bg-surface px-4 py-2 text-xs outline-none focus:border-violet-500"
       />
     </div>
 
     {/* Bank Account No */}
     <div>
-      <label className="mb-1 block text-xs px-1 font-semibold text-slate-700">
+      <label className="mb-1 block text-xs px-1 font-semibold text-text-secondary">
         Bank Account No
       </label>
 
@@ -3449,13 +3468,13 @@ onChange={(selected) =>
         value={employeeForm.bank_account_no}
         onChange={handleEmployeeChange}
         placeholder="Enter Bank Account No"
-        className="w-full rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs outline-none focus:border-violet-500"
+        className="w-full rounded-lg border border-border-color bg-surface px-4 py-2 text-xs outline-none focus:border-violet-500"
       />
     </div>
 
     {/* PAN No */}
     <div>
-      <label className="mb-1 block text-xs px-1 font-semibold text-slate-700">
+      <label className="mb-1 block text-xs px-1 font-semibold text-text-secondary">
         PAN No
       </label>
 
@@ -3465,13 +3484,13 @@ onChange={(selected) =>
         value={employeeForm.pan_no}
         onChange={handleEmployeeChange}
         placeholder="Enter PAN No"
-        className="w-full rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs outline-none focus:border-violet-500"
+        className="w-full rounded-lg border border-border-color bg-surface px-4 py-2 text-xs outline-none focus:border-violet-500"
       />
     </div>
 
     {/* Aadhaar No */}
     <div>
-      <label className="mb-1 block text-xs px-1 font-semibold text-slate-700">
+      <label className="mb-1 block text-xs px-1 font-semibold text-text-secondary">
         Aadhaar No
       </label>
 
@@ -3481,13 +3500,13 @@ onChange={(selected) =>
         value={employeeForm.aadhaar_no}
         onChange={handleEmployeeChange}
         placeholder="Enter Aadhaar No"
-        className="w-full rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs outline-none focus:border-violet-500"
+        className="w-full rounded-lg border border-border-color bg-surface px-4 py-2 text-xs outline-none focus:border-violet-500"
       />
     </div>
 
     {/* UAN No */}
     <div>
-      <label className="mb-1 block text-xs px-1 font-semibold text-slate-700">
+      <label className="mb-1 block text-xs px-1 font-semibold text-text-secondary">
         UAN No
       </label>
 
@@ -3497,12 +3516,12 @@ onChange={(selected) =>
         value={employeeForm.uan_no}
         onChange={handleEmployeeChange}
         placeholder="Enter UAN No"
-        className="w-full rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs outline-none focus:border-violet-500"
+        className="w-full rounded-lg border border-border-color bg-surface px-4 py-2 text-xs outline-none focus:border-violet-500"
       />
     </div>
 
 <div>
-  <label className="mb-1 block text-xs px-1 font-semibold text-slate-700">
+  <label className="mb-1 block text-xs px-1 font-semibold text-text-secondary">
     PF No
   </label>
 
@@ -3512,12 +3531,12 @@ onChange={(selected) =>
     value={employeeForm.pf_no}
     onChange={handleEmployeeChange}
     placeholder="Enter PF No"
-    className="w-full rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs outline-none focus:border-violet-500"
+    className="w-full rounded-lg border border-border-color bg-surface px-4 py-2 text-xs outline-none focus:border-violet-500"
   />
 </div>
 
 <div>
-  <label className="mb-1 block text-xs px-1 font-semibold text-slate-700">
+  <label className="mb-1 block text-xs px-1 font-semibold text-text-secondary">
     GTLI
   </label>
 
@@ -3541,7 +3560,7 @@ onChange={(selected) =>
 
     {/* ESIC IP No */}
     <div>
-      <label className="mb-1 block text-xs px-1 font-semibold text-slate-700">
+      <label className="mb-1 block text-xs px-1 font-semibold text-text-secondary">
         ESIC IP No
       </label>
 
@@ -3551,13 +3570,13 @@ onChange={(selected) =>
         value={employeeForm.esic_ip_no}
         onChange={handleEmployeeChange}
         placeholder="Enter ESIC IP No"
-        className="w-full rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs outline-none focus:border-violet-500"
+        className="w-full rounded-lg border border-border-color bg-surface px-4 py-2 text-xs outline-none focus:border-violet-500"
       />
     </div>
 
 {/* NTH Salary Amount */}
   <div>
-  <label className="mb-1 block text-xs px-1 font-semibold text-slate-700">
+  <label className="mb-1 block text-xs px-1 font-semibold text-text-secondary">
     NTH Salary Amount
   </label>
 
@@ -3567,7 +3586,7 @@ onChange={(selected) =>
     value={employeeForm.nth_salary}
     onChange={handleEmployeeChange}
     placeholder="Enter Salary Amount"
-    className="w-full rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs outline-none focus:border-violet-500"
+    className="w-full rounded-lg border border-border-color bg-surface px-4 py-2 text-xs outline-none focus:border-violet-500"
   />
 </div>
 
@@ -3576,7 +3595,7 @@ onChange={(selected) =>
   {/* Remarks */}
   <div className="mt-4">
 
-    <label className="mb-1 block text-xs px-1 font-semibold text-slate-700">
+    <label className="mb-1 block text-xs px-1 font-semibold text-text-secondary">
       Remarks
     </label>
 
@@ -3586,7 +3605,7 @@ onChange={(selected) =>
       value={employeeForm.remarks}
       onChange={handleEmployeeChange}
       placeholder="Enter any additional remarks here..."
-      className="w-full rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs outline-none focus:border-violet-500"
+      className="w-full rounded-lg border border-border-color bg-surface px-4 py-2 text-xs outline-none focus:border-violet-500"
     />
 
   </div>
@@ -3596,14 +3615,14 @@ onChange={(selected) =>
 </div>
 
 
-   <div className="mt-6 flex items-center justify-between rounded-2xl bg-violet-50 px-5 py-4">
+   <div className="mt-6 flex items-center justify-between rounded-2xl bg-violet-50 dark:bg-violet-500/10 px-5 py-4">
 
   <div>
-    <p className="text-sm font-semibold text-violet-700">
+    <p className="text-sm font-semibold text-violet-700 dark:text-violet-400">
       Please ensure all the information is accurate before saving.
     </p>
 
-    <p className="text-xs text-slate-500 mt-1">
+    <p className="text-xs text-text-muted mt-1">
       Fields marked with * are mandatory.
     </p>
   </div>
@@ -3612,7 +3631,7 @@ onChange={(selected) =>
 
     <button
       onClick={() => setShowEmployeeModal(false)}
-      className="rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700"
+      className="rounded-xl border border-border-color bg-surface px-5 py-2.5 text-sm font-semibold text-text-secondary"
     >
       Cancel
     </button>

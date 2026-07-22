@@ -76,11 +76,11 @@ export default function EmployeeList() {
     <div className="mx-auto max-w-7xl space-y-4 p-4 sm:p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="flex items-center gap-2 text-xl font-semibold tracking-tight text-slate-900">
-            <Users className="h-5 w-5 text-indigo-500" />
+          <h1 className="flex items-center gap-2 text-xl font-semibold tracking-tight text-text-primary">
+            <Users className="h-5 w-5 text-indigo-500 dark:text-indigo-400" />
             Training Employees
           </h1>
-          <p className="mt-0.5 text-sm text-slate-500">
+          <p className="mt-0.5 text-sm text-text-muted">
             Search, filter and manage all registered candidates.
           </p>
         </div>
@@ -88,7 +88,7 @@ export default function EmployeeList() {
           <button
             type="button"
             onClick={load}
-            className="flex h-9 items-center gap-1.5 rounded-2xl border border-slate-200 bg-white px-3 text-sm font-medium text-slate-600 shadow-sm transition hover:bg-slate-50"
+            className="flex h-9 items-center gap-1.5 rounded-2xl border border-border-color bg-surface px-3 text-sm font-medium text-text-secondary shadow-sm transition hover:bg-surface-muted"
           >
             <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
             Refresh
@@ -109,7 +109,7 @@ export default function EmployeeList() {
         </div>
       </div>
 
-      <div className="space-y-3 rounded-[20px] border border-slate-100 bg-white/70 p-4 shadow-sm">
+      <div className="space-y-3 rounded-[20px] border border-border-color bg-surface/70 p-4 shadow-sm">
         <SearchBar value={search} onChange={(value) => { setSearch(value); setPage(1); }} />
         <Filters
           value={filters}

@@ -242,27 +242,27 @@ export default function EnterpriseTable({
 
   const content = (
     <div
-      className={`relative overflow-hidden rounded-[12px] border border-slate-200/70 bg-white/92 ${
+      className={`relative overflow-hidden rounded-[12px] border border-border-color/70 bg-surface/92 ${
         isFullscreen ? "fixed inset-0 z-[350] flex flex-col rounded-none" : ""
       }`}
     >
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-[linear-gradient(180deg,_#ffffff_0%,_#f8fbff_100%)] px-4 py-2.5">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border-color bg-[linear-gradient(180deg,_#ffffff_0%,_#f8fbff_100%)] px-4 py-2.5">
         <div>
-          <p className="text-[0.72rem] font-semibold uppercase tracking-[0.14em] text-slate-700">
+          <p className="text-[0.72rem] font-semibold uppercase tracking-[0.14em] text-text-secondary">
             {title}
           </p>
-          {subtitle ? <p className="text-xs text-slate-400">{subtitle}</p> : null}
+          {subtitle ? <p className="text-xs text-text-muted">{subtitle}</p> : null}
         </div>
 
         <div className="flex flex-wrap items-center gap-1.5">
           <div className="relative">
-            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-text-muted" />
             <input
               type="text"
               placeholder="Search..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="h-8 w-36 rounded-[10px] border border-slate-200 bg-white pl-8 pr-2 text-xs text-slate-700 outline-none transition focus:border-indigo-300 focus:ring-4 focus:ring-indigo-50 sm:w-44"
+              className="h-8 w-36 rounded-[10px] border border-border-color bg-surface pl-8 pr-2 text-xs text-text-secondary outline-none transition focus:border-indigo-300 focus:dark:border-indigo-500/30 focus:ring-4 focus:ring-indigo-50 sm:w-44"
             />
           </div>
 
@@ -271,7 +271,7 @@ export default function EnterpriseTable({
               type="button"
               onClick={onRefresh}
               title="Refresh"
-              className="inline-flex h-8 w-8 items-center justify-center rounded-[10px] border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-[10px] border border-border-color bg-surface text-text-muted transition hover:bg-surface-muted"
             >
               <RefreshCw className="h-3.5 w-3.5" />
             </button>
@@ -285,16 +285,16 @@ export default function EnterpriseTable({
                 setShowExportMenu(false);
               }}
               title="Column visibility"
-              className="inline-flex h-8 w-8 items-center justify-center rounded-[10px] border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-[10px] border border-border-color bg-surface text-text-muted transition hover:bg-surface-muted"
             >
               <Columns3 className="h-3.5 w-3.5" />
             </button>
             {showColumnMenu ? (
-              <div className="absolute right-0 z-20 mt-1 w-52 rounded-[10px] border border-slate-200 bg-white p-2 shadow-lg">
+              <div className="absolute right-0 z-20 mt-1 w-52 rounded-[10px] border border-border-color bg-surface p-2 shadow-lg">
                 {columns.map((column) => (
                   <label
                     key={column.key}
-                    className="flex items-center gap-2 rounded-md px-2 py-1 text-xs text-slate-600 hover:bg-slate-50"
+                    className="flex items-center gap-2 rounded-md px-2 py-1 text-xs text-text-secondary hover:bg-surface-muted"
                   >
                     <input
                       type="checkbox"
@@ -316,35 +316,35 @@ export default function EnterpriseTable({
                 setShowColumnMenu(false);
               }}
               title="Export"
-              className="inline-flex h-8 items-center gap-1.5 rounded-[10px] border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-600 transition hover:bg-slate-50"
+              className="inline-flex h-8 items-center gap-1.5 rounded-[10px] border border-border-color bg-surface px-2.5 text-xs font-semibold text-text-secondary transition hover:bg-surface-muted"
             >
               <Download className="h-3.5 w-3.5" />
               Export
             </button>
             {showExportMenu ? (
-              <div className="absolute right-0 z-20 mt-1 w-44 rounded-[10px] border border-slate-200 bg-white p-1 shadow-lg">
+              <div className="absolute right-0 z-20 mt-1 w-44 rounded-[10px] border border-border-color bg-surface p-1 shadow-lg">
                 <button
                   type="button"
                   onClick={handleExportExcel}
-                  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs text-slate-600 hover:bg-slate-50"
+                  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs text-text-secondary hover:bg-surface-muted"
                 >
-                  <FileSpreadsheet className="h-3.5 w-3.5 text-emerald-600" />
+                  <FileSpreadsheet className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
                   Export Excel
                 </button>
                 <button
                   type="button"
                   onClick={handleExportCsv}
-                  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs text-slate-600 hover:bg-slate-50"
+                  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs text-text-secondary hover:bg-surface-muted"
                 >
-                  <FileText className="h-3.5 w-3.5 text-blue-600" />
+                  <FileText className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
                   Export CSV
                 </button>
                 <button
                   type="button"
                   onClick={handlePrintOrPdf}
-                  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs text-slate-600 hover:bg-slate-50"
+                  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs text-text-secondary hover:bg-surface-muted"
                 >
-                  <FileDown className="h-3.5 w-3.5 text-red-500" />
+                  <FileDown className="h-3.5 w-3.5 text-red-500 dark:text-red-400" />
                   Export PDF
                 </button>
               </div>
@@ -355,7 +355,7 @@ export default function EnterpriseTable({
             type="button"
             onClick={handlePrintOrPdf}
             title="Print"
-            className="inline-flex h-8 w-8 items-center justify-center rounded-[10px] border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-[10px] border border-border-color bg-surface text-text-muted transition hover:bg-surface-muted"
           >
             <Printer className="h-3.5 w-3.5" />
           </button>
@@ -364,7 +364,7 @@ export default function EnterpriseTable({
             type="button"
             onClick={handleCopy}
             title="Copy data"
-            className="inline-flex h-8 w-8 items-center justify-center rounded-[10px] border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-[10px] border border-border-color bg-surface text-text-muted transition hover:bg-surface-muted"
           >
             <Copy className="h-3.5 w-3.5" />
           </button>
@@ -373,7 +373,7 @@ export default function EnterpriseTable({
             type="button"
             onClick={() => setIsFullscreen((prev) => !prev)}
             title="Toggle fullscreen"
-            className="inline-flex h-8 w-8 items-center justify-center rounded-[10px] border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-[10px] border border-border-color bg-surface text-text-muted transition hover:bg-surface-muted"
           >
             {isFullscreen ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
           </button>
@@ -386,12 +386,12 @@ export default function EnterpriseTable({
       >
         <table className="min-w-max w-full whitespace-nowrap border-collapse text-xs">
           <thead>
-            <tr className="sticky top-0 z-[10] bg-slate-100 text-[11px] font-bold uppercase text-slate-600">
+            <tr className="sticky top-0 z-[10] bg-surface-muted text-[11px] font-bold uppercase text-text-secondary">
               {visibleColumns.map((column) => (
                 <th
                   key={column.key}
                   onClick={() => toggleSort(column.key)}
-                  className="cursor-pointer select-none border-b border-slate-300 px-3 py-2 text-left transition hover:bg-slate-200"
+                  className="cursor-pointer select-none border-b border-border-strong px-3 py-2 text-left transition hover:bg-surface-muted"
                 >
                   <span className="inline-flex items-center gap-1">
                     {column.label}
@@ -410,13 +410,13 @@ export default function EnterpriseTable({
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={visibleColumns.length} className="px-3 py-10 text-center text-slate-400">
+                <td colSpan={visibleColumns.length} className="px-3 py-10 text-center text-text-muted">
                   Loading...
                 </td>
               </tr>
             ) : !pageRows.length ? (
               <tr>
-                <td colSpan={visibleColumns.length} className="px-3 py-10 text-center text-slate-400">
+                <td colSpan={visibleColumns.length} className="px-3 py-10 text-center text-text-muted">
                   {emptyMessage}
                 </td>
               </tr>
@@ -425,12 +425,12 @@ export default function EnterpriseTable({
                 <tr
                   key={row.__key ?? index}
                   onClick={onRowClick ? () => onRowClick(row) : undefined}
-                  className={`transition hover:bg-blue-50 ${index % 2 === 0 ? "bg-white" : "bg-slate-50"} ${
+                  className={`transition hover:bg-blue-50 hover:dark:bg-blue-500/10 ${index % 2 === 0 ? "bg-surface" : "bg-surface-muted"} ${
                     onRowClick ? "cursor-pointer" : ""
                   }`}
                 >
                   {visibleColumns.map((column) => (
-                    <td key={column.key} className="border-b border-slate-200 px-3 py-1.5 text-slate-700">
+                    <td key={column.key} className="border-b border-border-color px-3 py-1.5 text-text-secondary">
                       {column.render ? column.render(row) : getCellText(row, column) || "—"}
                     </td>
                   ))}
@@ -441,7 +441,7 @@ export default function EnterpriseTable({
         </table>
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-200 bg-slate-50 px-4 py-2 text-[11px] text-slate-600">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border-color bg-surface-muted px-4 py-2 text-[11px] text-text-secondary">
         <span>
           {sortedRows.length === 0
             ? "Showing 0 of 0"
@@ -454,7 +454,7 @@ export default function EnterpriseTable({
           <select
             value={pageSize}
             onChange={(e) => setPageSize(Number(e.target.value))}
-            className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px] font-semibold text-slate-600"
+            className="rounded-lg border border-border-color bg-surface px-2 py-1 text-[11px] font-semibold text-text-secondary"
           >
             {PAGE_SIZE_OPTIONS.map((size) => (
               <option key={size} value={size}>
@@ -466,7 +466,7 @@ export default function EnterpriseTable({
             type="button"
             disabled={currentPage <= 1}
             onClick={() => setPage((prev) => Math.max(1, prev - 1))}
-            className="rounded-lg border border-slate-200 bg-white px-3 py-1 font-semibold text-slate-600 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded-lg border border-border-color bg-surface px-3 py-1 font-semibold text-text-secondary transition hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-50"
           >
             Prev
           </button>
@@ -477,7 +477,7 @@ export default function EnterpriseTable({
             type="button"
             disabled={currentPage >= totalPages}
             onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
-            className="rounded-lg border border-slate-200 bg-white px-3 py-1 font-semibold text-slate-600 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded-lg border border-border-color bg-surface px-3 py-1 font-semibold text-text-secondary transition hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-50"
           >
             Next
           </button>
@@ -488,7 +488,7 @@ export default function EnterpriseTable({
 
   if (isFullscreen) {
     return createPortal(
-      <div className="fixed inset-0 z-[340] bg-slate-900/60 backdrop-blur-sm">{content}</div>,
+      <div className="fixed inset-0 z-[340] bg-overlay/60 backdrop-blur-sm">{content}</div>,
       document.body
     );
   }

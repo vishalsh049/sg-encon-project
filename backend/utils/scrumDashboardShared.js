@@ -61,15 +61,36 @@ const buildScrumFilterClause = (req) => {
   };
 };
 
-// The dashboard always reflects only the most recently uploaded batch (per
-// the requesting user's circle scope), so it auto-updates the moment a new
-// Excel file lands — no separate "refresh" step needed anywhere upstream.
+// The dashboard always reflects only the most recently uploaded batch, so it
+// auto-updates the moment a new Excel file lands — no separate "refresh" step
+// needed anywhere upstream.
+//
+// Batches are uploaded per circle, so "the latest batch" only means something
+// relative to a circle. For a single-circle user that is unambiguous. For an
+// "All Circle" user this previously took the one globally-newest batch, which
+// meant they saw only whichever circle happened to upload last (in practice:
+// Haryana) and every other circle reported zero. It now resolves to the newest
+// batch *per circle*, so an All-Circle user sees every circle's current data.
+//
+// Returns 1..N batch ids, so callers must compare with IN (...), not = (...).
+//
+// Deliberately expressed as MAX(uploaded_at) GROUP BY state rather than
+// ORDER BY uploaded_at DESC LIMIT 1: this database is MariaDB, which rejects
+// a LIMIT inside an IN (...) subquery with
+// "This version of MariaDB doesn't yet support 'LIMIT & IN/ALL/ANY/SOME
+// subquery'" (errno 1235). The MAX/GROUP BY form is equivalent, portable, and
+// serves both the single-circle and All-Circle cases from one statement.
 const buildLatestScrumBatchSubquery = (req) => `
-  SELECT upload_batch_id
-  FROM scrum_manpower
-  ${isAllCircle(req.authUser) ? "" : "WHERE LOWER(TRIM(state)) = LOWER(TRIM(?))"}
-  ORDER BY uploaded_at DESC
-  LIMIT 1
+  SELECT DISTINCT newest_rows.upload_batch_id
+  FROM scrum_manpower newest_rows
+  INNER JOIN (
+    SELECT LOWER(TRIM(state)) AS state_key, MAX(uploaded_at) AS max_uploaded_at
+    FROM scrum_manpower
+    GROUP BY LOWER(TRIM(state))
+  ) newest
+    ON LOWER(TRIM(newest_rows.state)) = newest.state_key
+   AND newest_rows.uploaded_at = newest.max_uploaded_at
+  ${isAllCircle(req.authUser) ? "" : "WHERE LOWER(TRIM(newest_rows.state)) = LOWER(TRIM(?))"}
 `;
 
 const addLatestBatchParam = (req, params) => {

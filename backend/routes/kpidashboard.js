@@ -35,54 +35,36 @@ const normalizeUptimeValue = (value) => {
 // kpi_value * 100, matching the historical 100% display.
 const buildKpiValueSql = ({ markerKpi, kpiColumn, columnNames }) => {
   if (markerKpi) {
-    return columnNames.includes("availability")
-      ? "COALESCE(CAST(REPLACE(availability, '%', '') AS DECIMAL(12,4)), kpi_value * 100)"
+    const availabilityCol = findColumn(columnNames, "availability");
+    return availabilityCol
+      ? `COALESCE(CAST(REPLACE(\`${availabilityCol}\`, '%', '') AS DECIMAL(12,4)), kpi_value * 100)`
       : "kpi_value * 100";
   }
   return `CAST(REPLACE(\`${kpiColumn}\`, '%', '') AS DECIMAL(12,4))`;
 };
 
-// SQL TRIM() strips spaces only — mirror that exactly (not JS .trim(), which
-// also strips tabs/newlines) so results stay identical to the old queries.
-const sqlTrim = (v) => String(v == null ? "" : v).replace(/^ +| +$/g, "");
+// information_schema reports column names in their stored case, which varies
+// per table (`Date` vs `date`). Every lookup below must be case-insensitive or
+// a table using a different case silently loses its date/KPI column and the
+// card is dropped from the response.
+const findColumn = (columnNames, wanted) =>
+  (columnNames || []).find((c) => c.toLowerCase() === String(wanted).toLowerCase()) || null;
 
-// Case-insensitive sort matching the *_ci collation of the old ORDER BY.
-const ciSort = (arr) =>
-  arr.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }) || a.localeCompare(b));
+const hasColumn = (columnNames, wanted) => findColumn(columnNames, wanted) !== null;
 
-// The circle/CMP dropdown lists were previously built with
-// SELECT DISTINCT TRIM(col) ... WHERE LOWER(TRIM(circle)) = ? — those wrapper
-// functions disqualify MariaDB's loose index scan, forcing a full table scan
-// on every request. Instead we fetch bare DISTINCT pairs (which loose-scans
-// the (circle, cmp) index) and trim/filter/sort here with identical results.
-async function getDistinctCircleCmpPairs(table, columnNames) {
-  const hasCircle = columnNames.includes("circle");
-  const hasCmp = columnNames.includes("cmp");
-  if (!hasCircle && !hasCmp) return [];
-  const cols = [hasCircle ? "circle" : null, hasCmp ? "cmp" : null].filter(Boolean).join(", ");
-  const rows = await query(`SELECT DISTINCT ${cols} FROM \`${table}\``);
-  return rows.map((r) => ({
-    circle: hasCircle ? sqlTrim(r.circle) : null,
-    cmp: hasCmp ? sqlTrim(r.cmp) : null,
-  }));
-}
-
-const matchesCircle = (pairCircle, wanted) =>
-  String(pairCircle || "").toLowerCase() === sqlTrim(wanted).toLowerCase();
-
-// Distinct non-empty values of `field`, restricted by circle filters (each
-// non-empty filter is equivalent to a stacked LOWER(TRIM(circle)) = ? clause).
-function pickDistinct(pairs, field, circleFilters = []) {
-  const filters = circleFilters.filter(Boolean);
-  const out = new Set();
-  for (const p of pairs) {
-    if (!p[field]) continue;
-    if (filters.length && !filters.every((f) => matchesCircle(p.circle, f))) continue;
-    out.add(p[field]);
+// First of `candidates` that actually exists, in priority order. Returns the
+// real (correctly-cased) column name so it can be used directly in SQL.
+const pickColumn = (columnNames, candidates) => {
+  for (const candidate of candidates) {
+    const match = findColumn(columnNames, candidate);
+    if (match) return match;
   }
-  return ciSort(Array.from(out));
-}
+  return null;
+};
 
+// Single source of truth for every KPI table. Both /tower-uptime and
+// /tower-uptime/analytics read this, so a card and its drill-down popup can
+// never disagree about which column holds the uptime value.
 const SITE_TABLES = [
   {
     name: "AG1",
@@ -107,7 +89,10 @@ const SITE_TABLES = [
     name: "GNB",
     table: "gnb",
     color: "orange",
-    possibleColumns: ["kpi_value", "availability"],
+    // `availability` is GNB's real uptime percentage; kpi_value is only a
+    // fallback for legacy rows. Priority must match the analytics endpoint or
+    // the card and its drill-down popup report different numbers.
+    possibleColumns: ["availability", "kpi_value"],
   },
   {
     name: "OSC",
@@ -123,7 +108,17 @@ const SITE_TABLES = [
   },
 ];
 
-const POSSIBLE_DATE_COLUMNS = ["Date", "date", "created_at", "report_date", "timestamp"];
+const POSSIBLE_DATE_COLUMNS = ["date", "report_date", "created_at", "timestamp"];
+
+// Every "no data" exit from the analytics endpoint returns this exact shape so
+// the client never has to guard for missing keys.
+const EMPTY_ANALYTICS = Object.freeze({
+  chartData: [],
+  summary: { avg: 0, highest: 0, lowest: 0, total: 0, trend: "stable" },
+  circles: [],
+  cmps: [],
+  groupBy: "circle",
+});
 
 // Builds one KPI card. Runs the aggregate query and the cmp-list query in
 // parallel; returns null when the table/columns are missing or errored so the
@@ -135,20 +130,20 @@ async function buildTowerCard(site, columnNames, req) {
       return null;
     }
 
-    const kpiColumn = site.possibleColumns.find((c) => columnNames.includes(c));
+    const kpiColumn = pickColumn(columnNames, site.possibleColumns);
     if (!kpiColumn) {
       console.log(`No KPI column found in ${site.table}`);
       return null;
     }
 
-    const dateColumn = POSSIBLE_DATE_COLUMNS.find((c) => columnNames.includes(c));
+    const dateColumn = pickColumn(columnNames, POSSIBLE_DATE_COLUMNS);
     if (!dateColumn) {
       console.log(`No date column found in ${site.table}`);
       return null;
     }
 
-    const hasCircleColumn = columnNames.includes("circle");
-    const hasCmpColumn = columnNames.includes("cmp");
+    const hasCircleColumn = hasColumn(columnNames, "circle");
+    const hasCmpColumn = hasColumn(columnNames, "cmp");
 
     const selectedCircle = req.query.circle || "";
     const selectedCmp    = req.query.cmp    || "";
@@ -202,7 +197,7 @@ async function buildTowerCard(site, columnNames, req) {
       columnNames,
     });
 
-    const rowsPromise = query(`
+    const rows = await query(`
       SELECT
         DATE_FORMAT(${dateColumn}, '%Y-%m-%d') AS report_date,
         ${entitySelectSql}
@@ -213,12 +208,6 @@ async function buildTowerCard(site, columnNames, req) {
       GROUP BY DATE(${dateColumn})${entityGroupSql}
       ORDER BY DATE(${dateColumn}) ASC${orderEntitySql}
     `, [...rangeParams, ...params]);
-
-    const cmpsPromise = hasCmpColumn
-      ? getDistinctCircleCmpPairs(site.table, columnNames)
-      : Promise.resolve([]);
-
-    const [rows, cmpPairs] = await Promise.all([rowsPromise, cmpsPromise]);
 
     const normalizedRows = rows.map((row) => ({
       ...row,
@@ -246,8 +235,9 @@ async function buildTowerCard(site, columnNames, req) {
     });
 
     const entities = Array.from(entitySet).sort();
-    const cmps = pickDistinct(cmpPairs, "cmp", [selectedCircle]);
 
+    // Headline % is the mean of every (date, entity) cell actually plotted, so
+    // the number on the card is always the average of the chart beside it.
     const allVals = Object.values(rawGrouped).flatMap(day => Object.values(day)).map(Number);
 
     const avg = allVals.length > 0
@@ -259,9 +249,8 @@ async function buildTowerCard(site, columnNames, req) {
       uptime:   `${avg}%`,
       color:    site.color,
       chartData,
-      circles:  entities,  // kept for backward compat
       entities,
-      cmps,
+      dataPoints: allVals.length,
       groupBy:  groupByCmp ? "cmp" : "circle",
     };
   } catch (siteError) {
@@ -299,16 +288,9 @@ router.get("/tower-uptime/analytics", async (req, res) => {
       return res.status(400).json({ message: "kpi param required" });
     }
 
-    const siteConfigs = {
-      AG1:    { table: "ag1",    kpiCols: ["kpi_value", "availability"], markerKpi: true },
-      ENB:    { table: "enb",    kpiCols: ["availability", "kpi_value"] },
-      ESC:    { table: "esc",    kpiCols: ["total_availability", "kpi_value", "availability"] },
-      GNB:    { table: "gnb",    kpiCols: ["availability", "kpi_value"] },
-      OSC:    { table: "osc",    kpiCols: ["availability", "kpi_value"] },
-      HPODSC: { table: "hpodsc", kpiCols: ["total_availability", "kpi_value", "availability"] },
-    };
-
-    const config = siteConfigs[String(kpi).toUpperCase()];
+    // Resolved from the same SITE_TABLES config the cards use, so the popup
+    // can never pick a different uptime column than the card it opened from.
+    const config = SITE_TABLES.find((s) => s.name === String(kpi).toUpperCase());
     if (!config) {
       return res.status(400).json({ message: "Invalid KPI type" });
     }
@@ -318,17 +300,23 @@ router.get("/tower-uptime/analytics", async (req, res) => {
     const schemas = await getKpiTableSchemas(KPI_TABLES);
     const columnNames = schemas.get(table);
     if (!columnNames) {
-      return res.json({ chartData: [], summary: { avg: 0, highest: 0, lowest: 0, total: 0, trend: "stable" }, circles: [], cmps: [] });
+      return res.json(EMPTY_ANALYTICS);
     }
 
-    const kpiColumn = config.kpiCols.find(c => columnNames.includes(c));
+    const kpiColumn = pickColumn(columnNames, config.possibleColumns);
     if (!kpiColumn) {
-      return res.json({ chartData: [], summary: { avg: 0, highest: 0, lowest: 0, total: 0, trend: "stable" }, circles: [], cmps: [] });
+      return res.json(EMPTY_ANALYTICS);
     }
 
-    const hasCircleCol = columnNames.includes("circle");
-    const hasCmpCol   = columnNames.includes("cmp");
-    const dateColumn  = columnNames.includes("date") ? "date" : "created_at";
+    const hasCircleCol = hasColumn(columnNames, "circle");
+    const hasCmpCol    = hasColumn(columnNames, "cmp");
+
+    // Must use the same resolver as the cards — hardcoding "date"/"created_at"
+    // silently produced an Unknown-column error on tables storing it as `Date`.
+    const dateColumn = pickColumn(columnNames, POSSIBLE_DATE_COLUMNS);
+    if (!dateColumn) {
+      return res.json(EMPTY_ANALYTICS);
+    }
     const col = `\`${dateColumn}\``;
 
     // Circles / CMP option lists don't depend on the period — start them
@@ -365,6 +353,17 @@ router.get("/tower-uptime/analytics", async (req, res) => {
     const [{ maxDate } = {}] = await query(
       `SELECT DATE(MAX(${col})) AS maxDate FROM \`${table}\``
     );
+
+    // No dated rows at all — every period clause would degrade to `1=1` and
+    // full-scan the table only to aggregate nothing. Return early instead.
+    if (!maxDate) {
+      const [cr0, mr0] = await Promise.all([circlesPromise, cmpsPromise]);
+      return res.json({
+        ...EMPTY_ANALYTICS,
+        circles: cr0.map(r => r.circle).filter(Boolean),
+        cmps:    mr0.map(r => r.cmp).filter(Boolean),
+      });
+    }
 
     // Build period WHERE clause. Every condition is a sargable half-open
     // range on the bare column (no DATE()/MONTH()/YEAR() wrappers) so the
@@ -569,6 +568,53 @@ router.get("/tower-uptime/analytics", async (req, res) => {
   }
 });
 
+// ─── Dedicated circle list endpoint ──────────────────────────────────────────
+// The circle dropdown used to be derived from whichever cards came back, but
+// selecting a circle flips every card to CMP-grouping — so on a reload with a
+// circle already persisted the list came back empty and the user was stuck
+// unable to see or change their own selection. This endpoint is independent of
+// the current filters, so the list is always complete.
+router.get("/tower-uptime/circles", async (req, res) => {
+  try {
+    const schemas = await getKpiTableSchemas(KPI_TABLES);
+
+    const perTableCircles = await Promise.all(
+      KPI_TABLES.map(async (table) => {
+        try {
+          const columnNames = schemas.get(table);
+          if (!columnNames || !hasColumn(columnNames, "circle")) return [];
+
+          const conditions = ["circle IS NOT NULL", "TRIM(circle) != ''"];
+          const params = [];
+
+          if (!isAllCircle(req.authUser)) {
+            conditions.push("LOWER(TRIM(circle)) = LOWER(TRIM(?))");
+            params.push(req.authUser.circle);
+          }
+
+          const rows = await query(
+            `SELECT DISTINCT TRIM(circle) AS circle FROM \`${table}\` WHERE ${conditions.join(" AND ")}`,
+            params
+          );
+          return rows.map((r) => r.circle).filter(Boolean);
+        } catch (e) {
+          console.log(`Circle fetch for ${table}:`, e.message);
+          return [];
+        }
+      })
+    );
+
+    const circles = Array.from(new Set(perTableCircles.flat())).sort((a, b) =>
+      a.localeCompare(b, undefined, { sensitivity: "base" })
+    );
+
+    res.json({ circles });
+  } catch (error) {
+    console.error("Circle list error:", error.message);
+    res.status(500).json({ circles: [] });
+  }
+});
+
 // ─── Dedicated CMP list endpoint ─────────────────────────────────────────────
 // Returns all unique, real CMP names across every KPI table.
 // When ?circle= is provided, only CMPs belonging to that circle are returned.
@@ -582,9 +628,9 @@ router.get("/tower-uptime/cmps", async (req, res) => {
       KPI_TABLES.map(async (table) => {
         try {
           const columnNames = schemas.get(table);
-          if (!columnNames || !columnNames.includes("cmp")) return [];
+          if (!columnNames || !hasColumn(columnNames, "cmp")) return [];
 
-          const hasCircleCol = columnNames.includes("circle");
+          const hasCircleCol = hasColumn(columnNames, "circle");
           const conditions   = ["cmp IS NOT NULL", "TRIM(cmp) != ''"];
           const params       = [];
 

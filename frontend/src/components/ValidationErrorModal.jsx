@@ -414,9 +414,9 @@ export default function ValidationErrorModal({ isOpen, onClose, errorData }) {
     if (sortConfig.key !== col)
       return <ChevronUp className="w-3 h-3 text-slate-300" />;
     return sortConfig.direction === "asc" ? (
-      <ChevronUp className="w-3 h-3 text-blue-500" />
+      <ChevronUp className="w-3 h-3 text-blue-500 dark:text-blue-400" />
     ) : (
-      <ChevronDown className="w-3 h-3 text-blue-500" />
+      <ChevronDown className="w-3 h-3 text-blue-500 dark:text-blue-400" />
     );
   };
 
@@ -445,7 +445,7 @@ export default function ValidationErrorModal({ isOpen, onClose, errorData }) {
       }}
     >
       <div
-        className="w-full bg-white rounded-2xl shadow-2xl flex flex-col"
+        className="w-full bg-surface rounded-2xl shadow-2xl flex flex-col"
         style={{
           maxWidth: "1400px",
           maxHeight: "95vh",
@@ -453,7 +453,7 @@ export default function ValidationErrorModal({ isOpen, onClose, errorData }) {
         }}
       >
         {/* ── STICKY HEADER ──────────────────────────────────────────────── */}
-        <div className="flex-shrink-0 border-b border-slate-100 rounded-t-2xl px-4 py-4 flex items-start gap-4">
+        <div className="flex-shrink-0 border-b border-border-color rounded-t-2xl px-4 py-4 flex items-start gap-4">
           {/* Icon */}
           <div
             className="flex-shrink-0 flex items-center justify-center rounded-xl"
@@ -468,12 +468,12 @@ export default function ValidationErrorModal({ isOpen, onClose, errorData }) {
 
           {/* Title */}
           <div className="flex-1 min-w-0">
-            <h2 className="text-xl font-semibold text-slate-900 leading-tight">
+            <h2 className="text-xl font-semibold text-text-primary leading-tight">
               File Upload Validation Failed
             </h2>
-            <p className="text-sm text-slate-500 mt-0.5">
+            <p className="text-sm text-text-muted mt-0.5">
               We found validation errors in your uploaded Excel file.{" "}
-              <span className="font-medium text-slate-700">
+              <span className="font-medium text-text-secondary">
                 Please correct the highlighted records and upload again.
               </span>
             </p>
@@ -491,7 +491,7 @@ export default function ValidationErrorModal({ isOpen, onClose, errorData }) {
             </button>
             <button
               onClick={onClose}
-              className="flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+              className="flex items-center justify-center rounded-lg text-text-muted hover:text-text-secondary hover:bg-surface-muted transition-colors"
               style={{ width: 36, height: 36 }}
             >
               <X className="w-5 h-5" />
@@ -509,13 +509,13 @@ export default function ValidationErrorModal({ isOpen, onClose, errorData }) {
               border: "1px solid #E2E8F0",
             }}
           >
-            <span className="text-xs font-semibold uppercase tracking-widest text-slate-500">
+            <span className="text-xs font-semibold uppercase tracking-widest text-text-muted">
               Total Records
             </span>
-            <span className="text-xl font-semibold text-slate-800">
+            <span className="text-xl font-semibold text-text-primary">
               {totalRecords ?? "—"}
             </span>
-            <span className="text-xs text-slate-400">Rows in uploaded file</span>
+            <span className="text-xs text-text-muted">Rows in uploaded file</span>
           </div>
 
           {/* Valid Records */}
@@ -526,15 +526,15 @@ export default function ValidationErrorModal({ isOpen, onClose, errorData }) {
               border: "1px solid #BBF7D0",
             }}
           >
-            <span className="text-xs font-bold uppercase tracking-widest text-emerald-600">
+            <span className="text-xs font-bold uppercase tracking-widest text-emerald-600 dark:text-emerald-400">
               Valid Records
             </span>
-            <span className="text-xl font-semibold text-emerald-700">
+            <span className="text-xl font-semibold text-emerald-700 dark:text-emerald-400">
               {validRecords ?? "—"}
             </span>
             <div className="flex items-center gap-1">
-              <CheckCircle className="w-3 h-3 text-emerald-500" />
-              <span className="text-xs text-emerald-600">Ready to import</span>
+              <CheckCircle className="w-3 h-3 text-emerald-500 dark:text-emerald-400" />
+              <span className="text-xs text-emerald-600 dark:text-emerald-400">Ready to import</span>
             </div>
           </div>
 
@@ -546,15 +546,15 @@ export default function ValidationErrorModal({ isOpen, onClose, errorData }) {
               border: "1px solid #FECDD3",
             }}
           >
-            <span className="text-xs font-bold uppercase tracking-widest text-red-600">
+            <span className="text-xs font-bold uppercase tracking-widest text-red-600 dark:text-red-400">
               Invalid Records
             </span>
-            <span className="text-xl font-semibold text-red-700">
+            <span className="text-xl font-semibold text-red-700 dark:text-red-400">
               {invalidRows}
             </span>
             <div className="flex items-center gap-1">
-              <XCircle className="w-3 h-3 text-red-500" />
-              <span className="text-xs text-red-600">Need correction</span>
+              <XCircle className="w-3 h-3 text-red-500 dark:text-red-400" />
+              <span className="text-xs text-red-600 dark:text-red-400">Need correction</span>
             </div>
           </div>
 
@@ -566,15 +566,15 @@ export default function ValidationErrorModal({ isOpen, onClose, errorData }) {
               border: "1px solid #FDE68A",
             }}
           >
-            <span className="text-xs font-bold uppercase tracking-widest text-amber-600">
+            <span className="text-xs font-bold uppercase tracking-widest text-amber-600 dark:text-amber-400">
               Error Types
             </span>
-            <span className="text-xl font-semibold text-amber-700">
+            <span className="text-xl font-semibold text-amber-700 dark:text-amber-400">
               {groupedErrors.length}
             </span>
             <div className="flex items-center gap-1">
-              <AlertCircle className="w-3 h-3 text-amber-500" />
-              <span className="text-xs text-amber-600">Distinct issues</span>
+              <AlertCircle className="w-3 h-3 text-amber-500 dark:text-amber-400" />
+              <span className="text-xs text-amber-600 dark:text-amber-400">Distinct issues</span>
             </div>
           </div>
         </div>
@@ -590,11 +590,11 @@ export default function ValidationErrorModal({ isOpen, onClose, errorData }) {
             {/* Error Summary */}
             <div>
               <div className="flex items-center gap-2 mb-3">
-                <AlertCircle className="w-4 h-4 text-amber-500" />
-                <h3 className="text-sm font-bold text-slate-800">
+                <AlertCircle className="w-4 h-4 text-amber-500 dark:text-amber-400" />
+                <h3 className="text-sm font-bold text-text-primary">
                   Error Summary
                 </h3>
-                <span className="ml-auto text-xs text-slate-400">
+                <span className="ml-auto text-xs text-text-muted">
                   {groupedErrors.length} error type
                   {groupedErrors.length !== 1 ? "s" : ""}
                 </span>
@@ -604,7 +604,7 @@ export default function ValidationErrorModal({ isOpen, onClose, errorData }) {
                 {groupedErrors.map((group) => (
                   <div
                     key={group.errorType}
-                    className="bg-white rounded-xl p-4 transition-shadow"
+                    className="bg-surface rounded-xl p-4 transition-shadow"
                     style={{
                       border: "1px solid #E2E8F0",
                       boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
@@ -629,7 +629,7 @@ export default function ValidationErrorModal({ isOpen, onClose, errorData }) {
                       <div className="flex-1 min-w-0">
                         {/* Header row */}
                         <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-sm font-semibold text-slate-800">
+                          <span className="text-sm font-semibold text-text-primary">
                             {group.errorType}
                           </span>
                           <span
@@ -646,17 +646,17 @@ export default function ValidationErrorModal({ isOpen, onClose, errorData }) {
                         {/* Details grid */}
                         <div className="mt-2.5 grid grid-cols-3 gap-4 text-xs">
                           <div>
-                            <p className="font-semibold text-slate-400 uppercase tracking-wide text-[10px] mb-1">
+                            <p className="font-semibold text-text-muted uppercase tracking-wide text-[10px] mb-1">
                               Column
                             </p>
-                            <p className="font-semibold text-slate-700">
+                            <p className="font-semibold text-text-secondary">
                               {group.column}
                             </p>
                           </div>
 
                           {group.currentValues.size > 0 && (
                             <div>
-                              <p className="font-semibold text-slate-400 uppercase tracking-wide text-[10px] mb-1">
+                              <p className="font-semibold text-text-muted uppercase tracking-wide text-[10px] mb-1">
                                 Found Values
                               </p>
                               <div className="flex flex-wrap gap-1">
@@ -676,7 +676,7 @@ export default function ValidationErrorModal({ isOpen, onClose, errorData }) {
                                     </span>
                                   ))}
                                 {group.currentValues.size > 4 && (
-                                  <span className="text-slate-400 text-[11px]">
+                                  <span className="text-text-muted text-[11px]">
                                     +{group.currentValues.size - 4} more
                                   </span>
                                 )}
@@ -685,7 +685,7 @@ export default function ValidationErrorModal({ isOpen, onClose, errorData }) {
                           )}
 
                           <div>
-                            <p className="font-semibold text-slate-400 uppercase tracking-wide text-[10px] mb-1">
+                            <p className="font-semibold text-text-muted uppercase tracking-wide text-[10px] mb-1">
                               Expected Values
                             </p>
                             <div className="flex flex-wrap gap-1">
@@ -717,8 +717,8 @@ export default function ValidationErrorModal({ isOpen, onClose, errorData }) {
               {/* Table header controls */}
               <div className="flex items-center gap-3 mb-3">
                 <div className="flex items-center gap-2">
-                  <AlertTriangle className="w-4 h-4 text-red-500" />
-                  <h3 className="text-sm font-bold text-slate-800">
+                  <AlertTriangle className="w-4 h-4 text-red-500 dark:text-red-400" />
+                  <h3 className="text-sm font-bold text-text-primary">
                     Detailed Error Records
                   </h3>
                 </div>
@@ -727,7 +727,7 @@ export default function ValidationErrorModal({ isOpen, onClose, errorData }) {
                   style={{ maxWidth: 300 }}
                 >
                   <Search
-                    className="absolute top-1/2 -translate-y-1/2 text-slate-400"
+                    className="absolute top-1/2 -translate-y-1/2 text-text-muted"
                     style={{ left: 10, width: 14, height: 14 }}
                   />
                   <input
@@ -735,7 +735,7 @@ export default function ValidationErrorModal({ isOpen, onClose, errorData }) {
                     placeholder="Search row, employee, column..."
                     value={searchTerm}
                     onChange={(e) => handleSearch(e.target.value)}
-                    className="w-full py-2 text-xs rounded-lg focus:outline-none focus:ring-2 bg-slate-50"
+                    className="w-full py-2 text-xs rounded-lg focus:outline-none focus:ring-2 bg-surface-muted"
                     style={{
                       paddingLeft: 32,
                       paddingRight: 12,
@@ -744,7 +744,7 @@ export default function ValidationErrorModal({ isOpen, onClose, errorData }) {
                     }}
                   />
                 </div>
-                <span className="text-xs text-slate-400 flex-shrink-0">
+                <span className="text-xs text-text-muted flex-shrink-0">
                   {filteredErrors.length} record
                   {filteredErrors.length !== 1 ? "s" : ""}
                 </span>
@@ -769,7 +769,7 @@ export default function ValidationErrorModal({ isOpen, onClose, errorData }) {
                           <th
                             key={col.key}
                             onClick={() => handleSort(col.key)}
-                            className="text-left font-semibold text-slate-500 uppercase tracking-wide cursor-pointer select-none hover:bg-slate-100 transition-colors"
+                            className="text-left font-semibold text-text-muted uppercase tracking-wide cursor-pointer select-none hover:bg-surface-muted transition-colors"
                             style={{
                               padding: "10px 12px",
                               fontSize: 10,
@@ -783,7 +783,7 @@ export default function ValidationErrorModal({ isOpen, onClose, errorData }) {
                           </th>
                         ))}
                         <th
-                          className="text-left font-semibold text-slate-500 uppercase tracking-wide"
+                          className="text-left font-semibold text-text-muted uppercase tracking-wide"
                           style={{
                             padding: "10px 12px",
                             fontSize: 10,
@@ -799,7 +799,7 @@ export default function ValidationErrorModal({ isOpen, onClose, errorData }) {
                         <tr>
                           <td
                             colSpan={6}
-                            className="text-center text-slate-400"
+                            className="text-center text-text-muted"
                             style={{ padding: "32px 16px" }}
                           >
                             No records match your search
@@ -815,7 +815,7 @@ export default function ValidationErrorModal({ isOpen, onClose, errorData }) {
                               background:
                                 idx % 2 === 0 ? "#FFFFFF" : "#FAFAFA",
                             }}
-                            className="hover:bg-red-50 transition-colors"
+                            className="hover:bg-red-50 hover:dark:bg-red-500/10 transition-colors"
                           >
                             {/* Row Number */}
                             <td style={{ padding: "10px 12px" }}>

@@ -129,16 +129,33 @@ function buildDashboardWhere(req) {
 // Metric buckets driving KPI-card click-through and the "pending"/"deactivated"
 // columns on every summary table — defined once here so the KPI numbers, the
 // summary table columns and the employee drilldown can never disagree.
+//
+// sasSuccess / cobCompleted / pendingApproval / rejected are driven strictly
+// by the uploaded `flow_description` value (the real, authoritative pipeline
+// stage recorded per resource), not derived date columns — per the approved
+// Scrum Dashboard KPI spec. Pending and Rejected are each the combined count
+// of their three CIDC/Level 1/Level 2 sub-stages.
+// Uploaded sheets store placeholder text ("Pending", "0") in the pprj_code
+// column when it hasn't actually been assigned yet — a plain non-blank check
+// would wrongly count those as complete. Same placeholder convention as the
+// Physical Dashboard's pprj_code completion check (backend/routes/physicalRoutes.js).
+const PPRJ_CODE_PENDING_SQL =
+  "(TRIM(COALESCE(pprj_code, '')) IN ('', '0') OR LOWER(TRIM(pprj_code)) LIKE '%pending%')";
+
 const METRIC_CONDITIONS = {
   active: "UPPER(TRIM(status)) = 'ACTIVE'",
   deactivated:
     "(deactivated_date IS NOT NULL OR UPPER(TRIM(status)) LIKE '%DEACTIVAT%')",
   level1Approved: "level1_approved_date IS NOT NULL",
   level2Approved: "level2_approved_date IS NOT NULL",
-  sasSuccess: "sas_success_date IS NOT NULL",
-  cobCompleted: "cob_done_date IS NOT NULL",
+  sasSuccess: "UPPER(TRIM(flow_description)) = 'SAS SUCCESS'",
+  cobCompleted: "UPPER(TRIM(flow_description)) = 'CONFIRM ON BOARD'",
   pendingApproval:
-    "(UPPER(TRIM(status)) = 'ACTIVE' AND level1_approved_date IS NULL)",
+    "UPPER(TRIM(flow_description)) IN ('PENDING WITH CIDC', 'PENDING WITH LEVEL 1', 'PENDING WITH LEVEL 2')",
+  rejected:
+    "UPPER(TRIM(flow_description)) IN ('REJECTED BY CIDC', 'REJECTED BY LEVEL 1', 'REJECTED BY LEVEL 2')",
+  pprjComplete: `NOT ${PPRJ_CODE_PENDING_SQL}`,
+  pprjPending: PPRJ_CODE_PENDING_SQL,
 };
 
 const SUM_CASE = (label, sql) => `SUM(CASE WHEN ${sql} THEN 1 ELSE 0 END) AS ${label}`;
@@ -154,7 +171,7 @@ function buildScopedWhere(req) {
     return { whereSql: `${whereSql} AND upload_batch_id = ?`, params: [...params, batchId] };
   }
 
-  const scopedWhere = `${whereSql} AND upload_batch_id = (${buildLatestScrumBatchSubquery(req)})`;
+  const scopedWhere = `${whereSql} AND upload_batch_id IN (${buildLatestScrumBatchSubquery(req)})`;
   const scopedParams = [...params];
   addLatestBatchParam(req, scopedParams);
   return { whereSql: scopedWhere, params: scopedParams };
@@ -175,7 +192,7 @@ function guardRequestedCircle(req, res) {
 router.get("/filters", async (req, res) => {
   try {
     const base = buildScrumFilterClause(req);
-    const scopedWhere = `${base.whereClause} AND upload_batch_id = (${buildLatestScrumBatchSubquery(req)})`;
+    const scopedWhere = `${base.whereClause} AND upload_batch_id IN (${buildLatestScrumBatchSubquery(req)})`;
     const params = [...base.params];
     addLatestBatchParam(req, params);
 
@@ -225,6 +242,7 @@ router.get("/summary", async (req, res) => {
         ${SUM_CASE("sasSuccess", METRIC_CONDITIONS.sasSuccess)},
         ${SUM_CASE("cobCompleted", METRIC_CONDITIONS.cobCompleted)},
         ${SUM_CASE("pendingApproval", METRIC_CONDITIONS.pendingApproval)},
+        ${SUM_CASE("rejected", METRIC_CONDITIONS.rejected)},
         COUNT(DISTINCT state) AS totalCircles,
         COUNT(DISTINCT maintenance_point) AS totalCmps,
         COUNT(DISTINCT vendor) AS totalVendors,
@@ -263,11 +281,12 @@ router.get("/circle-summary", async (req, res) => {
         COUNT(*) AS total,
         ${SUM_CASE("active", METRIC_CONDITIONS.active)},
         ${SUM_CASE("deactivated", METRIC_CONDITIONS.deactivated)},
-        ${SUM_CASE("level1Approved", METRIC_CONDITIONS.level1Approved)},
-        ${SUM_CASE("level2Approved", METRIC_CONDITIONS.level2Approved)},
+        ${SUM_CASE("pprjComplete", METRIC_CONDITIONS.pprjComplete)},
+        ${SUM_CASE("pprjPending", METRIC_CONDITIONS.pprjPending)},
         ${SUM_CASE("sasSuccess", METRIC_CONDITIONS.sasSuccess)},
         ${SUM_CASE("cobCompleted", METRIC_CONDITIONS.cobCompleted)},
-        ${SUM_CASE("pending", METRIC_CONDITIONS.pendingApproval)}
+        ${SUM_CASE("pending", METRIC_CONDITIONS.pendingApproval)},
+        ${SUM_CASE("rejected", METRIC_CONDITIONS.rejected)}
       FROM scrum_manpower
       ${whereSql}
       GROUP BY state
@@ -292,7 +311,7 @@ router.get("/cmp-summary", async (req, res) => {
         COUNT(*) AS total,
         ${SUM_CASE("active", METRIC_CONDITIONS.active)},
         ${SUM_CASE("deactivated", METRIC_CONDITIONS.deactivated)},
-        ${SUM_CASE("pending", METRIC_CONDITIONS.pendingApproval)}
+        ${SUM_CASE("pprjComplete", METRIC_CONDITIONS.pprjComplete)}
       FROM scrum_manpower
       ${whereSql}
         AND maintenance_point IS NOT NULL AND maintenance_point <> ''
@@ -317,7 +336,7 @@ router.get("/vendor-summary", async (req, res) => {
         COUNT(*) AS total,
         ${SUM_CASE("active", METRIC_CONDITIONS.active)},
         ${SUM_CASE("deactivated", METRIC_CONDITIONS.deactivated)},
-        ${SUM_CASE("pending", METRIC_CONDITIONS.pendingApproval)}
+        ${SUM_CASE("pprjComplete", METRIC_CONDITIONS.pprjComplete)}
       FROM scrum_manpower
       ${whereSql}
         AND vendor IS NOT NULL AND vendor <> ''
@@ -342,7 +361,7 @@ router.get("/job-role-summary", async (req, res) => {
         COUNT(*) AS total,
         ${SUM_CASE("active", METRIC_CONDITIONS.active)},
         ${SUM_CASE("deactivated", METRIC_CONDITIONS.deactivated)},
-        ${SUM_CASE("pending", METRIC_CONDITIONS.pendingApproval)}
+        ${SUM_CASE("pprjComplete", METRIC_CONDITIONS.pprjComplete)}
       FROM scrum_manpower
       ${whereSql}
         AND job_role IS NOT NULL AND job_role <> ''
@@ -470,6 +489,7 @@ function mapEmployeeRow(row) {
     mobile: row.mobile || "",
     email: row.email_id || "",
     status: row.status || "",
+    flowDescription: row.flow_description || "",
     profileUploadDate: row.profile_upload_date || null,
     level1Date: row.level1_approved_date || null,
     level2Date: row.level2_approved_date || null,
@@ -491,7 +511,7 @@ router.get("/employees", async (req, res) => {
         `
         SELECT
           resource_name, jc_sap_id, state, maintenance_point, job_role, vendor,
-          mobile, email_id, status,
+          mobile, email_id, status, flow_description,
           profile_upload_date, level1_approved_date, level2_approved_date,
           sas_success_date, cob_done_date
         FROM scrum_manpower
@@ -535,6 +555,15 @@ async function sendWorkbook(res, workbook, filenamePrefix) {
   res.end(buffer);
 }
 
+// Uploaded `status` values are free text, not a fixed enum — some read
+// literally "Deactivated". This only affects what's printed in the
+// downloaded spreadsheet cell; the DB column, query, and JSON API response
+// (mapEmployeeRow) are untouched.
+function displayStatusForExport(value) {
+  if (!value) return value;
+  return /deactivat/i.test(String(value)) ? "Inactive" : value;
+}
+
 const EMPLOYEE_EXPORT_COLUMNS = [
   { key: "resourceName", label: "Resource Name" },
   { key: "sapId", label: "SAP ID" },
@@ -545,6 +574,7 @@ const EMPLOYEE_EXPORT_COLUMNS = [
   { key: "mobile", label: "Mobile" },
   { key: "email", label: "Email" },
   { key: "status", label: "Status" },
+  { key: "flowDescription", label: "Flow Description" },
   { key: "profileUploadDate", label: "Profile Upload Date" },
   { key: "level1Date", label: "Level 1 Date" },
   { key: "level2Date", label: "Level 2 Date" },
@@ -565,7 +595,7 @@ router.get("/employees/export", async (req, res) => {
       `
       SELECT
         resource_name, jc_sap_id, state, maintenance_point, job_role, vendor,
-        mobile, email_id, status,
+        mobile, email_id, status, flow_description,
         profile_upload_date, level1_approved_date, level2_approved_date,
         sas_success_date, cob_done_date
       FROM scrum_manpower
@@ -588,7 +618,11 @@ router.get("/employees/export", async (req, res) => {
     });
 
     rows.map(mapEmployeeRow).forEach((row) => {
-      worksheet.addRow(EMPLOYEE_EXPORT_COLUMNS.map((c) => row[c.key] ?? ""));
+      worksheet.addRow(
+        EMPLOYEE_EXPORT_COLUMNS.map((c) =>
+          c.key === "status" ? displayStatusForExport(row[c.key]) ?? "" : row[c.key] ?? ""
+        )
+      );
     });
 
     worksheet.columns.forEach((col, index) => {

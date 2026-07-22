@@ -34,15 +34,15 @@ export default function EmployeeEdit() {
   if (loading) {
     return (
       <div className="mx-auto max-w-5xl space-y-4 p-4 sm:p-6">
-        <div className="h-16 animate-pulse rounded-[20px] bg-slate-100" />
-        <div className="h-96 animate-pulse rounded-[20px] bg-slate-100" />
+        <div className="h-16 animate-pulse rounded-[20px] bg-surface-muted" />
+        <div className="h-96 animate-pulse rounded-[20px] bg-surface-muted" />
       </div>
     );
   }
 
   if (!employee) {
     return (
-      <div className="mx-auto max-w-5xl p-6 text-center text-sm text-slate-500">
+      <div className="mx-auto max-w-5xl p-6 text-center text-sm text-text-muted">
         Training record not found.
       </div>
     );
@@ -50,7 +50,7 @@ export default function EmployeeEdit() {
 
   if (employee.status === "Converted") {
     return (
-      <div className="mx-auto max-w-5xl p-6 text-center text-sm text-slate-500">
+      <div className="mx-auto max-w-5xl p-6 text-center text-sm text-text-muted">
         This record has been converted to an employee and can no longer be edited.
       </div>
     );
@@ -62,16 +62,16 @@ export default function EmployeeEdit() {
         <button
           type="button"
           onClick={() => navigate(-1)}
-          className="flex h-9 w-9 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50"
+          className="flex h-9 w-9 items-center justify-center rounded-2xl border border-border-color bg-surface text-text-muted transition hover:bg-surface-muted"
         >
           <ArrowLeft className="h-4 w-4" />
         </button>
         <div>
-          <h1 className="flex items-center gap-2 text-xl font-semibold tracking-tight text-slate-900">
-            <PencilLine className="h-5 w-5 text-indigo-500" />
+          <h1 className="flex items-center gap-2 text-xl font-semibold tracking-tight text-text-primary">
+            <PencilLine className="h-5 w-5 text-indigo-500 dark:text-indigo-400" />
             Edit — {employee.full_name}
           </h1>
-          <p className="mt-0.5 text-sm text-slate-500">
+          <p className="mt-0.5 text-sm text-text-muted">
             All changes are recorded in the activity log.
           </p>
         </div>

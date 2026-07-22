@@ -801,11 +801,26 @@ async function getFiberRowsByUploadId(uploadId, authUser) {
   );
 }
 
-async function getLatestFiberSummary(authUser) {
+// `options.circles` is an optional circle selection (e.g. the Dashboard's
+// circle filter). It is layered on top of the caller's own circle permission
+// as an intersection, so it can only ever narrow what a user may see.
+async function getLatestFiberSummary(authUser, options = {}) {
   const latestUpload = await getLatestFiberUpload(authUser);
   const filters = [];
   const params = [];
   appendFiberCircleFilter(filters, params, authUser, "fi.circle");
+
+  const selectedCircles = (options.circles || [])
+    .map((value) => String(value || "").trim())
+    .filter(Boolean);
+
+  if (selectedCircles.length) {
+    filters.push(
+      `LOWER(TRIM(fi.circle)) IN (${selectedCircles.map(() => "?").join(",")})`
+    );
+    params.push(...selectedCircles.map((value) => value.toLowerCase()));
+  }
+
   const scopedCircleSql = filters.length ? `AND ${filters.join(" AND ")}` : "";
 
   const rows = await query(

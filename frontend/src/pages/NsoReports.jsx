@@ -449,7 +449,7 @@ const handleDownload = async (row) => {
   return (
    <div className="w-full pb-24">
     <div className="mx-auto w-full space-y-2">
-     <section className="relative overflow-hidden rounded-[18px] border border-slate-200 px-4 py-3
+     <section className="relative overflow-hidden rounded-[18px] border border-border-color px-4 py-3
       bg-[radial-gradient(circle_at_top_left,_rgba(14,165,233,0.2),_transparent_30%),linear-gradient(135deg,#f8fafc_0%,#eef6ff_45%,#fff8ed_100%)]">
      <div className="absolute right-0 top-0 h-40 w-40 rounded-full bg-cyan-300/20 blur-3xl" />
       <div className="absolute bottom-0 left-1/3 h-32 w-32 rounded-full bg-amber-200/30 blur-3xl" />
@@ -457,18 +457,18 @@ const handleDownload = async (row) => {
      <div className="relative flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
       <div className="max-w-3xl">
       
-        <h1 className="text-sm font-semibold tracking-[-0.03em] text-slate-900 md:text-lg">
+        <h1 className="text-sm font-semibold tracking-[-0.03em] text-text-primary md:text-lg">
                 NSO reports with a real operations workflow
         </h1>
-          <p className=" max-w-2xl text-sm leading-6 text-slate-600 md:text-md">
+          <p className=" max-w-2xl text-sm leading-6 text-text-secondary md:text-md">
                 Upload, search, export, and manage NSO activity in one place.
           </p>
       </div>
 
        <div className="flex flex-wrap gap-3">
          <button onClick={handleExport}
-          className="inline-flex items-center gap-2 rounded-2xl border border-slate-300 bg-white/85
-           px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-white">
+          className="inline-flex items-center gap-2 rounded-2xl border border-border-strong bg-surface/85
+           px-4 py-2 text-sm font-medium text-text-secondary transition hover:bg-surface">
             <Download size={16} />
                Export CSV
          </button>
@@ -488,20 +488,20 @@ const handleDownload = async (row) => {
      const Icon = stat.icon;
     return (
      <div key={stat.label}
-       className="rounded-[22px] border border-slate-200 bg-white px-4 py-2
+       className="rounded-[22px] border border-border-color bg-surface px-4 py-2
         ">
         <div className=" flex items-center justify-between">
-         <div className="text-sm font-medium text-slate-500">
+         <div className="text-sm font-medium text-text-muted">
              {stat.label}
          </div>
-        <div className="flex h-8 w-8 items-center justify-center rounded-2xl bg-slate-100 text-slate-700">
+        <div className="flex h-8 w-8 items-center justify-center rounded-2xl bg-surface-muted text-text-secondary">
              <Icon size={14} />
         </div>
       </div>
-    <div className="text-lg font-semibold tracking-[-0.03em] text-slate-900">
+    <div className="text-lg font-semibold tracking-[-0.03em] text-text-primary">
             {stat.value}
       </div>
-     <div className="mt-1 text-xs uppercase tracking-[0.1em] text-slate-400">
+     <div className="mt-1 text-xs uppercase tracking-[0.1em] text-text-muted">
           {stat.helper}
       </div>
      </div>
@@ -510,17 +510,17 @@ const handleDownload = async (row) => {
  </div>
 
     {/* circle wise count */}
-  <div className="rounded-[22px] border border-slate-200 bg-white px-4 py-3">
+  <div className="rounded-[22px] border border-border-color bg-surface px-4 py-3">
 
   <div className="mb-2 flex items-center">
-    <h2 className="text-sm font-medium text-slate-800 tracking-[-0.03em]">
+    <h2 className="text-sm font-medium text-text-primary tracking-[-0.03em]">
       Circle Wise Fiber Cut
     </h2>
-   <div className="ml-auto mr-6 text-[11px] font-semibold uppercase tracking-[0.18em] text-cyan-600">
+   <div className="ml-auto mr-6 text-[11px] font-semibold uppercase tracking-[0.18em] text-cyan-600 dark:text-cyan-400">
   Current Month - MTD
 </div>
 
-<div className="rounded-xl bg-cyan-50 border border-cyan-100 px-3 py-1 text-xs font-semibold text-cyan-700">
+<div className="rounded-xl bg-cyan-50 dark:bg-cyan-500/10 border border-cyan-100 dark:border-cyan-500/20 px-3 py-1 text-xs font-semibold text-cyan-700 dark:text-cyan-400">
 
   {
     new Date(
@@ -551,16 +551,16 @@ const handleDownload = async (row) => {
 
     <div
       key={index}
-      className="rounded-xl border border-slate-100 bg-gradient-to-br from-slate-50 to-white px-3 py-2"
+      className="rounded-xl border border-border-color bg-gradient-to-br from-surface-muted to-white px-3 py-2"
     >
 
-   <div className="flex items-center justify-between text-sm font-medium text-slate-500">
+   <div className="flex items-center justify-between text-sm font-medium text-text-muted">
   
   <span>
     {item.circle}
   </span>
 
-  <span className="font-semibold text-slate-900">
+  <span className="font-semibold text-text-primary">
     {item.total}
   </span>
 
@@ -576,25 +576,25 @@ const handleDownload = async (row) => {
 
         </section>
 
-        <section className="rounded-[18px] border border-slate-200 bg-white/90 backdrop-blur-xl p-2 md:p-2">
+        <section className="rounded-[18px] border border-border-color bg-surface/90 backdrop-blur-xl p-2 md:p-2">
 
           <div className="flex flex-wrap items-center gap-3">
             <label className="relative block">
               <Search
                 size={16}
-                className="pointer-events-none absolute left-4 top-[14px] text-slate-400"
+                className="pointer-events-none absolute left-4 top-[14px] text-text-muted"
               />
               <input
                 type="text"
                 value={searchTerm}
                 onChange={(event) => setSearchTerm(event.target.value)}
                 placeholder="File name, site, report, uploader, date"
-                className="h-10 w-[580px] rounded-2xl border border-slate-200 bg-slate-50 pl-10 pr-4
-                 text-sm text-slate-800 outline-none transition focus:border-cyan-400 focus:bg-white"
+                className="h-10 w-[580px] rounded-2xl border border-border-color bg-surface-muted pl-10 pr-4
+                 text-sm text-text-primary outline-none transition focus:border-cyan-400 focus:bg-surface"
               />
             </label>
 
-            <div className="w-[220px] rounded-lg border border-slate-200">
+            <div className="w-[220px] rounded-lg border border-border-color">
               <PremiumDatePicker
                 value={filterDate}
                 onChange={setFilterDate}
@@ -606,7 +606,7 @@ const handleDownload = async (row) => {
               <button
                 onClick={handleBulkDownload}
                 disabled={!selectedIds.length}
-                className="inline-flex items-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+                className="inline-flex items-center gap-2 rounded-2xl border border-emerald-200 dark:border-emerald-500/20 bg-emerald-50 dark:bg-emerald-500/10 px-4 py-2 text-sm font-medium text-emerald-700 dark:text-emerald-400 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Download size={14} />
                 Download ({selectedIds.length})
@@ -614,7 +614,7 @@ const handleDownload = async (row) => {
               <button
                 onClick={handleBulkDelete}
                 disabled={!selectedIds.length}
-                className="inline-flex items-center gap-2 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-medium text-rose-700 disabled:cursor-not-allowed disabled:opacity-50"
+                className="inline-flex items-center gap-2 rounded-2xl border border-rose-200 dark:border-rose-500/20 bg-rose-50 dark:bg-rose-500/10 px-4 py-2 text-sm font-medium text-rose-700 dark:text-rose-400 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Trash2 size={14} />
                 Delete ({selectedIds.length})
@@ -629,7 +629,7 @@ const handleDownload = async (row) => {
                   setFilterDate("");
                   
                 }}
-                className="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+                className="inline-flex items-center justify-center rounded-2xl border border-border-color bg-surface px-4 py-2 text-sm font-medium text-text-secondary transition hover:bg-surface-muted"
               >
                 Reset
               </button>
@@ -638,20 +638,20 @@ const handleDownload = async (row) => {
         </section>
 
     
-        <section className="overflow-hidden rounded-[22px] border border-slate-200 bg-white shadow-[0_20px_50px_rgba(15,23,42,0.05)]">
-          <div className="flex flex-col gap-3 border-b border-slate-200 px-5 py-3 md:flex-row md:items-center md:justify-between">
+        <section className="overflow-hidden rounded-[22px] border border-border-color bg-surface shadow-[0_20px_50px_rgba(15,23,42,0.05)]">
+          <div className="flex flex-col gap-3 border-b border-border-color px-5 py-3 md:flex-row md:items-center md:justify-between">
             <div>
-              <h2 className="text-sm font-semibold text-slate-900">
+              <h2 className="text-sm font-semibold text-text-primary">
                 NSO Upload Register
               </h2>
             </div>
 
-            <div className="flex items-center gap-3 text-sm text-slate-500">
+            <div className="flex items-center gap-3 text-sm text-text-muted">
               <span>Rows per page</span>
               <select
                 value={pageSize}
                 onChange={(event) => setPageSize(Number(event.target.value))}
-                className="h-6 rounded-xl border border-slate-200 bg-slate-50 px-2 text-sm text-slate-700"
+                className="h-6 rounded-xl border border-border-color bg-surface-muted px-2 text-sm text-text-secondary"
               >
                 {[10, 20, 50, 100].map((size) => (
                   <option key={size} value={size}>
@@ -664,7 +664,7 @@ const handleDownload = async (row) => {
 
           <div className="overflow-x-auto">
             <table className="min-w-full text-left text-sm">
-              <thead className="bg-slate-50 text-slate-500">
+              <thead className="bg-surface-muted text-text-muted">
                 <tr>
                   <th className="px-5 py-4">
                     <input
@@ -693,7 +693,7 @@ const handleDownload = async (row) => {
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan="10" className="px-5 py-12 text-center text-slate-400">
+                    <td colSpan="10" className="px-5 py-12 text-center text-text-muted">
                       Loading NSO reports...
                     </td>
                   </tr>
@@ -701,7 +701,7 @@ const handleDownload = async (row) => {
                   paginatedRows.map((row) => (
                     <tr
                       key={row.id}
-                      className="border-t border-slate-100 transition hover:bg-slate-50/80"
+                      className="border-t border-border-color transition hover:bg-surface-muted/80"
                     >
                       <td className="px-5 py-4">
                         <input
@@ -716,28 +716,28 @@ const handleDownload = async (row) => {
                           }
                         />
                       </td>
-                      <td className="px-5 py-4 text-slate-700">
+                      <td className="px-5 py-4 text-text-secondary">
                         {formatDateOnly(row.report_date)}
                       </td>
                       
-                      <td className="px-5 py-4 text-slate-700">
+                      <td className="px-5 py-4 text-text-secondary">
                         {row.uploaded_by || "-"}
                       </td>
-                      <td className="max-w-[220px] px-5 py-4 text-slate-700">
+                      <td className="max-w-[220px] px-5 py-4 text-text-secondary">
                         <div className="truncate" title={row.original_name || row.file_name}>
                           {row.original_name || row.file_name || "-"}
                         </div>
                        
                       </td>
 
-                      <td className="px-5 py-4 text-slate-700">
+                      <td className="px-5 py-4 text-text-secondary">
                         {formatTimestamp(row.uploaded_at)}
                       </td>
                       <td className="px-5 py-4">
                         <div className="ml-auto flex flex-wrap gap-3">
                           <button
                             onClick={() => handleDownload(row)}
-                            className="inline-flex items-center gap-1 text-sm font-medium text-cyan-700 hover:text-cyan-900"
+                            className="inline-flex items-center gap-1 text-sm font-medium text-cyan-700 dark:text-cyan-400 hover:text-cyan-900"
                            
                             title="Download"
                           >
@@ -746,14 +746,14 @@ const handleDownload = async (row) => {
                           </button>
                           <button
                             onClick={() => openEditModal(row)}
-                            className="inline-flex items-center gap-1 text-sm font-medium text-emerald-700 hover:text-emerald-900"
+                            className="inline-flex items-center gap-1 text-sm font-medium text-emerald-700 dark:text-emerald-400 hover:text-emerald-900"
                           >
                             <Pencil size={15} />
                             Edit
                           </button>
                           <button
                             onClick={() => handleDelete(row.id)}
-                            className="inline-flex items-center gap-1 text-sm font-medium text-rose-700 hover:text-rose-900"
+                            className="inline-flex items-center gap-1 text-sm font-medium text-rose-700 dark:text-rose-400 hover:text-rose-900"
                           >
                             <Trash2 size={15} />
                             Delete
@@ -766,10 +766,10 @@ const handleDownload = async (row) => {
                   <tr>
                     <td colSpan="10" className="px-5 py-14 text-center">
                       <div className="mx-auto max-w-md">
-                        <div className="text-lg font-semibold text-slate-800">
+                        <div className="text-lg font-semibold text-text-primary">
                           No NSO reports found
                         </div>
-                        <div className="mt-2 text-sm text-slate-500">
+                        <div className="mt-2 text-sm text-text-muted">
                           Try adjusting your filters or upload a new file to
                           start building the register.
                         </div>
@@ -781,14 +781,14 @@ const handleDownload = async (row) => {
             </table>
           </div>
 
-          <div className="flex flex-col gap-4 border-t border-slate-200 px-5 py-4 md:flex-row md:items-center md:justify-between">
-            <div className="text-sm text-slate-500">
+          <div className="flex flex-col gap-4 border-t border-border-color px-5 py-4 md:flex-row md:items-center md:justify-between">
+            <div className="text-sm text-text-muted">
               Showing{" "}
-              <span className="font-semibold text-slate-800">
+              <span className="font-semibold text-text-primary">
                 {paginatedRows.length}
               </span>{" "}
               of{" "}
-              <span className="font-semibold text-slate-800">
+              <span className="font-semibold text-text-primary">
                 {filteredRows.length}
               </span>{" "}
               filtered reports
@@ -798,11 +798,11 @@ const handleDownload = async (row) => {
               <button
                 onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
                 disabled={currentPage === 1}
-                className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-xl border border-border-color px-4 py-2 text-sm font-medium text-text-secondary disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Prev
               </button>
-              <div className="text-sm text-slate-600">
+              <div className="text-sm text-text-secondary">
                 Page {currentPage} of {totalPages}
               </div>
               <button
@@ -810,7 +810,7 @@ const handleDownload = async (row) => {
                   setCurrentPage((prev) => Math.min(totalPages, prev + 1))
                 }
                 disabled={currentPage === totalPages}
-                className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-xl border border-border-color px-4 py-2 text-sm font-medium text-text-secondary disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Next
               </button>
@@ -820,14 +820,14 @@ const handleDownload = async (row) => {
       </div>
 
       {modalOpen ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 px-4 backdrop-blur-sm">
-          <div className="w-full max-w-3xl rounded-[30px] border border-slate-200 bg-white shadow-[0_30px_80px_rgba(15,23,42,0.2)]">
-            <div className="flex items-start justify-between border-b border-slate-200 px-6 py-5">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-overlay/40 px-4 backdrop-blur-sm">
+          <div className="w-full max-w-3xl rounded-[30px] border border-border-color bg-surface shadow-[0_30px_80px_rgba(15,23,42,0.2)]">
+            <div className="flex items-start justify-between border-b border-border-color px-6 py-5">
               <div>
-                <h2 className="mt-1 text-xl font-semibold tracking-[-0.03em] text-slate-900">
+                <h2 className="mt-1 text-xl font-semibold tracking-[-0.03em] text-text-primary">
                   {editingId ? "Edit NSO report" : "Upload NSO report"}
                 </h2>
-                <p className="mt-1 text-sm text-slate-500">
+                <p className="mt-1 text-sm text-text-muted">
                   {editingId
                     ? "Update metadata for an existing report."
                     : "Add a fresh workbook and capture its tracking details."}
@@ -839,7 +839,7 @@ const handleDownload = async (row) => {
                   setModalOpen(false);
                   resetForm();
                 }}
-                className="flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-200 text-slate-500 transition hover:bg-slate-50 hover:text-slate-700"
+                className="flex h-10 w-10 items-center justify-center rounded-2xl border border-border-color text-text-muted transition hover:bg-surface-muted hover:text-text-secondary"
               >
                 <X size={18} />
               </button>
@@ -850,8 +850,8 @@ const handleDownload = async (row) => {
                 <div
                   className={`rounded-2xl px-4 py-3 text-sm ${
                     messageType === "error"
-                      ? "border border-rose-200 bg-rose-50 text-rose-700"
-                      : "border border-emerald-200 bg-emerald-50 text-emerald-700"
+                      ? "border border-rose-200 dark:border-rose-500/20 bg-rose-50 dark:bg-rose-500/10 text-rose-700 dark:text-rose-400"
+                      : "border border-emerald-200 dark:border-emerald-500/20 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
                   }`}
                 >
                   {message}
@@ -860,7 +860,7 @@ const handleDownload = async (row) => {
 
               <div className="grid grid-cols-2 gap-5 md:grid-cols-2">
                 <div>
-                  <label className="mb-2 block text-xs font-medium uppercase tracking-[0.2em] text-slate-400">
+                  <label className="mb-2 block text-xs font-medium uppercase tracking-[0.2em] text-text-muted">
                     Report Date
                   </label>
                  <PremiumDatePicker
@@ -885,7 +885,7 @@ const handleDownload = async (row) => {
                 </div>
 
                 <label className="block">
-                  <span className="mb-2 block text-xs font-medium uppercase tracking-[0.2em] text-slate-400">
+                  <span className="mb-2 block text-xs font-medium uppercase tracking-[0.2em] text-text-muted">
                     Uploaded By
                   </span>
                   <input
@@ -898,23 +898,23 @@ const handleDownload = async (row) => {
                       }))
                     }
                     placeholder="Team member name"
-                    className="h-10 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm text-slate-800 outline-none transition focus:border-cyan-400 focus:bg-white"
+                    className="h-10 w-full rounded-2xl border border-border-color bg-surface-muted px-4 text-sm text-text-primary outline-none transition focus:border-cyan-400 focus:bg-surface"
                   />
                 </label>
 
                 {!editingId ? (
                   <label className="block md:col-span-2">
-                    <span className="mb-2 block text-xs font-medium uppercase tracking-[0.2em] text-slate-400">
+                    <span className="mb-2 block text-xs font-medium uppercase tracking-[0.2em] text-text-muted">
                       Workbook File
                     </span>
-                    <div className="rounded-[24px] border border-dashed border-slate-300 bg-slate-50 p-4">
+                    <div className="rounded-[24px] border border-dashed border-border-strong bg-surface-muted p-4">
                       <input
                         type="file"
                         accept=".xlsx,.xls,.xlsb,.csv"
                         onChange={handleFileChange}
-                        className="block w-full text-sm text-slate-700 file:mr-4 file:rounded-xl file:border-0 file:bg-slate-900 file:px-4 file:py-2.5 file:text-white"
+                        className="block w-full text-sm text-text-secondary file:mr-4 file:rounded-xl file:border-0 file:bg-slate-900 file:px-4 file:py-2.5 file:text-white"
                       />
-                      <div className="mt-3 text-sm text-slate-500">
+                      <div className="mt-3 text-sm text-text-muted">
                         {form.file
                           ? form.file.name
                           : "Supported formats: .xlsx, .xls, .xlsb, .csv"}
@@ -925,13 +925,13 @@ const handleDownload = async (row) => {
               </div>
             </div>
 
-            <div className="flex items-center justify-end gap-3 border-t border-slate-200 px-6 py-5">
+            <div className="flex items-center justify-end gap-3 border-t border-border-color px-6 py-5">
               <button
                 onClick={() => {
                   setModalOpen(false);
                   resetForm();
                 }}
-                className="rounded-2xl border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+                className="rounded-2xl border border-border-color px-4 py-2.5 text-sm font-medium text-text-secondary transition hover:bg-surface-muted"
               >
                 Cancel
               </button>

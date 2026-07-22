@@ -63,45 +63,45 @@ const statCardConfig = [
     label: "Admin",
     icon: UserCog,
     tint:
-      "from-blue-50 via-white to-blue-50/70 border-blue-100/80 text-blue-700",
-    badge: "bg-blue-100/80 text-blue-700",
-    valueClass: "text-blue-700",
+      "from-blue-50 via-white to-blue-50/70 border-blue-100 dark:border-blue-500/20/80 text-blue-700 dark:text-blue-400",
+    badge: "bg-blue-100 dark:bg-blue-500/15/80 text-blue-700 dark:text-blue-400",
+    valueClass: "text-blue-700 dark:text-blue-400",
   },
   {
     key: "utility",
     label: "Utility & ISP",
     icon: Workflow,
     tint:
-      "from-violet-50 via-white to-violet-50/70 border-violet-100/80 text-violet-700",
-    badge: "bg-violet-100/80 text-violet-700",
-    valueClass: "text-violet-700",
+      "from-violet-50 via-white to-violet-50/70 border-violet-100 dark:border-violet-500/20/80 text-violet-700 dark:text-violet-400",
+    badge: "bg-violet-100 dark:bg-violet-500/15/80 text-violet-700 dark:text-violet-400",
+    valueClass: "text-violet-700 dark:text-violet-400",
   },
  {
   key: "fiber",
   label: "Fiber",
   icon: Users,
   tint:
-    "from-cyan-50 via-white to-sky-50/70 border-cyan-100/80 text-cyan-700",
-  badge: "bg-cyan-100/80 text-cyan-700",
-  valueClass: "text-cyan-700",
+    "from-cyan-50 via-white to-sky-50/70 border-cyan-100 dark:border-cyan-500/20/80 text-cyan-700 dark:text-cyan-400",
+  badge: "bg-cyan-100 dark:bg-cyan-500/15/80 text-cyan-700 dark:text-cyan-400",
+  valueClass: "text-cyan-700 dark:text-cyan-400",
 },
 {
   key: "fttx",
   label: "FTTX",
   icon: BadgeCheck,
   tint:
-    "from-indigo-50 via-white to-blue-50/70 border-indigo-100/80 text-indigo-700",
-  badge: "bg-indigo-100/80 text-indigo-700",
-  valueClass: "text-indigo-700",
+    "from-indigo-50 via-white to-blue-50/70 border-indigo-100 dark:border-indigo-500/20/80 text-indigo-700 dark:text-indigo-400",
+  badge: "bg-indigo-100 dark:bg-indigo-500/15/80 text-indigo-700 dark:text-indigo-400",
+  valueClass: "text-indigo-700 dark:text-indigo-400",
 },
   {
     key: "fttxPo",
     label: "FTTX PO Based",
     icon: BarChart3,
     tint:
-      "from-emerald-50 via-white to-teal-50/70 border-emerald-100/80 text-emerald-700",
-    badge: "bg-emerald-100/80 text-emerald-700",
-    valueClass: "text-emerald-700",
+      "from-emerald-50 via-white to-teal-50/70 border-emerald-100 dark:border-emerald-500/20/80 text-emerald-700 dark:text-emerald-400",
+    badge: "bg-emerald-100 dark:bg-emerald-500/15/80 text-emerald-700 dark:text-emerald-400",
+    valueClass: "text-emerald-700 dark:text-emerald-400",
   },
 
 ];
@@ -855,7 +855,7 @@ function HrDashboard() {
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(255,255,255,0.22),_transparent_28%),radial-gradient(circle_at_bottom_right,_rgba(255,255,255,0.14),_transparent_24%)]" />
         <div className="relative flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="flex items-start gap-4">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[18px] border border-white/20 bg-white/14 shadow-[inset_0_1px_0_rgba(255,255,255,0.2)] backdrop-blur-xl">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[18px] border border-white/20 bg-surface/14 shadow-[inset_0_1px_0_rgba(255,255,255,0.2)] backdrop-blur-xl">
               <Users className="h-4 w-4" />
             </div>
 
@@ -874,7 +874,7 @@ function HrDashboard() {
  {/* 
           <button
             type="button"
-            className="inline-flex items-center justify-between gap-3 rounded-[18px] border border-white/10 bg-white/12 px-4 py-2 text-sm font-semibold text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.16)] backdrop-blur-xl md:min-w-[250px]"
+            className="inline-flex items-center justify-between gap-3 rounded-[18px] border border-white/10 bg-surface/12 px-4 py-2 text-sm font-semibold text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.16)] backdrop-blur-xl md:min-w-[250px]"
           >
             <span className="flex items-center gap-3">
               <CalendarRange className="h-3 w-3" />
@@ -890,16 +890,16 @@ function HrDashboard() {
 
 
 
-      <div className="rounded-[12px] border border-slate-200/70 bg-white/90 p-1 mt-1 backdrop-blur-xl">
+      <div className="rounded-[12px] border border-border-color/70 bg-surface/90 p-1 mt-1 backdrop-blur-xl">
         <div className="grid grid-cols-2 gap-2 md:grid-cols-4 xl:grid-cols-[1.15fr_1fr_1fr_0.9fr_0.9fr_0.9fr]">
           <div className="relative">
-            <Search className="pointer-events-none absolute left-5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <Search className="pointer-events-none absolute left-5 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted" />
             <input
               type="text"
               placeholder="Search anything..."
               value={searchText}
               onChange={(event) => setSearchText(event.target.value)}
-              className="h-8 w-full rounded-[12px] border border-slate-200 bg-[linear-gradient(180deg,_#ffffff_0%,_#f8fafc_100%)] pl-12 pr-4 text-[13px] text-slate-700 outline-none transition focus:border-indigo-300 focus:ring-4 focus:ring-indigo-50"
+              className="h-8 w-full rounded-[12px] border border-border-color bg-[linear-gradient(180deg,_#ffffff_0%,_#f8fafc_100%)] pl-12 pr-4 text-[13px] text-text-secondary outline-none transition focus:border-indigo-300 focus:dark:border-indigo-500/30 focus:ring-4 focus:ring-indigo-50"
             />
           </div>
 
@@ -907,7 +907,7 @@ function HrDashboard() {
             value={selectedCircle}
             onChange={(event) => setSelectedCircle(event.target.value)}
             disabled={!isAllCircleUser}
-            className="h-8 w-full rounded-[12px] border border-slate-200 bg-[linear-gradient(180deg,_#ffffff_0%,_#f8fafc_100%)] px-4 text-[13px] text-slate-700 outline-none transition focus:border-indigo-300 focus:ring-4 focus:ring-indigo-50 disabled:cursor-not-allowed disabled:opacity-70"
+            className="h-8 w-full rounded-[12px] border border-border-color bg-[linear-gradient(180deg,_#ffffff_0%,_#f8fafc_100%)] px-4 text-[13px] text-text-secondary outline-none transition focus:border-indigo-300 focus:dark:border-indigo-500/30 focus:ring-4 focus:ring-indigo-50 disabled:cursor-not-allowed disabled:opacity-70"
           >
             {isAllCircleUser && <option value="">Select Circle</option>}
             {allowedCircleLabels.map((circleLabel) => (
@@ -920,7 +920,7 @@ function HrDashboard() {
           <select
             value={selectedCmp}
             onChange={(event) => setSelectedCmp(event.target.value)}
-            className="h-8 w-full rounded-[12px] border border-slate-200 bg-[linear-gradient(180deg,_#ffffff_0%,_#f8fafc_100%)] px-4 text-[13px] text-slate-700 outline-none transition focus:border-indigo-300 focus:ring-4 focus:ring-indigo-50"
+            className="h-8 w-full rounded-[12px] border border-border-color bg-[linear-gradient(180deg,_#ffffff_0%,_#f8fafc_100%)] px-4 text-[13px] text-text-secondary outline-none transition focus:border-indigo-300 focus:dark:border-indigo-500/30 focus:ring-4 focus:ring-indigo-50"
           >
             <option value="">Select CMP</option>
             {filteredCmpOptions.map((cmp) => (
@@ -963,7 +963,7 @@ function HrDashboard() {
           subtitle="Requirement vs Available Manpower"
           description="Real-time view of physical workforce requirements, availability, and deployment gaps."
           gradient="from-sky-500 via-cyan-500 to-teal-400"
-          accent="text-cyan-600"
+          accent="text-cyan-600 dark:text-cyan-400"
           groups={filteredGroups}
           columns={physicalDesignationColumns}
           countLookup={activeCountLookup}
@@ -989,7 +989,7 @@ function HrDashboard() {
           subtitle="Overview Scrum Manpower"
           description="Real-time view of scrum workforce requirements, availability, and deployment gaps."
           gradient="from-violet-600 via-fuchsia-500 to-pink-500"
-          accent="text-violet-600"
+          accent="text-violet-600 dark:text-violet-400"
           groups={filteredGroups}
           columns={scrumDesignationColumns}
           countLookup={scrumActiveCountLookup}
@@ -1001,28 +1001,28 @@ function HrDashboard() {
         <InfoCard
           icon={Lightbulb}
           title="How to Read"
-          accent="text-blue-600"
-          iconBg="bg-blue-50 text-blue-600"
+          accent="text-blue-600 dark:text-blue-400"
+          iconBg="bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400"
           description="R: Requirement, A: Available, G: Gap"
           subText={
        <>
-    <span className="font-semibold text-slate-700">
+    <span className="font-semibold text-text-secondary">
       A Column Format →
     </span>{" "}
 
-    <span className="font-semibold text-slate-900">
+    <span className="font-semibold text-text-primary">
       Total Available
     </span>
 
     {" / "}
 
-    <span className="font-semibold text-blue-600">
+    <span className="font-semibold text-blue-600 dark:text-blue-400">
       P = Physical Count
     </span>
 
     {" / "}
 
-    <span className="font-semibold text-emerald-600">
+    <span className="font-semibold text-emerald-600 dark:text-emerald-400">
       NJ = New Joining Count
     </span>
   </>
@@ -1032,8 +1032,8 @@ function HrDashboard() {
         <InfoCard
           icon={BriefcaseBusiness}
           title="Physical Requirement"
-          accent="text-slate-900"
-          iconBg="bg-slate-100 text-slate-700"
+          accent="text-text-primary"
+          iconBg="bg-surface-muted text-text-secondary"
           description="Field staff required for execution, installation and maintenance activities."
           subText={`Active manpower tracked across ${circles.length || visibleCmpGroups.length} circle groups.`}
         />
@@ -1041,8 +1041,8 @@ function HrDashboard() {
         <InfoCard
           icon={Layers3}
           title="Scrum Manpower"
-          accent="text-violet-700"
-          iconBg="bg-violet-50 text-violet-600"
+          accent="text-violet-700 dark:text-violet-400"
+          iconBg="bg-violet-50 dark:bg-violet-500/10 text-violet-600 dark:text-violet-400"
           description="Project management, coordination and support staff for project delivery."
           subText={`Current scrum count snapshot: ${scrumCount.total || 0} total, ${scrumCount.active || 0} active.`}
         />
@@ -1050,8 +1050,8 @@ function HrDashboard() {
         <InfoCard
           icon={BarChart3}
           title="Key Insights"
-          accent="text-emerald-700"
-          iconBg="bg-emerald-50 text-emerald-600"
+          accent="text-emerald-700 dark:text-emerald-400"
+          iconBg="bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
           description="Positive gap shown in red indicates shortfall. Lower or zero gap reflects healthier coverage."
           subText={`Employment summary: ${employmentTotals.active || 0} active, ${employmentTotals.inactive || 0} inactive.`}
         />
@@ -1125,12 +1125,12 @@ function TablePanel({
  {
   
   return (
-    <div className="relative overflow-hidden rounded-[12px] border border-slate-200/70 bg-white/92">
+    <div className="relative overflow-hidden rounded-[12px] border border-border-color/70 bg-surface/92">
       <div className={`bg-gradient-to-r ${gradient} px-4 py-2 text-white md:px-4 md:py-2`}>
         <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
 
-    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[12px] border border-white/20 bg-white/14 backdrop-blur-xl">
+    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[12px] border border-white/20 bg-surface/14 backdrop-blur-xl">
         <Icon className="h-4 w-4" />
     </div>
 
@@ -1151,7 +1151,7 @@ function TablePanel({
         type="button"
         onClick={onFullScreen}
         title="Open full screen view"
-        className="inline-flex items-center gap-2 rounded-lg border border-white/20 bg-white/20 px-4 py-2 text-sm font-semibold text-white backdrop-blur-sm transition hover:bg-white/30"
+        className="inline-flex items-center gap-2 rounded-lg border border-white/20 bg-surface/20 px-4 py-2 text-sm font-semibold text-white backdrop-blur-sm transition hover:bg-surface/30"
     >
         <Maximize2 className="h-4 w-4" />
         Full Screen
@@ -1161,7 +1161,7 @@ function TablePanel({
         onClick={onExport}
         disabled={exporting}
         title={exportLabel}
-        className="inline-flex items-center gap-2 rounded-lg border border-white/20 bg-white/20 px-4 py-2 text-sm font-semibold text-white backdrop-blur-sm transition hover:bg-white/30 disabled:cursor-not-allowed disabled:opacity-70"
+        className="inline-flex items-center gap-2 rounded-lg border border-white/20 bg-surface/20 px-4 py-2 text-sm font-semibold text-white backdrop-blur-sm transition hover:bg-surface/30 disabled:cursor-not-allowed disabled:opacity-70"
     >
         <Download className="h-4 w-4" />
         {exporting ? "Exporting..." : exportLabel}
@@ -1173,7 +1173,7 @@ function TablePanel({
         onClick={onRefresh}
         disabled={isRefreshing}
         title="Refresh Dashboard Data"
-        className="inline-flex items-center gap-2 rounded-lg border border-white/20 bg-white/20 px-4 py-2 text-sm font-semibold text-white backdrop-blur-sm transition hover:bg-white/30 disabled:cursor-not-allowed disabled:opacity-70"
+        className="inline-flex items-center gap-2 rounded-lg border border-white/20 bg-surface/20 px-4 py-2 text-sm font-semibold text-white backdrop-blur-sm transition hover:bg-surface/30 disabled:cursor-not-allowed disabled:opacity-70"
       >
         <RefreshCw className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} />
         Refresh
@@ -1186,7 +1186,7 @@ function TablePanel({
         </div>
       </div>
 
-          <div className="border-b border-slate-200 bg-white px-3 py-1 text-xs text-slate-500 md:px-4">
+          <div className="border-b border-border-color bg-surface px-3 py-1 text-xs text-text-muted md:px-4">
         {description}
       </div>
 
@@ -1226,7 +1226,7 @@ function StatCardsRow({ groups, countLookup, getSignoffRow }) {
 };
 
   return (
-    <div className="grid grid-cols-2 gap-1 md:grid-cols-5 xl:grid-cols-5 p-1 border-b border-slate-200 bg-slate-50">
+    <div className="grid grid-cols-2 gap-1 md:grid-cols-5 xl:grid-cols-5 p-1 border-b border-border-color bg-surface-muted">
 
  {statCardConfig.map((card) => {
 
@@ -1351,7 +1351,7 @@ if (card.key === "fttxPo") {
   return (
     <div
       key={card.key}
-     className={`rounded-[12px] border bg-white px-3 py-2 ${card.tint}`}
+     className={`rounded-[12px] border bg-surface px-3 py-2 ${card.tint}`}
     >
 
       <p className="truncate text-[0.58rem] font-semibold uppercase tracking-[0.16em]">
@@ -1360,19 +1360,19 @@ if (card.key === "fttxPo") {
 
     <div className="flex items-center justify-center gap-2 text-[14px] font-bold">
 
-  <span className="text-slate-800">
+  <span className="text-text-primary">
     R {requirement}
   </span>
 
-  <span className="text-slate-400">|</span>
+  <span className="text-text-muted">|</span>
 
-  <span className="text-slate-700">
+  <span className="text-text-secondary">
     A {available}
   </span>
 
-  <span className="text-slate-400">|</span>
+  <span className="text-text-muted">|</span>
 
-  <span className="text-emerald-600">
+  <span className="text-emerald-600 dark:text-emerald-400">
     G {gap}
   </span>
 
@@ -1435,7 +1435,7 @@ function RagTable({
       <table  className="relative z-0 min-w-max w-full whitespace-nowrap border-collapse text-sm">
           <thead>
 
-            <tr className="sticky top-0 z-[100] bg-slate-100 text-[13px] font-bold">
+            <tr className="sticky top-0 z-[100] bg-surface-muted text-[13px] font-bold">
 
  <th
   colSpan={13}
@@ -1473,10 +1473,10 @@ function RagTable({
 </th>
 </tr>
   
-<tr className="sticky top-[36px] z-[90] bg-[#f8fbff] text-[12px] uppercase text-slate-700">
+<tr className="sticky top-[36px] z-[90] bg-[#f8fbff] text-[12px] uppercase text-text-secondary">
  <th
   rowSpan={3}
- className="sticky left-0 top-[36px] z-[105] min-w-[140px] border-r border-slate-300 bg-violet-50 px-4 py-1 text-left text-[13px] font-semibold text-slate-700"
+ className="sticky left-0 top-[36px] z-[105] min-w-[140px] border-r border-border-strong bg-violet-50 dark:bg-violet-500/10 px-4 py-1 text-left text-[13px] font-semibold text-text-secondary"
    >
     CMP
   </th>
@@ -1487,25 +1487,25 @@ function RagTable({
   colSpan={3}
   onClick={() => openDrilldown(column, "", "", "designation")}
   title={`View ${column.label} employees`}
- className="min-w-[180px] cursor-pointer text-center py-2 font-semibold border-r-2 border-blue-300 bg-blue-200 text-blue-900 transition hover:bg-blue-300"
+ className="min-w-[180px] cursor-pointer text-center py-2 font-semibold border-r-2 border-blue-300 dark:border-blue-500/30 bg-blue-200 text-blue-900 transition hover:bg-blue-300"
 >
     {column.label}
   </th>
  ))}
 </tr>
 
- <tr className="sticky top-[72px] z-[85] bg-[#F1F5F9] text-[12px] text-slate-500">
+ <tr className="sticky top-[72px] z-[85] bg-[#F1F5F9] text-[12px] text-text-muted">
   {columns.map((column, index) => (
 <React.Fragment key={column.key}>
-<th className="border-b border-blue-500 py-1 text-center font-semibold text-blue-700 w-[40px] bg-blue-100">
+<th className="border-b border-blue-500 py-1 text-center font-semibold text-blue-700 dark:text-blue-400 w-[40px] bg-blue-100 dark:bg-blue-500/15">
   R
 </th>
 
-<th className="border-b border-blue-500 py-1 text-center font-semibold text-blue-700 w-[40px] bg-blue-100">
+<th className="border-b border-blue-500 py-1 text-center font-semibold text-blue-700 dark:text-blue-400 w-[40px] bg-blue-100 dark:bg-blue-500/15">
   A
 </th>
 
-<th className="border-b border-blue-500 py-1 text-center font-semibold text-blue-700 w-[40px] bg-blue-100">
+<th className="border-b border-blue-500 py-1 text-center font-semibold text-blue-700 dark:text-blue-400 w-[40px] bg-blue-100 dark:bg-blue-500/15">
   G
 </th>
                 </React.Fragment>
@@ -1513,11 +1513,11 @@ function RagTable({
             </tr>
           </thead>
 
-          <tbody className="text-[12px] text-slate-700">
+          <tbody className="text-[12px] text-text-secondary">
             {groups.map((group) => (
               <React.Fragment key={group.title}>
-              <tr className="bg-white font-bold border-y border-slate-200">
-                 <td className="sticky left-0 z-[80] min-w-[140px] border-r-2 bg-indigo-50 border-blue-200 px-4 py-2 text-[13px] font-bold text-slate-900">
+              <tr className="bg-surface font-bold border-y border-border-color">
+                 <td className="sticky left-0 z-[80] min-w-[140px] border-r-2 bg-indigo-50 dark:bg-indigo-500/10 border-blue-200 dark:border-blue-500/20 px-4 py-2 text-[13px] font-bold text-text-primary">
                   {`${group.title.replace(" SHQ", "")} Total`}
                   </td>
 
@@ -1547,23 +1547,23 @@ function RagTable({
                         <td
                           onClick={() => openDrilldown(column, totalCircle, "", "R")}
                           title={`View ${column.label} employees — ${totalCircle}`}
-                          className="w-[55px] cursor-pointer px-2 py-2 text-center bg-indigo-50 border-slate-300 font-bold border-y hover:bg-indigo-100"
+                          className="w-[55px] cursor-pointer px-2 py-2 text-center bg-indigo-50 dark:bg-indigo-500/10 border-border-strong font-bold border-y hover:bg-indigo-100 hover:dark:bg-indigo-500/15"
                         >
                           {totalRequirement}
                         </td>
                         <td
                           onClick={() => openDrilldown(column, totalCircle, "", "A")}
                           title={`View ${column.label} employees — ${totalCircle}`}
-                          className="w-[55px] cursor-pointer px-2 py-2 text-center font-bold border-y bg-indigo-50 border-slate-300 hover:bg-indigo-100"
+                          className="w-[55px] cursor-pointer px-2 py-2 text-center font-bold border-y bg-indigo-50 dark:bg-indigo-500/10 border-border-strong hover:bg-indigo-100 hover:dark:bg-indigo-500/15"
                         >
                           {totalAvailable}
                         </td>
                         <td
                           onClick={() => openDrilldown(column, totalCircle, "", "G")}
                           title={`View ${column.label} employees — ${totalCircle}`}
-                           className={`cursor-pointer px-2 py-2 text-center font-bold border-r border-y bg-indigo-50 border-slate-300 hover:bg-indigo-100 ${
+                           className={`cursor-pointer px-2 py-2 text-center font-bold border-r border-y bg-indigo-50 dark:bg-indigo-500/10 border-border-strong hover:bg-indigo-100 hover:dark:bg-indigo-500/15 ${
 
-                            totalGap <= 0 ? "text-emerald-600" : "text-red-500"
+                            totalGap <= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-500 dark:text-red-400"
                           }`}
                         >
                           {totalGap}
@@ -1579,11 +1579,11 @@ function RagTable({
                   return (
                    <tr
   key={cmpName}
-  className={`transition hover:bg-blue-50 ${
-    rowIndex % 2 === 0 ? "bg-white" : "bg-slate-50"
+  className={`transition hover:bg-blue-50 hover:dark:bg-blue-500/10 ${
+    rowIndex % 2 === 0 ? "bg-surface" : "bg-surface-muted"
   }`}
 >
-  <td className="sticky left-0 z-[70] min-w-[160px] border-r-2 border-b border-slate-300 bg-slate-50 px-3 py-2 font-semibold text-slate-800">
+  <td className="sticky left-0 z-[70] min-w-[160px] border-r-2 border-b border-border-strong bg-surface-muted px-3 py-2 font-semibold text-text-primary">
     {cmpName}
   </td>
      {columns.map((column) => {
@@ -1625,7 +1625,7 @@ if (showJoining) {
      <td
        onClick={() => openDrilldown(column, rowCircle, cmpName, "R")}
        title={`View ${column.label} employees — ${cmpName}`}
-       className="w-[55px] cursor-pointer px-2 py-2 text-center border-b border-slate-200 hover:bg-blue-100"
+       className="w-[55px] cursor-pointer px-2 py-2 text-center border-b border-border-color hover:bg-blue-100 hover:dark:bg-blue-500/15"
      >
          {requirement}
       </td>
@@ -1633,28 +1633,28 @@ if (showJoining) {
  <td
    onClick={() => openDrilldown(column, rowCircle, cmpName, "A")}
    title={`View ${column.label} employees — ${cmpName}`}
-   className="w-[55px] cursor-pointer px-2 py-2 text-center border-b border-slate-200 hover:bg-blue-100"
+   className="w-[55px] cursor-pointer px-2 py-2 text-center border-b border-border-color hover:bg-blue-100 hover:dark:bg-blue-500/15"
  >
 
   {showJoining ? (
 
     <div className="flex flex-col items-center leading-none">
 
-      <span className="font-semibold text-[13px] text-slate-900">
+      <span className="font-semibold text-[13px] text-text-primary">
         {available}
       </span>
 
       <div className="flex items-center gap-1 text-[10px] font-semibold mt-[2px]">
 
-        <span className="text-blue-600">
+        <span className="text-blue-600 dark:text-blue-400">
           {physicalCount}
         </span>
 
-        <span className="text-slate-400">
+        <span className="text-text-muted">
           |
         </span>
 
-        <span className="text-emerald-600">
+        <span className="text-emerald-600 dark:text-emerald-400">
           {newJoiningCount}
         </span>
 
@@ -1664,7 +1664,7 @@ if (showJoining) {
 
   ) : (
 
-    <span className="font-semibold text-slate-900">
+    <span className="font-semibold text-text-primary">
       {available}
     </span>
 
@@ -1675,9 +1675,9 @@ if (showJoining) {
  <td
     onClick={() => openDrilldown(column, rowCircle, cmpName, "G")}
     title={`View ${column.label} employees — ${cmpName}`}
-    className={`cursor-pointer px-2 py-2 text-center font-bold border-r border-slate-300 hover:bg-blue-100 ${
+    className={`cursor-pointer px-2 py-2 text-center font-bold border-r border-border-strong hover:bg-blue-100 hover:dark:bg-blue-500/15 ${
 
-    gap <= 0 ? "text-emerald-600" : "text-red-500"
+    gap <= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-500 dark:text-red-400"
   }`}
 >
   {gap}
@@ -1705,14 +1705,14 @@ if (showJoining) {
 
 function InfoCard({ icon: Icon, title, accent, iconBg, description, subText }) {
   return (
-    <div className="rounded-[14px] border border-slate-200/70 bg-[linear-gradient(180deg,_#ffffff_0%,_#f8fafc_100%)] px-4 py-2 shadow-[0_18px_45px_rgba(15,23,42,0.05)]">
+    <div className="rounded-[14px] border border-border-color/70 bg-[linear-gradient(180deg,_#ffffff_0%,_#f8fafc_100%)] px-4 py-2 shadow-[0_18px_45px_rgba(15,23,42,0.05)]">
       <div className="flex items-start">
       
 
         <div>
           <p className={`text-sm font-semibold ${accent}`}>{title}</p>
-          <p className="mt-1 text-sm leading-6 text-slate-600">{description}</p>
-          <p className="mt-1 text-sm leading-6 text-slate-500">{subText}</p>
+          <p className="mt-1 text-sm leading-6 text-text-secondary">{description}</p>
+          <p className="mt-1 text-sm leading-6 text-text-muted">{subText}</p>
         </div>
       </div>
     </div>
@@ -1771,17 +1771,17 @@ function FullScreenRagModal({
   const Icon = config.icon;
 
   return (
-    <div className="fixed inset-0 z-[300] flex flex-col bg-slate-900/60 p-2 backdrop-blur-sm md:p-4">
+    <div className="fixed inset-0 z-[300] flex flex-col bg-overlay/60 p-2 backdrop-blur-sm md:p-4">
       <style>{`@keyframes hrModalIn { from { opacity: 0; transform: scale(0.985); } to { opacity: 1; transform: scale(1); } }`}</style>
 
       <div
-        className="flex h-full min-h-0 flex-col overflow-hidden rounded-[18px] border border-white/40 bg-white/95 shadow-[0_40px_120px_rgba(15,23,42,0.5)] backdrop-blur-2xl"
+        className="flex h-full min-h-0 flex-col overflow-hidden rounded-[18px] border border-white/40 bg-surface/95 shadow-[0_40px_120px_rgba(15,23,42,0.5)] backdrop-blur-2xl"
         style={{ animation: "hrModalIn 0.25s ease" }}
       >
         <div className={`bg-gradient-to-r ${config.gradient} px-4 py-2.5 text-white`}>
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-3">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[12px] border border-white/25 bg-white/15 backdrop-blur-xl">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[12px] border border-white/25 bg-surface/15 backdrop-blur-xl">
                 <Icon className="h-4 w-4" />
               </div>
               <div>
@@ -1796,7 +1796,7 @@ function FullScreenRagModal({
               <button
                 type="button"
                 onClick={() => onOpenExport({ search, circle, cmp })}
-                className="inline-flex items-center gap-2 rounded-lg border border-white/20 bg-white/20 px-4 py-2 text-sm font-semibold text-white backdrop-blur-sm transition hover:bg-white/30"
+                className="inline-flex items-center gap-2 rounded-lg border border-white/20 bg-surface/20 px-4 py-2 text-sm font-semibold text-white backdrop-blur-sm transition hover:bg-surface/30"
               >
                 <Download className="h-4 w-4" />
                 {config.exportLabel}
@@ -1805,7 +1805,7 @@ function FullScreenRagModal({
                 type="button"
                 onClick={onClose}
                 title="Close (Esc)"
-                className="inline-flex items-center gap-2 rounded-lg border border-white/20 bg-white/20 px-3 py-2 text-sm font-semibold text-white backdrop-blur-sm transition hover:bg-white/35"
+                className="inline-flex items-center gap-2 rounded-lg border border-white/20 bg-surface/20 px-3 py-2 text-sm font-semibold text-white backdrop-blur-sm transition hover:bg-surface/35"
               >
                 <X className="h-4 w-4" />
                 Close
@@ -1814,16 +1814,16 @@ function FullScreenRagModal({
           </div>
         </div>
 
-        <div className="border-b border-slate-200/80 bg-white/80 p-1.5 backdrop-blur-xl">
+        <div className="border-b border-border-color/80 bg-surface/80 p-1.5 backdrop-blur-xl">
           <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
             <div className="relative">
-              <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted" />
               <input
                 type="text"
                 placeholder="Search Employee / CMP..."
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
-                className="h-9 w-full rounded-[12px] border border-slate-200 bg-[linear-gradient(180deg,_#ffffff_0%,_#f8fafc_100%)] pl-10 pr-4 text-[13px] text-slate-700 outline-none transition focus:border-indigo-300 focus:ring-4 focus:ring-indigo-50"
+                className="h-9 w-full rounded-[12px] border border-border-color bg-[linear-gradient(180deg,_#ffffff_0%,_#f8fafc_100%)] pl-10 pr-4 text-[13px] text-text-secondary outline-none transition focus:border-indigo-300 focus:dark:border-indigo-500/30 focus:ring-4 focus:ring-indigo-50"
               />
             </div>
 
@@ -1834,7 +1834,7 @@ function FullScreenRagModal({
                 setCmp("");
               }}
               disabled={!isAllCircleUser}
-              className="h-9 w-full rounded-[12px] border border-slate-200 bg-[linear-gradient(180deg,_#ffffff_0%,_#f8fafc_100%)] px-4 text-[13px] text-slate-700 outline-none transition focus:border-indigo-300 focus:ring-4 focus:ring-indigo-50 disabled:cursor-not-allowed disabled:opacity-70"
+              className="h-9 w-full rounded-[12px] border border-border-color bg-[linear-gradient(180deg,_#ffffff_0%,_#f8fafc_100%)] px-4 text-[13px] text-text-secondary outline-none transition focus:border-indigo-300 focus:dark:border-indigo-500/30 focus:ring-4 focus:ring-indigo-50 disabled:cursor-not-allowed disabled:opacity-70"
             >
               {isAllCircleUser && <option value="">Select Circle</option>}
               {allowedCircleLabels.map((circleLabel) => (
@@ -1847,7 +1847,7 @@ function FullScreenRagModal({
             <select
               value={cmp}
               onChange={(event) => setCmp(event.target.value)}
-              className="h-9 w-full rounded-[12px] border border-slate-200 bg-[linear-gradient(180deg,_#ffffff_0%,_#f8fafc_100%)] px-4 text-[13px] text-slate-700 outline-none transition focus:border-indigo-300 focus:ring-4 focus:ring-indigo-50"
+              className="h-9 w-full rounded-[12px] border border-border-color bg-[linear-gradient(180deg,_#ffffff_0%,_#f8fafc_100%)] px-4 text-[13px] text-text-secondary outline-none transition focus:border-indigo-300 focus:dark:border-indigo-500/30 focus:ring-4 focus:ring-indigo-50"
             >
               <option value="">Select CMP</option>
               {cmpOptions.map((cmpName) => (
@@ -1875,7 +1875,7 @@ function FullScreenRagModal({
         />
 
         {groups.length === 0 ? (
-          <div className="flex flex-1 items-center justify-center text-sm font-semibold text-slate-400">
+          <div className="flex flex-1 items-center justify-center text-sm font-semibold text-text-muted">
             No records match the current filters.
           </div>
         ) : (
@@ -2015,17 +2015,17 @@ function ExportRagModal({
   };
 
   return (
-    <div className="fixed inset-0 z-[320] flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[320] flex items-center justify-center bg-overlay/60 p-4 backdrop-blur-sm">
       <style>{`@keyframes hrModalIn { from { opacity: 0; transform: scale(0.985); } to { opacity: 1; transform: scale(1); } }`}</style>
 
       <div
-        className="w-full max-w-2xl overflow-hidden rounded-[20px] border border-white/50 bg-white/95 shadow-[0_40px_120px_rgba(15,23,42,0.5)] backdrop-blur-2xl"
+        className="w-full max-w-2xl overflow-hidden rounded-[20px] border border-white/50 bg-surface/95 shadow-[0_40px_120px_rgba(15,23,42,0.5)] backdrop-blur-2xl"
         style={{ animation: "hrModalIn 0.25s ease" }}
       >
         <div className={`bg-gradient-to-r ${config.gradient} px-5 py-3 text-white`}>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[12px] border border-white/25 bg-white/15 backdrop-blur-xl">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[12px] border border-white/25 bg-surface/15 backdrop-blur-xl">
                 <Download className="h-4 w-4" />
               </div>
               <div>
@@ -2042,7 +2042,7 @@ function ExportRagModal({
               type="button"
               onClick={onClose}
               title="Close (Esc)"
-              className="rounded-lg border border-white/20 bg-white/20 p-2 text-white backdrop-blur-sm transition hover:bg-white/35"
+              className="rounded-lg border border-white/20 bg-surface/20 p-2 text-white backdrop-blur-sm transition hover:bg-surface/35"
             >
               <X className="h-4 w-4" />
             </button>
@@ -2050,19 +2050,19 @@ function ExportRagModal({
         </div>
 
         <div className="max-h-[70vh] overflow-y-auto p-5">
-          <p className="text-[0.7rem] font-semibold uppercase tracking-[0.14em] text-slate-400">
+          <p className="text-[0.7rem] font-semibold uppercase tracking-[0.14em] text-text-muted">
             Filters
           </p>
 
           <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-2">
             <div className="relative md:col-span-2">
-              <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted" />
               <input
                 type="text"
                 placeholder="Search Employee / CMP..."
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
-                className="h-9 w-full rounded-[12px] border border-slate-200 bg-[linear-gradient(180deg,_#ffffff_0%,_#f8fafc_100%)] pl-10 pr-4 text-[13px] text-slate-700 outline-none transition focus:border-indigo-300 focus:ring-4 focus:ring-indigo-50"
+                className="h-9 w-full rounded-[12px] border border-border-color bg-[linear-gradient(180deg,_#ffffff_0%,_#f8fafc_100%)] pl-10 pr-4 text-[13px] text-text-secondary outline-none transition focus:border-indigo-300 focus:dark:border-indigo-500/30 focus:ring-4 focus:ring-indigo-50"
               />
             </div>
 
@@ -2073,7 +2073,7 @@ function ExportRagModal({
                 setCmp("");
               }}
               disabled={!isAllCircleUser}
-              className="h-9 w-full rounded-[12px] border border-slate-200 bg-[linear-gradient(180deg,_#ffffff_0%,_#f8fafc_100%)] px-4 text-[13px] text-slate-700 outline-none transition focus:border-indigo-300 focus:ring-4 focus:ring-indigo-50 disabled:cursor-not-allowed disabled:opacity-70"
+              className="h-9 w-full rounded-[12px] border border-border-color bg-[linear-gradient(180deg,_#ffffff_0%,_#f8fafc_100%)] px-4 text-[13px] text-text-secondary outline-none transition focus:border-indigo-300 focus:dark:border-indigo-500/30 focus:ring-4 focus:ring-indigo-50 disabled:cursor-not-allowed disabled:opacity-70"
             >
               {isAllCircleUser && <option value="">All Circles</option>}
               {allowedCircleLabels.map((circleLabel) => (
@@ -2086,7 +2086,7 @@ function ExportRagModal({
             <select
               value={cmp}
               onChange={(event) => setCmp(event.target.value)}
-              className="h-9 w-full rounded-[12px] border border-slate-200 bg-[linear-gradient(180deg,_#ffffff_0%,_#f8fafc_100%)] px-4 text-[13px] text-slate-700 outline-none transition focus:border-indigo-300 focus:ring-4 focus:ring-indigo-50"
+              className="h-9 w-full rounded-[12px] border border-border-color bg-[linear-gradient(180deg,_#ffffff_0%,_#f8fafc_100%)] px-4 text-[13px] text-text-secondary outline-none transition focus:border-indigo-300 focus:dark:border-indigo-500/30 focus:ring-4 focus:ring-indigo-50"
             >
               <option value="">All CMPs</option>
               {cmpOptions.map((cmpName) => (
@@ -2097,9 +2097,9 @@ function ExportRagModal({
             </select>
           </div>
 
-          <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-[12px] border border-indigo-100 bg-indigo-50/60 px-4 py-2">
-            <p className="text-xs text-slate-600">
-              <span className="font-semibold text-indigo-700">
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-[12px] border border-indigo-100 dark:border-indigo-500/20 bg-indigo-50 dark:bg-indigo-500/10/60 px-4 py-2">
+            <p className="text-xs text-text-secondary">
+              <span className="font-semibold text-indigo-700 dark:text-indigo-400">
                 {matchedCmpCount} CMP{matchedCmpCount === 1 ? "" : "s"}
               </span>{" "}
               will be exported — {filtersSummary}
@@ -2108,7 +2108,7 @@ function ExportRagModal({
               <button
                 type="button"
                 onClick={resetFilters}
-                className="inline-flex items-center gap-1.5 text-xs font-semibold text-indigo-600 transition hover:text-indigo-800"
+                className="inline-flex items-center gap-1.5 text-xs font-semibold text-indigo-600 dark:text-indigo-400 transition hover:text-indigo-800 hover:dark:text-indigo-300"
               >
                 <RefreshCcw className="h-3 w-3" />
                 Reset filters
@@ -2116,7 +2116,7 @@ function ExportRagModal({
             )}
           </div>
 
-          <p className="mt-4 text-[0.7rem] font-semibold uppercase tracking-[0.14em] text-slate-400">
+          <p className="mt-4 text-[0.7rem] font-semibold uppercase tracking-[0.14em] text-text-muted">
             Export Format
           </p>
 
@@ -2131,15 +2131,15 @@ function ExportRagModal({
                   onClick={() => setFormat(option.value)}
                   className={`flex items-center gap-3 rounded-[14px] border px-3 py-2.5 text-left transition ${
                     selected
-                      ? "border-indigo-400 bg-indigo-50/80 ring-4 ring-indigo-50"
-                      : "border-slate-200 bg-white hover:border-indigo-200 hover:bg-slate-50"
+                      ? "border-indigo-400 bg-indigo-50 dark:bg-indigo-500/10/80 ring-4 ring-indigo-50"
+                      : "border-border-color bg-surface hover:border-indigo-200 hover:dark:border-indigo-500/20 hover:bg-surface-muted"
                   }`}
                 >
                   <span
                     className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] ${
                       selected
                         ? "bg-indigo-600 text-white"
-                        : "bg-slate-100 text-slate-500"
+                        : "bg-surface-muted text-text-muted"
                     }`}
                   >
                     <OptionIcon className="h-4 w-4" />
@@ -2147,12 +2147,12 @@ function ExportRagModal({
                   <span>
                     <span
                       className={`block text-[13px] font-semibold ${
-                        selected ? "text-indigo-700" : "text-slate-700"
+                        selected ? "text-indigo-700 dark:text-indigo-400" : "text-text-secondary"
                       }`}
                     >
                       {option.label}
                     </span>
-                    <span className="block text-[11px] text-slate-400">
+                    <span className="block text-[11px] text-text-muted">
                       {option.hint}
                     </span>
                   </span>
@@ -2162,12 +2162,12 @@ function ExportRagModal({
           </div>
         </div>
 
-        <div className="flex items-center justify-end gap-2 border-t border-slate-200/80 bg-slate-50/80 px-5 py-3">
+        <div className="flex items-center justify-end gap-2 border-t border-border-color/80 bg-surface-muted/80 px-5 py-3">
           <button
             type="button"
             onClick={onClose}
             disabled={busy}
-            className="rounded-[12px] border border-slate-200 bg-white px-5 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-70"
+            className="rounded-[12px] border border-border-color bg-surface px-5 py-2 text-sm font-semibold text-text-secondary transition hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-70"
           >
             Cancel
           </button>

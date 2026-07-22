@@ -83,17 +83,17 @@ const getStatusTone = (status) => {
 
 function MetricCard({ label, value, context, icon: Icon, iconTone }) {
   return (
-    <div className="group relative h-full overflow-hidden rounded-[24px] border border-white/70 bg-white/70 p-4 shadow-[0_24px_80px_rgba(15,23,42,0.10)] backdrop-blur-2xl transition duration-300 hover:-translate-y-1.5 hover:shadow-[0_32px_90px_rgba(15,23,42,0.14)]">
+    <div className="group relative h-full overflow-hidden rounded-[24px] border border-white/70 bg-surface/70 p-4 shadow-[0_24px_80px_rgba(15,23,42,0.10)] backdrop-blur-2xl transition duration-300 hover:-translate-y-1.5 hover:shadow-[0_32px_90px_rgba(15,23,42,0.14)]">
      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.92),transparent_40%)]" />
       <div className="relative flex items-start justify-between gap-4">
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-text-muted">
             {label}
           </p>
-          <h2 className="mt-2 text-2xl font-bold tracking-tight text-slate-800">
+          <h2 className="mt-2 text-2xl font-bold tracking-tight text-text-primary">
             {value}
           </h2>
-          <p className="mt-1 text-xs leading-5 text-slate-600 tracking-[0.05em] ">
+          <p className="mt-1 text-xs leading-5 text-text-secondary tracking-[0.05em] ">
             {context}
           </p>
 
@@ -126,21 +126,21 @@ function FilterSelect({ value, onChange, icon: Icon, placeholder, options }) {
 
      {/* INPUT */}
   <div onClick={() => setOpen(!open)}
-   className="flex items-center gap-2 rounded-full border border-white/80 bg-white/80 px-4 py-3
-    shadow-[0_10px_30px_rgba(15,23,42,0.08)] backdrop-blur-xl cursor-pointer transition hover:border-blue-200"
+   className="flex items-center gap-2 rounded-full border border-white/80 bg-surface/80 px-4 py-3
+    shadow-[0_10px_30px_rgba(15,23,42,0.08)] backdrop-blur-xl cursor-pointer transition hover:border-blue-200 hover:dark:border-blue-500/20"
    >
-   <Icon className="h-4 w-4 text-slate-400" />
-    <span className={`flex-1 text-sm font-medium ${value ? "text-slate-700" : "text-slate-400"}`}>
+   <Icon className="h-4 w-4 text-text-muted" />
+    <span className={`flex-1 text-sm font-medium ${value ? "text-text-secondary" : "text-text-muted"}`}>
       {options.find(o => o.value === value)?.label || placeholder}
     </span>
 
-   <ArrowRight className={`h-4 w-4 text-slate-400 transition ${open ? "rotate-270" : "rotate-90"}`} />
+   <ArrowRight className={`h-4 w-4 text-text-muted transition ${open ? "rotate-270" : "rotate-90"}`} />
    </div>
 
    {/* DROPDOWN */}
    {open && (
     <div className="absolute left-0 top-full z-[999999] mt-3 w-full overflow-hidden rounded-[14px] 
-    border border-white/80 bg-white shadow-[0_20px_60px_rgba(15,23,42,0.14)] backdrop-blur-xl">
+    border border-white/80 bg-surface shadow-[0_20px_60px_rgba(15,23,42,0.14)] backdrop-blur-xl">
 
     {options.map((option) => (
       <div
@@ -150,7 +150,7 @@ function FilterSelect({ value, onChange, icon: Icon, placeholder, options }) {
         setOpen(false);
          }}
        className={`px-4 py-2 text-sm cursor-pointer transition
-       ${value === option.value ? "bg-blue-100 text-blue-700 font-semibold" : "text-slate-700 hover:bg-blue-50"}
+       ${value === option.value ? "bg-blue-100 dark:bg-blue-500/15 text-blue-700 dark:text-blue-400 font-semibold" : "text-text-secondary hover:bg-blue-50 hover:dark:bg-blue-500/10"}
            `}
       >
           {option.label}
@@ -166,7 +166,7 @@ function FilterSelect({ value, onChange, icon: Icon, placeholder, options }) {
 function StatusBlock({ label, status, note }) {
   return (
     <div className="relative flex min-h-[72px] flex-col justify-between gap-2
-         overflow-hidden rounded-[18px] border border-white/70 bg-white/75 p-3
+         overflow-hidden rounded-[18px] border border-white/70 bg-surface/75 p-3
          shadow-[0_8px_24px_rgba(15,23,42,0.05)] backdrop-blur-xl">
      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.14),transparent_40%)]" />
     <div className="relative flex items-center">
@@ -186,7 +186,7 @@ function StatusBlock({ label, status, note }) {
         </span>
       </div>
 
-      <p className="relative text-[13px] leading-5 text-slate-600">
+      <p className="relative text-[13px] leading-5 text-text-secondary">
         {note || "Completed successfully."}
       </p>
     </div>
@@ -529,7 +529,7 @@ const pendingTasks = totalTasks - completedTasks;
     <div ref={ref} className="relative w-full">
      <div
   onClick={() => setOpen(!open)}
-  className="flex items-center justify-between rounded-xl border border-white/80 bg-white/90 px-4 py-3 text-sm font-medium text-slate-700 shadow-sm cursor-pointer hover:border-blue-200 transition"
+  className="flex items-center justify-between rounded-xl border border-white/80 bg-surface/90 px-4 py-3 text-sm font-medium text-text-secondary shadow-sm cursor-pointer hover:border-blue-200 hover:dark:border-blue-500/20 transition"
 >
   <span className="mx-auto">
     {value || placeholder}
@@ -542,7 +542,7 @@ const pendingTasks = totalTasks - completedTasks;
 
       {open && (
         <div className="absolute left-0 top-full z-[99999] mt-2 w-full rounded-xl border
-         border-white/80 bg-white shadow-lg overflow-hidden">
+         border-white/80 bg-surface shadow-lg overflow-hidden">
           {options.map((option) => (
             <div
               key={option}
@@ -552,8 +552,8 @@ const pendingTasks = totalTasks - completedTasks;
               }}
               className={`px-4 py-2 text-center text-sm cursor-pointer transition
                 ${value === option
-                  ? "bg-blue-100 text-blue-700 font-semibold"
-                  : "hover:bg-blue-50 text-slate-700"}
+                  ? "bg-blue-100 dark:bg-blue-500/15 text-blue-700 dark:text-blue-400 font-semibold"
+                  : "hover:bg-blue-50 hover:dark:bg-blue-500/10 text-text-secondary"}
               `}
             >
               {option}
@@ -578,13 +578,13 @@ const pendingTasks = totalTasks - completedTasks;
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(96,165,250,0.30),transparent_40%),radial-gradient(circle_at_bottom_right,rgba(168,85,247,0.24),transparent_40%)]" />
        <div className="relative flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="max-w-2xl">
-         <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.34em] text-indigo-600">
+         <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.34em] text-indigo-600 dark:text-indigo-400">
                BILLING DASHBOARD
          </p>
-        <h1 className="max-w-xl text-xl font-bold tracking-tight text-slate-800 sm:text-2xl">
+        <h1 className="max-w-xl text-xl font-bold tracking-tight text-text-primary sm:text-2xl">
                 Billing status with real-time insights
         </h1>
-         <p className="mt-2 max-w-xl text-sm leading-7 text-slate-600 sm:text-base">
+         <p className="mt-2 max-w-xl text-sm leading-7 text-text-secondary sm:text-base">
              Monitor billing progress, track KPI completion, and manage pending tasks.
          </p>
         </div>
@@ -608,25 +608,25 @@ const pendingTasks = totalTasks - completedTasks;
             value={displayCounts.total}
             context="All active items"
             icon={Globe}
-            iconTone="bg-blue-100 text-blue-700 ring-blue-200"
+            iconTone="bg-blue-100 dark:bg-blue-500/15 text-blue-700 dark:text-blue-400 ring-blue-200"
           />
           <MetricCard
             label="Completed Tasks"
             value={displayCounts.completed}
             context="Work completed"
             icon={BarChart3}
-            iconTone="bg-emerald-100 text-emerald-700 ring-emerald-200"
+            iconTone="bg-emerald-100 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 ring-emerald-200"
           />
           <MetricCard
             label="Pending Tasks"
             value={displayCounts.pending}
             context="Action required"
             icon={AlertTriangle}
-            iconTone="bg-amber-100 text-amber-700 ring-amber-200"
+            iconTone="bg-amber-100 dark:bg-amber-500/15 text-amber-700 dark:text-amber-400 ring-amber-200"
           />
 
   <div className="relative flex h-full flex-col justify-center gap-2 rounded-[24px] p-3 border
-   border-white/85 bg-white/70 shadow-[0_30px_100px_rgba(15,23,42,0.10)] backdrop-blur-xl overflow-visible">
+   border-white/85 bg-surface/70 shadow-[0_30px_100px_rgba(15,23,42,0.10)] backdrop-blur-xl overflow-visible">
   
   {/* Row 1 */}
   <div className="relative z-[100] flex items-center justify-between gap-2">
@@ -654,7 +654,7 @@ const pendingTasks = totalTasks - completedTasks;
     setBillingFilter("");
   }}
   className="flex items-center gap-2 whitespace-nowrap rounded-full border border-white/70
-   bg-white/65 shadow-[0_24px_70px_rgba(15,23,42,0.10)] px-4 py-2 text-xs font-semibold transition"
+   bg-surface/65 shadow-[0_24px_70px_rgba(15,23,42,0.10)] px-4 py-2 text-xs font-semibold transition"
 >
   <RotateCcw className="h-3 w-3" />
   Reset
@@ -698,11 +698,11 @@ const pendingTasks = totalTasks - completedTasks;
 
     return (
      <div key={monthName}
-      className="relative rounded-[18px] border border-white/85 bg-white/70 p-3 
+      className="relative rounded-[18px] border border-white/85 bg-surface/70 p-3 
       shadow-[0_30px_110px_rgba(15,23,42,0.10)] backdrop-blur-2xl lg:px-4 overflow-visible"
      >
-     <div className="mb-1 flex items-center justify-between gap-4 border-b border-slate-200/70 pb-2">
-        <h2 className="text-lg font-semibold tracking-tight text-slate-800">
+     <div className="mb-1 flex items-center justify-between gap-4 border-b border-border-color/70 pb-2">
+        <h2 className="text-lg font-semibold tracking-tight text-text-primary">
              {fullMonthMap[monthName] || monthName}
         </h2>
       <div className="rounded-full bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2 text-xs 
@@ -711,8 +711,8 @@ const pendingTasks = totalTasks - completedTasks;
         </div>
      </div>
 
-     <div className="mb-2 hidden grid-cols-[0.8fr_1.1fr_1.1fr_1.1fr] gap-4 rounded-[20px] bg-slate-100 
-      px-4 py-2 text-[12px] font-semibold uppercase tracking-[0.16em] text-slate-700 lg:grid">
+     <div className="mb-2 hidden grid-cols-[0.8fr_1.1fr_1.1fr_1.1fr] gap-4 rounded-[20px] bg-surface-muted 
+      px-4 py-2 text-[12px] font-semibold uppercase tracking-[0.16em] text-text-secondary lg:grid">
            <div className="pl-2">Circle + Billing Type</div>
            <div className="pl-2">60% Billing Status</div>  
            <div className="pl-2">40% Billing Status</div>
@@ -734,17 +734,17 @@ const pendingTasks = totalTasks - completedTasks;
       >
         <div className="flex items-start gap-4">
          <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-full 
-          bg-gradient-to-br from-blue-100 via-white to-violet-100 text-blue-700 ring-1 ring-blue-200">
+          bg-gradient-to-br from-blue-100 via-white to-violet-100 text-blue-700 dark:text-blue-400 ring-1 ring-blue-200">
           <span className="text-sm font-bold">
               {(r.circle || "?").slice(0, 2).toUpperCase()}
            </span>
          </div>
       
        <div>
-         <p className="text-base font-semibold text-slate-900">
+         <p className="text-base font-semibold text-text-primary">
             {r.circle}
          </p>
-          <p className="mt-1 text-sm text-slate-500">
+          <p className="mt-1 text-sm text-text-muted">
            {r.billing_type}
           </p>
            </div>
@@ -778,10 +778,10 @@ const pendingTasks = totalTasks - completedTasks;
       <div className="mx-auto w-full max-w-4xl rounded-[28px] border border-white/70 p-10 
       bg-[linear-gradient(135deg,rgba(255,255,255,0.96),rgba(248,250,252,0.92),rgba(243,232,255,0.92))]
       shadow-[0_30px_90px_rgba(15,23,42,0.24)] backdrop-blur-2xl">
-       <h2 className="mb-2 text-2xl font-semibold tracking-tight text-slate-900">
+       <h2 className="mb-2 text-2xl font-semibold tracking-tight text-text-primary">
               Add Billing Data
        </h2>
-   <p className="mb-6 text-sm leading-6 text-slate-500">
+   <p className="mb-6 text-sm leading-6 text-text-muted">
        Enter the latest billing checkpoint details. Existing validation and save behavior remain unchanged.
    </p>
 
@@ -800,7 +800,7 @@ const pendingTasks = totalTasks - completedTasks;
 
   <div onClick={() => setOpenMonth(!openMonth)}
     className="flex flex-1 cursor-pointer items-center justify-between">
-    <span className={form.month ? "text-black" : "text-gray-400"}>
+    <span className={form.month ? "text-black" : "text-text-muted"}>
       {form.month ? fullMonthMap[form.month] : "Select Month"}
     </span>
     <span className="text-xs">▼</span>
@@ -809,7 +809,7 @@ const pendingTasks = totalTasks - completedTasks;
 
   {openMonth && (
    <div className="absolute left-0 top-full z-[9999] mt-2 max-h-60 w-full overflow-y-auto 
-         rounded-2xl border border-white/80 bg-white shadow-xl">
+         rounded-2xl border border-white/80 bg-surface shadow-xl">
      {months.map((m) => (
        <div
         key={m}
@@ -817,7 +817,7 @@ const pendingTasks = totalTasks - completedTasks;
          setForm({ ...form, month: m });
          setOpenMonth(false);
       }}
-       className="cursor-pointer px-4 py-2 hover:bg-purple-100"
+       className="cursor-pointer px-4 py-2 hover:bg-purple-100 hover:dark:bg-purple-500/15"
    >
       {fullMonthMap[m] || m}
       </div>
@@ -840,7 +840,7 @@ const pendingTasks = totalTasks - completedTasks;
   <div
      onClick={() => setOpenCircle(!openCircle)}
       className="flex flex-1 cursor-pointer items-center justify-between">
-    <span className={form.circle ? "text-black" : "text-gray-400"}>
+    <span className={form.circle ? "text-black" : "text-text-muted"}>
        {form.circle || "Select Circle"}
     </span>
       <span className="text-xs">▼</span>  
@@ -848,7 +848,7 @@ const pendingTasks = totalTasks - completedTasks;
  </div>
 
   {openCircle && (
-   <div className="absolute left-0 top-full z-[9999] mt-2 w-full rounded-2xl border border-white/80 bg-white shadow-xl">
+   <div className="absolute left-0 top-full z-[9999] mt-2 w-full rounded-2xl border border-white/80 bg-surface shadow-xl">
       {circleOptions.map((c) => (
        <div
         key={c}
@@ -856,7 +856,7 @@ const pendingTasks = totalTasks - completedTasks;
         setForm({ ...form, circle: c });
         setOpenCircle(false);
       }}
-    className="cursor-pointer px-4 py-2 hover:bg-purple-100"
+    className="cursor-pointer px-4 py-2 hover:bg-purple-100 hover:dark:bg-purple-500/15"
    >
       {c}  
      </div>
@@ -880,7 +880,7 @@ const pendingTasks = totalTasks - completedTasks;
      onClick={() => setOpenBilling(!openBilling)}
      className="flex flex-1 cursor-pointer items-center justify-between"
       >
-     <span className={form.billingType ? "text-black" : "text-gray-400"}>
+     <span className={form.billingType ? "text-black" : "text-text-muted"}>
            {form.billingType || "Select Billing Type"}
       </span>
       <span className="text-xs">▼</span>
@@ -888,7 +888,7 @@ const pendingTasks = totalTasks - completedTasks;
   </div>
 
  {openBilling && (
- <div className="absolute left-0 top-full z-[9999] mt-2 w-full rounded-2xl border border-white/80 bg-white shadow-xl">
+ <div className="absolute left-0 top-full z-[9999] mt-2 w-full rounded-2xl border border-white/80 bg-surface shadow-xl">
     {billingOptions.map((b) => (
   <div
      key={b}
@@ -896,7 +896,7 @@ const pendingTasks = totalTasks - completedTasks;
      setForm({ ...form, billingType: b });
      setOpenBilling(false);
     }}
-     className="cursor-pointer px-4 py-2 hover:bg-purple-100"
+     className="cursor-pointer px-4 py-2 hover:bg-purple-100 hover:dark:bg-purple-500/15"
      >
     {b}
     </div>
@@ -969,7 +969,7 @@ const pendingTasks = totalTasks - completedTasks;
               <div className="mt-8 flex justify-end gap-4">
                 <button
                   onClick={() => setShowForm(false)}
-                  className="rounded-full border border-slate-300 bg-white px-6 py-3 text-sm font-medium text-slate-600 transition hover:bg-slate-50"
+                  className="rounded-full border border-border-strong bg-surface px-6 py-3 text-sm font-medium text-text-secondary transition hover:bg-surface-muted"
                 >
                   Cancel
                 </button>

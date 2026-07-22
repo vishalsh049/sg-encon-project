@@ -37,16 +37,16 @@ const sections = [
 ];
 
 const statusStyles = {
-  Good: "bg-emerald-500/10 text-emerald-600",
-  Warning: "bg-amber-500/10 text-amber-600",
-  Critical: "bg-rose-500/10 text-rose-600",
+  Good: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
+  Warning: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
+  Critical: "bg-rose-500/10 text-rose-600 dark:text-rose-400",
 };
 
 const heatmapColor = (value) => {
-  if (value >= 6) return "bg-rose-500/15 text-rose-700";
-  if (value >= 3) return "bg-amber-400/15 text-amber-700";
-  if (value > 0) return "bg-emerald-500/15 text-emerald-700";
-  return "bg-slate-700/10 text-slate-500";
+  if (value >= 6) return "bg-rose-500/15 text-rose-700 dark:text-rose-400";
+  if (value >= 3) return "bg-amber-400/15 text-amber-700 dark:text-amber-400";
+  if (value > 0) return "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400";
+  return "bg-slate-700/10 text-text-muted";
 };
 
 const formatNumber = (value) => {
@@ -259,13 +259,13 @@ function NsoDashboard() {
   return (
     <div className="space-y-6">
       <div className="grid gap-6 xl:grid-cols-[260px_1fr]">
-        <aside className="sticky top-4 rounded-[32px] border border-slate-800/40 bg-slate-950/95 p-6 shadow-xl shadow-slate-900/5 text-slate-100">
+        <aside className="sticky top-4 rounded-[32px] border border-slate-800/40 bg-overlay/95 p-6 shadow-xl shadow-slate-900/5 text-slate-100">
           <div className="mb-6 flex items-center gap-3">
             <div className="flex h-12 w-12 items-center justify-center rounded-3xl bg-sky-500/15 text-sky-300">
               <Sparkles className="h-6 w-6" />
             </div>
             <div>
-              <p className="text-sm uppercase tracking-[0.28em] text-slate-400">
+              <p className="text-sm uppercase tracking-[0.28em] text-text-muted">
                 NSO Fiber Dashboard
               </p>
               <h2 className="text-xl font-semibold text-white">
@@ -283,10 +283,10 @@ function NsoDashboard() {
                 className={`flex w-full items-center gap-3 rounded-3xl border px-4 py-3 text-left text-sm transition ${
                   activeSection === section.id
                     ? "border-sky-500 bg-sky-500/10 text-sky-100"
-                    : "border-slate-800/80 bg-slate-950/90 text-slate-300 hover:border-slate-700 hover:bg-slate-900"
+                    : "border-slate-800/80 bg-overlay/90 text-slate-300 hover:border-slate-700 hover:bg-slate-900"
                 }`}
               >
-                <span className="inline-flex h-9 w-9 items-center justify-center rounded-2xl bg-slate-900/80 text-slate-300">
+                <span className="inline-flex h-9 w-9 items-center justify-center rounded-2xl bg-overlay/80 text-slate-300">
                   <FileText className="h-4 w-4" />
                 </span>
                 <span>{section.label}</span>
@@ -296,13 +296,13 @@ function NsoDashboard() {
         </aside>
 
         <div className="space-y-6">
-          <div className="rounded-[32px] border border-slate-200/70 bg-white p-5 shadow-sm dark:border-slate-800/70 dark:bg-slate-950/95">
+          <div className="rounded-[32px] border border-border-color bg-surface p-5 shadow-sm">
             <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
               <div>
-                <p className="text-xs uppercase tracking-[0.3em] text-slate-500">
+                <p className="text-xs uppercase tracking-[0.3em] text-text-muted">
                   NSO Fiber Performance Dashboard
                 </p>
-                <h1 className="mt-2 text-3xl font-semibold text-slate-900 dark:text-white">
+                <h1 className="mt-2 text-3xl font-semibold text-text-primary">
                   Circle-wise and CMP-wise Analysis
                 </h1>
               </div>
@@ -311,7 +311,7 @@ function NsoDashboard() {
                 <button
                   type="button"
                   onClick={doDownload}
-                  className="inline-flex items-center gap-2 rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-slate-900/10 transition hover:bg-slate-800"
+                  className="inline-flex items-center gap-2 rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-slate-900/10 transition hover:bg-slate-800 dark:bg-slate-700 dark:hover:bg-slate-600"
                 >
                   <Download className="h-4 w-4" />
                   Download Report
@@ -319,7 +319,7 @@ function NsoDashboard() {
                 <button
                   type="button"
                   onClick={() => setFilters({ circle: "", cmp: "", year: "", month: "", week: "" })}
-                  className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                  className="inline-flex items-center gap-2 rounded-2xl border border-border-color bg-surface px-4 py-3 text-sm font-semibold text-text-secondary transition hover:bg-surface-muted"
                 >
                   <RefreshCcw className="h-4 w-4" />
                   Reset
@@ -330,11 +330,11 @@ function NsoDashboard() {
             <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
               <div className="xl:col-span-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                 <label className="space-y-2">
-                  <span className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">
+                  <span className="text-xs font-semibold uppercase tracking-[0.24em] text-text-muted">
                     Circle
                   </span>
                   <select
-                    className="app-input w-full bg-slate-950/5 text-slate-900"
+                    className="app-input w-full bg-slate-950/5 text-text-primary"
                     value={filters.circle}
                     onChange={(e) => updateFilter("circle", e.target.value)}
                   >
@@ -348,11 +348,11 @@ function NsoDashboard() {
                 </label>
 
                 <label className="space-y-2">
-                  <span className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">
+                  <span className="text-xs font-semibold uppercase tracking-[0.24em] text-text-muted">
                     CMP
                   </span>
                   <select
-                    className="app-input w-full bg-slate-950/5 text-slate-900"
+                    className="app-input w-full bg-slate-950/5 text-text-primary"
                     value={filters.cmp}
                     onChange={(e) => updateFilter("cmp", e.target.value)}
                   >
@@ -366,11 +366,11 @@ function NsoDashboard() {
                 </label>
 
                 <label className="space-y-2">
-                  <span className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">
+                  <span className="text-xs font-semibold uppercase tracking-[0.24em] text-text-muted">
                     Year
                   </span>
                   <select
-                    className="app-input w-full bg-slate-950/5 text-slate-900"
+                    className="app-input w-full bg-slate-950/5 text-text-primary"
                     value={filters.year}
                     onChange={(e) => updateFilter("year", e.target.value)}
                   >
@@ -384,11 +384,11 @@ function NsoDashboard() {
                 </label>
 
                 <label className="space-y-2">
-                  <span className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">
+                  <span className="text-xs font-semibold uppercase tracking-[0.24em] text-text-muted">
                     Month
                   </span>
                   <select
-                    className="app-input w-full bg-slate-950/5 text-slate-900"
+                    className="app-input w-full bg-slate-950/5 text-text-primary"
                     value={filters.month}
                     onChange={(e) => updateFilter("month", e.target.value)}
                   >
@@ -402,11 +402,11 @@ function NsoDashboard() {
                 </label>
 
                 <label className="space-y-2">
-                  <span className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">
+                  <span className="text-xs font-semibold uppercase tracking-[0.24em] text-text-muted">
                     Week
                   </span>
                   <select
-                    className="app-input w-full bg-slate-950/5 text-slate-900"
+                    className="app-input w-full bg-slate-950/5 text-text-primary"
                     value={filters.week}
                     onChange={(e) => updateFilter("week", e.target.value)}
                   >
@@ -423,7 +423,7 @@ function NsoDashboard() {
           </div>
 
           {error ? (
-            <div className="rounded-3xl border border-rose-200 bg-rose-50 p-5 text-rose-700">
+            <div className="rounded-3xl border border-rose-200 dark:border-rose-500/20 bg-rose-50 dark:bg-rose-500/10 p-5 text-rose-700 dark:text-rose-400">
               {error}
             </div>
           ) : null}
@@ -434,18 +434,18 @@ function NsoDashboard() {
                 Array.from({ length: 4 }).map((_, index) => (
                   <div
                     key={index}
-                    className="h-32 rounded-[28px] bg-slate-100 shimmer"
+                    className="h-32 rounded-[28px] bg-surface-muted shimmer"
                   />
                 ))
               ) : (
                 cardData.map((card) => (
                   <div
                     key={card.title}
-                    className="rounded-[28px] border border-slate-200 bg-slate-950/95 p-5 shadow-lg shadow-slate-900/5"
+                    className="rounded-[28px] border border-border-color bg-overlay/95 p-5 shadow-lg shadow-slate-900/5"
                   >
                     <div className="flex items-center justify-between gap-4">
                       <div>
-                        <p className="text-sm font-semibold uppercase tracking-[0.24em] text-slate-400">
+                        <p className="text-sm font-semibold uppercase tracking-[0.24em] text-text-muted">
                           {card.title}
                         </p>
                         <p className="mt-3 text-3xl font-semibold text-white">
@@ -457,7 +457,7 @@ function NsoDashboard() {
                       </div>
                     </div>
                     {card.previous !== null ? (
-                      <p className="mt-4 text-sm text-slate-400">
+                      <p className="mt-4 text-sm text-text-muted">
                         Prev week: <span className="font-semibold text-white">{formatNumber(card.previous)}</span>
                         <span className="ml-3 text-emerald-400">{formatChange(card.change)}</span>
                       </p>
@@ -468,22 +468,22 @@ function NsoDashboard() {
             </div>
           </section>
 
-          <div id="circle-ranking" className="space-y-4 rounded-[32px] border border-slate-200 bg-white p-5 shadow-sm">
+          <div id="circle-ranking" className="space-y-4 rounded-[32px] border border-border-color bg-surface p-5 shadow-sm">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <h2 className="text-xl font-semibold text-slate-900">Circle Performance Ranking</h2>
-                <p className="text-sm text-slate-500">
+                <h2 className="text-xl font-semibold text-text-primary">Circle Performance Ranking</h2>
+                <p className="text-sm text-text-muted">
                   Rank circles by cuts, FTKM, and MTTR.
                 </p>
               </div>
-              <span className="rounded-full bg-slate-100 px-3 py-2 text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">
+              <span className="rounded-full bg-surface-muted px-3 py-2 text-xs font-semibold uppercase tracking-[0.24em] text-text-muted">
                 Sorted by cuts
               </span>
             </div>
 
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[680px] text-left text-sm text-slate-600">
-                <thead className="bg-slate-50 text-slate-500">
+              <table className="w-full min-w-[680px] text-left text-sm text-text-secondary">
+                <thead className="bg-surface-muted text-text-muted">
                   <tr>
                     <th className="px-4 py-3">Circle</th>
                     <th className="px-4 py-3">Cuts</th>
@@ -495,19 +495,19 @@ function NsoDashboard() {
                 <tbody>
                   {loading ? (
                     Array.from({ length: 4 }).map((_, index) => (
-                      <tr key={index} className="animate-pulse bg-slate-50">
+                      <tr key={index} className="animate-pulse bg-surface-muted">
                         <td className="h-12 px-4" colSpan={5} />
                       </tr>
                     ))
                   ) : circleRanking.length ? (
                     circleRanking.map((row) => (
-                      <tr key={row.circle} className="border-b border-slate-100">
-                        <td className="px-4 py-4 font-medium text-slate-900">{row.circle}</td>
+                      <tr key={row.circle} className="border-b border-border-color">
+                        <td className="px-4 py-4 font-medium text-text-primary">{row.circle}</td>
                         <td className="px-4 py-4">{formatNumber(row.cuts)}</td>
                         <td className="px-4 py-4">{formatNumber(row.ftkm)}</td>
                         <td className="px-4 py-4">{formatNumber(row.mttr)}</td>
                         <td className="px-4 py-4">
-                          <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${statusStyles[row.status] || "bg-slate-100 text-slate-700"}`}>
+                          <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${statusStyles[row.status] || "bg-surface-muted text-text-secondary"}`}>
                             {row.status}
                           </span>
                         </td>
@@ -515,7 +515,7 @@ function NsoDashboard() {
                     ))
                   ) : (
                     <tr>
-                      <td className="px-4 py-6 text-center text-sm text-slate-500" colSpan={5}>
+                      <td className="px-4 py-6 text-center text-sm text-text-muted" colSpan={5}>
                         No circle ranking data available.
                       </td>
                     </tr>
@@ -526,19 +526,19 @@ function NsoDashboard() {
           </div>
 
           <div className="grid gap-4 xl:grid-cols-2">
-            <section id="cuts-trend" className="rounded-[32px] border border-slate-200 bg-white p-5 shadow-sm">
+            <section id="cuts-trend" className="rounded-[32px] border border-border-color bg-surface p-5 shadow-sm">
               <div className="mb-4 flex items-center justify-between gap-4">
                 <div>
-                  <h3 className="text-lg font-semibold text-slate-900">Cuts Trend</h3>
-                  <p className="text-sm text-slate-500">Weekly cuts trend for selected filters.</p>
+                  <h3 className="text-lg font-semibold text-text-primary">Cuts Trend</h3>
+                  <p className="text-sm text-text-muted">Weekly cuts trend for selected filters.</p>
                 </div>
-                <span className="rounded-full bg-slate-100 px-3 py-2 text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">
+                <span className="rounded-full bg-surface-muted px-3 py-2 text-xs font-semibold uppercase tracking-[0.24em] text-text-muted">
                   {cutsTrend.length} weeks
                 </span>
               </div>
               <div className="h-72">
                 {loading ? (
-                  <div className="flex h-full items-center justify-center text-slate-400">
+                  <div className="flex h-full items-center justify-center text-text-muted">
                     Loading chart...
                   </div>
                 ) : (
@@ -555,19 +555,19 @@ function NsoDashboard() {
               </div>
             </section>
 
-            <section id="mttr-trend" className="rounded-[32px] border border-slate-200 bg-white p-5 shadow-sm">
+            <section id="mttr-trend" className="rounded-[32px] border border-border-color bg-surface p-5 shadow-sm">
               <div className="mb-4 flex items-center justify-between gap-4">
                 <div>
-                  <h3 className="text-lg font-semibold text-slate-900">MTTR Trend</h3>
-                  <p className="text-sm text-slate-500">Weekly average MTTR trend.</p>
+                  <h3 className="text-lg font-semibold text-text-primary">MTTR Trend</h3>
+                  <p className="text-sm text-text-muted">Weekly average MTTR trend.</p>
                 </div>
-                <span className="rounded-full bg-slate-100 px-3 py-2 text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">
+                <span className="rounded-full bg-surface-muted px-3 py-2 text-xs font-semibold uppercase tracking-[0.24em] text-text-muted">
                   {mttrTrend.length} weeks
                 </span>
               </div>
               <div className="h-72">
                 {loading ? (
-                  <div className="flex h-full items-center justify-center text-slate-400">
+                  <div className="flex h-full items-center justify-center text-text-muted">
                     Loading chart...
                   </div>
                 ) : (
@@ -585,16 +585,16 @@ function NsoDashboard() {
             </section>
           </div>
 
-          <section id="cmp-summary" className="space-y-4 rounded-[32px] border border-slate-200 bg-white p-5 shadow-sm">
+          <section id="cmp-summary" className="space-y-4 rounded-[32px] border border-border-color bg-surface p-5 shadow-sm">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <h3 className="text-xl font-semibold text-slate-900">CMP Performance Summary</h3>
-                <p className="text-sm text-slate-500">
+                <h3 className="text-xl font-semibold text-text-primary">CMP Performance Summary</h3>
+                <p className="text-sm text-text-muted">
                   Current week and previous week CMP performance comparison.
                 </p>
               </div>
-              <div className="flex items-center gap-2 text-sm text-slate-500">
-                <span className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-2">
+              <div className="flex items-center gap-2 text-sm text-text-muted">
+                <span className="inline-flex items-center gap-2 rounded-full bg-surface-muted px-3 py-2">
                   <Layers className="h-4 w-4" />
                   {cmpSummary.length} CMPs
                 </span>
@@ -602,8 +602,8 @@ function NsoDashboard() {
             </div>
 
             <div className="overflow-x-auto">
-              <table className="min-w-[960px] w-full text-left text-sm text-slate-600">
-                <thead className="bg-slate-50 text-slate-500">
+              <table className="min-w-[960px] w-full text-left text-sm text-text-secondary">
+                <thead className="bg-surface-muted text-text-muted">
                   <tr>
                     <th className="px-4 py-3">CMP</th>
                     <th className="px-4 py-3">Scope KM</th>
@@ -620,14 +620,14 @@ function NsoDashboard() {
                 <tbody>
                   {loading ? (
                     Array.from({ length: 6 }).map((_, index) => (
-                      <tr key={index} className="animate-pulse bg-slate-50">
+                      <tr key={index} className="animate-pulse bg-surface-muted">
                         <td className="h-12 px-4" colSpan={10} />
                       </tr>
                     ))
                   ) : pagedCmpSummary.length ? (
                     pagedCmpSummary.map((row) => (
-                      <tr key={row.cmp} className="border-b border-slate-100 hover:bg-slate-50">
-                        <td className="px-4 py-4 font-medium text-slate-900">{row.cmp}</td>
+                      <tr key={row.cmp} className="border-b border-border-color hover:bg-surface-muted">
+                        <td className="px-4 py-4 font-medium text-text-primary">{row.cmp}</td>
                         <td className="px-4 py-4">{row.scope}</td>
                         <td className="px-4 py-4">{formatNumber(row.currentCuts)}</td>
                         <td className="px-4 py-4">{formatNumber(row.currentFTKM)}</td>
@@ -637,7 +637,7 @@ function NsoDashboard() {
                         <td className="px-4 py-4">{formatNumber(row.previousMTTR)}</td>
                         <td className="px-4 py-4">{formatChange(row.cutsChangePct)}</td>
                         <td className="px-4 py-4">
-                          <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${statusStyles[row.status] || "bg-slate-100 text-slate-700"}`}>
+                          <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${statusStyles[row.status] || "bg-surface-muted text-text-secondary"}`}>
                             {row.status}
                           </span>
                         </td>
@@ -645,7 +645,7 @@ function NsoDashboard() {
                     ))
                   ) : (
                     <tr>
-                      <td className="px-4 py-6 text-center text-sm text-slate-500" colSpan={10}>
+                      <td className="px-4 py-6 text-center text-sm text-text-muted" colSpan={10}>
                         No CMP records available for the selected filters.
                       </td>
                     </tr>
@@ -655,15 +655,15 @@ function NsoDashboard() {
             </div>
 
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <p className="text-sm text-slate-500">
+              <p className="text-sm text-text-muted">
                 Showing {pagedCmpSummary.length} of {cmpSummary.length} CMP rows.
               </p>
-              <div className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-2 text-sm text-slate-600">
+              <div className="inline-flex items-center gap-2 rounded-full bg-surface-muted px-3 py-2 text-sm text-text-secondary">
                 <button
                   type="button"
                   disabled={currentPage === 1}
                   onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
-                  className="rounded-full bg-white px-3 py-2 text-slate-700 transition hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="rounded-full bg-surface px-3 py-2 text-text-secondary transition hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   Prev
                 </button>
@@ -674,7 +674,7 @@ function NsoDashboard() {
                   type="button"
                   disabled={currentPage === cmpPageCount}
                   onClick={() => setCurrentPage((page) => Math.min(cmpPageCount, page + 1))}
-                  className="rounded-full bg-white px-3 py-2 text-slate-700 transition hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="rounded-full bg-surface px-3 py-2 text-text-secondary transition hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   Next
                 </button>
@@ -683,19 +683,19 @@ function NsoDashboard() {
           </section>
 
           <div className="grid gap-4 xl:grid-cols-2">
-            <section id="reports" className="rounded-[32px] border border-slate-200 bg-white p-5 shadow-sm">
+            <section id="reports" className="rounded-[32px] border border-border-color bg-surface p-5 shadow-sm">
               <div className="mb-4 flex items-center justify-between gap-4">
                 <div>
-                  <h3 className="text-lg font-semibold text-slate-900">Weekly Performance Heatmap</h3>
-                  <p className="text-sm text-slate-500">Heatmap view of CMP cuts intensity for the last few weeks.</p>
+                  <h3 className="text-lg font-semibold text-text-primary">Weekly Performance Heatmap</h3>
+                  <p className="text-sm text-text-muted">Heatmap view of CMP cuts intensity for the last few weeks.</p>
                 </div>
-                <div className="text-xs uppercase tracking-[0.24em] text-slate-500">
+                <div className="text-xs uppercase tracking-[0.24em] text-text-muted">
                   Good / Warning / Critical
                 </div>
               </div>
               <div className="overflow-x-auto">
-                <table className="min-w-[640px] w-full text-left text-sm text-slate-600">
-                  <thead className="bg-slate-50 text-slate-500">
+                <table className="min-w-[640px] w-full text-left text-sm text-text-secondary">
+                  <thead className="bg-surface-muted text-text-muted">
                     <tr>
                       <th className="px-4 py-3">CMP</th>
                       {heatmap.weeks.map((week) => (
@@ -708,14 +708,14 @@ function NsoDashboard() {
                   <tbody>
                     {loading ? (
                       Array.from({ length: 4 }).map((_, index) => (
-                        <tr key={index} className="animate-pulse bg-slate-50">
+                        <tr key={index} className="animate-pulse bg-surface-muted">
                           <td className="h-12 px-4" colSpan={heatmap.weeks.length + 1} />
                         </tr>
                       ))
                     ) : heatmap.rows.length ? (
                       heatmap.rows.map((row) => (
-                        <tr key={row.cmp} className="border-b border-slate-100 hover:bg-slate-50">
-                          <td className="px-4 py-4 font-medium text-slate-900">{row.cmp}</td>
+                        <tr key={row.cmp} className="border-b border-border-color hover:bg-surface-muted">
+                          <td className="px-4 py-4 font-medium text-text-primary">{row.cmp}</td>
                           {heatmap.weeks.map((week) => (
                             <td key={week} className="px-4 py-4 text-center">
                               <span className={`mx-auto inline-flex h-10 min-w-[2.5rem] items-center justify-center rounded-2xl text-sm font-semibold ${heatmapColor(row.values[week])}`}>
@@ -727,7 +727,7 @@ function NsoDashboard() {
                       ))
                     ) : (
                       <tr>
-                        <td className="px-4 py-6 text-center text-sm text-slate-500" colSpan={heatmap.weeks.length + 1}>
+                        <td className="px-4 py-6 text-center text-sm text-text-muted" colSpan={heatmap.weeks.length + 1}>
                           No heatmap data available.
                         </td>
                       </tr>
@@ -736,28 +736,28 @@ function NsoDashboard() {
                 </table>
               </div>
 
-              <div className="mt-4 flex flex-wrap items-center gap-3 text-sm text-slate-500">
-                <span className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-2">
+              <div className="mt-4 flex flex-wrap items-center gap-3 text-sm text-text-muted">
+                <span className="inline-flex items-center gap-2 rounded-full bg-surface-muted px-3 py-2">
                   <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" /> Good (0-2)
                 </span>
-                <span className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-2">
+                <span className="inline-flex items-center gap-2 rounded-full bg-surface-muted px-3 py-2">
                   <span className="h-2.5 w-2.5 rounded-full bg-amber-500" /> Warning (3-5)
                 </span>
-                <span className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-2">
+                <span className="inline-flex items-center gap-2 rounded-full bg-surface-muted px-3 py-2">
                   <span className="h-2.5 w-2.5 rounded-full bg-rose-500" /> Critical (6+)
                 </span>
               </div>
             </section>
 
-            <section id="weekly-details" className="space-y-4 rounded-[32px] border border-slate-200 bg-white p-5 shadow-sm">
+            <section id="weekly-details" className="space-y-4 rounded-[32px] border border-border-color bg-surface p-5 shadow-sm">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                  <h3 className="text-lg font-semibold text-slate-900">CMP Weekly Details</h3>
-                  <p className="text-sm text-slate-500">
+                  <h3 className="text-lg font-semibold text-text-primary">CMP Weekly Details</h3>
+                  <p className="text-sm text-text-muted">
                     Expand each CMP to inspect weekly cuts, FTKM, and MTTR.
                   </p>
                 </div>
-                <span className="rounded-full bg-slate-100 px-3 py-2 text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">
+                <span className="rounded-full bg-surface-muted px-3 py-2 text-xs font-semibold uppercase tracking-[0.24em] text-text-muted">
                   {weeklyDetails.weeks.length} weeks
                 </span>
               </div>
@@ -765,7 +765,7 @@ function NsoDashboard() {
               {loading ? (
                 <div className="space-y-3">
                   {Array.from({ length: 3 }).map((_, index) => (
-                    <div key={index} className="h-24 rounded-3xl bg-slate-100" />
+                    <div key={index} className="h-24 rounded-3xl bg-surface-muted" />
                   ))}
                 </div>
               ) : weeklyDetails.rows.length ? (
@@ -774,7 +774,7 @@ function NsoDashboard() {
                   return (
                     <div
                       key={item.cmp}
-                      className="overflow-hidden rounded-3xl border border-slate-200 bg-slate-50"
+                      className="overflow-hidden rounded-3xl border border-border-color bg-surface-muted"
                     >
                       <button
                         type="button"
@@ -783,21 +783,21 @@ function NsoDashboard() {
                       >
                         <div className="flex items-center justify-between gap-3">
                           <div>
-                            <h4 className="text-base font-semibold text-slate-900">{item.cmp}</h4>
-                            <p className="text-sm text-slate-500">Tap to view weekly cut details.</p>
+                            <h4 className="text-base font-semibold text-text-primary">{item.cmp}</h4>
+                            <p className="text-sm text-text-muted">Tap to view weekly cut details.</p>
                           </div>
-                          <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-white text-slate-700 shadow-sm">
+                          <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-surface text-text-secondary shadow-sm">
                             {expanded ? <ArrowDownRight className="h-4 w-4" /> : <ArrowUpRight className="h-4 w-4" />}
                           </span>
                         </div>
                       </button>
                       {expanded ? (
-                        <div className="border-t border-slate-200 bg-white p-5">
+                        <div className="border-t border-border-color bg-surface p-5">
                           <div className="grid gap-4 sm:grid-cols-3">
                             {item.details.map((detail) => (
-                              <div key={detail.week} className="rounded-3xl border border-slate-200 p-4 bg-slate-50">
-                                <p className="text-xs uppercase tracking-[0.24em] text-slate-500">{detail.week}</p>
-                                <div className="mt-3 space-y-2 text-sm text-slate-700">
+                              <div key={detail.week} className="rounded-3xl border border-border-color p-4 bg-surface-muted">
+                                <p className="text-xs uppercase tracking-[0.24em] text-text-muted">{detail.week}</p>
+                                <div className="mt-3 space-y-2 text-sm text-text-secondary">
                                   <div className="flex items-center justify-between">
                                     <span>Cuts</span>
                                     <strong>{formatNumber(detail.cuts)}</strong>
@@ -820,31 +820,31 @@ function NsoDashboard() {
                   );
                 })
               ) : (
-                <div className="rounded-3xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center text-sm text-slate-500">
+                <div className="rounded-3xl border border-dashed border-border-strong bg-surface-muted p-8 text-center text-sm text-text-muted">
                   No weekly CMP details found for the selected filters.
                 </div>
               )}
             </section>
           </div>
 
-          <section id="upload" className="rounded-[32px] border border-slate-200 bg-white p-5 shadow-sm">
+          <section id="upload" className="rounded-[32px] border border-border-color bg-surface p-5 shadow-sm">
             <div className="flex items-center gap-4">
-              <ShieldCheck className="h-6 w-6 text-slate-700" />
+              <ShieldCheck className="h-6 w-6 text-text-secondary" />
               <div>
-                <h3 className="text-lg font-semibold text-slate-900">Data Upload & Security</h3>
-                <p className="text-sm text-slate-500">
+                <h3 className="text-lg font-semibold text-text-primary">Data Upload & Security</h3>
+                <p className="text-sm text-text-muted">
                   All KPI data is filtered by circle access from your authenticated user session.
                 </p>
               </div>
             </div>
           </section>
 
-          <section id="settings" className="rounded-[32px] border border-slate-200 bg-white p-5 shadow-sm">
+          <section id="settings" className="rounded-[32px] border border-border-color bg-surface p-5 shadow-sm">
             <div className="flex items-center gap-4">
-              <Settings className="h-6 w-6 text-slate-700" />
+              <Settings className="h-6 w-6 text-text-secondary" />
               <div>
-                <h3 className="text-lg font-semibold text-slate-900">Settings</h3>
-                <p className="text-sm text-slate-500">
+                <h3 className="text-lg font-semibold text-text-primary">Settings</h3>
+                <p className="text-sm text-text-muted">
                   Use the filters above to tune the dashboard to your circle, CMP, year, month and week.
                 </p>
               </div>

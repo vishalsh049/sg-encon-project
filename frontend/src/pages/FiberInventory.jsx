@@ -217,10 +217,10 @@ useEffect(() => {
         <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
           
             <div className="space-y-1">
-              <h1 className="text-2xl font-semibold tracking-[-0.05em] text-slate-900 sm:text-xl md:text-[1.2rem]">
+              <h1 className="text-2xl font-semibold tracking-[-0.05em] text-text-primary sm:text-xl md:text-[1.2rem]">
                 Fiber Inventory
               </h1>
-              <p className="max-w-3xl text-sm text-slate-500 md:text-[15px]">
+              <p className="max-w-3xl text-sm text-text-muted md:text-[15px]">
                 Each card uses the newest upload for that fiber segment, so FTTx
                 uploads do not replace Intercity or Intracity totals.
               </p>
@@ -252,14 +252,14 @@ useEffect(() => {
         </div>
 
 
-  <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[14px] border border-slate-200/60 bg-white/80 backdrop-blur-xl sm:rounded-[18px]">
-   <div className="flex flex-col gap-4 border-b border-slate-200/80 px-4 py-3 sm:px-6 sm:py-3 lg:flex-row lg:items-center lg:justify-between">
+  <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[14px] border border-border-color/60 bg-surface/80 backdrop-blur-xl sm:rounded-[18px]">
+   <div className="flex flex-col gap-4 border-b border-border-color/80 px-4 py-3 sm:px-6 sm:py-3 lg:flex-row lg:items-center lg:justify-between">
 
     <div>
-     <h2 className="text-lg font-semibold tracking-[-0.03em] text-slate-900">
+     <h2 className="text-lg font-semibold tracking-[-0.03em] text-text-primary">
        Upload History
      </h2>
-     <p className=" text-sm text-slate-500">
+     <p className=" text-sm text-text-muted">
         Uploads are stored separately, and each dashboard card resolves its own
         latest matching upload.
       </p>
@@ -289,7 +289,7 @@ useEffect(() => {
   fetchSummary();
   fetchUploads();
 }}
-    className="w-full rounded-lg bg-red-100 px-3 py-2 text-xs text-red-700 sm:w-auto"
+    className="w-full rounded-lg bg-red-100 dark:bg-red-500/15 px-3 py-2 text-xs text-red-700 dark:text-red-400 sm:w-auto"
   >
     Delete Selected
   </button>
@@ -318,7 +318,7 @@ useEffect(() => {
     alert("Download failed");
   }
 }}
-    className="w-full rounded-lg bg-blue-100 px-3 py-2 text-xs text-blue-700 sm:w-auto"
+    className="w-full rounded-lg bg-blue-100 dark:bg-blue-500/15 px-3 py-2 text-xs text-blue-700 dark:text-blue-400 sm:w-auto"
   >
     Download Selected
   </button>
@@ -326,21 +326,21 @@ useEffect(() => {
      </div>
 
        {error ? (
-       <div className="m-5 rounded-2xl border border-rose-100 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+       <div className="m-5 rounded-2xl border border-rose-100 dark:border-rose-500/20 bg-rose-50 dark:bg-rose-500/10 px-4 py-3 text-sm text-rose-700 dark:text-rose-400">
         {error}
         </div>
       ) : null}
 
       <div className="min-h-0 w-full max-w-full flex-1 overflow-y-auto overflow-x-auto">
-       <div className="px-4 pt-3 text-xs text-slate-400 sm:hidden">Swipe sideways to view the full table.</div>
-       <table className="min-w-[920px] w-full border-separate border-spacing-0 text-sm text-slate-600">
-        <thead className="sticky top-0 z-10 bg-white/95 backdrop-blur-xl">
+       <div className="px-4 pt-3 text-xs text-text-muted sm:hidden">Swipe sideways to view the full table.</div>
+       <table className="min-w-[920px] w-full border-separate border-spacing-0 text-sm text-text-secondary">
+        <thead className="sticky top-0 z-10 bg-surface/95 backdrop-blur-xl">
   <tr>
     {/* SELECT ALL CHECKBOX */}
     <th className="px-4 py-4 sm:px-4">
       <input
         type="checkbox"
-        className="h-4 w-4 rounded-md border-slate-300 text-blue-600"
+        className="h-4 w-4 rounded-md border-border-strong text-blue-600 dark:text-blue-400"
         checked={
           allUploads.length > 0 &&
           selectedIds.length === allUploads.length
@@ -356,19 +356,19 @@ useEffect(() => {
     </th>
 
     {/* HEADERS */}
-    <th className="px-4 py-4 text-[12px] font-semibold uppercase text-slate-400 sm:px-6">Date</th>
-    <th className="px-4 py-4 text-[12px] font-semibold uppercase text-slate-400 sm:px-6">Uploaded By</th>
-    <th className="px-4 py-4 text-[12px] font-semibold uppercase text-slate-400 sm:px-6">Scope</th>
-    <th className="px-4 py-4 text-[12px] font-semibold uppercase text-slate-400 sm:px-6">Uploaded At</th>
-    <th className="px-4 py-4 text-[12px] font-semibold uppercase text-slate-400 sm:px-6">File Name</th>
-    <th className="px-4 py-4 text-[12px] font-semibold uppercase text-slate-400 sm:px-6">Actions</th>
+    <th className="px-4 py-4 text-[12px] font-semibold uppercase text-text-muted sm:px-6">Date</th>
+    <th className="px-4 py-4 text-[12px] font-semibold uppercase text-text-muted sm:px-6">Uploaded By</th>
+    <th className="px-4 py-4 text-[12px] font-semibold uppercase text-text-muted sm:px-6">Scope</th>
+    <th className="px-4 py-4 text-[12px] font-semibold uppercase text-text-muted sm:px-6">Uploaded At</th>
+    <th className="px-4 py-4 text-[12px] font-semibold uppercase text-text-muted sm:px-6">File Name</th>
+    <th className="px-4 py-4 text-[12px] font-semibold uppercase text-text-muted sm:px-6">Actions</th>
   </tr>
 </thead>
       <tbody>
     {!uploadsLoading && allUploads.length === 0 ? (      <tr>
        <td
         colSpan={7}
-      className="px-4 py-16 text-center text-sm text-slate-500 sm:px-6"
+      className="px-4 py-16 text-center text-sm text-text-muted sm:px-6"
         >
         No fiber uploads found. Add an Excel or CSV file to start the
         latest-date dashboard.
@@ -377,11 +377,11 @@ useEffect(() => {
         ) : null}
 
       {allUploads.map((item) => (
-       <tr key={item.id} className="group transition hover:bg-slate-50/70">
+       <tr key={item.id} className="group transition hover:bg-surface-muted/70">
        <td className="px-4 py-4 sm:px-6">
   <input
   type="checkbox"
-  className="h-4 w-4 rounded-md border-slate-300 text-blue-600"
+  className="h-4 w-4 rounded-md border-border-strong text-blue-600 dark:text-blue-400"
   checked={selectedIds.includes(item.id)}
   onChange={() => {
     setSelectedIds((prev) => {
@@ -394,36 +394,36 @@ useEffect(() => {
   }}
 />
 </td>
-     <td className="border-b border-slate-100 px-4 py-4 font-medium text-slate-800 transition duration-150 group-hover:bg-slate-50/90 sm:px-6">
+     <td className="border-b border-border-color px-4 py-4 font-medium text-text-primary transition duration-150 group-hover:bg-surface-muted/90 sm:px-6">
      {formatDate(item.date)}
        </td>
-        <td className="border-b border-slate-100 px-4 py-4 transition duration-150 group-hover:bg-slate-50/90 sm:px-6">
+        <td className="border-b border-border-color px-4 py-4 transition duration-150 group-hover:bg-surface-muted/90 sm:px-6">
         {item.uploaded_by}
           </td>
-        <td className="border-b border-slate-100 px-4 py-4 transition duration-150 group-hover:bg-slate-50/90 sm:px-6">
-        <span className="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">
+        <td className="border-b border-border-color px-4 py-4 transition duration-150 group-hover:bg-surface-muted/90 sm:px-6">
+        <span className="inline-flex rounded-full bg-surface-muted px-2.5 py-1 text-xs font-medium text-text-secondary">
           {item.upload_scope || "Unknown"}
         </span>
           </td>
-        <td className="border-b border-slate-100 px-4 py-4 transition duration-150 group-hover:bg-slate-50/90 sm:px-6">
+        <td className="border-b border-border-color px-4 py-4 transition duration-150 group-hover:bg-surface-muted/90 sm:px-6">
           {formatDateTime(item.uploaded_at)}
         </td>
-           <td className="border-b border-slate-100 px-4 py-4 transition duration-150 group-hover:bg-slate-50/90 sm:px-6">
+           <td className="border-b border-border-color px-4 py-4 transition duration-150 group-hover:bg-surface-muted/90 sm:px-6">
           <div className="flex items-center gap-2">
-           <FileSpreadsheet size={16} className="text-slate-400" />
-          <span className="max-w-[260px] truncate font-medium text-slate-700">{item.file_name}</span>
+           <FileSpreadsheet size={16} className="text-text-muted" />
+          <span className="max-w-[260px] truncate font-medium text-text-secondary">{item.file_name}</span>
          </div>
          {item.file_missing ? (
-           <div className="mt-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-700">
+           <div className="mt-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-700 dark:text-amber-400">
              File missing
            </div>
          ) : null}
         </td>
-        <td className="border-b border-slate-100 px-4 py-4 transition duration-150 group-hover:bg-slate-50/90 sm:px-6">
+        <td className="border-b border-border-color px-4 py-4 transition duration-150 group-hover:bg-surface-muted/90 sm:px-6">
      <div className="flex flex-wrap gap-2">
       <a
         href={item.file_missing ? undefined : buildApiUrl(`/api/fiber/uploads/${item.id}/download`)}
-        className={`p-2 rounded-lg ${item.file_missing ? "bg-slate-200 text-slate-500 cursor-not-allowed" : "bg-blue-50 text-blue-600 hover:bg-blue-100"} transition`}
+        className={`p-2 rounded-lg ${item.file_missing ? "bg-surface-muted text-text-muted cursor-not-allowed" : "bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 hover:bg-blue-100 hover:dark:bg-blue-500/15"} transition`}
         onClick={(event) => item.file_missing && event.preventDefault()}
       >
          <Download size={14} />
@@ -439,7 +439,7 @@ useEffect(() => {
                             });
                             setShowEditModal(true);
                           }}
-                       className="p-2 rounded-lg bg-slate-100 hover:bg-slate-200 transition"
+                       className="p-2 rounded-lg bg-surface-muted hover:bg-surface-muted transition"
                         >
                           <Pencil size={14} />
                         </button>
@@ -454,7 +454,7 @@ useEffect(() => {
     handleDelete(item.id);
   }
 }}
-                         className="p-2 rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-100 transition"
+                         className="p-2 rounded-lg bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400 hover:bg-rose-100 hover:dark:bg-rose-500/15 transition"
                         >
                           <Trash2 size={14} />
                         </button>
@@ -471,9 +471,9 @@ useEffect(() => {
                         {Array.from({ length: 7 }).map((__, cellIndex) => (
                           <td
                             key={`cell-${cellIndex}`}
-                            className="border-b border-slate-100 px-4 py-4 sm:px-6"
+                            className="border-b border-border-color px-4 py-4 sm:px-6"
                           >
-                            <div className="h-4 animate-pulse rounded-full bg-slate-100" />
+                            <div className="h-4 animate-pulse rounded-full bg-surface-muted" />
                           </td>
                         ))}
                       </tr>
@@ -504,13 +504,13 @@ useEffect(() => {
               onClick={closeUploadModal}
             >
               <div
-                className="max-h-[90vh] w-full max-w-xl overflow-hidden rounded-[28px] bg-white/95 p-5 shadow-2xl backdrop-blur-xl sm:rounded-3xl sm:p-8"
+                className="max-h-[90vh] w-full max-w-xl overflow-hidden rounded-[28px] bg-surface/95 p-5 shadow-2xl backdrop-blur-xl sm:rounded-3xl sm:p-8"
                 onClick={(event) => event.stopPropagation()}
               >
                 <div className="flex items-start justify-between gap-4">
                   <div>
-                    <h2 className="text-2xl font-bold text-slate-900">Upload Fiber File</h2>
-                    <p className="mt-1 text-sm text-slate-500">
+                    <h2 className="text-2xl font-bold text-text-primary">Upload Fiber File</h2>
+                    <p className="mt-1 text-sm text-text-muted">
                       This upload becomes active only for the fiber segments found in
                       the file when its date is the newest for those segments.
                     </p>
@@ -518,14 +518,14 @@ useEffect(() => {
                   <button
                     type="button"
                     onClick={closeUploadModal}
-                    className="rounded-full p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
+                    className="rounded-full p-1 text-text-muted transition hover:bg-surface-muted hover:text-text-secondary"
                   >
                     <X size={18} />
                   </button>
                 </div>
 
                 {saveError ? (
-                  <div className="mt-4 rounded-xl border border-rose-200/60 bg-rose-50/80 px-4 py-3 text-sm text-rose-800">
+                  <div className="mt-4 rounded-xl border border-rose-200 dark:border-rose-500/20/60 bg-rose-50 dark:bg-rose-500/10/80 px-4 py-3 text-sm text-rose-800 dark:text-rose-300">
                     {saveError}
                   </div>
                 ) : null}
@@ -533,7 +533,7 @@ useEffect(() => {
                 <form onSubmit={handleUpload} className="mt-6 max-h-[calc(90vh-120px)] space-y-6 overflow-y-auto pr-1 sm:mt-8">
                   <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
                     <div>
-                      <label className="mb-2 block text-sm font-medium text-slate-700">
+                      <label className="mb-2 block text-sm font-medium text-text-secondary">
                         Date
                       </label>
                       <PremiumDatePicker
@@ -546,7 +546,7 @@ useEffect(() => {
                     </div>
 
                     <div>
-                      <label className="mb-2 block text-sm font-medium text-slate-700">
+                      <label className="mb-2 block text-sm font-medium text-text-secondary">
                         Uploaded By
                       </label>
                       <input
@@ -560,28 +560,28 @@ useEffect(() => {
                           }))
                         }
                         placeholder="Enter person name"
-                        className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm shadow-sm focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                        className="w-full rounded-xl border border-border-color px-4 py-3 text-sm shadow-sm focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
                       />
                     </div>
                   </div>
 
                   <div>
-                    <label className="mb-2 block text-sm font-medium text-slate-700">
+                    <label className="mb-2 block text-sm font-medium text-text-secondary">
                       Upload File
                     </label>
-                    <label className="flex cursor-pointer flex-col items-start gap-4 rounded-2xl border border-dashed border-slate-300 bg-slate-50/80 px-4 py-4 transition hover:border-blue-300 hover:bg-blue-50/60 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+                    <label className="flex cursor-pointer flex-col items-start gap-4 rounded-2xl border border-dashed border-border-strong bg-surface-muted/80 px-4 py-4 transition hover:border-blue-300 hover:dark:border-blue-500/30 hover:bg-blue-50 hover:dark:bg-blue-500/10/60 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
                       <div className="flex items-center gap-3">
-                        <Upload size={18} className="text-blue-500" />
+                        <Upload size={18} className="text-blue-500 dark:text-blue-400" />
                         <div>
-                          <p className="text-sm font-medium text-slate-700">
+                          <p className="text-sm font-medium text-text-secondary">
                             {uploadForm.file ? uploadForm.file.name : "Choose .xlsx or .csv file"}
                           </p>
-                          <p className="text-xs text-slate-500">
+                          <p className="text-xs text-text-muted">
                             Excel and CSV files only
                           </p>
                         </div>
                       </div>
-                      <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-600 shadow-sm">
+                      <span className="rounded-full bg-surface px-3 py-1 text-xs font-semibold text-text-secondary shadow-sm">
                         Browse
                       </span>
                       <input
@@ -600,13 +600,13 @@ useEffect(() => {
                   </div>
 
                   <div>
-                    <label className="mb-2 block text-sm font-medium text-slate-700">
+                    <label className="mb-2 block text-sm font-medium text-text-secondary">
                       Uploaded At
                     </label>
                     <input
                       value={uploadTimestampPreview}
                       disabled
-                      className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500 shadow-sm"
+                      className="w-full rounded-xl border border-border-color bg-surface-muted px-4 py-3 text-sm text-text-muted shadow-sm"
                     />
                   </div>
 
@@ -615,7 +615,7 @@ useEffect(() => {
                       type="button"
                       onClick={closeUploadModal}
                       disabled={saving}
-                      className="flex-1 rounded-xl border border-slate-200 px-6 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-200 disabled:opacity-50"
+                      className="flex-1 rounded-xl border border-border-color px-6 py-3 text-sm font-medium text-text-secondary transition hover:bg-surface-muted focus:outline-none focus:ring-2 focus:ring-border-strong disabled:opacity-50"
                     >
                       Cancel
                     </button>
@@ -641,7 +641,7 @@ useEffect(() => {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 z-40 bg-slate-900/30 backdrop-blur-sm"
+              className="fixed inset-0 z-40 bg-overlay/30 backdrop-blur-sm"
               onClick={closeEditModal}
             />
             <MotionDiv
@@ -653,34 +653,34 @@ useEffect(() => {
               onClick={closeEditModal}
             >
               <div
-                className="max-h-[90vh] w-full max-w-lg overflow-hidden rounded-[28px] bg-white/95 p-5 shadow-2xl backdrop-blur-xl sm:rounded-3xl sm:p-8"
+                className="max-h-[90vh] w-full max-w-lg overflow-hidden rounded-[28px] bg-surface/95 p-5 shadow-2xl backdrop-blur-xl sm:rounded-3xl sm:p-8"
                 onClick={(event) => event.stopPropagation()}
               >
                 <div className="flex items-start justify-between gap-4">
                   <div>
-                    <h2 className="text-2xl font-bold text-slate-900">Edit Upload</h2>
-                    <p className="mt-1 text-sm text-slate-500">
+                    <h2 className="text-2xl font-bold text-text-primary">Edit Upload</h2>
+                    <p className="mt-1 text-sm text-text-muted">
                       Update the upload date or uploaded-by name for this dataset.
                     </p>
                   </div>
                   <button
                     type="button"
                     onClick={closeEditModal}
-                    className="rounded-full p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
+                    className="rounded-full p-1 text-text-muted transition hover:bg-surface-muted hover:text-text-secondary"
                   >
                     <X size={18} />
                   </button>
                 </div>
 
                 {saveError ? (
-                  <div className="mt-4 rounded-xl border border-rose-200/60 bg-rose-50/80 px-4 py-3 text-sm text-rose-800">
+                  <div className="mt-4 rounded-xl border border-rose-200 dark:border-rose-500/20/60 bg-rose-50 dark:bg-rose-500/10/80 px-4 py-3 text-sm text-rose-800 dark:text-rose-300">
                     {saveError}
                   </div>
                 ) : null}
 
                 <form onSubmit={handleEdit} className="mt-6 max-h-[calc(90vh-120px)] space-y-6 overflow-y-auto pr-1 sm:mt-8">
                   <div>
-                    <label className="mb-2 block text-sm font-medium text-slate-700">
+                    <label className="mb-2 block text-sm font-medium text-text-secondary">
                       Date
                     </label>
                     <PremiumDatePicker
@@ -693,7 +693,7 @@ useEffect(() => {
                   </div>
 
                   <div>
-                    <label className="mb-2 block text-sm font-medium text-slate-700">
+                    <label className="mb-2 block text-sm font-medium text-text-secondary">
                       Uploaded By
                     </label>
                     <input
@@ -706,7 +706,7 @@ useEffect(() => {
                           uploadedBy: event.target.value,
                         }))
                       }
-                      className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm shadow-sm focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                      className="w-full rounded-xl border border-border-color px-4 py-3 text-sm shadow-sm focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
                     />
                   </div>
 
@@ -715,7 +715,7 @@ useEffect(() => {
                       type="button"
                       onClick={closeEditModal}
                       disabled={saving}
-                      className="flex-1 rounded-xl border border-slate-200 px-6 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-200 disabled:opacity-50"
+                      className="flex-1 rounded-xl border border-border-color px-6 py-3 text-sm font-medium text-text-secondary transition hover:bg-surface-muted focus:outline-none focus:ring-2 focus:ring-border-strong disabled:opacity-50"
                     >
                       Cancel
                     </button>

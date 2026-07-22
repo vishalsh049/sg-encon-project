@@ -68,18 +68,18 @@ export default function Verification() {
     <div className="mx-auto max-w-7xl space-y-4 p-4 sm:p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="flex items-center gap-2 text-xl font-semibold tracking-tight text-slate-900">
-            <ShieldCheck className="h-5 w-5 text-indigo-500" />
+          <h1 className="flex items-center gap-2 text-xl font-semibold tracking-tight text-text-primary">
+            <ShieldCheck className="h-5 w-5 text-indigo-500 dark:text-indigo-400" />
             Document Verification
           </h1>
-          <p className="mt-0.5 text-sm text-slate-500">
+          <p className="mt-0.5 text-sm text-text-muted">
             {queue.length} document{queue.length === 1 ? "" : "s"} waiting for verification.
           </p>
         </div>
         <button
           type="button"
           onClick={load}
-          className="flex h-9 items-center gap-1.5 rounded-2xl border border-slate-200 bg-white px-3 text-sm font-medium text-slate-600 shadow-sm transition hover:bg-slate-50"
+          className="flex h-9 items-center gap-1.5 rounded-2xl border border-border-color bg-surface px-3 text-sm font-medium text-text-secondary shadow-sm transition hover:bg-surface-muted"
         >
           <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
           Refresh
@@ -91,20 +91,20 @@ export default function Verification() {
         <div className="space-y-2.5 lg:col-span-2">
           {loading ? (
             Array.from({ length: 5 }).map((_, index) => (
-              <div key={index} className="h-20 animate-pulse rounded-2xl bg-slate-100" />
+              <div key={index} className="h-20 animate-pulse rounded-2xl bg-surface-muted" />
             ))
           ) : queue.length ? (
             queue.map((doc) => (
-              <div key={doc.id} className="rounded-2xl border border-slate-100 bg-white p-3.5 shadow-sm">
+              <div key={doc.id} className="rounded-2xl border border-border-color bg-surface p-3.5 shadow-sm">
                 <div className="flex flex-wrap items-center gap-3">
                   <div className="min-w-0 flex-1">
                     <Link
                       to={`/dashboard/training/employees/${doc.training_employee_id}`}
-                      className="text-sm font-semibold text-slate-800 hover:text-indigo-600"
+                      className="text-sm font-semibold text-text-primary hover:text-indigo-600 hover:dark:text-indigo-400"
                     >
                       {doc.full_name}
                     </Link>
-                    <p className="text-xs text-slate-400">
+                    <p className="text-xs text-text-muted">
                       {prettyType(doc.document_type)} · {doc.file_name || "no file name"}
                     </p>
                   </div>
@@ -113,7 +113,7 @@ export default function Verification() {
                     <button
                       type="button"
                       onClick={() => setPreview(doc)}
-                      className="flex h-8 w-8 items-center justify-center rounded-xl border border-slate-200 text-slate-500 transition hover:bg-slate-50"
+                      className="flex h-8 w-8 items-center justify-center rounded-xl border border-border-color text-text-muted transition hover:bg-surface-muted"
                       title="Preview"
                     >
                       <Eye className="h-3.5 w-3.5" />
@@ -154,7 +154,7 @@ export default function Verification() {
                       value={remarks}
                       onChange={(event) => setRemarks(event.target.value)}
                       placeholder="Reason for rejection (required)"
-                      className="h-9 min-w-[220px] flex-1 rounded-xl border border-rose-200 bg-rose-50/50 px-3 text-sm outline-none focus:border-rose-300 focus:ring-4 focus:ring-rose-100"
+                      className="h-9 min-w-[220px] flex-1 rounded-xl border border-rose-200 dark:border-rose-500/20 bg-rose-50 dark:bg-rose-500/10/50 px-3 text-sm outline-none focus:border-rose-300 focus:dark:border-rose-500/30 focus:ring-4 focus:ring-rose-100"
                     />
                     <button
                       type="button"
@@ -169,33 +169,33 @@ export default function Verification() {
               </div>
             ))
           ) : (
-            <div className="rounded-2xl border border-dashed border-slate-200 bg-white py-14 text-center">
+            <div className="rounded-2xl border border-dashed border-border-color bg-surface py-14 text-center">
               <ShieldCheck className="mx-auto h-8 w-8 text-emerald-400" />
-              <p className="mt-2 text-sm font-medium text-slate-600">All caught up!</p>
-              <p className="text-xs text-slate-400">No documents pending verification.</p>
+              <p className="mt-2 text-sm font-medium text-text-secondary">All caught up!</p>
+              <p className="text-xs text-text-muted">No documents pending verification.</p>
             </div>
           )}
         </div>
 
         {/* Recent verification activity */}
-        <div className="rounded-[20px] border border-slate-100 bg-white p-4 shadow-sm">
-          <h2 className="text-sm font-semibold text-slate-700">Recent Verifications</h2>
+        <div className="rounded-[20px] border border-border-color bg-surface p-4 shadow-sm">
+          <h2 className="text-sm font-semibold text-text-secondary">Recent Verifications</h2>
           <div className="mt-3 space-y-2.5">
             {recent.length ? (
               recent.map((entry) => (
-                <div key={entry.id} className="rounded-xl bg-slate-50 p-2.5 text-xs">
+                <div key={entry.id} className="rounded-xl bg-surface-muted p-2.5 text-xs">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="truncate font-semibold text-slate-700">{entry.full_name}</span>
+                    <span className="truncate font-semibold text-text-secondary">{entry.full_name}</span>
                     <StatusBadge status={entry.action} />
                   </div>
-                  <p className="mt-0.5 text-slate-400">
+                  <p className="mt-0.5 text-text-muted">
                     {entry.document_type ? prettyType(entry.document_type) : "Profile"} ·{" "}
                     {entry.verified_by}
                   </p>
                 </div>
               ))
             ) : (
-              <p className="py-4 text-center text-xs text-slate-400">
+              <p className="py-4 text-center text-xs text-text-muted">
                 {loading ? "Loading…" : "No verification activity yet."}
               </p>
             )}

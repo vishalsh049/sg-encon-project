@@ -59,7 +59,7 @@ const SECTIONS = [
 ];
 
 const inputClass =
-  "h-10 w-full rounded-2xl border border-slate-200 bg-white px-3 text-sm text-slate-700 shadow-sm outline-none transition focus:border-blue-300 focus:ring-4 focus:ring-blue-100";
+  "h-10 w-full rounded-2xl border border-border-color bg-surface px-3 text-sm text-text-secondary shadow-sm outline-none transition focus:border-blue-300 focus:dark:border-blue-500/30 focus:ring-4 focus:ring-blue-100";
 
 function validate(form) {
   const errors = {};
@@ -117,15 +117,15 @@ export default function EmployeeForm({ initial = {}, onSubmit, submitting, submi
       {SECTIONS.map((section) => (
         <div
           key={section.title}
-          className="rounded-[20px] border border-slate-100 bg-white p-4 shadow-sm sm:p-5"
+          className="rounded-[20px] border border-border-color bg-surface p-4 shadow-sm sm:p-5"
         >
-          <h3 className="mb-3 text-sm font-semibold text-slate-700">{section.title}</h3>
+          <h3 className="mb-3 text-sm font-semibold text-text-secondary">{section.title}</h3>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {section.fields.map((field) => (
               <div key={field.name} className={field.span ? "sm:col-span-2 lg:col-span-3" : ""}>
-                <label className="mb-1 block px-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                <label className="mb-1 block px-1 text-[11px] font-semibold uppercase tracking-wide text-text-muted">
                   {field.label}
-                  {field.required ? <span className="text-rose-500"> *</span> : null}
+                  {field.required ? <span className="text-rose-500 dark:text-rose-400"> *</span> : null}
                 </label>
                 {field.type === "select" ? (
                   <select
@@ -154,12 +154,12 @@ export default function EmployeeForm({ initial = {}, onSubmit, submitting, submi
                     maxLength={field.maxLength}
                     onChange={(event) => set(field.name, event.target.value)}
                     className={`${inputClass} ${
-                      errors[field.name] ? "border-rose-300 ring-4 ring-rose-100" : ""
+                      errors[field.name] ? "border-rose-300 dark:border-rose-500/30 ring-4 ring-rose-100" : ""
                     }`}
                   />
                 )}
                 {errors[field.name] ? (
-                  <p className="mt-1 px-1 text-xs text-rose-500">{errors[field.name]}</p>
+                  <p className="mt-1 px-1 text-xs text-rose-500 dark:text-rose-400">{errors[field.name]}</p>
                 ) : null}
               </div>
             ))}

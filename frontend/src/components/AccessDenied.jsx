@@ -6,13 +6,13 @@ export default function AccessDenied({ pageName = "this page" }) {
   const navigate = useNavigate();
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 p-4">
+    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-surface-muted to-surface-muted p-4">
       <div className="w-full max-w-md">
-        <div className="app-surface rounded-3xl border border-white/40 bg-white/70 p-8 shadow-[0_8px_32px_rgba(0,0,0,0.08)] backdrop-blur-md">
+        <div className="app-surface rounded-3xl border border-white/40 bg-surface/70 p-8 shadow-[0_8px_32px_rgba(0,0,0,0.08)] backdrop-blur-md">
           {/* Icon */}
           <div className="mb-6 flex justify-center">
             <div className="flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-red-100 to-red-50">
-              <Lock className="h-8 w-8 text-red-600" strokeWidth={1.5} />
+              <Lock className="h-8 w-8 text-red-600 dark:text-red-400" strokeWidth={1.5} />
             </div>
           </div>
 
@@ -45,7 +45,7 @@ export default function AccessDenied({ pageName = "this page" }) {
 
             <button
               onClick={() => window.history.back()}
-              className="rounded-xl border border-text-secondary/20 px-4 py-3 font-medium text-text-primary transition-all duration-200 hover:bg-slate-50 active:scale-95"
+              className="rounded-xl border border-text-secondary/20 px-4 py-3 font-medium text-text-primary transition-all duration-200 hover:bg-surface-muted active:scale-95"
             >
               Go Back
             </button>

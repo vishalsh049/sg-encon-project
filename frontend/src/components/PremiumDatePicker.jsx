@@ -178,7 +178,7 @@ function PremiumDatePicker({
     onMouseDown={(event) => event.preventDefault()}
     className={`absolute z-[9999] left-0 w-[280px]
       ${openUp ? "bottom-full mb-2" : "top-full mt-2"}
-      rounded-2xl bg-white border border-slate-200 
+      rounded-2xl bg-surface border border-border-color 
       shadow-[0_20px_60px_rgba(0,0,0,0.12)]
       ${isOpen ? "block" : "hidden"}
     `}

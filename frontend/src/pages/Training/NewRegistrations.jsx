@@ -79,11 +79,11 @@ export default function NewRegistrations() {
     <div className="mx-auto max-w-7xl space-y-4 p-4 sm:p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="flex items-center gap-2 text-xl font-semibold tracking-tight text-slate-900">
-            <Inbox className="h-5 w-5 text-indigo-500" />
+          <h1 className="flex items-center gap-2 text-xl font-semibold tracking-tight text-text-primary">
+            <Inbox className="h-5 w-5 text-indigo-500 dark:text-indigo-400" />
             New Registrations
           </h1>
-          <p className="mt-0.5 text-sm text-slate-500">
+          <p className="mt-0.5 text-sm text-text-muted">
             Pending candidates from the Google Form, waiting for HR review.
           </p>
         </div>
@@ -91,7 +91,7 @@ export default function NewRegistrations() {
           <button
             type="button"
             onClick={load}
-            className="flex h-9 items-center gap-1.5 rounded-2xl border border-slate-200 bg-white px-3 text-sm font-medium text-slate-600 shadow-sm transition hover:bg-slate-50"
+            className="flex h-9 items-center gap-1.5 rounded-2xl border border-border-color bg-surface px-3 text-sm font-medium text-text-secondary shadow-sm transition hover:bg-surface-muted"
           >
             <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
             Refresh
@@ -132,21 +132,21 @@ export default function NewRegistrations() {
       {/* Manual registration modal */}
       {showForm ? (
         <div
-          className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/50 p-4 backdrop-blur-sm"
+          className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-overlay/50 p-4 backdrop-blur-sm"
           onClick={() => setShowForm(false)}
         >
           <div
-            className="my-6 w-full max-w-3xl rounded-[22px] bg-slate-50 p-5 shadow-2xl"
+            className="my-6 w-full max-w-3xl rounded-[22px] bg-surface-muted p-5 shadow-2xl"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-base font-semibold text-slate-800">
+              <h2 className="text-base font-semibold text-text-primary">
                 Register Candidate Manually
               </h2>
               <button
                 type="button"
                 onClick={() => setShowForm(false)}
-                className="flex h-8 w-8 items-center justify-center rounded-xl text-slate-400 transition hover:bg-slate-200 hover:text-slate-600"
+                className="flex h-8 w-8 items-center justify-center rounded-xl text-text-muted transition hover:bg-surface-muted hover:text-text-secondary"
               >
                 <X className="h-4 w-4" />
               </button>

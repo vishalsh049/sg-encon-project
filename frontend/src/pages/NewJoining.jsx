@@ -39,10 +39,11 @@ const selectStyles = {
     minHeight: "40px",
     height: "40px",
     borderRadius: "14px",
-    borderColor: state.isFocused ? "#bfdbfe" : "rgba(226,232,240,0.8)",
-    boxShadow: state.isFocused ? "0 0 0 4px rgba(59,130,246,0.08)" : "none",
+    borderColor: state.isFocused ? "rgb(var(--color-primary))" : "rgb(var(--color-border))",
+    boxShadow: state.isFocused ? "0 0 0 4px rgba(99,102,241,0.15)" : "none",
     fontSize: "13px",
-    "&:hover": { borderColor: "#cbd5e1" },
+    backgroundColor: "rgb(var(--color-surface))",
+    "&:hover": { borderColor: "rgb(var(--color-border-strong))" },
   }),
   valueContainer: (provided) => ({
     ...provided,
@@ -59,6 +60,7 @@ const selectStyles = {
     marginTop: 2,
     borderRadius: "12px",
     overflow: "hidden",
+    backgroundColor: "rgb(var(--color-surface-elevated))",
   }),
   menuList: (provided) => ({
     ...provided,
@@ -68,25 +70,28 @@ const selectStyles = {
     ...provided,
     fontSize: "13px",
     margin: 0,
+    color: "rgb(var(--color-text-primary))",
   }),
   placeholder: (provided) => ({
     ...provided,
     fontSize: "13px",
-    color: "#94a3b8",
+    color: "rgb(var(--color-text-muted))",
   }),
   singleValue: (provided) => ({
     ...provided,
     fontSize: "13px",
+    color: "rgb(var(--color-text-primary))",
   }),
   option: (provided, state) => ({
     ...provided,
     fontSize: "13px",
     cursor: "pointer",
+    color: state.isSelected ? "#ffffff" : "rgb(var(--color-text-primary))",
     backgroundColor: state.isSelected
       ? "#3b82f6"
       : state.isFocused
-        ? "#eff6ff"
-        : "white",
+        ? "rgba(99,102,241,0.1)"
+        : "rgb(var(--color-surface-elevated))",
   }),
 };
 
@@ -105,8 +110,8 @@ function getDesignationSelectStyles(hasError) {
       borderColor: hasError
         ? "#ef4444"
         : state.isFocused
-          ? "#bfdbfe"
-          : "rgba(226,232,240,0.8)",
+          ? "rgb(var(--color-primary))"
+          : "rgb(var(--color-border))",
       boxShadow: hasError
         ? "0 0 0 4px rgba(239,68,68,0.08)"
         : state.isFocused
@@ -128,7 +133,7 @@ function getDesignationSelectStyles(hasError) {
 function FilterField({ icon: Icon, label, children }) {
   return (
     <div className="min-w-[150px] flex-1">
-      <label className="mb-1 flex items-center gap-1 px-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+      <label className="mb-1 flex items-center gap-1 px-1 text-[11px] font-semibold uppercase tracking-wide text-text-muted">
         {Icon ? <Icon className="h-3 w-3" /> : null}
         {label}
       </label>
@@ -193,7 +198,7 @@ function MetricCard({ icon: Icon, label, value, accent, note }) {
   return (
     <motion.div
       whileHover={{ y: -3 }}
-      className="group relative overflow-hidden rounded-[18px] border border-white/70 bg-white/85 px-4 py-3 backdrop-blur-2xl"
+      className="group relative overflow-hidden rounded-[18px] border border-white/70 bg-surface/85 px-4 py-3 backdrop-blur-2xl"
     >
       <div
         className={`absolute inset-x-5 top-0 h-14 rounded-b-[32px] bg-gradient-to-br ${accent} opacity-20 blur-2xl transition duration-500 group-hover:opacity-30`}
@@ -206,15 +211,15 @@ function MetricCard({ icon: Icon, label, value, accent, note }) {
             <Icon className="h-4 w-4" />
           </div>
           <div>
-            <p className="text-sm font-medium text-slate-500">{label}</p>
-            <p className="mt-1 text-[14px] font-semibold tracking-[-0.04em] text-slate-900">
+            <p className="text-sm font-medium text-text-muted">{label}</p>
+            <p className="mt-1 text-[14px] font-semibold tracking-[-0.04em] text-text-primary">
               {value}
             </p>
           </div>
         </div>
        
       </div>
-      <p className="relative mt-1 text-xs text-slate-500">{note}</p>
+      <p className="relative mt-1 text-xs text-text-muted">{note}</p>
     </motion.div>
   );
 }
@@ -222,13 +227,13 @@ function MetricCard({ icon: Icon, label, value, accent, note }) {
 function StatusPill({ variant, children }) {
   const styles = {
     pending:
-      "border border-amber-200/80 bg-amber-50 text-amber-700",
+      "border border-amber-200 dark:border-amber-500/20/80 bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-400",
     active:
-      "border border-emerald-200/80 bg-emerald-50 text-emerald-700",
+      "border border-emerald-200 dark:border-emerald-500/20/80 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
     joined:
-      "border border-cyan-200/80 bg-cyan-50 text-cyan-700",
+      "border border-cyan-200 dark:border-cyan-500/20/80 bg-cyan-50 dark:bg-cyan-500/10 text-cyan-700 dark:text-cyan-400",
     not_joined:
-      "border border-rose-200/80 bg-rose-50 text-rose-700",
+      "border border-rose-200 dark:border-rose-500/20/80 bg-rose-50 dark:bg-rose-500/10 text-rose-700 dark:text-rose-400",
   };
 
   return (
@@ -248,9 +253,9 @@ function LoadingSkeletonRows({ rows = 6, cols = 10 }) {
           {Array.from({ length: cols }).map((__, col) => (
             <td
               key={col}
-              className="border-b border-slate-100 px-4 py-5"
+              className="border-b border-border-color px-4 py-5"
             >
-              <div className="h-4 rounded-xl bg-slate-100" />
+              <div className="h-4 rounded-xl bg-surface-muted" />
             </td>
           ))}
         </tr>
@@ -1077,10 +1082,10 @@ loadData();
          
 
             <div>
-              <h1 className="text-sm font-semibold tracking-[-0.05em] text-slate-900 sm:text-xl">
+              <h1 className="text-sm font-semibold tracking-[-0.05em] text-text-primary sm:text-xl">
                 New Joining
               </h1>
-              <p className="mt-1 text-sm text-slate-500">
+              <p className="mt-1 text-sm text-text-muted">
                 Employee Joining Management
               </p>
             </div>
@@ -1108,7 +1113,7 @@ loadData();
               whileHover={{ y: -2, scale: 1.01 }}
               whileTap={{ scale: 0.99 }}
               onClick={handleExport}
-              className="inline-flex items-center gap-3 rounded-[18px] border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50"
+              className="inline-flex items-center gap-3 rounded-[18px] border border-border-color bg-surface px-4 py-2 text-sm font-semibold text-text-secondary shadow-sm transition hover:border-border-strong hover:bg-surface-muted"
             >
               <Download className="h-4 w-4" />
               Export
@@ -1133,17 +1138,17 @@ loadData();
           ))}
         </div>
 
-        <div className="relative z-20 mb-2 rounded-[18px] border border-white/70 bg-white/78 px-2 py-1 backdrop-blur-2xl">
+        <div className="relative z-20 mb-2 rounded-[18px] border border-white/70 bg-surface/78 px-2 py-1 backdrop-blur-2xl">
           <div className="flex flex-wrap items-end gap-2 xl:flex-nowrap">
             <FilterField icon={Search} label="Search Employee">
               <div className="relative">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted" />
                 <input
                   type="text"
                   placeholder="Search name, code, aadhaar, circle..."
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  className="h-10 w-full rounded-[14px] border border-slate-200/80 bg-white pl-9 pr-3 text-sm text-slate-700 outline-none transition focus:border-blue-200 focus:ring-4 focus:ring-blue-50"
+                  className="h-10 w-full rounded-[14px] border border-border-color/80 bg-surface pl-9 pr-3 text-sm text-text-secondary outline-none transition focus:border-blue-200 focus:dark:border-blue-500/20 focus:ring-4 focus:ring-blue-50"
                 />
               </div>
             </FilterField>
@@ -1251,7 +1256,7 @@ loadData();
               <button
                 type="button"
                 onClick={resetFilters}
-                className="inline-flex h-10 items-center gap-2 whitespace-nowrap rounded-[14px] border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-600 transition hover:border-slate-300 hover:bg-slate-50"
+                className="inline-flex h-10 items-center gap-2 whitespace-nowrap rounded-[14px] border border-border-color bg-surface px-4 py-2 text-sm font-semibold text-text-secondary transition hover:border-border-strong hover:bg-surface-muted"
               >
                 <RefreshCw className="h-4 w-4" />
                 Reset
@@ -1260,28 +1265,28 @@ loadData();
           </div>
         </div>
 
-        <div className="overflow-visible rounded-[18px] border border-white/70 bg-white/85 backdrop-blur-2xl">
-          <div className="flex flex-col gap-4 border-b border-slate-100 px-5 py-2 sm:flex-row sm:items-center sm:justify-between sm:px-4">
+        <div className="overflow-visible rounded-[18px] border border-white/70 bg-surface/85 backdrop-blur-2xl">
+          <div className="flex flex-col gap-4 border-b border-border-color px-5 py-2 sm:flex-row sm:items-center sm:justify-between sm:px-4">
             <div className="flex items-center gap-3">
-              <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-blue-50 text-blue-600">
+              <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400">
                 <FileSpreadsheet className="h-4 w-4" />
               </div>
               <div>
-                <h2 className="text-sm font-semibold tracking-[0.02em] text-slate-900">
+                <h2 className="text-sm font-semibold tracking-[0.02em] text-text-primary">
                   Employee Records
                 </h2>
-                <p className="text-sm text-slate-500 tracking-[-0.01em]">
+                <p className="text-sm text-text-muted tracking-[-0.01em]">
                   Review and manage employee joining records
                 </p>
               </div>
             </div>
 
-            <div className="flex items-center gap-3 text-sm text-slate-500">
+            <div className="flex items-center gap-3 text-sm text-text-muted">
               {tableLoading && (
-                <RefreshCw className="h-4 w-4 animate-spin text-blue-500" />
+                <RefreshCw className="h-4 w-4 animate-spin text-blue-500 dark:text-blue-400" />
               )}
               Total Records:{" "}
-              <span className="font-semibold text-slate-900">
+              <span className="font-semibold text-text-primary">
                 {filteredData.length}
               </span>
             </div>
@@ -1307,8 +1312,8 @@ loadData();
        <col className="w-[10%]" />
      </colgroup>
      <thead>
-      <tr className="bg-slate-50/90">
-       <td className="w-10 border-b border-slate-100 px-1 py-2 text-center align-middle">
+      <tr className="bg-surface-muted/90">
+       <td className="w-10 border-b border-border-color px-1 py-2 text-center align-middle">
           <input
            type="checkbox"
            checked={
@@ -1319,7 +1324,7 @@ loadData();
           }
           onChange={handleSelectAll}
           disabled={!canDelete}
-         className="h-3 w-3 rounded border-slate-300 text-blue-600 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-40"
+         className="h-3 w-3 rounded border-border-strong text-blue-600 dark:text-blue-400 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-40"
          />
         </td>
                   {[
@@ -1337,7 +1342,7 @@ loadData();
                   ].map((heading) => (
                     <th
                       key={heading}
-                      className="border-b border-slate-200 px-2 py-2 text-center align-middle text-sm font-semibold whitespace-normal break-words text-slate-600"
+                      className="border-b border-border-color px-2 py-2 text-center align-middle text-sm font-semibold whitespace-normal break-words text-text-secondary"
                     >
                       {heading === "Upload At" ? (
                         <button
@@ -1348,7 +1353,7 @@ loadData();
                             )
                           }
                           title="Sort by Upload At"
-                          className="text-xs font-semibold text-slate-600 transition hover:text-blue-600"
+                          className="text-xs font-semibold text-text-secondary transition hover:text-blue-600 hover:dark:text-blue-400"
                         >
                           {heading}
                         </button>
@@ -1367,7 +1372,7 @@ loadData();
                   <tr>
                     <td
                       colSpan="12"
-                      className="px-4 py-20 text-center text-sm font-medium text-slate-400"
+                      className="px-4 py-20 text-center text-sm font-medium text-text-muted"
                     >
                       No Records Found
                     </td>
@@ -1376,44 +1381,44 @@ loadData();
                   paginatedData.map((item, index) => (
                     <tr
                       key={item.id || index}
-                      className="transition hover:bg-slate-50/70 border-b border-slate-200"
+                      className="transition hover:bg-surface-muted/70 border-b border-border-color"
                     >
-                      <td className="border-b border-slate-100 px-4 py-3 align-middle">
+                      <td className="border-b border-border-color px-4 py-3 align-middle">
                         <input
                           type="checkbox"
                           checked={selectedRows.includes(item.id)}
                           onChange={() => handleSelectRow(item.id)}
                           disabled={!canDelete}
-                          className="h-3 w-3 rounded border-slate-300 text-blue-600 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-40"
+                          className="h-3 w-3 rounded border-border-strong text-blue-600 dark:text-blue-400 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-40"
                         />
                       </td>
-                      <td className="border-b border-slate-100 px-3 py-2 align-middle whitespace-normal break-words text-sm font-semibold text-blue-600">
+                      <td className="border-b border-border-color px-3 py-2 align-middle whitespace-normal break-words text-sm font-semibold text-blue-600 dark:text-blue-400">
                         {item.employee_code || "-"}
                       </td>
-                      <td className="border-b border-slate-100 px-3 py-2 align-middle whitespace-normal break-words text-sm font-semibold leading-snug text-slate-800">
+                      <td className="border-b border-border-color px-3 py-2 align-middle whitespace-normal break-words text-sm font-semibold leading-snug text-text-primary">
                         {item.employee_name || "-"}
                       </td>
-                      <td className="border-b border-slate-100 px-3 py-2 align-middle whitespace-normal break-words text-sm text-slate-600">
+                      <td className="border-b border-border-color px-3 py-2 align-middle whitespace-normal break-words text-sm text-text-secondary">
                         {item.circle || "-"}
                       </td>
-                      <td className="border-b border-slate-100 px-3 py-2 align-middle whitespace-normal break-words text-sm text-slate-600">
+                      <td className="border-b border-border-color px-3 py-2 align-middle whitespace-normal break-words text-sm text-text-secondary">
                         {item.cmp || item.cluster || "-"}
                       </td>
-                      <td className="border-b border-slate-100 px-3 py-2 align-middle whitespace-normal break-words text-sm text-slate-600">
+                      <td className="border-b border-border-color px-3 py-2 align-middle whitespace-normal break-words text-sm text-text-secondary">
                         {item.designation || "-"}
                       </td>
-                      <td className="border-b border-slate-100 px-3 py-2 align-middle whitespace-normal break-words text-sm text-slate-600">
+                      <td className="border-b border-border-color px-3 py-2 align-middle whitespace-normal break-words text-sm text-text-secondary">
                         {item.aadhaar_no || "-"}
                       </td>
-                      <td className="border-b border-slate-100 px-3 py-2 align-middle whitespace-normal break-words text-center text-sm text-slate-600">
+                      <td className="border-b border-border-color px-3 py-2 align-middle whitespace-normal break-words text-center text-sm text-text-secondary">
                         {(() => {
                           const uploaded = formatUploadedAt(item.uploaded_at);
                           return uploaded ? (
                             <div className="leading-tight">
-                              <p className="break-words font-medium text-slate-700">
+                              <p className="break-words font-medium text-text-secondary">
                                 {uploaded.date}
                               </p>
-                              <p className="break-words text-xs text-slate-400">
+                              <p className="break-words text-xs text-text-muted">
                                 {uploaded.time}
                               </p>
                             </div>
@@ -1422,12 +1427,12 @@ loadData();
                           );
                         })()}
                       </td>
-                    {/*   <td className="border-b border-slate-100 px-4 py-2 text-sm text-slate-600">
+                    {/*   <td className="border-b border-border-color px-4 py-2 text-sm text-text-secondary">
   ₹ {Number(item.nth_salary || 0).toLocaleString("en-IN")}
 </td>
 */}
                     
- <td className="relative border-b border-slate-100 px-3 py-2 align-middle overflow-visible">
+ <td className="relative border-b border-border-color px-3 py-2 align-middle overflow-visible">
 
  <div className="flex flex-col items-center gap-1">
 
@@ -1447,7 +1452,7 @@ loadData();
       <select
         value={item.l2_status || "Pending"}
         onChange={(e) => handleL2Approval(item.id, e.target.value)}
-       className="h-7 w-full max-w-[110px] rounded-md border border-slate-200 bg-slate-50 px-1 text-[11px] font-medium">
+       className="h-7 w-full max-w-[110px] rounded-md border border-border-color bg-surface-muted px-1 text-[11px] font-medium">
         <option value="Pending">🟡 Pending</option>
         <option value="Approved">🟢 Approved</option>
         <option value="Rejected">🔴 Rejected</option>
@@ -1458,7 +1463,7 @@ loadData();
 
 </td>
 
-<td className="border-b border-slate-100 px-3 py-2 align-middle text-xs whitespace-normal break-words">
+<td className="border-b border-border-color px-3 py-2 align-middle text-xs whitespace-normal break-words">
 
   <StatusPill
     variant={
@@ -1473,7 +1478,7 @@ loadData();
   </StatusPill>
 
 </td>
-                      <td className="border-b border-slate-100 px-3 py-2 align-middle text-sm">
+                      <td className="border-b border-border-color px-3 py-2 align-middle text-sm">
                         <StatusPill
                           variant={
                             item.employee_status === "Inactive"
@@ -1484,14 +1489,14 @@ loadData();
                           {item.employee_status || "Active"}
                         </StatusPill>
                       </td>
-                      <td className="border-b border-slate-100 px-3 py-2 align-middle">
+                      <td className="border-b border-border-color px-3 py-2 align-middle">
                       <div className="flex flex-col gap-2">
                          <TableActionButton
                          disabled={item.l2_status !== "Approved"}
                          onClick={() =>
                            handleStatusUpdate(item.id, "Joined", item)
                          }
-                            className="bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+                            className="bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 hover:dark:bg-emerald-500/15"
                           >
                             Joined
                           </TableActionButton>
@@ -1499,7 +1504,7 @@ loadData();
                             onClick={() =>
                               handleStatusUpdate(item.id, "Not Joined")
                             }
-                            className="bg-rose-50 text-rose-700 hover:bg-rose-100"
+                            className="bg-rose-50 dark:bg-rose-500/10 text-rose-700 dark:text-rose-400 hover:bg-rose-100 hover:dark:bg-rose-500/15"
                           >
                             Not Joined
                           </TableActionButton>
@@ -1508,7 +1513,7 @@ loadData();
                               icon={Trash2}
                               disabled={deleting}
                               onClick={() => openSingleDelete(item)}
-                              className="border border-red-200 bg-red-50 text-red-600 hover:bg-red-100"
+                              className="border border-red-200 dark:border-red-500/20 bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400 hover:bg-red-100 hover:dark:bg-red-500/15"
                             >
                               Delete
                             </TableActionButton>
@@ -1523,9 +1528,9 @@ loadData();
           </div>
 
           <div className="flex flex-col gap-4 px-2 py-2 sm:flex-row sm:items-center sm:justify-between sm:px-4">
-            <div className="text-sm text-slate-500">
+            <div className="text-sm text-text-muted">
               Total Records:{" "}
-              <span className="font-semibold text-slate-800">
+              <span className="font-semibold text-text-primary">
                 {filteredData.length}
               </span>
             </div>
@@ -1534,7 +1539,7 @@ loadData();
               <button
                 type="button"
                 onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
-                className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 transition hover:border-slate-300 hover:text-slate-700"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-border-color bg-surface text-text-muted transition hover:border-border-strong hover:text-text-secondary"
               >
                 <ChevronLeft className="h-4 w-4" />
               </button>
@@ -1548,7 +1553,7 @@ loadData();
                 onClick={() =>
                   setCurrentPage((prev) => Math.min(prev + 1, totalPages))
                 }
-                className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 transition hover:border-slate-300 hover:text-slate-700"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-border-color bg-surface text-text-muted transition hover:border-border-strong hover:text-text-secondary"
               >
                 <ChevronRight className="h-4 w-4" />
               </button>
@@ -1560,13 +1565,13 @@ loadData();
                     setPageSize(Number(e.target.value));
                     setCurrentPage(1);
                   }}
-                  className="h-8 appearance-none rounded-xl border border-slate-200 bg-white px-4 pr-10 text-sm text-slate-700 outline-none transition focus:border-blue-200 focus:ring-4 focus:ring-blue-50"
+                  className="h-8 appearance-none rounded-xl border border-border-color bg-surface px-4 pr-10 text-sm text-text-secondary outline-none transition focus:border-blue-200 focus:dark:border-blue-500/20 focus:ring-4 focus:ring-blue-50"
                 >
                   <option value={10}>10 / page</option>
                   <option value={25}>25 / page</option>
                   <option value={50}>50 / page</option>
                 </select>
-                <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted" />
               </label>
             </div>
           </div>
@@ -1579,13 +1584,13 @@ loadData();
 
 <div className="fixed inset-0 z-[99999] overflow-hidden bg-black/40 backdrop-blur-md p-4">
 
-<div className="mx-auto my-4 h-[90vh] w-full max-w-4xl overflow-hidden rounded-[14px] bg-white shadow-[0_30px_80px_rgba(15,23,42,0.25)] flex flex-col">
+<div className="mx-auto my-4 h-[90vh] w-full max-w-4xl overflow-hidden rounded-[14px] bg-surface shadow-[0_30px_80px_rgba(15,23,42,0.25)] flex flex-col">
 
     {/* HEADER */}
 
-    <div className="relative overflow-hidden border-b border-slate-200 bg-gradient-to-r from-violet-50 via-white to-sky-50 px-4 py-6">
+    <div className="relative overflow-hidden border-b border-border-color bg-gradient-to-r from-violet-50 via-white to-sky-50 px-4 py-6">
 
-      <div className="absolute right-0 top-0 h-10 w-10 rounded-full bg-violet-100 blur-3xl opacity-50" />
+      <div className="absolute right-0 top-0 h-10 w-10 rounded-full bg-violet-100 dark:bg-violet-500/15 blur-3xl opacity-50" />
 
       <div className="flex items-start justify-between">
 
@@ -1595,7 +1600,7 @@ loadData();
 
           <div className="flex h-10 w-10 items-center justify-center rounded-[14px] bg-gradient-to-br from-violet-100 to-indigo-100">
 
-            <Plus className="h-4 w-4 text-indigo-600" />
+            <Plus className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
 
           </div>
 
@@ -1603,13 +1608,13 @@ loadData();
 
           <div>
 
-            <span className="rounded-full bg-indigo-100 px-3 py-1 text-xs font-semibold uppercase tracking-[0.25em] text-indigo-700">
+            <span className="rounded-full bg-indigo-100 dark:bg-indigo-500/15 px-3 py-1 text-xs font-semibold uppercase tracking-[0.25em] text-indigo-700 dark:text-indigo-400">
               ADD NEW EMPLOYEE
             </span>
 
            
 
-            <p className="mt-1 text-sm text-slate-500">
+            <p className="mt-1 text-sm text-text-muted">
               Fill in employee details and upload supporting data in one flow.
             </p>
 
@@ -1624,7 +1629,7 @@ loadData();
             setShowModal(false);
             setFormErrors({});
           }}
-          className="flex h-10 w-10 items-center justify-center rounded-3xl border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50"
+          className="flex h-10 w-10 items-center justify-center rounded-3xl border border-border-color bg-surface text-text-muted transition hover:bg-surface-muted"
         >
           <span className="text-xl leading-none">×</span>
         </button>
@@ -1645,8 +1650,8 @@ loadData();
 
         <div>
 
-          <label className="mb-1 px-1 block text-[13px] font-semibold text-slate-800">
-            Employee Code <span className="text-red-500">*</span>
+          <label className="mb-1 px-1 block text-[13px] font-semibold text-text-primary">
+            Employee Code <span className="text-red-500 dark:text-red-400">*</span>
           </label>
 
           <div className="flex items-stretch gap-2">
@@ -1655,7 +1660,7 @@ loadData();
 
               <User
                 size={14}
-                className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400"
+                className="absolute left-2 top-1/2 -translate-y-1/2 text-text-muted"
               />
 
               <input
@@ -1671,10 +1676,10 @@ loadData();
                  setIsEmployeeCodeAuto(false);
                  clearFieldError("employee_code");
                  }}
-                className={`h-9 w-full rounded-xl border bg-white pl-8 pr-2 text-xs outline-none transition focus:ring-4 ${
+                className={`h-9 w-full rounded-xl border bg-surface pl-8 pr-2 text-xs outline-none transition focus:ring-4 ${
                   formErrors.employee_code
                     ? "border-red-500 focus:border-red-500 focus:ring-red-100"
-                    : "border-slate-200 focus:border-indigo-500 focus:ring-indigo-100"
+                    : "border-border-color focus:border-indigo-500 focus:ring-indigo-100"
                 }`}
               />
 
@@ -1697,7 +1702,7 @@ loadData();
           </div>
 
           {formErrors.employee_code && (
-            <p className="mt-1 px-1 text-xs text-red-500">
+            <p className="mt-1 px-1 text-xs text-red-500 dark:text-red-400">
               {formErrors.employee_code}
             </p>
           )}
@@ -1708,15 +1713,15 @@ loadData();
 
         <div>
 
-          <label className="mb-1 px-1 block text-[13px] font-semibold text-slate-800">
-            Employee Name <span className="text-red-500">*</span>
+          <label className="mb-1 px-1 block text-[13px] font-semibold text-text-primary">
+            Employee Name <span className="text-red-500 dark:text-red-400">*</span>
           </label>
 
           <div className="relative">
 
             <User
               size={14}
-              className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400"
+              className="absolute left-2 top-1/2 -translate-y-1/2 text-text-muted"
             />
 
             <input
@@ -1731,17 +1736,17 @@ loadData();
   });
   clearFieldError("employee_name");
 }}
-              className={`h-9 w-full rounded-2xl border bg-white pl-8 pr-4 text-xs outline-none transition focus:ring-4 ${
+              className={`h-9 w-full rounded-2xl border bg-surface pl-8 pr-4 text-xs outline-none transition focus:ring-4 ${
                 formErrors.employee_name
                   ? "border-red-500 focus:border-red-500 focus:ring-red-100"
-                  : "border-slate-200 focus:border-indigo-500 focus:ring-indigo-100"
+                  : "border-border-color focus:border-indigo-500 focus:ring-indigo-100"
               }`}
             />
 
           </div>
 
           {formErrors.employee_name && (
-            <p className="mt-1 px-1 text-xs text-red-500">
+            <p className="mt-1 px-1 text-xs text-red-500 dark:text-red-400">
               {formErrors.employee_name}
             </p>
           )}
@@ -1752,15 +1757,15 @@ loadData();
 
         <div>
 
-          <label className="mb-1 px-1 block text-[13px] font-semibold text-slate-800">
-            Select Circle <span className="text-red-500">*</span>
+          <label className="mb-1 px-1 block text-[13px] font-semibold text-text-primary">
+            Select Circle <span className="text-red-500 dark:text-red-400">*</span>
           </label>
 
           <div className="relative">
 
             <MapPin
               size={14}
-              className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400"
+              className="absolute left-2 top-1/2 -translate-y-1/2 text-text-muted"
             />
 
             <select
@@ -1774,10 +1779,10 @@ loadData();
   });
   clearFieldError("circle");
 }}
-              className={`h-9 w-full rounded-2xl border bg-white pl-8 pr-4 text-xs outline-none transition focus:ring-4 ${
+              className={`h-9 w-full rounded-2xl border bg-surface pl-8 pr-4 text-xs outline-none transition focus:ring-4 ${
                 formErrors.circle
                   ? "border-red-500 focus:border-red-500 focus:ring-red-100"
-                  : "border-slate-200 focus:border-indigo-500 focus:ring-indigo-100"
+                  : "border-border-color focus:border-indigo-500 focus:ring-indigo-100"
               }`}
             >
 
@@ -1806,7 +1811,7 @@ loadData();
           </div>
 
           {formErrors.circle && (
-            <p className="mt-1 px-1 text-xs text-red-500">
+            <p className="mt-1 px-1 text-xs text-red-500 dark:text-red-400">
               {formErrors.circle}
             </p>
           )}
@@ -1817,15 +1822,15 @@ loadData();
 
         <div>
 
-          <label className="mb-1 px-1 block text-[13px] font-semibold text-slate-800">
-            Select CMP <span className="text-red-500">*</span>
+          <label className="mb-1 px-1 block text-[13px] font-semibold text-text-primary">
+            Select CMP <span className="text-red-500 dark:text-red-400">*</span>
           </label>
 
           <div className="relative">
 
             <Building2
               size={14}
-              className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400"
+              className="absolute left-2 top-1/2 -translate-y-1/2 text-text-muted"
             />
 
             <select
@@ -1838,10 +1843,10 @@ loadData();
   });
   clearFieldError("cmp");
 }}
-              className={`h-9 w-full rounded-2xl border bg-white pl-8 pr-4 text-xs outline-none transition focus:ring-4 ${
+              className={`h-9 w-full rounded-2xl border bg-surface pl-8 pr-4 text-xs outline-none transition focus:ring-4 ${
                 formErrors.cmp
                   ? "border-red-500 focus:border-red-500 focus:ring-red-100"
-                  : "border-slate-200 focus:border-indigo-500 focus:ring-indigo-100"
+                  : "border-border-color focus:border-indigo-500 focus:ring-indigo-100"
               }`}
             >
 
@@ -1866,7 +1871,7 @@ loadData();
           </div>
 
           {formErrors.cmp && (
-            <p className="mt-1 px-1 text-xs text-red-500">{formErrors.cmp}</p>
+            <p className="mt-1 px-1 text-xs text-red-500 dark:text-red-400">{formErrors.cmp}</p>
           )}
 
         </div>
@@ -1875,15 +1880,15 @@ loadData();
 
         <div>
 
-          <label className="mb-1 px-1 block text-[13px] font-semibold text-slate-800">
-            Designation <span className="text-red-500">*</span>
+          <label className="mb-1 px-1 block text-[13px] font-semibold text-text-primary">
+            Designation <span className="text-red-500 dark:text-red-400">*</span>
           </label>
 
           <div className="relative">
 
             <BadgeCheck
               size={14}
-              className="pointer-events-none absolute left-2 top-1/2 z-10 -translate-y-1/2 text-slate-400"
+              className="pointer-events-none absolute left-2 top-1/2 z-10 -translate-y-1/2 text-text-muted"
             />
 
             <Select
@@ -1911,7 +1916,7 @@ loadData();
           </div>
 
           {formErrors.designation && (
-            <p className="mt-1 px-1 text-xs text-red-500">
+            <p className="mt-1 px-1 text-xs text-red-500 dark:text-red-400">
               {formErrors.designation}
             </p>
           )}
@@ -1922,15 +1927,15 @@ loadData();
 
         <div>
 
-          <label className="mb-1 px-1 block text-[13px] font-semibold text-slate-800">
-            Aadhaar Number <span className="text-red-500">*</span>
+          <label className="mb-1 px-1 block text-[13px] font-semibold text-text-primary">
+            Aadhaar Number <span className="text-red-500 dark:text-red-400">*</span>
           </label>
 
           <div className="relative">
 
             <CreditCard
               size={14}
-              className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400"
+              className="absolute left-2 top-1/2 -translate-y-1/2 text-text-muted"
             />
 
             <input
@@ -1948,17 +1953,17 @@ loadData();
                 });
                 clearFieldError("aadhaar_no");
               }}
-              className={`h-9 w-full rounded-2xl border bg-white pl-8 pr-4 text-xs outline-none transition focus:ring-4 ${
+              className={`h-9 w-full rounded-2xl border bg-surface pl-8 pr-4 text-xs outline-none transition focus:ring-4 ${
                 formErrors.aadhaar_no
                   ? "border-red-500 focus:border-red-500 focus:ring-red-100"
-                  : "border-slate-200 focus:border-indigo-500 focus:ring-indigo-100"
+                  : "border-border-color focus:border-indigo-500 focus:ring-indigo-100"
               }`}
             />
 
           </div>
 
           {formErrors.aadhaar_no && (
-            <p className="mt-1 px-1 text-xs text-red-500">
+            <p className="mt-1 px-1 text-xs text-red-500 dark:text-red-400">
               {formErrors.aadhaar_no}
             </p>
           )}
@@ -1967,7 +1972,7 @@ loadData();
 
         <div>
 
-  <label className="mb-1 px-1 block text-[13px] font-semibold text-slate-800">
+  <label className="mb-1 px-1 block text-[13px] font-semibold text-text-primary">
     NTH Salary
   </label>
 
@@ -1981,7 +1986,7 @@ loadData();
         nth_salary: e.target.value,
       })
     }
-    className="h-9 w-full rounded-2xl border border-slate-200 bg-white px-4 text-xs outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100"
+    className="h-9 w-full rounded-2xl border border-border-color bg-surface px-4 text-xs outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100"
   />
 
 </div>
@@ -1990,32 +1995,32 @@ loadData();
 
       {/* BULK UPLOAD */}
 
-      <div className="p-4 mt-3 rounded-[14px] border border-emerald-200 bg-gradient-to-br from-emerald-50 to-white ">
+      <div className="p-4 mt-3 rounded-[14px] border border-emerald-200 dark:border-emerald-500/20 bg-gradient-to-br from-emerald-50 to-white ">
 
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
 
           <div className="flex items-start gap-4">
 
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-100">
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-500/15">
 
               <FileSpreadsheet
                 size={14}
-                className="text-emerald-600"
+                className="text-emerald-600 dark:text-emerald-400"
               />
 
             </div>
 
             <div>
 
-              <p className="text-xs font-semibold uppercase tracking-[0.15em] text-emerald-600">
+              <p className="text-xs font-semibold uppercase tracking-[0.15em] text-emerald-600 dark:text-emerald-400">
                 BULK UPLOAD
               </p>
 
-              <h3 className="mt-1 text-sm font-semibold text-slate-900">
+              <h3 className="mt-1 text-sm font-semibold text-text-primary">
                 Upload Excel File
               </h3>
 
-              <p className="mt-1 text-sm text-slate-500">
+              <p className="mt-1 text-sm text-text-muted">
                 Accepts `.xlsx`, `.xls`, and `.csv` employee sheets.
               </p>
 
@@ -2047,7 +2052,7 @@ loadData();
     <button
   onClick={handleExcelUpload}
   disabled={uploadingExcel}
-  className="flex items-center gap-3 rounded-2xl border border-emerald-300 bg-white px-4 py-2 text-sm font-semibold text-emerald-700 disabled:opacity-60"
+  className="flex items-center gap-3 rounded-2xl border border-emerald-300 dark:border-emerald-500/30 bg-surface px-4 py-2 text-sm font-semibold text-emerald-700 dark:text-emerald-400 disabled:opacity-60"
 >
   <Upload size={14} />
   {uploadingExcel ? "Uploading..." : "Upload File"}
@@ -2059,13 +2064,13 @@ loadData();
 
         {/* DROP AREA */}
 
-        <div className="mt-2 rounded-[14px] border-2 border-dashed border-slate-300 bg-white px-4 py-4 text-center">
+        <div className="mt-2 rounded-[14px] border-2 border-dashed border-border-strong bg-surface px-4 py-4 text-center">
 
-         <p className="text-sm font-semibold text-slate-700">
+         <p className="text-sm font-semibold text-text-secondary">
   {excelFile ? excelFile.name : "No file selected"}
 </p>
 
-          <p className="mt-1 text-xs text-slate-400">
+          <p className="mt-1 text-xs text-text-muted">
             Drag & drop your file here or click to browse
           </p>
 
@@ -2077,14 +2082,14 @@ loadData();
 
     {/* FOOTER */}
 
-    <div className="flex items-center justify-end gap-5 border-t border-slate-200 bg-slate-50 px-4 py-4">
+    <div className="flex items-center justify-end gap-5 border-t border-border-color bg-surface-muted px-4 py-4">
 
       <button
         onClick={() => {
           setShowModal(false);
           setFormErrors({});
         }}
-        className="rounded-2xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
+        className="rounded-2xl border border-border-strong bg-surface px-4 py-2 text-sm font-semibold text-text-secondary transition hover:bg-surface-muted"
       >
         Cancel
       </button>
@@ -2126,11 +2131,11 @@ loadData();
         exit={{ opacity: 0, scale: 0.94, y: 12 }}
         transition={{ type: "spring", stiffness: 320, damping: 26 }}
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-md overflow-hidden rounded-[18px] bg-white shadow-[0_30px_80px_rgba(15,23,42,0.3)]"
+        className="w-full max-w-md overflow-hidden rounded-[18px] bg-surface shadow-[0_30px_80px_rgba(15,23,42,0.3)]"
       >
         {/* HEADER */}
-        <div className="relative overflow-hidden border-b border-slate-100 bg-gradient-to-r from-rose-50 via-white to-red-50 px-6 py-5">
-          <div className="absolute right-0 top-0 h-16 w-16 rounded-full bg-rose-100 opacity-60 blur-3xl" />
+        <div className="relative overflow-hidden border-b border-border-color bg-gradient-to-r from-rose-50 via-white to-red-50 px-6 py-5">
+          <div className="absolute right-0 top-0 h-16 w-16 rounded-full bg-rose-100 dark:bg-rose-500/15 opacity-60 blur-3xl" />
 
           <div className="relative flex items-start gap-4">
             <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[14px] bg-gradient-to-br from-rose-500 to-red-500 text-white shadow-lg shadow-rose-200">
@@ -2138,12 +2143,12 @@ loadData();
             </div>
 
             <div>
-              <h3 className="text-base font-semibold tracking-[-0.02em] text-slate-900">
+              <h3 className="text-base font-semibold tracking-[-0.02em] text-text-primary">
                 {deleteTarget.type === "single"
                   ? "Delete Employee?"
                   : `Delete ${selectedRows.length} Employees?`}
               </h3>
-              <p className="mt-0.5 text-sm text-slate-500">
+              <p className="mt-0.5 text-sm text-text-muted">
                 This action is permanent and cannot be undone.
               </p>
             </div>
@@ -2153,32 +2158,32 @@ loadData();
         {/* BODY */}
         <div className="px-6 py-5">
           {deleteTarget.type === "single" ? (
-            <div className="rounded-[14px] border border-slate-200 bg-slate-50/70 px-4 py-3">
+            <div className="rounded-[14px] border border-border-color bg-surface-muted/70 px-4 py-3">
               <div className="flex items-center justify-between gap-4">
                 <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-text-muted">
                     Employee Name
                   </p>
-                  <p className="mt-0.5 text-sm font-semibold text-slate-900">
+                  <p className="mt-0.5 text-sm font-semibold text-text-primary">
                     {deleteTarget.item?.employee_name || "-"}
                   </p>
                 </div>
                 <div className="text-right">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-text-muted">
                     Employee Code
                   </p>
-                  <p className="mt-0.5 text-sm font-semibold text-blue-600">
+                  <p className="mt-0.5 text-sm font-semibold text-blue-600 dark:text-blue-400">
                     {deleteTarget.item?.employee_code || "-"}
                   </p>
                 </div>
               </div>
             </div>
           ) : (
-            <div className="flex items-center gap-3 rounded-[14px] border border-rose-200 bg-rose-50/70 px-4 py-3">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-rose-100 text-sm font-bold text-rose-600">
+            <div className="flex items-center gap-3 rounded-[14px] border border-rose-200 dark:border-rose-500/20 bg-rose-50 dark:bg-rose-500/10/70 px-4 py-3">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-rose-100 dark:bg-rose-500/15 text-sm font-bold text-rose-600 dark:text-rose-400">
                 {selectedRows.length}
               </div>
-              <p className="text-sm font-medium text-slate-700">
+              <p className="text-sm font-medium text-text-secondary">
                 {selectedRows.length === 1
                   ? "1 selected employee record"
                   : `${selectedRows.length} selected employee records`}{" "}
@@ -2187,19 +2192,19 @@ loadData();
             </div>
           )}
 
-          <p className="mt-3 px-1 text-xs text-slate-500">
+          <p className="mt-3 px-1 text-xs text-text-muted">
             The record{deleteTarget.type === "bulk" ? "s" : ""} will be
             deleted from the New Joining database and cannot be recovered.
           </p>
         </div>
 
         {/* FOOTER */}
-        <div className="flex items-center justify-end gap-3 border-t border-slate-100 bg-slate-50 px-6 py-4">
+        <div className="flex items-center justify-end gap-3 border-t border-border-color bg-surface-muted px-6 py-4">
           <button
             type="button"
             onClick={closeDeleteModal}
             disabled={deleting}
-            className="rounded-2xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+            className="rounded-2xl border border-border-strong bg-surface px-4 py-2 text-sm font-semibold text-text-secondary transition hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-60"
           >
             Cancel
           </button>

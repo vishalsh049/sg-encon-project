@@ -49,6 +49,18 @@
   @apply text-text-primary transition-colors duration-300;
   background: linear-gradient(135deg, #f5f7fb, #eef1f7);
 }
+
+.dark body {
+  background: linear-gradient(135deg, #020617, #0b1120);
+}
+
+* {
+  scrollbar-color: rgb(var(--color-border-strong)) transparent;
+}
+
+::selection {
+  background: rgb(var(--color-primary) / 0.25);
+}
 }
 
 @layer components {
@@ -57,15 +69,15 @@
   }
 
   .app-surface {
-    @apply rounded-2xl border border-border-color bg-surface shadow-panel;
+    @apply rounded-2xl border border-border-color bg-surface shadow-panel dark:shadow-none;
   }
 
   .app-surface-soft {
-    @apply rounded-2xl border border-border-color bg-surface-muted shadow-soft;
+    @apply rounded-2xl border border-border-color bg-surface-muted shadow-soft dark:shadow-none;
   }
 
   .app-card {
-    @apply rounded-2xl border border-border-color bg-surface shadow-soft;
+    @apply rounded-2xl border border-border-color bg-surface shadow-soft transition duration-200 hover:border-border-strong hover:shadow-panel dark:shadow-none;
   }
 
   .app-header {
@@ -97,19 +109,25 @@
   }
 
   .app-date-input {
-    @apply h-10 w-full rounded-xl border border-white/70 bg-white/75 pl-4 pr-11 text-sm text-text-primary outline-none transition duration-200 placeholder:text-text-muted focus:border-primary;
+    @apply h-10 w-full rounded-xl border border-border-color bg-surface/75 pl-4 pr-11 text-sm text-text-primary outline-none transition duration-200 placeholder:text-text-muted focus:border-primary;
     backdrop-filter: blur(20px);
     box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
   }
+  .dark .app-date-input {
+    box-shadow: none;
+  }
 
   .app-date-trigger {
-    @apply absolute right-2 top-1/2 inline-flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-lg text-text-muted transition duration-200 hover:bg-slate-100 hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-50;
+    @apply absolute right-2 top-1/2 inline-flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-lg text-text-muted transition duration-200 hover:bg-surface-muted hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-50;
   }
 
   .app-date-popover {
-    @apply absolute left-0 top-[calc(100%+0.65rem)] z-[80] w-[19rem] rounded-2xl border border-white/70 bg-white/75 p-3 text-text-primary transition duration-200 ease-out;
+    @apply absolute left-0 top-[calc(100%+0.65rem)] z-[80] w-[19rem] rounded-2xl border border-border-color bg-surface/95 p-3 text-text-primary transition duration-200 ease-out;
     backdrop-filter: blur(20px);
     box-shadow: 0 8px 30px rgba(0, 0, 0, 0.08);
+  }
+  .dark .app-date-popover {
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35);
   }
 
   .app-date-header {
@@ -117,16 +135,19 @@
   }
 
   .app-date-title {
-    @apply text-sm font-semibold tracking-[-0.02em] text-slate-800;
+    @apply text-sm font-semibold tracking-[-0.02em] text-text-primary;
   }
 
   .app-date-nav {
-    @apply inline-flex h-9 w-9 items-center justify-center rounded-xl border border-white/70 bg-white/70 text-slate-600 transition duration-200 hover:bg-slate-100 hover:text-slate-900;
+    @apply inline-flex h-9 w-9 items-center justify-center rounded-xl border border-border-color bg-surface-muted text-text-secondary transition duration-200 hover:bg-surface hover:text-text-primary;
     box-shadow: 0 6px 18px rgba(15, 23, 42, 0.06);
+  }
+  .dark .app-date-nav {
+    box-shadow: none;
   }
 
   .app-date-weekdays {
-    @apply mb-2 grid grid-cols-7 gap-2 px-1 text-center text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400;
+    @apply mb-2 grid grid-cols-7 gap-2 px-1 text-center text-[11px] font-semibold uppercase tracking-[0.16em] text-text-muted;
   }
 
   .app-date-grid {
@@ -134,11 +155,11 @@
   }
 
   .app-date-cell {
-    @apply inline-flex h-10 items-center justify-center rounded-[10px] text-sm font-medium text-slate-700 transition duration-200 hover:bg-slate-100;
+    @apply inline-flex h-10 items-center justify-center rounded-[10px] text-sm font-medium text-text-secondary transition duration-200 hover:bg-surface-muted;
   }
 
   .app-date-cell-outside {
-    @apply text-slate-400;
+    @apply text-text-muted;
   }
 
   .app-date-cell-today {
@@ -156,12 +177,15 @@
   }
 
   .app-date-link {
-    @apply text-sm font-medium text-slate-500 transition duration-200 hover:text-slate-800 hover:underline;
+    @apply text-sm font-medium text-text-muted transition duration-200 hover:text-text-primary hover:underline;
   }
 
   .app-date-soft {
-    @apply inline-flex items-center justify-center rounded-xl border border-white/70 bg-white/75 px-3 py-2 text-sm font-medium text-slate-700 transition duration-200 hover:bg-slate-100 hover:text-slate-900;
+    @apply inline-flex items-center justify-center rounded-xl border border-border-color bg-surface/75 px-3 py-2 text-sm font-medium text-text-secondary transition duration-200 hover:bg-surface-muted hover:text-text-primary;
     box-shadow: 0 6px 18px rgba(15, 23, 42, 0.06);
+  }
+  .dark .app-date-soft {
+    box-shadow: none;
   }
 
   .app-button-primary {
@@ -242,6 +266,21 @@
   color: #dc2626;
 }
 
+.dark .status-badge.success {
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+}
+
+.dark .status-badge.pending {
+  background: rgba(245, 158, 11, 0.15);
+  color: #fbbf24;
+}
+
+.dark .status-badge.warning {
+  background: rgba(239, 68, 68, 0.15);
+  color: #f87171;
+}
+
 /* PREMIUM MONTHLY PROGRESS SCROLLBAR */
 
 .custom-scrollbar::-webkit-scrollbar {
@@ -260,6 +299,56 @@
   );
 
   border-radius: 999px;
+}
+
+.dark .custom-scrollbar::-webkit-scrollbar-thumb {
+  background: linear-gradient(
+    to bottom,
+    #475569,
+    #334155
+  );
+}
+
+.dark .custom-scrollbar::-webkit-scrollbar-thumb:horizontal {
+  background: #475569;
+}
+
+.dark .custom-scrollbar::-webkit-scrollbar-track:horizontal {
+  background: #1e293b;
+}
+
+/* SWEETALERT2 DARK MODE */
+.dark .swal2-popup {
+  background: rgb(var(--color-surface-elevated)) !important;
+  color: rgb(var(--color-text-primary)) !important;
+}
+
+.dark .swal2-title,
+.dark .swal2-html-container {
+  color: rgb(var(--color-text-primary)) !important;
+}
+
+.dark .swal2-html-container p[style*="color:green"],
+.dark .swal2-html-container p[style*="color: green"] {
+  color: #4ade80 !important;
+}
+
+.dark .swal2-html-container p[style*="color:#2563eb"],
+.dark .swal2-html-container p[style*="color: #2563eb"] {
+  color: #60a5fa !important;
+}
+
+.dark .swal2-html-container p[style*="color:red"],
+.dark .swal2-html-container p[style*="color: red"] {
+  color: #f87171 !important;
+}
+
+.dark .swal2-actions .swal2-confirm {
+  background: rgb(var(--color-primary)) !important;
+}
+
+.dark .swal2-timer-progress-bar {
+  background: rgb(var(--color-primary)) !important;
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {

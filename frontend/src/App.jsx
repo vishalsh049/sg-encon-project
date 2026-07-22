@@ -39,7 +39,19 @@ function App() {
 
     <UserProvider>
     <BrowserRouter>
-    <Toaster position="top-right" />
+    <Toaster
+      position="top-right"
+      toastOptions={{
+        style: {
+          background: "rgb(var(--color-surface-elevated))",
+          color: "rgb(var(--color-text-primary))",
+          border: "1px solid rgb(var(--color-border))",
+          boxShadow: "0 10px 30px rgba(15, 23, 42, 0.12)",
+        },
+        success: { iconTheme: { primary: "rgb(var(--color-success))", secondary: "rgb(var(--color-surface-elevated))" } },
+        error: { iconTheme: { primary: "rgb(var(--color-danger))", secondary: "rgb(var(--color-surface-elevated))" } },
+      }}
+    />
 
       <Routes>
         <Route path="/" element={<Login />} />

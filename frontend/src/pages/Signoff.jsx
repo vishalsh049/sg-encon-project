@@ -947,17 +947,17 @@ const rejectRequest = async (id) => {
       <div className="min-h-screen space-y-3">
 
         {/* HEADER */}
-        <div className="rounded-[14px] border border-white/70 bg-white/80 px-4 py-3">
+        <div className="rounded-[14px] border border-white/70 bg-surface/80 px-4 py-3">
 
           <div className="flex items-center justify-between">
 
             <div>
 
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">
                 MANPOWER
               </p>
 
-              <h1 className=" text-lg font-semibold text-slate-950">
+              <h1 className=" text-lg font-semibold text-text-primary">
                 Signoff Management
               </h1>
 
@@ -977,7 +977,7 @@ const rejectRequest = async (id) => {
     className="
       flex items-center gap-3
       rounded-xl
-      border border-orange-200
+      border border-orange-200 dark:border-orange-500/20
       bg-gradient-to-r
       from-orange-50
       to-amber-50
@@ -988,17 +988,17 @@ const rejectRequest = async (id) => {
     <div className="
       flex h-8 w-8 items-center justify-center
       rounded-full
-      bg-orange-100
+      bg-orange-100 dark:bg-orange-500/15
     ">
       🔔
     </div>
 
     <div>
-      <p className="text-[11px] text-slate-500">
+      <p className="text-[11px] text-text-muted">
         Pending Requests
       </p>
 
-      <p className="font-bold text-orange-600">
+      <p className="font-bold text-orange-600 dark:text-orange-400">
         {pendingCount}
       </p>
     </div>
@@ -1015,15 +1015,15 @@ const rejectRequest = async (id) => {
       gap-2
       rounded-xl
       border
-      border-slate-200
-      bg-white
+      border-border-color
+      bg-surface
       px-4
       py-2
       text-sm
-      text-slate-700
+      text-text-secondary
       shadow-sm
       transition-all
-      hover:bg-slate-50
+      hover:bg-surface-muted
     "
   >
 
@@ -1035,7 +1035,7 @@ const rejectRequest = async (id) => {
 
     <label
     className={`flex cursor-pointer items-center gap-2 rounded-xl border
-    border-slate-200 bg-white px-4 py-2 text-slate-700 text-sm shadow-sm
+    border-border-color bg-surface px-4 py-2 text-text-secondary text-sm shadow-sm
     ${
       uploading
         ? "opacity-50 pointer-events-none"
@@ -1080,28 +1080,28 @@ const rejectRequest = async (id) => {
     {/* TOTAL CIRCLES */}
 
     <div className="group relative overflow-visible rounded-[14px] border border-white/60
-    bg-white/90 px-4 py-2  hover:-translate-y-1
+    bg-surface/90 px-4 py-2  hover:-translate-y-1
       transition-all duration-300  hover:shadow-[0_20px_60px_rgba(79,70,229,0.18)]">
 
       <div className="flex items-center justify-between">
 
         <div>
 
-          <p className="text-sm font-medium text-slate-500">
+          <p className="text-sm font-medium text-text-muted">
             Total Circles
           </p>
 
-          <h2 className="mt-1 text-xl font-semibold text-slate-900">
+          <h2 className="mt-1 text-xl font-semibold text-text-primary">
             {totalCircles}
           </h2>
 
-          <p className="mt-1 text-xs text-slate-400">
+          <p className="mt-1 text-xs text-text-muted">
             Across all regions
           </p>
 
         </div>
 
-        <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-blue-100 text-blue-600">
+        <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-blue-100 dark:bg-blue-500/15 text-blue-600 dark:text-blue-400">
 
           <Users size={14} />
 
@@ -1114,28 +1114,28 @@ const rejectRequest = async (id) => {
     {/* TOTAL CMP */}
 
     <div className="group relative overflow-hidden rounded-[14px] border border-white/60
-    bg-white/90 px-4 py-2 hover:-translate-y-1
+    bg-surface/90 px-4 py-2 hover:-translate-y-1
       transition-all duration-300  hover:shadow-[0_20px_60px_rgba(79,70,229,0.18)]">
 
       <div className="flex items-center justify-between">
 
         <div>
 
-          <p className="text-sm font-medium text-slate-500">
+          <p className="text-sm font-medium text-text-muted">
             Total CMPs
           </p>
 
-          <h2 className="mt-1 text-xl font-semibold text-slate-900">
+          <h2 className="mt-1 text-xl font-semibold text-text-primary">
             {totalCMPs}
           </h2>
 
-          <p className="mt-1 text-xs text-slate-400">
+          <p className="mt-1 text-xs text-text-muted">
             Active CMP Partners
           </p>
 
         </div>
 
-        <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-green-100 text-green-600">
+        <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-green-100 dark:bg-green-500/15 text-green-600 dark:text-green-400">
 
           <Briefcase size={14} />
 
@@ -1148,28 +1148,28 @@ const rejectRequest = async (id) => {
     {/* TOTAL WORKFORCE */}
 
     <div className="group relative overflow-hidden rounded-[14px] border border-white/60
-    bg-white/90 px-4 py-2 hover:-translate-y-1
+    bg-surface/90 px-4 py-2 hover:-translate-y-1
       transition-all duration-300  hover:shadow-[0_20px_60px_rgba(79,70,229,0.18)]">
 
       <div className="flex items-center justify-between">
 
         <div>
 
-          <p className="text-sm font-medium text-slate-500">
+          <p className="text-sm font-medium text-text-muted">
             Total Workforce
           </p>
 
-          <h2 className="mt-1 text-xl font-semibold text-slate-900">
+          <h2 className="mt-1 text-xl font-semibold text-text-primary">
             {totalWorkforce}
           </h2>
 
-          <p className="mt-1 text-xs text-slate-400">
+          <p className="mt-1 text-xs text-text-muted">
             All teams combined
           </p>
 
         </div>
 
-        <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-violet-100 text-violet-600">
+        <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-violet-100 dark:bg-violet-500/15 text-violet-600 dark:text-violet-400">
 
           <Activity size={14} />
 
@@ -1182,28 +1182,28 @@ const rejectRequest = async (id) => {
     {/* UTILITY */}
 
     <div className="group relative overflow-hidden rounded-[14px] border border-white/60
-    bg-white/90 px-4 py-2  hover:-translate-y-1
+    bg-surface/90 px-4 py-2  hover:-translate-y-1
       transition-all duration-300  hover:shadow-[0_20px_60px_rgba(79,70,229,0.18)]">
 
       <div className="flex items-center justify-between">
 
         <div>
 
-          <p className="text-sm font-medium text-slate-500">
+          <p className="text-sm font-medium text-text-muted">
             Utility Team
           </p>
 
-          <h2 className="mt-1 text-xl font-semibold text-slate-900">
+          <h2 className="mt-1 text-xl font-semibold text-text-primary">
             {totalUtility}
           </h2>
 
-          <p className="mt-1 text-xs text-slate-400">
+          <p className="mt-1 text-xs text-text-muted">
             Utility + Operations
           </p>
 
         </div>
 
-        <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-orange-100 text-orange-600">
+        <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-orange-100 dark:bg-orange-500/15 text-orange-600 dark:text-orange-400">
 
           <ShieldCheck size={14} />
 
@@ -1216,28 +1216,28 @@ const rejectRequest = async (id) => {
     {/* ISP */}
 
     <div className="group relative overflow-hidden rounded-[14px] border border-white/60
-    bg-white/90 px-4 py-2 hover:-translate-y-1
+    bg-surface/90 px-4 py-2 hover:-translate-y-1
       transition-all duration-300  hover:shadow-[0_20px_60px_rgba(79,70,229,0.18)]">
 
       <div className="flex items-center justify-between">
 
         <div>
 
-          <p className="text-sm font-medium text-slate-500">
+          <p className="text-sm font-medium text-text-muted">
             ISP Engineers
           </p>
 
-          <h2 className="mt-1 text-xl font-semibold text-slate-900">
+          <h2 className="mt-1 text-xl font-semibold text-text-primary">
             {totalISP}
           </h2>
 
-          <p className="mt-1 text-xs text-slate-400">
+          <p className="mt-1 text-xs text-text-muted">
             ISP Network Team
           </p>
 
         </div>
 
-        <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-pink-100 text-pink-600">
+        <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-pink-100 dark:bg-pink-500/15 text-pink-600 dark:text-pink-400">
 
           <Wifi size={14} />
 
@@ -1252,7 +1252,7 @@ const rejectRequest = async (id) => {
       
       {/* SEARCH, FILTERS */}
 
-  <div className="rounded-[14px] border border-slate-200 bg-white p-2 shadow-sm">
+  <div className="rounded-[14px] border border-border-color bg-surface p-2 shadow-sm">
 
     <div className="grid gap-2 lg:grid-cols-12">
 
@@ -1263,7 +1263,7 @@ const rejectRequest = async (id) => {
 
           <Search
             size={14}
-            className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
+            className="absolute left-4 top-1/2 -translate-y-1/2 text-text-muted"
           />
 
           <input
@@ -1273,7 +1273,7 @@ const rejectRequest = async (id) => {
             onChange={(e) =>
               setSearch(e.target.value)
             }
-            className="h-9 w-full text-sm rounded-xl border border-slate-200 pl-10 pr-4 outline-none"
+            className="h-9 w-full text-sm rounded-xl border border-border-color pl-10 pr-4 outline-none"
           />
 
         </div>
@@ -1290,7 +1290,7 @@ const rejectRequest = async (id) => {
     onChange={(e) =>
       setSelectedCircle(e.target.value)
     }
-    className="h-9 w-full text-sm rounded-xl border border-slate-200 px-4 outline-none"
+    className="h-9 w-full text-sm rounded-xl border border-border-color px-4 outline-none"
   >
 
     <option value="">
@@ -1320,7 +1320,7 @@ const rejectRequest = async (id) => {
     onChange={(e) =>
       setSelectedCMP(e.target.value)
     }
-    className="h-9 w-full text-sm rounded-xl border border-slate-200 px-4 outline-none"
+    className="h-9 w-full text-sm rounded-xl border border-border-color px-4 outline-none"
   >
 
     <option value="">
@@ -1362,7 +1362,7 @@ const rejectRequest = async (id) => {
       setSelectedCMP("");
       setSearch("");
     }}
-    className="h-10 w-full text-sm rounded-2xl border border-slate-200 bg-slate-50 font-semibold text-slate-700"
+    className="h-10 w-full text-sm rounded-2xl border border-border-color bg-surface-muted font-semibold text-text-secondary"
   >
     Reset
   </button>
@@ -1381,8 +1381,8 @@ const rejectRequest = async (id) => {
       overflow-hidden
       rounded-[20px]
       border
-      border-slate-200
-      bg-white
+      border-border-color
+      bg-surface
     "
     style={{
       scrollbarColor: "#f1f5f9 #e2e8f0",
@@ -1693,101 +1693,101 @@ const rejectRequest = async (id) => {
 
       {/* TOTAL ROW */}
 
-      <tr className="bg-slate-200 font-bold">
+      <tr className="bg-surface-muted font-bold">
 
-        <td className="sticky left-0 z-20 w-[100px] min-w-[100px] border border-slate-300 bg-slate-200 px-4 py-2">
+        <td className="sticky left-0 z-20 w-[100px] min-w-[100px] border border-border-strong bg-surface-muted px-4 py-2">
             {circle}
           </td>
 
-          <td className="sticky left-[100px] z-20 w-[160px] min-w-[160px] border border-slate-300 bg-slate-200 px-4 py-2">
+          <td className="sticky left-[100px] z-20 w-[160px] min-w-[160px] border border-border-strong bg-surface-muted px-4 py-2">
             Total
           </td>
 
-        <td className="border border-slate-300 px-4 py-2 text-center">
+        <td className="border border-border-strong px-4 py-2 text-center">
           {total.state_leadership_team}
         </td>
 
-        <td className="border border-slate-300 px-4 py-2 text-center">
+        <td className="border border-border-strong px-4 py-2 text-center">
           {total.noc_executive}
         </td>
 
-        <td className="border border-slate-300 px-4 py-2 text-center">
+        <td className="border border-border-strong px-4 py-2 text-center">
           {total.analyst}
         </td>
 
-        <td className="border border-slate-300 px-4 py-2 text-center">
+        <td className="border border-border-strong px-4 py-2 text-center">
           {total.cmp_lead}
         </td>
 
-        <td className="border border-slate-300 px-4 py-2 text-center">
+        <td className="border border-border-strong px-4 py-2 text-center">
           {total.technician}
         </td>
 
-        <td className="border border-slate-300 px-4 py-2 text-center">
+        <td className="border border-border-strong px-4 py-2 text-center">
           {total.rigger}
         </td>
 
-        <td className="border border-slate-300 px-4 py-2 text-center">
+        <td className="border border-border-strong px-4 py-2 text-center">
           {total.utility_supervisor}
         </td>
 
-        <td className="border border-slate-300 px-4 py-2 text-center">
+        <td className="border border-border-strong px-4 py-2 text-center">
           {total.utility_engineer}
         </td>
 
-        <td className="border border-slate-300 px-4 py-2 text-center">
+        <td className="border border-border-strong px-4 py-2 text-center">
           {total.isp_engineer}
         </td>
 
-        <td className="border border-slate-300 px-4 py-2 text-center">
+        <td className="border border-border-strong px-4 py-2 text-center">
           {total.wh_incharge_cum_security}
         </td>
 
-        <td className="border border-slate-300 px-4 py-2 text-center">
+        <td className="border border-border-strong px-4 py-2 text-center">
           {total.splicer}
         </td>
 
-        <td className="border border-slate-300 px-4 py-2 text-center">
+        <td className="border border-border-strong px-4 py-2 text-center">
           {total.assistant_splicer}
         </td>
 
-        <td className="border border-slate-300 px-4 py-2 text-center">
+        <td className="border border-border-strong px-4 py-2 text-center">
           {total.fiber_helper}
         </td>
 
-        <td className="border border-slate-300 px-4 py-2 text-center">
+        <td className="border border-border-strong px-4 py-2 text-center">
           {total.patroller}
         </td>
 
-        <td className="border border-slate-300 px-4 py-2 text-center">
+        <td className="border border-border-strong px-4 py-2 text-center">
           {total.fiber_supervisor}
         </td>
 
-        <td className="border border-slate-300 px-4 py-2 text-center">
+        <td className="border border-border-strong px-4 py-2 text-center">
           {total.fibre_engineer}
         </td>
 
-        <td className="border border-slate-300 px-4 py-2 text-center">
+        <td className="border border-border-strong px-4 py-2 text-center">
           {total.fttx_splicer}
         </td>
 
-        <td className="border border-slate-300 px-4 py-2 text-center">
+        <td className="border border-border-strong px-4 py-2 text-center">
           {total.fttx_assistant_splicer}
         </td>
 
-        <td className="border border-slate-300 px-4 py-2 text-center">
+        <td className="border border-border-strong px-4 py-2 text-center">
           {total.fttx_supervisor}
         </td>
 
-        <td className="border border-slate-300 px-4 py-2 text-center">
+        <td className="border border-border-strong px-4 py-2 text-center">
           {total.fttx_helper}
         </td>
 
-        <td className="border border-slate-300 px-4 py-2 text-center">
+        <td className="border border-border-strong px-4 py-2 text-center">
           {total.fttx_engineer}
         </td>
 
-        <td className="border border-slate-300 px-4 py-2 text-center">
+        <td className="border border-border-strong px-4 py-2 text-center">
           {total.fttx_technician}
         </td>
 
@@ -1799,102 +1799,102 @@ const rejectRequest = async (id) => {
 
         <tr
           key={row.id}
-          className="border-b border-slate-100 hover:bg-indigo-50/40"
+          className="border-b border-border-color hover:bg-indigo-50 hover:dark:bg-indigo-500/10/40"
         >
 
-        <td className="sticky left-0 z-10 w-[100px] min-w-[100px] max-w-[100px] border border-slate-200 bg-white px-2 py-2">
+        <td className="sticky left-0 z-10 w-[100px] min-w-[100px] max-w-[100px] border border-border-color bg-surface px-2 py-2">
             {row.circle}
           </td>
 
-          <td className="sticky left-[100px] z-10 w-[160px] min-w-[160px] max-w-[160px] border border-slate-200 bg-white px-4 py-2 font-medium">
+          <td className="sticky left-[100px] z-10 w-[160px] min-w-[160px] max-w-[160px] border border-border-color bg-surface px-4 py-2 font-medium">
             {row.cmp}
           </td>
 
-          <td className="border border-slate-200 px-4 py-2 text-center">
+          <td className="border border-border-color px-4 py-2 text-center">
             {row.state_leadership_team}
           </td>
 
-          <td className="border border-slate-200 px-4 py-2 text-center">
+          <td className="border border-border-color px-4 py-2 text-center">
     {row.noc_executive}
   </td>
 
-  <td className="border border-slate-200 px-4 py-2 text-center">
+  <td className="border border-border-color px-4 py-2 text-center">
     {row.analyst}
   </td>
 
-  <td className="border border-slate-200 px-4 py-2 text-center">
+  <td className="border border-border-color px-4 py-2 text-center">
     {row.cmp_lead}
   </td>
 
-  <td className="border border-slate-200 px-4 py-2 text-center">
+  <td className="border border-border-color px-4 py-2 text-center">
     {row.technician}
   </td>
 
-  <td className="border border-slate-200 px-4 py-2 text-center">
+  <td className="border border-border-color px-4 py-2 text-center">
     {row.rigger}
   </td>
 
-  <td className="border border-slate-200 px-4 py-2 text-center">
+  <td className="border border-border-color px-4 py-2 text-center">
     {row.utility_supervisor}
   </td>
 
-  <td className="border border-slate-200 px-4 py-2 text-center">
+  <td className="border border-border-color px-4 py-2 text-center">
     {row.utility_engineer}
   </td>
 
-  <td className="border border-slate-200 px-4 py-2 text-center">
+  <td className="border border-border-color px-4 py-2 text-center">
     {row.isp_engineer}
   </td>
 
-  <td className="border border-slate-200 px-4 py-2 text-center">
+  <td className="border border-border-color px-4 py-2 text-center">
     {row.wh_incharge_cum_security}
   </td>
 
-  <td className="border border-slate-200 px-4 py-2 text-center">
+  <td className="border border-border-color px-4 py-2 text-center">
     {row.splicer}
   </td>
 
-  <td className="border border-slate-200 px-4 py-2 text-center">
+  <td className="border border-border-color px-4 py-2 text-center">
     {row.assistant_splicer}
   </td>
 
-  <td className="border border-slate-200 px-4 py-2 text-center">
+  <td className="border border-border-color px-4 py-2 text-center">
     {row.fiber_helper}
   </td>
 
-  <td className="border border-slate-200 px-4 py-2 text-center">
+  <td className="border border-border-color px-4 py-2 text-center">
     {row.patroller}
   </td>
 
-  <td className="border border-slate-200 px-4 py-2 text-center">
+  <td className="border border-border-color px-4 py-2 text-center">
     {row.fiber_supervisor}
   </td>
 
-  <td className="border border-slate-200 px-4 py-2 text-center">
+  <td className="border border-border-color px-4 py-2 text-center">
     {row.fibre_engineer}
   </td>
 
-  <td className="border border-slate-200 px-4 py-2 text-center">
+  <td className="border border-border-color px-4 py-2 text-center">
     {row.fttx_splicer}
   </td>
 
-  <td className="border border-slate-200 px-4 py-2 text-center">
+  <td className="border border-border-color px-4 py-2 text-center">
     {row.fttx_assistant_splicer}
   </td>
 
-  <td className="border border-slate-200 px-4 py-2 text-center">
+  <td className="border border-border-color px-4 py-2 text-center">
     {row.fttx_supervisor}
   </td>
 
-  <td className="border border-slate-200 px-4 py-2 text-center">
+  <td className="border border-border-color px-4 py-2 text-center">
     {row.fttx_helper}
   </td>
 
-  <td className="border border-slate-200 px-4 py-2 text-center">
+  <td className="border border-border-color px-4 py-2 text-center">
     {row.fttx_engineer}
   </td>
 
-  <td className="border border-slate-200 px-4 py-2 text-center">
+  <td className="border border-border-color px-4 py-2 text-center">
     {row.fttx_technician}
   </td>
 
@@ -1918,7 +1918,7 @@ const rejectRequest = async (id) => {
   {modalOpen && (
   <div className="
   fixed inset-0 z-[99999]
-  bg-slate-900/60
+  bg-overlay/60
   backdrop-blur-xl
   flex items-center justify-center
   p-4
@@ -1931,7 +1931,7 @@ const rejectRequest = async (id) => {
   h-[85vh]
   overflow-y-auto
   rounded-[18px]
-  bg-white
+  bg-surface
   border border-white/60
   shadow-[0_30px_100px_rgba(15,23,42,0.25)]
   "
@@ -1959,15 +1959,15 @@ const rejectRequest = async (id) => {
   flex items-center justify-center
   "
   >
-  <Plus className="text-slate-900" size={24}/>
+  <Plus className="text-text-primary" size={24}/>
   </div>
 
   <div>
-  <h2 className="text-xl font-semibold text-slate-900">
+  <h2 className="text-xl font-semibold text-text-primary">
   Add Record
   </h2>
 
-  <p className="text-slate-600">
+  <p className="text-text-secondary">
   Fill in the details below to add a new record
   </p>
   </div>
@@ -1976,7 +1976,7 @@ const rejectRequest = async (id) => {
 
   <button
   onClick={() => setModalOpen(false)}
-  className="text-3xl text-slate-500"
+  className="text-3xl text-text-muted"
   >
   ×
   </button>
@@ -1991,8 +1991,8 @@ const rejectRequest = async (id) => {
   className="
   mb-4
   rounded-[18px]
-  bg-white
-  border border-slate-100
+  bg-surface
+  border border-border-color
   px-4 py-2
   "
   >
@@ -2072,9 +2072,9 @@ const rejectRequest = async (id) => {
 
   <div className="
   rounded-[18px]
-  bg-white
+  bg-surface
   p-4
-  border border-slate-100
+  border border-border-color
   hover:-translate-y-1
   hover:shadow-[0_20px_40px_rgba(99,102,241,0.15)]
   transition-all
@@ -2093,7 +2093,7 @@ const rejectRequest = async (id) => {
   state_leadership_team:e.target.value
   })
   }
-  className="h-9 w-full rounded-xl border border-slate-200 text-sm px-4 mb-2"
+  className="h-9 w-full rounded-xl border border-border-color text-sm px-4 mb-2"
   />
 
   <input
@@ -2105,7 +2105,7 @@ const rejectRequest = async (id) => {
   noc_executive:e.target.value
   })
   }
-  className="h-9 w-full rounded-xl border border-slate-200 text-sm px-4 mb-2"
+  className="h-9 w-full rounded-xl border border-border-color text-sm px-4 mb-2"
   />
 
   <input
@@ -2117,7 +2117,7 @@ const rejectRequest = async (id) => {
   analyst:e.target.value
   })
   }
-  className="h-9 w-full rounded-xl border border-slate-200 text-sm px-4 mb-2"
+  className="h-9 w-full rounded-xl border border-border-color text-sm px-4 mb-2"
   />
 
   <input
@@ -2129,7 +2129,7 @@ const rejectRequest = async (id) => {
   cmp_lead:e.target.value
   })
   }
-  className="h-9 w-full rounded-xl border border-slate-200 text-sm px-4 mb-2"
+  className="h-9 w-full rounded-xl border border-border-color text-sm px-4 mb-2"
   />
 
   </div>
@@ -2138,9 +2138,9 @@ const rejectRequest = async (id) => {
 
   <div className="
   rounded-[18px]
-  bg-white
+  bg-surface
   p-4
-  border border-slate-100
+  border border-border-color
   hover:-translate-y-1
   hover:shadow-[0_20px_40px_rgba(99,102,241,0.15)]
   transition-all
@@ -2198,9 +2198,9 @@ const rejectRequest = async (id) => {
 
   <div className="
   rounded-[18px]
-  bg-white
+  bg-surface
   p-4
-  border border-slate-100
+  border border-border-color
   hover:-translate-y-1
   hover:shadow-[0_20px_40px_rgba(99,102,241,0.15)]
   transition-all
@@ -2258,9 +2258,9 @@ const rejectRequest = async (id) => {
 
   <div className="
   rounded-[18px]
-  bg-white
+  bg-surface
   p-4
-  border border-slate-100
+  border border-border-color
   hover:-translate-y-1
   hover:shadow-[0_20px_40px_rgba(99,102,241,0.15)]
   transition-all
@@ -2291,9 +2291,9 @@ const rejectRequest = async (id) => {
   {/* FTTX PO BASED */}
   <div className="
   rounded-[18px]
-  bg-white
+  bg-surface
   p-4
-  border border-slate-100
+  border border-border-color
   hover:-translate-y-1
   hover:shadow-[0_20px_40px_rgba(99,102,241,0.15)]
   transition-all
@@ -2315,7 +2315,7 @@ const rejectRequest = async (id) => {
 
   </div>
 
-  <div className="sticky bottom-0 border-t bg-white p-4 flex justify-end gap-4">
+  <div className="sticky bottom-0 border-t bg-surface p-4 flex justify-end gap-4">
 
   <button
   onClick={() => setModalOpen(false)}
@@ -2351,18 +2351,18 @@ const rejectRequest = async (id) => {
   {approvalModalOpen && (
    <div className="
 fixed inset-0 z-[99999]
-bg-slate-900/40
+bg-overlay/40
 backdrop-blur-md
 flex items-center justify-center
 p-4
 ">
   <div
   className="
-  bg-white
+  bg-surface
   w-[95vw]
   h-[88vh]
   rounded-[18px]
-  border border-slate-200
+  border border-border-color
   shadow-[0_30px_80px_rgba(15,23,42,0.15)]
   flex
   flex-col
@@ -2379,7 +2379,7 @@ px-6
 py-3
 border-b
 bg-gradient-to-r
-from-slate-50
+from-surface-muted
 to-white
 sticky
 top-0
@@ -2387,11 +2387,11 @@ z-30
 "
 >
        <div>
-  <h2 className="text-xl font-semibold text-slate-900">
+  <h2 className="text-xl font-semibold text-text-primary">
     Pending Requests
   </h2>
 
-  <p className="text-sm text-slate-500">
+  <p className="text-sm text-text-muted">
     Real-time overview of pending requests across circles
   </p>
 </div>
@@ -2531,8 +2531,8 @@ shadow-lg
  <tr
   key={row.id || index}
   className="
-  bg-white
-  hover:bg-blue-50
+  bg-surface
+  hover:bg-blue-50 hover:dark:bg-blue-500/10
   transition-all
   duration-200
   "
@@ -2621,10 +2621,10 @@ shadow-lg
   <span
   className={`px-4 py-2 rounded-full text-xs font-bold shadow-sm ${
     row.status === "APPROVED"
-      ? "bg-green-100 text-green-700"
+      ? "bg-green-100 dark:bg-green-500/15 text-green-700 dark:text-green-400"
       : row.status === "REJECTED"
-      ? "bg-red-100 text-red-700"
-      : "bg-yellow-100 text-yellow-700"
+      ? "bg-red-100 dark:bg-red-500/15 text-red-700 dark:text-red-400"
+      : "bg-yellow-100 dark:bg-yellow-500/15 text-yellow-700 dark:text-yellow-400"
   }`}
   >
     {row.status}

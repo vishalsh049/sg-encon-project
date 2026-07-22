@@ -669,18 +669,18 @@ const deleteUser = async (id) => {
 
 {userModalOpen ? (
   <div
-    className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm"
+    className="fixed inset-0 z-50 flex items-center justify-center bg-overlay/40 p-4 backdrop-blur-sm"
     onClick={() => setUserModalOpen(false)}
   >
     <div
-  className="relative flex h-[95vh] w-full max-w-8xl flex-col overflow-hidden rounded-[22px] border border-slate-200/70 bg-white shadow-[0_40px_90px_rgba(15,23,42,0.18)]"
+  className="relative flex h-[95vh] w-full max-w-8xl flex-col overflow-hidden rounded-[22px] border border-border-color/70 bg-surface shadow-[0_40px_90px_rgba(15,23,42,0.18)]"
       onClick={(e) => e.stopPropagation()}
     >
       <div className="relative overflow-hidden bg-gradient-to-r from-purple-600 via-violet-600 to-indigo-600 px-6 py-4 sm:px-6 sm:py-2 flex items-center">
 
   <div className="relative flex items-center justify-between w-full">
     <div className="flex items-start gap-4">
-      <div className="flex h-10 w-10 items-center justify-center rounded-[14px] bg-white/15 text-white shadow-slate-950/20 ring-1 ring-white/30">
+      <div className="flex h-10 w-10 items-center justify-center rounded-[14px] bg-surface/15 text-white shadow-slate-950/20 ring-1 ring-white/30">
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="h-4 w-4 text-white" fill="none" stroke="currentColor" strokeWidth="1.8">
           <path strokeLinecap="round" strokeLinejoin="round" d="M12 12c2.761 0 5-2.239 5-5s-2.239-5-5-5-5 2.239-5 5 2.239 5 5 5z" />
           <path strokeLinecap="round" strokeLinejoin="round" d="M4 21c0-4.418 3.582-8 8-8s8 3.582 8 8" />
@@ -700,7 +700,7 @@ const deleteUser = async (id) => {
     <button
       type="button"
       onClick={() => setUserModalOpen(false)}
-      className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-white/20 bg-white/10 text-white transition hover:bg-white/20"
+      className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-white/20 bg-surface/10 text-white transition hover:bg-surface/20"
       aria-label="Close modal"
     >
       ✕
@@ -708,20 +708,20 @@ const deleteUser = async (id) => {
   </div>
 </div>
 
-<div className="grid flex-1 min-h-0 gap-2 bg-slate-50 px-4 py-2 md:grid-cols-[32%_68%] overflow-hidden">
-    <div className="h-full overflow-y-auto rounded-[18px] border border-slate-200/80 bg-white px-4 py-3 shadow-sm">
+<div className="grid flex-1 min-h-0 gap-2 bg-surface-muted px-4 py-2 md:grid-cols-[32%_68%] overflow-hidden">
+    <div className="h-full overflow-y-auto rounded-[18px] border border-border-color/80 bg-surface px-4 py-3 shadow-sm">
       <div>
-        <p className="text-[13px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+        <p className="text-[13px] font-semibold uppercase tracking-[0.14em] text-text-muted">
           User Information
         </p>
-        <p className=" text-xs text-slate-500">
+        <p className=" text-xs text-text-muted">
           Add the user details to create the account.
         </p>
       </div>
 
       <div className="mt-2 space-y-2 flex-1 overflow-y-auto pr-2">
         <label className="block space-y-0">
-          <span className="text-sm px-1 font-semibold text-slate-700">Name</span>
+          <span className="text-sm px-1 font-semibold text-text-secondary">Name</span>
           <input
             type="text"
             placeholder="Enter User Name"
@@ -732,12 +732,12 @@ const deleteUser = async (id) => {
                 name: e.target.value,
               }))
             }
-            className="h-9 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 text-sm text-slate-900 transition focus:border-indigo-500 focus:bg-white focus:ring-4 focus:ring-indigo-100"
+            className="h-9 w-full rounded-xl border border-border-color bg-surface-muted px-4 text-sm text-text-primary transition focus:border-indigo-500 focus:bg-surface focus:ring-4 focus:ring-indigo-100"
           />
         </label>
 
         <label className="block space-y-0">
-          <span className="text-sm px-1 font-semibold text-slate-700">Designation</span>
+          <span className="text-sm px-1 font-semibold text-text-secondary">Designation</span>
           <input
             type="text"
             placeholder="Enter Designation"
@@ -748,13 +748,13 @@ const deleteUser = async (id) => {
                 designation: e.target.value,
               }))
             }
-            className="h-9 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 text-sm text-slate-900 transition focus:border-indigo-500 focus:bg-white focus:ring-4 focus:ring-indigo-100"
+            className="h-9 w-full rounded-xl border border-border-color bg-surface-muted px-4 text-sm text-text-primary transition focus:border-indigo-500 focus:bg-surface focus:ring-4 focus:ring-indigo-100"
           />
         </label>
 
         <div className="grid gap-4 sm:grid-cols-2">
           <label className="block space-y-0">
-            <span className="text-sm px-1 font-semibold text-slate-700">Circle</span>
+            <span className="text-sm px-1 font-semibold text-text-secondary">Circle</span>
             <select
               value={userForm.circle}
               onChange={(e) =>
@@ -763,7 +763,7 @@ const deleteUser = async (id) => {
                   circle: e.target.value,
                 }))
               }
-              className="h-9 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 text-sm text-slate-900 focus:border-indigo-500 focus:bg-white focus:ring-4 focus:ring-indigo-100"
+              className="h-9 w-full rounded-xl border border-border-color bg-surface-muted px-4 text-sm text-text-primary focus:border-indigo-500 focus:bg-surface focus:ring-4 focus:ring-indigo-100"
             >
               <option value="">Select Circle</option>
               <option value="ALL">All Circles</option>
@@ -776,7 +776,7 @@ const deleteUser = async (id) => {
           </label>
 
           <label className="block space-y-0">
-            <span className="text-sm px-1 font-semibold text-slate-700">Domain</span>
+            <span className="text-sm px-1 font-semibold text-text-secondary">Domain</span>
             <select
               value={userForm.domain}
               onChange={(e) =>
@@ -785,7 +785,7 @@ const deleteUser = async (id) => {
                   domain: e.target.value,
                 }))
               }
-              className="h-9 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 text-sm text-slate-900 focus:border-indigo-500 focus:bg-white focus:ring-4 focus:ring-indigo-100"
+              className="h-9 w-full rounded-xl border border-border-color bg-surface-muted px-4 text-sm text-text-primary focus:border-indigo-500 focus:bg-surface focus:ring-4 focus:ring-indigo-100"
             >
               <option value="">Select Domain</option>
               <option value="ALL">All Domains</option>
@@ -799,7 +799,7 @@ const deleteUser = async (id) => {
         </div>
 
         <label className="block space-y-0">
-          <span className="text-sm px-1 font-semibold text-slate-700">Username</span>
+          <span className="text-sm px-1 font-semibold text-text-secondary">Username</span>
           <input
             type="text"
             placeholder="Username"
@@ -810,12 +810,12 @@ const deleteUser = async (id) => {
                 username: e.target.value,
               }))
             }
-            className="h-9 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 text-sm text-slate-900 focus:border-indigo-500 focus:bg-white focus:ring-4 focus:ring-indigo-100"
+            className="h-9 w-full rounded-xl border border-border-color bg-surface-muted px-4 text-sm text-text-primary focus:border-indigo-500 focus:bg-surface focus:ring-4 focus:ring-indigo-100"
           />
         </label>
 
         <label className="block space-y-0">
-          <span className="text-sm px-1 font-semibold text-slate-700">Email</span>
+          <span className="text-sm px-1 font-semibold text-text-secondary">Email</span>
           <input
             type="email"
             placeholder="Enter Email"
@@ -826,7 +826,7 @@ const deleteUser = async (id) => {
                 email: e.target.value,
               }))
             }
-            className="h-9 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 text-sm text-slate-900 focus:border-indigo-500 focus:bg-white focus:ring-4 focus:ring-indigo-100"
+            className="h-9 w-full rounded-xl border border-border-color bg-surface-muted px-4 text-sm text-text-primary focus:border-indigo-500 focus:bg-surface focus:ring-4 focus:ring-indigo-100"
           />
         </label>
 
@@ -846,26 +846,26 @@ const deleteUser = async (id) => {
                   password: e.target.value,
                 }))
               }
-              className="h-9 min-w-0 flex-1 rounded-xl border border-slate-200 bg-slate-50 px-4 text-sm text-slate-900 transition focus:border-indigo-500 focus:bg-white focus:ring-4 focus:ring-indigo-100"
+              className="h-9 min-w-0 flex-1 rounded-xl border border-border-color bg-surface-muted px-4 text-sm text-text-primary transition focus:border-indigo-500 focus:bg-surface focus:ring-4 focus:ring-indigo-100"
             />
             <div className="flex flex-col gap-2 sm:flex-row">
               <button
                 type="button"
                 onClick={handleGeneratePassword}
-                className="h-9 rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
+                className="h-9 rounded-xl border border-border-color bg-surface px-4 text-sm font-semibold text-text-secondary transition hover:bg-surface-muted"
               >
                 Generate Password
               </button>
               <button
                 type="button"
                 onClick={() => setShowPassword((prev) => !prev)}
-                className="h-9 rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
+                className="h-9 rounded-xl border border-border-color bg-surface px-4 text-sm font-semibold text-text-secondary transition hover:bg-surface-muted"
               >
                 {showPassword ? "Hide Password" : "Show Password"}
               </button>
             </div>
           </div>
-          <p className="text-xs text-slate-500">
+          <p className="text-xs text-text-muted">
             {editingUser
               ? "Leave blank to keep the current password."
               : "Generate a strong password automatically when creating a user."}
@@ -873,7 +873,7 @@ const deleteUser = async (id) => {
         </div>
 
         <label className="block space-y-0">
-          <span className="text-sm font-semibold text-slate-700">Status</span>
+          <span className="text-sm font-semibold text-text-secondary">Status</span>
           <select
             value={userForm.status}
             onChange={(e) =>
@@ -882,7 +882,7 @@ const deleteUser = async (id) => {
                 status: e.target.value,
               }))
             }
-            className="h-9 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 text-sm text-slate-900 focus:border-indigo-500 focus:bg-white focus:ring-4 focus:ring-indigo-100"
+            className="h-9 w-full rounded-xl border border-border-color bg-surface-muted px-4 text-sm text-text-primary focus:border-indigo-500 focus:bg-surface focus:ring-4 focus:ring-indigo-100"
           >
             <option value="active">Active</option>
             <option value="inactive">Inactive</option>
@@ -894,21 +894,21 @@ const deleteUser = async (id) => {
    
 
  <div className="h-full min-h-0 overflow-hidden">
-<div className="h-full min-h-0 rounded-[18px] border border-slate-200/80 bg-white px-4 py-3 flex flex-col">
+<div className="h-full min-h-0 rounded-[18px] border border-border-color/80 bg-surface px-4 py-3 flex flex-col">
         <div>
-          <p className="text-[13px] font-semibold uppercase tracking-[0.24em] text-slate-500">
+          <p className="text-[13px] font-semibold uppercase tracking-[0.24em] text-text-muted">
             Page Permissions
           </p>
-          <p className=" text-xs text-slate-500">
+          <p className=" text-xs text-text-muted">
             Control access for each module.
           </p>
         </div>
 
         <div className="mt-2 flex-1 overflow-y-auto space-y-1 pr-2">
           {pageAccessList.map((section) => (
-            <div key={section.title} className="rounded-[14px] border border-slate-200 bg-slate-50 px-4 py-2">
+            <div key={section.title} className="rounded-[14px] border border-border-color bg-surface-muted px-4 py-2">
               <div className="mb-1 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div className="text-sm px-2 font-semibold text-slate-900">{section.title}</div>
+                <div className="text-sm px-2 font-semibold text-text-primary">{section.title}</div>
                 <button
                   type="button"
                   className="inline-flex items-center justify-center rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 px-3 py-1 text-xs font-semibold text-white transition hover:scale-[1.02]"
@@ -950,13 +950,13 @@ const deleteUser = async (id) => {
                 {section.pages.map((page) => {
                   const current = userForm.pagePermissions?.find((p) => p.page === page) || {};
                   return (
-                    <div key={page} className="grid grid-cols-[220px_repeat(4,1fr)] gap-4 rounded-xl bg-white px-4 py-2 shadow-sm ring-1 ring-slate-200">
-                      <div className="flex items-center text-sm font-medium text-slate-700">{page}</div>
+                    <div key={page} className="grid grid-cols-[220px_repeat(4,1fr)] gap-4 rounded-xl bg-surface px-4 py-2 shadow-sm ring-1 ring-border-strong">
+                      <div className="flex items-center text-sm font-medium text-text-secondary">{page}</div>
                       {['view', 'edit', 'download', 'delete'].map((action) => (
-                        <label key={action} className="flex items-center gap-2 text-sm capitalize text-slate-600">
+                        <label key={action} className="flex items-center gap-2 text-sm capitalize text-text-secondary">
                           <input
                             type="checkbox"
-                            className="h-3 w-3 rounded-md border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                            className="h-3 w-3 rounded-md border-border-strong text-indigo-600 dark:text-indigo-400 focus:ring-indigo-500"
                             checked={current[action] || false}
                             onChange={(e) => {
                               setUserForm((prev) => {
@@ -995,11 +995,11 @@ const deleteUser = async (id) => {
     </div>
   </div>
 
- <div className="sticky bottom-0 flex items-center justify-end gap-3 border-t border-slate-200/80 bg-white px-4 py-1.5">
+ <div className="sticky bottom-0 flex items-center justify-end gap-3 border-t border-border-color/80 bg-surface px-4 py-1.5">
     <button
       type="button"
       onClick={() => setUserModalOpen(false)}
-      className=" rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
+      className=" rounded-xl border border-border-strong bg-surface px-4 py-2 text-sm font-semibold text-text-secondary transition hover:bg-surface-muted"
     >
       Cancel
     </button>
