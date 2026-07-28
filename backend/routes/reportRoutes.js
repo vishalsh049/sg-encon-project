@@ -8,6 +8,7 @@ const {
   assertRowsAllowedCircle,
   authMiddleware,
   isAllCircle,
+  normalizeCircle,
 } = require("../middleware/circleAccess");
 const { requirePagePermission } = require("../middleware/pagePermission");
 
@@ -17,16 +18,39 @@ router.use(authMiddleware);
 // ✅ Storage config
 const storage = multer.memoryStorage();
 
+// Uploads are buffered in memory and the parsed workbook costs several times
+// the raw file size, so file count and size are both capped. Raise via env if
+// real reports outgrow these limits.
+const maxUploadFileSizeMb = Number(process.env.REPORT_MAX_FILE_MB) || 60;
+const maxBulkUploadFiles = Number(process.env.REPORT_MAX_BULK_FILES) || 12;
+
 const allowedExtensions = new Set(["xlsx", "xls", "xlsb", "csv"]);
 const upload = multer({
   storage,
-  limits: { fileSize: 150 * 1024 * 1024 },
+  limits: {
+    fileSize: maxUploadFileSizeMb * 1024 * 1024,
+    files: maxBulkUploadFiles,
+    fields: 20,
+  },
 });
 
 const uploadAnyReportFiles = upload.fields([
-  { name: "file", maxCount: 100 },
-  { name: "files", maxCount: 100 },
+  { name: "file", maxCount: 1 },
+  { name: "files", maxCount: maxBulkUploadFiles },
 ]);
+
+const uploadLimitMessage = (err) => {
+  switch (err?.code) {
+    case "LIMIT_FILE_SIZE":
+      return `File too large.\n\nEach report must be under ${maxUploadFileSizeMb} MB. Please split the file by date and upload again.`;
+    case "LIMIT_FILE_COUNT":
+      return `Too many files.\n\nYou can upload up to ${maxBulkUploadFiles} reports at a time. Please upload them in smaller batches.`;
+    case "LIMIT_UNEXPECTED_FILE":
+      return "Single Upload accepts one file at a time.\n\nSwitch to Bulk Upload to send multiple files.";
+    default:
+      return "We could not read the uploaded files. Please check the files and try again.";
+  }
+};
 
 const getUploadedReportFiles = (req) => [
   ...(req.files?.file || []),
@@ -35,10 +59,6 @@ const getUploadedReportFiles = (req) => [
 
 const bulkFileNameFormatHelp =
   "Required format: reporttype_YYYY-MM-DD.xlsx";
-const bulkFileNameCorrectionMessage =
-  `Please correct the file name and upload again. ${bulkFileNameFormatHelp}`;
-const bulkInvalidFileNameMessage =
-  "Invalid file name. Please rename the file using the format reporttype_YYYY-MM-DD and upload again.";
 
 const query = (sql, params = []) =>
   new Promise((resolve, reject) => {
@@ -60,6 +80,45 @@ const query = (sql, params = []) =>
       });
     });
   });
+
+/**
+ * Runs `work` inside a single transaction on one pooled connection and hands it
+ * a `run(sql, params)` bound to that connection. Everything commits together or
+ * nothing does.
+ *
+ * DDL (CREATE TABLE / ALTER TABLE) must NOT be issued inside `work` — MySQL and
+ * MariaDB implicitly commit on DDL, which would silently break the rollback.
+ * Call the ensure*Table helpers before opening the transaction.
+ */
+const withTransaction = async (work) => {
+  const connection = await new Promise((resolve, reject) => {
+    db.getConnection((err, pooled) => (err ? reject(err) : resolve(pooled)));
+  });
+
+  const run = (sql, params = []) =>
+    new Promise((resolve, reject) => {
+      connection.query(sql, params, (err, rows) => (err ? reject(err) : resolve(rows)));
+    });
+
+  try {
+    await run("SET time_zone = '+05:30'");
+    await run("START TRANSACTION");
+
+    const result = await work(run);
+
+    await run("COMMIT");
+    return result;
+  } catch (error) {
+    try {
+      await run("ROLLBACK");
+    } catch (rollbackError) {
+      console.error("Rollback failed:", rollbackError.message);
+    }
+    throw error;
+  } finally {
+    connection.release();
+  }
+};
 
 const reportDataTables = new Set([
   "ag1", "ag2", "enb", "esc", "gnb", "gsc",
@@ -91,6 +150,302 @@ const getRawCircle = (row = {}) => {
   return normalized.circle || normalized["circle name"] || "";
 };
 
+// ---------------------------------------------------------------------------
+// Shared row validation
+//
+// Previously only ENB and ISC checked the Circle column. The other nine site
+// types either dropped bad rows silently or stored them with a NULL circle,
+// which hides the data from every circle-scoped query. These helpers give all
+// parsers one consistent check and one readable error message.
+// ---------------------------------------------------------------------------
+
+// How many individual row problems travel back to the browser. The dialog
+// paginates them, so this can be generous without making the payload huge.
+const MAX_REPORTED_ROW_ERRORS = 250;
+
+const normalizeHeaderKey = (key) =>
+  key.toString().trim().toLowerCase().replace(/[\s_]+/g, " ");
+
+const buildCleanRow = (row) => {
+  const cleanRow = {};
+  Object.keys(row).forEach((key) => {
+    cleanRow[normalizeHeaderKey(key)] = row[key];
+  });
+  return cleanRow;
+};
+
+// Excel commonly reports trailing formatted-but-empty rows. Those are not a
+// data error — they are skipped without complaint.
+const isBlankRow = (cleanRow) =>
+  Object.values(cleanRow).every(
+    (value) => value === null || value === undefined || String(value).trim() === ""
+  );
+
+const CIRCLE_EXPECTED = VALID_CIRCLES.join(" | ");
+
+/**
+ * One row problem, in the shape the upload dialog renders:
+ * which sheet, which Excel row, which column, what was found, what was
+ * expected, why it failed and how to fix it.
+ */
+const rowError = ({ row, column, value, expected, reason, fix }) => ({
+  row,
+  column,
+  value: value === null || value === undefined || String(value).trim() === ""
+    ? "(blank)"
+    : String(value).trim(),
+  expected,
+  reason,
+  fix,
+});
+
+/**
+ * Checks the Circle/CMP pair. Pushes a structured problem description into
+ * `errors` and returns false when the row must not be inserted.
+ */
+const validateRowCircle = (circle, cmp, rowNumber, errors) => {
+  const circleText = String(circle ?? "").trim();
+  const cmpText = String(cmp ?? "").trim();
+
+  if (!circleText) {
+    errors.push(rowError({
+      row: rowNumber,
+      column: "Circle",
+      value: circle,
+      expected: CIRCLE_EXPECTED,
+      reason: "Circle is blank. Every row must say which circle it belongs to.",
+      fix: `Type one of the allowed circle names into the Circle column of row ${rowNumber}.`,
+    }));
+    // Report both blanks so one pass through the file fixes everything.
+    if (!cmpText) {
+      errors.push(rowError({
+        row: rowNumber,
+        column: "CMP",
+        value: cmp,
+        expected: "Any non-empty CMP name",
+        reason: "CMP is blank. Every row must name the CMP that owns the site.",
+        fix: `Fill in the CMP column of row ${rowNumber}.`,
+      }));
+    }
+    return false;
+  }
+
+  if (!cmpText) {
+    errors.push(rowError({
+      row: rowNumber,
+      column: "CMP",
+      value: cmp,
+      expected: "Any non-empty CMP name",
+      reason: "CMP is blank. Every row must name the CMP that owns the site.",
+      fix: `Fill in the CMP column of row ${rowNumber}.`,
+    }));
+    return false;
+  }
+
+  if (!isValidCircle(circleText)) {
+    errors.push(rowError({
+      row: rowNumber,
+      column: "Circle",
+      value: circleText,
+      expected: CIRCLE_EXPECTED,
+      reason: `"${circleText}" is not a recognised Circle name.`,
+      fix: `Replace it with the exact circle name — check for typos, extra spaces or a short form.`,
+    }));
+    return false;
+  }
+
+  return true;
+};
+
+const pluralRows = (count) => `${count} row${count === 1 ? "" : "s"}`;
+
+/**
+ * Turns collected row problems into one message that says what is wrong, why it
+ * failed and how to fix it. Long lists are truncated so the text stays usable —
+ * the full structured list travels separately in `error.details.errors`.
+ */
+const rowErrorsToMessage = (errors, siteTypeLabel = "", context = {}) => {
+  const shown = errors.slice(0, 10);
+  const remaining = errors.length - shown.length;
+  const heading = siteTypeLabel ? `${siteTypeLabel} upload stopped.\n\n` : "";
+  const where = [
+    context.fileName ? `File: ${context.fileName}` : null,
+    context.sheetName ? `Sheet: ${context.sheetName}` : null,
+  ].filter(Boolean).join("\n");
+
+  const lines = shown.map(
+    (item) =>
+      `Row ${item.row} • ${item.column}: found ${item.value} — ${item.reason}`
+  );
+
+  return (
+    `${heading}${where ? `${where}\n\n` : ""}` +
+    `We found ${pluralRows(errors.length)} with problems, so nothing was uploaded.\n\n` +
+    `${lines.join("\n")}` +
+    (remaining > 0 ? `\n...and ${remaining} more.` : "") +
+    `\n\nAllowed Circle names: ${VALID_CIRCLES.join(", ")}.\n\n` +
+    `Row numbers match the row numbers shown in Excel.`
+  );
+};
+
+const throwRowErrors = (errors, siteTypeLabel, details = {}) => {
+  const error = new Error(rowErrorsToMessage(errors, siteTypeLabel, details));
+  error.statusCode = 400;
+  error.details = {
+    errorType: "row-validation",
+    siteType: siteTypeLabel,
+    invalidRows: new Set(errors.map((item) => item.row)).size,
+    ...details,
+    errors: errors.slice(0, MAX_REPORTED_ROW_ERRORS),
+    truncated: errors.length > MAX_REPORTED_ROW_ERRORS,
+    totalErrors: errors.length,
+  };
+  throw error;
+};
+
+const throwNoValidRows = (siteTypeLabel, details = {}) => {
+  const detected = details.detectedHeaders || [];
+  const error = new Error(
+    `${siteTypeLabel} upload stopped.\n\n` +
+    (details.fileName ? `File: ${details.fileName}\n` : "") +
+    (details.sheetName ? `Sheet: ${details.sheetName}\n\n` : "\n") +
+    `The sheet was read successfully but every row was empty, so there is ` +
+    `nothing to upload.\n\n` +
+    (detected.length
+      ? `Columns found in this sheet: ${detected.join(", ")}.\n\n`
+      : "") +
+    `Check that the data starts on row 2, directly under the header row.`
+  );
+  error.statusCode = 400;
+  error.details = { errorType: "empty-sheet", siteType: siteTypeLabel, ...details };
+  throw error;
+};
+
+// ---------------------------------------------------------------------------
+// Template / header validation
+//
+// Every parser needs a Circle and a CMP column, and each site type has a set of
+// data columns its parser reads. Checking the header row up front turns "Row 2:
+// Circle is blank" repeated 5,000 times into one message that names the sheet,
+// lists the columns that were actually found and says which template to use.
+// ---------------------------------------------------------------------------
+
+// Header aliases accepted for the two mandatory columns, already normalized
+// (lowercase, underscores folded to spaces) to match buildCleanRow output.
+const CIRCLE_HEADER_ALIASES = ["circle", "circle name"];
+const CMP_HEADER_ALIASES = ["cmp", "cmp name"];
+
+// Columns each parser actually reads, used to tell "right template, bad data"
+// apart from "wrong template altogether".
+const SITE_TEMPLATE_COLUMNS = {
+  enb: ["sap id", "jc name", "jc id", "city", "device type", "overall cnum count", "overall cell outage (sec)", "overall cell availability", "cells up"],
+  esc: ["sap id", "jc name", "jc code", "city", "site type", "device type", "total cnum count", "total outage", "availability", "cells up"],
+  gnb: ["sap id", "jc", "city", "site type", "device type", "total cnum count", "total outage", "availability", "cells up", "vendor"],
+  hpodsc: ["sap id", "jc name", "jc code", "jc sap id", "city", "site type", "device type", "integration state", "total cnum count", "total outage", "total availability", "cells up"],
+  osc: ["sap id", "region", "ems alias", "city", "jc code", "jc sap id", "lsm name", "sys alias", "ip addr 1", "site type", "total enb down sec", "availability"],
+  isc: [],
+  ag1: ["availability"],
+  ag2: ["availability"],
+  ila: ["availability"],
+  gsc: ["availability"],
+  wifi: ["availability"],
+};
+
+const findHeaderAlias = (headerSet, aliases) =>
+  aliases.find((alias) => headerSet.has(alias)) ||
+  // "Circle Name (as per SAP)" and similar suffixed headers.
+  [...headerSet].find((header) =>
+    aliases.some((alias) => header === alias || header.startsWith(`${alias} `))
+  ) ||
+  null;
+
+/**
+ * Validates the header row before any data row is parsed. Throws a 400 that
+ * names the sheet, the missing column, the columns that were found and the
+ * template to download.
+ */
+const assertTemplateHeaders = (headers, siteTypeLabel, context = {}) => {
+  const headerSet = new Set(headers);
+  const siteKey = String(siteTypeLabel || "").toLowerCase();
+  const missing = [];
+
+  if (!findHeaderAlias(headerSet, CIRCLE_HEADER_ALIASES)) {
+    missing.push({ column: "Circle", accepts: "Circle, Circle Name" });
+  }
+  if (!findHeaderAlias(headerSet, CMP_HEADER_ALIASES)) {
+    missing.push({ column: "CMP", accepts: "CMP, CMP Name" });
+  }
+
+  const templateColumns = SITE_TEMPLATE_COLUMNS[siteKey] || [];
+  const matchedTemplateColumns = templateColumns.filter((column) => headerSet.has(column));
+  // A file that shares almost none of the expected data columns is the wrong
+  // template, not a file with a couple of bad values.
+  const looksLikeWrongTemplate =
+    templateColumns.length >= 4 && matchedTemplateColumns.length === 0;
+
+  if (!missing.length && !looksLikeWrongTemplate) return;
+
+  const detected = headers.slice(0, 40);
+  const heading = `${siteTypeLabel} upload stopped.\n\n`;
+  const where = [
+    context.fileName ? `File: ${context.fileName}` : null,
+    context.sheetName ? `Sheet: ${context.sheetName}` : null,
+  ].filter(Boolean).join("\n");
+
+  const problem = missing.length
+    ? `Required column${missing.length === 1 ? "" : "s"} not found: ` +
+      `${missing.map((item) => item.column).join(", ")}.\n\n` +
+      missing
+        .map((item) => `• "${item.column}" — accepted headings: ${item.accepts}`)
+        .join("\n")
+    : `This file does not match the ${siteTypeLabel} template.\n\n` +
+      `None of the expected ${siteTypeLabel} data columns were found ` +
+      `(${templateColumns.slice(0, 6).join(", ")}...).`;
+
+  const error = new Error(
+    `${heading}${where ? `${where}\n\n` : ""}${problem}\n\n` +
+    `Columns found in this sheet: ${detected.join(", ") || "(none)"}.\n\n` +
+    `Download the ${siteTypeLabel} format from the upload window, copy your ` +
+    `data into it and upload again. The header row must be row 1.`
+  );
+  error.statusCode = 400;
+  error.details = {
+    errorType: "template",
+    siteType: siteTypeLabel,
+    ...context,
+    detectedHeaders: detected,
+    expectedHeaders: [
+      "Circle",
+      "CMP",
+      ...templateColumns.map((column) =>
+        column.replace(/\b\w/g, (character) => character.toUpperCase())
+      ),
+    ],
+    errors: missing.length
+      ? missing.map((item) =>
+          rowError({
+            row: 1,
+            column: item.column,
+            value: "(not found)",
+            expected: item.accepts,
+            reason: `The header row has no "${item.column}" column.`,
+            fix: `Add a "${item.column}" heading to row 1, or use the ${siteTypeLabel} format file.`,
+          })
+        )
+      : [
+          rowError({
+            row: 1,
+            column: "(header row)",
+            value: detected.slice(0, 6).join(", "),
+            expected: templateColumns.slice(0, 6).join(", "),
+            reason: `The header row does not contain any ${siteTypeLabel} data column.`,
+            fix: `Check that the Site Type you selected matches the file you are uploading.`,
+          }),
+        ],
+  };
+  throw error;
+};
+
 const isUploadAccessible = async (upload, authUser, requireExclusive = false) => {
   if (isAllCircle(authUser)) return true;
   const tableName = String(upload.site_type || "").toLowerCase();
@@ -114,6 +469,55 @@ const filterAccessibleUploads = async (uploads, authUser) => {
     uploads.map(async (upload) => (await isUploadAccessible(upload, authUser) ? upload : null))
   );
   return allowed.filter(Boolean);
+};
+
+/**
+ * Resolves which circles each upload's data covers, using one grouped query per
+ * site-type table instead of one query per upload.
+ *
+ * Returns Map<file_id, Set<circle>>.
+ */
+const buildFileCircleIndex = async (uploads) => {
+  const fileIdsByTable = new Map();
+
+  uploads.forEach((upload) => {
+    const tableName = String(upload.site_type || "").toLowerCase();
+    const fileId = Number(upload.file_id);
+    if (!reportDataTables.has(tableName) || !Number.isFinite(fileId)) return;
+
+    if (!fileIdsByTable.has(tableName)) fileIdsByTable.set(tableName, new Set());
+    fileIdsByTable.get(tableName).add(fileId);
+  });
+
+  const circlesByFileId = new Map();
+
+  for (const [tableName, fileIdSet] of fileIdsByTable) {
+    const fileIds = [...fileIdSet];
+    if (!fileIds.length) continue;
+
+    try {
+      const placeholders = fileIds.map(() => "?").join(",");
+      const rows = await query(
+        `SELECT file_id, TRIM(circle) AS circle
+           FROM ${tableName}
+          WHERE file_id IN (${placeholders})
+            AND circle IS NOT NULL AND TRIM(circle) <> ''
+          GROUP BY file_id, TRIM(circle)`,
+        fileIds
+      );
+
+      rows.forEach(({ file_id: fileId, circle }) => {
+        const key = Number(fileId);
+        if (!circlesByFileId.has(key)) circlesByFileId.set(key, new Set());
+        circlesByFileId.get(key).add(String(circle).trim());
+      });
+    } catch (error) {
+      // A site-type table may not exist yet on a fresh install.
+      console.warn(`Circle lookup skipped for ${tableName}:`, error.code || error.message);
+    }
+  }
+
+  return circlesByFileId;
 };
 
 
@@ -197,69 +601,39 @@ const ensureEscTable = async () => {
     `);
 };
 
+// Missing columns are added in place. This must never drop or recreate the
+// table — gnb holds historical uploads that cannot be recovered from source.
 const ensureGnbTable = async () => {
-  try {
-    // Step 1: Check if table exists and what columns it has
-    const checkTableQuery = `
-        SELECT COLUMN_NAME 
-        FROM INFORMATION_SCHEMA.COLUMNS 
-        WHERE TABLE_NAME = 'gnb' 
-        AND TABLE_SCHEMA = DATABASE()
-      `;
-    const existingColumns = await query(checkTableQuery);
-    const existingColumnNames = existingColumns.map(col => col.COLUMN_NAME);
+  await query(`
+      CREATE TABLE IF NOT EXISTS gnb (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        file_id BIGINT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
 
-    console.log("✅ Checking GNB table structure...");
-    console.log("   Current columns:", existingColumnNames.join(", "));
+  const gnbColumns = [
+    ["sap_id", "VARCHAR(100) NULL"],
+    ["circle", "VARCHAR(100) NULL"],
+    ["cmp", "VARCHAR(150) NULL"],
+    ["jc", "VARCHAR(150) NULL"],
+    ["city", "VARCHAR(100) NULL"],
+    ["site_type", "VARCHAR(50) NULL"],
+    ["device_type", "VARCHAR(50) NULL"],
+    ["total_cnum_count", "INT NULL"],
+    ["total_outage", "BIGINT NULL"],
+    ["availability", "DECIMAL(10,4) NULL"],
+    ["cells_up", "INT NULL"],
+    ["cells_up_mod", "INT NULL"],
+    ["vendor", "VARCHAR(100) NULL"],
+    ["r4g_availability", "DECIMAL(10,4) NULL"],
+    ["air_fiber_sites", "VARCHAR(50) NULL"],
+    ["updated_r4g", "VARCHAR(100) NULL"],
+    ["date", "DATE NULL"],
+  ];
 
-    const requiredColumns = [
-      "id", "file_id", "sap_id", "circle", "cmp", "jc", "city", "site_type",
-      "device_type", "total_cnum_count", "total_outage", "availability",
-      "cells_up", "cells_up_mod", "vendor", "r4g_availability", "air_fiber_sites",
-      "updated_r4g", "date", "created_at"
-    ];
-
-    const missingColumns = requiredColumns.filter(col => !existingColumnNames.includes(col));
-
-    if (missingColumns.length > 0) {
-      console.warn("⚠️  Missing columns in GNB table:", missingColumns);
-      console.log("   Dropping and recreating GNB table...");
-
-      // Drop existing table if it exists
-      await query("DROP TABLE IF EXISTS gnb");
-
-      // Create new table with all columns
-      await query(`
-          CREATE TABLE gnb (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            file_id BIGINT,
-            sap_id VARCHAR(100),
-            circle VARCHAR(100),
-            cmp VARCHAR(150),
-            jc VARCHAR(150),
-            city VARCHAR(100),
-            site_type VARCHAR(50),
-            device_type VARCHAR(50),
-            total_cnum_count INT,
-            total_outage BIGINT,
-            availability DECIMAL(10,4),
-            cells_up INT,
-            cells_up_mod INT,
-            vendor VARCHAR(100),
-            r4g_availability DECIMAL(10,4),
-            air_fiber_sites VARCHAR(50),
-            updated_r4g VARCHAR(100),
-            date DATE,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-          )
-        `);
-      console.log("✅ GNB table recreated with all required columns");
-    } else {
-      console.log("✅ GNB table has all required columns");
-    }
-  } catch (err) {
-    console.error("❌ Error checking/creating GNB table:", err.message);
-    throw err;
+  for (const [column, definition] of gnbColumns) {
+    await ensureColumn("gnb", column, definition);
   }
 };
 
@@ -372,175 +746,70 @@ const ensureHpodscTable = async () => {
   await ensureColumn("hpodsc", "cells_up", "INT NULL");
 };
 
-const insertEnbRows = async (rows) => {
-  if (!rows.length) return;
-  const batchSize = 1000;
-  for (let i = 0; i < rows.length; i += batchSize) {
-    const batch = rows.slice(i, i + batchSize);
-    await query(
-      `INSERT INTO enb (
-              file_id, circle, cmp, site_type, date, kpi_value,
-              sap_id, jc_name, jc_id, jc_sap_id, city,
-              site_type_excel, device_type, cnum_count,
-              outage_sec, availability, cells_up
-            )
-                  VALUES ?`,
-      [batch]
-    );
+// Every parser builds its value tuple with file_id at index 0, so the real
+// file_id can be stamped in just before insert — which lets the metadata row be
+// created first and its auto-increment id reused as the file_id.
+const FILE_ID_COLUMN_INDEX = 0;
+
+const insertStatements = {
+  enb: `INSERT INTO enb (
+          file_id, circle, cmp, site_type, date, kpi_value,
+          sap_id, jc_name, jc_id, jc_sap_id, city,
+          site_type_excel, device_type, cnum_count,
+          outage_sec, availability, cells_up
+        ) VALUES ?`,
+
+  esc: `INSERT INTO esc (
+          file_id, sap_id, circle, cmp, jc_name, jc_id, jc_sap_id,
+          city, site_type, device_type, total_cnum_count, total_outage,
+          total_availability, cells_up, date
+        ) VALUES ?`,
+
+  gnb: `INSERT INTO gnb (
+          file_id, sap_id, circle, cmp, jc, city, site_type, device_type,
+          total_cnum_count, total_outage, availability, cells_up, cells_up_mod,
+          vendor, r4g_availability, air_fiber_sites, updated_r4g, date
+        ) VALUES ?`,
+
+  hpodsc: `INSERT INTO hpodsc (
+          file_id, sap_id, circle, cmp, jc_name, jc_id, jc_sap_id,
+          city, site_type, device_type, integration_state, total_cnum_count,
+          total_outage, total_availability, cells_up, date
+        ) VALUES ?`,
+
+  osc: `INSERT INTO osc (
+          file_id, date, sap_id, circle, cmp, region, ems_alias, city,
+          jc_code, jc_sap_id, lsm_name, sys_alias, ip_addr_1, activeversion,
+          site_type, outage_12am_12pm, outage_12pm_12am, total_enb_down_sec,
+          cmp_code, availability, equipment_vendor, jc_name, jc_id, kpi_value
+        ) VALUES ?`,
+
+  isc: `INSERT INTO isc (file_id, circle, cmp, date, kpi_value) VALUES ?`,
+};
+
+const simpleKpiInsertStatement = (tableName) =>
+  `INSERT INTO ${tableName} (file_id, circle, cmp, date, kpi_value, availability) VALUES ?`;
+
+const INSERT_BATCH_SIZE = 1000;
+
+/**
+ * Writes prepared rows using `run` (the transaction-bound executor), stamping
+ * the real file_id into each tuple first.
+ */
+const insertPreparedRows = async (prepared, fileId, run) => {
+  const { insertSql, values } = prepared;
+  if (!values.length) return 0;
+
+  for (let i = 0; i < values.length; i += INSERT_BATCH_SIZE) {
+    const batch = values.slice(i, i + INSERT_BATCH_SIZE).map((row) => {
+      const stamped = row.slice();
+      stamped[FILE_ID_COLUMN_INDEX] = fileId;
+      return stamped;
+    });
+    await run(insertSql, [batch]);
   }
-};
 
-const insertEscRows = async (rows) => {
-  if (!rows.length) return;
-
-  await query(
-    `INSERT INTO esc (
-    file_id,
-    sap_id,
-    circle,
-    cmp,
-    jc_name,
-    jc_id,
-    jc_sap_id,
-    city,
-    site_type,
-    device_type,
-    total_cnum_count,
-    total_outage,
-    total_availability,
-    cells_up,
-    date
-  ) VALUES ?`,
-    [rows]
-  );
-};
-
-const insertGnbRows = async (rows) => {
-
-  if (!rows.length) return;
-
-  try {
-    console.log("\n========== GNB INSERT DEBUG ==========");
-    console.log("📊 Inserting", rows.length, "GNB records");
-    console.log("🔍 First row data:", rows[0]);
-    console.log("📝 INSERT SQL structure:");
-    console.log("INSERT INTO gnb (file_id, sap_id, circle, cmp, jc, city, site_type, device_type, total_cnum_count, total_outage, availability, cells_up, cells_up_mod, vendor, r4g_availability, air_fiber_sites, updated_r4g, date) VALUES ?");
-    console.log("==========================================\n");
-
-    await query(`
-        INSERT INTO gnb (
-
-          file_id,
-          sap_id,
-          circle,
-          cmp,
-          jc,
-          city,
-          site_type,
-          device_type,
-          total_cnum_count,
-          total_outage,
-          availability,
-          cells_up,
-          cells_up_mod,
-          vendor,
-          r4g_availability,
-          air_fiber_sites,
-          updated_r4g,
-          date
-
-        ) VALUES ?
-      `, [rows]);
-
-    console.log("✅ GNB records inserted successfully");
-  } catch (err) {
-    console.error("\n❌ GNB INSERT ERROR");
-    console.error("Error Code:", err.code);
-    console.error("Error Message:", err.message);
-    console.error("SQL:", err.sql);
-    console.error("Full Error:", err);
-    throw err;
-  }
-};
-
-const insertHpodscRows = async (rows) => {
-  if (!rows.length) return;
-
-  await query(
-    `INSERT INTO hpodsc (
-
-      file_id,
-
-      sap_id,
-
-      circle,
-
-      cmp,
-
-      jc_name,
-
-      jc_id,
-
-      jc_sap_id,
-
-      city,
-
-      site_type,
-
-      device_type,
-
-      integration_state,
-
-      total_cnum_count,
-
-      total_outage,
-
-      total_availability,
-
-      cells_up,
-
-      date
-
-    ) VALUES ?`,
-    [rows]
-  );
-};
-
-const insertOscRows = async (rows) => {
-  if (!rows.length) return;
-  const batchSize = 1000;
-  for (let i = 0; i < rows.length; i += batchSize) {
-    const batch = rows.slice(i, i + batchSize);
-  await query(
-  `INSERT INTO osc (
-      file_id,
-      date,
-      sap_id,
-      circle,
-      cmp,
-      region,
-      ems_alias,
-      city,
-      jc_code,
-      jc_sap_id,
-      lsm_name,
-      sys_alias,
-      ip_addr_1,
-      activeversion,
-      site_type,
-      outage_12am_12pm,
-      outage_12pm_12am,
-      total_enb_down_sec,
-      cmp_code,
-      availability,
-      equipment_vendor,
-      jc_name,
-      jc_id,
-      kpi_value
-    ) VALUES ?`,
-  [batch]
-);
-  }
+  return values.length;
 };
 
 const getLatestUploadRow = async (siteCategory, authUser) => {
@@ -554,18 +823,39 @@ const getLatestUploadRow = async (siteCategory, authUser) => {
                 LIMIT 200`,
     [siteCategory]
   );
-  return (await filterAccessibleUploads(rows, authUser))[0] || null;
+
+  if (isAllCircle(authUser)) return rows[0] || null;
+
+  // Grouped lookup instead of one access query per candidate row.
+  const circlesByFileId = await buildFileCircleIndex(rows);
+  const viewerCircle = normalizeCircle(authUser?.circle).toLowerCase();
+
+  return (
+    rows.find((row) => {
+      const circles = circlesByFileId.get(Number(row.file_id));
+      if (!circles) return false;
+      return [...circles].some((circle) => circle.toLowerCase() === viewerCircle);
+    }) || null
+  );
 };
 
 const formatDateOnly = (value) => {
   if (!value) return null;
-  const d = new Date(value + " 2026");
+
+  // The pool runs with dateStrings, so dates arrive as "YYYY-MM-DD" or
+  // "YYYY-MM-DD HH:MM:SS" and need no parsing.
+  if (typeof value === "string") {
+    const match = value.match(/^(\d{4}-\d{2}-\d{2})/);
+    if (match) return match[1];
+  }
+
+  const d = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(d.valueOf())) return null;
 
-  // ✅ FIX: Use local date components instead of .toISOString()
+  // Local components, not toISOString(), so an IST date is not shifted back a day.
   const year = d.getFullYear();
-  const month = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
 };
 
@@ -594,50 +884,17 @@ const parseEnbRows = (rows, fallbackDate, fileId) => {
 
   rows.forEach((row, index) => {
 
-    const cleanRow = {};
-    Object.keys(row).forEach((key) => {
-      const normalizedKey = key
-        .toString()
-        .trim()
-        .toLowerCase()
-        .replace(/\s+/g, " ").trim();
+    // buildCleanRow also folds underscores, so headers like "SAP_ID" now match
+    // the "sap id" lookups below instead of silently reading as null.
+    const cleanRow = buildCleanRow(row);
+    if (isBlankRow(cleanRow)) return;
 
-      cleanRow[normalizedKey] = row[key];
-    });
-
-    const circle =
-      cleanRow["circle"] ||
-      cleanRow["circle name"] ||
-      cleanRow["Circle"] ||
-      cleanRow["CIRCLE"];
-
-    const cmp =
-      cleanRow["cmp"] ||
-      cleanRow["cmp name"] ||
-      cleanRow["CMP"] ||
-      cleanRow["Cmp"];
+    const circle = cleanRow["circle"] || cleanRow["circle name"];
+    const cmp = cleanRow["cmp"] || cleanRow["cmp name"];
 
     const normalizedDate = normalizeDate(fallbackDate);
 
-   if (!circle || !cmp) {
-  errors.push(`Row ${index + 2}: Circle or CMP is missing.`);
-  return;
-}
-
-if (!isValidCircle(circle)) {
-  errors.push(
-    `Row ${index + 2}: Invalid Circle "${circle}".\n\n` +
-    `Allowed Circle Names:\n` +
-    `• Delhi\n` +
-    `• Haryana\n` +
-    `• Punjab\n` +
-    `• Uttar Pradesh (East)\n\n` +
-    `Please correct the Circle name in the Excel file and upload it again.`
-  );
-  return;
-}
-
-    console.log("Availability Value:", cleanRow["overall cell availability"]);
+    if (!validateRowCircle(circle, cmp, index + 2, errors)) return;
 
     let availability = cleanRow["overall cell availability"];
 
@@ -669,10 +926,19 @@ if (
       cleanRow["jc id"],
       cleanRow["jc sap id"],
       cleanRow["city"],
-      cleanRow["site type"],
+      // The template ships a dedicated "Site Type Excel" column; fall back to
+      // "Site Type" for files produced before it existed.
+      findHeaderValue(cleanRow, ["site type excel", "site type"]) ?? null,
       cleanRow["device type"],
-      cleanRow["overall cnum count"] || cleanRow["overall cNum count"],
-      cleanRow["overall cell outage (sec)"],
+      // enb_format.xlsx heads these "CNUM Count" and "Outage Sec", but only the
+      // "overall ..." spellings were read — so every upload made from the
+      // official template stored NULL in both columns.
+      findHeaderValue(cleanRow, [
+        "cnum count", "overall cnum count", "total cnum count",
+      ]) ?? null,
+      findHeaderValue(cleanRow, [
+        "outage sec", "overall cell outage (sec)", "total outage",
+      ]) ?? null,
       availability,
       cleanRow["cells up"]
     ]);
@@ -688,40 +954,15 @@ const parseEscRows = (rows, fallbackDate, fileId) => {
   const errors = [];
 
   rows.forEach((row, index) => {
-    const cleanRow = {};
+    const cleanRow = buildCleanRow(row);
+    if (isBlankRow(cleanRow)) return;
 
-    Object.keys(row).forEach((key) => {
-      const normalizedKey = key
-        .toString()
-        .trim()
-        .toLowerCase()
-        .replace(/[\s_]+/g, " ");
-
-      cleanRow[normalizedKey] = row[key];
-    });
-
-    const circle =
-      cleanRow["circle"] ||
-      cleanRow["circle name"] ||
-      cleanRow["Circle"] ||
-      cleanRow["CIRCLE"];
-
-    const cmp =
-      cleanRow["cmp"] ||
-      cleanRow["cmp name"] ||
-      cleanRow["CMP"] ||
-      cleanRow["Cmp"];
+    const circle = cleanRow["circle"] || cleanRow["circle name"];
+    const cmp = cleanRow["cmp"] || cleanRow["cmp name"];
 
     const date = normalizeDate(fallbackDate);
 
-    console.log("ESC ROW:", cleanRow);
-    console.log("CIRCLE:", circle);
-    console.log("CMP:", cmp);
-
-    if (!circle || !cmp) {
-      errors.push(index + 2);
-      return;
-    }
+    if (!validateRowCircle(circle, cmp, index + 2, errors)) return;
 
    let availability =
   cleanRow["availability"] ??
@@ -799,6 +1040,15 @@ if (
   return { insertRows, errors };
 };
 
+// Matches a header that starts with `prefix`, e.g. "circle name (as per sap)"
+// for prefix "circle". Was defined identically inside three parser branches.
+const pickByPrefix = (obj, prefix) => {
+  const key = Object.keys(obj).find(
+    (k) => k === prefix || k.startsWith(`${prefix} `)
+  );
+  return key ? obj[key] : undefined;
+};
+
 // 🔥 SMART HEADER DETECTION - Handles various naming conventions
 const findHeaderValue = (cleanRow, possibleNames) => {
   for (const name of possibleNames) {
@@ -840,52 +1090,20 @@ const toExactNumber = (value) => {
 
 const parseGnbRows = (rows, fallbackDate, fileId) => {
   const insertRows = [];
-  let headerMappingIssuesDetected = false;
+  const errors = [];
 
-  rows.forEach((rowIndex, idx) => {
-    const row = rows[idx];
-    const cleanRow = {};
-    const headerMapping = {}; // Track which Excel headers map to which normalized keys
+  rows.forEach((row, idx) => {
+    const cleanRow = buildCleanRow(row);
+    if (isBlankRow(cleanRow)) return;
 
-    // 🔥 NORMALIZE ALL HEADERS
-    Object.keys(row).forEach((key) => {
-      const normalizedKey = key
-        .toString()
-        .trim()
-        .toLowerCase()
-        .replace(/[\s_]+/g, " ");
-
-      cleanRow[normalizedKey] = row[key];
-      headerMapping[normalizedKey] = key; // Store original header name
-    });
-
-    // 🔥 DEBUG: Show EXACT headers on first row
-    if (idx === 0) {
-      console.log("\n========== GNB UPLOAD DEBUG ==========");
-      console.log("📋 ORIGINAL EXCEL HEADERS:", Object.keys(row));
-      console.log("📋 NORMALIZED HEADERS:", Object.keys(cleanRow));
-      console.log("✅ Expected headers: sap id, circle, cmp, jc, city, site type, device type, total cnum count, total outage, total availability, cells up, cells up mod, vendor, availability, air fiber sites, updated r4g");
-      console.log("========================================\n");
-    }
-
-    // 🔥 VERIFY CRITICAL HEADERS EXIST
-    const expectedHeaders = [
-      "sap_id", "circle", "cmp", "jc", "city", "site type", "device type",
-      "total cnum count", "total outage", "total availability",
-      "cells up", "cells up mod", "vendor", "availability", "air fiber sites", "updated r4g"
-    ];
-
-    const missingHeaders = expectedHeaders.filter(h => !Object.keys(cleanRow).includes(h) && !Object.keys(cleanRow).includes(h.replace(/ /g, "_")));
-    if (missingHeaders.length > 0 && idx === 0) {
-      console.log("⚠️  WARNING: Missing headers - might cause NULL values:", missingHeaders);
-      console.log("📌 Available keys:", Object.keys(cleanRow));
-      headerMappingIssuesDetected = true;
-    }
-
-    // 🔥 EXTRACT AND LOG EACH FIELD - Using helper for robustness
-    const sapId = findHeaderValue(cleanRow, ["sap id", "sap_id", "sap id", "sap"]) || null;
+    const sapId = findHeaderValue(cleanRow, ["sap id", "sap_id", "sap"]) || null;
     const circle = cleanRow["circle"] || cleanRow["circle name"] || null;
     const cmp = cleanRow["cmp"] || cleanRow["cmp name"] || null;
+
+    // GNB previously skipped this check entirely and inserted rows with a NULL
+    // circle, which made them invisible to every circle-scoped query.
+    if (!validateRowCircle(circle, cmp, idx + 2, errors)) return;
+
     const jc = findHeaderValue(cleanRow, ["jc", "jc name", "jc_name"]) || null;
     const city = cleanRow["city"] || cleanRow["city name"] || null;
     const siteType = findHeaderValue(cleanRow, ["site type", "site_type", "sitetype", "site_type_excel"]) || null;
@@ -915,29 +1133,6 @@ const parseGnbRows = (rows, fallbackDate, fileId) => {
     const airFiberSites = findHeaderValue(cleanRow, ["air fiber sites", "air_fiber_sites", "air fiber"]) || null;
     const updatedR4g = findHeaderValue(cleanRow, ["updated r4g", "updated_r4g", "r4g"]) || null;
 
-    // 🔥 LOG ROW DETAILS ON FIRST ROW ONLY
-    if (idx === 0) {
-      console.log("🔍 FIRST ROW DATA EXTRACTION:");
-      console.log("  sap_id =>", { raw: findHeaderValue(cleanRow, ["sap id", "sap_id"]), extracted: sapId });
-      console.log("  circle =>", { raw: cleanRow["circle"], extracted: circle });
-      console.log("  cmp =>", { raw: cleanRow["cmp"], extracted: cmp });
-      console.log("  site_type =>", { raw: findHeaderValue(cleanRow, ["site type", "site_type"]), extracted: siteType });
-      console.log("  device_type =>", { raw: findHeaderValue(cleanRow, ["device type", "device_type"]), extracted: deviceType });
-      console.log("  total_cnum_count =>", { raw: findHeaderValue(cleanRow, ["total cnum count", "total_cnum_count"]), extracted: totalCnumCount });
-      console.log("  total_outage =>", { raw: findHeaderValue(cleanRow, ["total outage", "total_outage"]), extracted: totalOutage });
-      console.log("  availability =>", { raw: findHeaderValue(cleanRow, ["total availability", "total_availability"]), extracted: availability });
-      console.log("  cells_up =>", { raw: findHeaderValue(cleanRow, ["cells up", "cells_up"]), extracted: cellsUp });
-      console.log("  vendor =>", { raw: findHeaderValue(cleanRow, ["vendor"]), extracted: vendor });
-      console.log("  availability =>", { raw: findHeaderValue(cleanRow, ["availability"]), extracted: availability });
-      console.log("  air_fiber_sites =>", { raw: findHeaderValue(cleanRow, ["air fiber sites", "air_fiber_sites"]), extracted: airFiberSites });
-      console.log("  updated_r4g =>", { raw: findHeaderValue(cleanRow, ["updated r4g", "updated_r4g"]), extracted: updatedR4g });
-      console.log("==========================================\n");
-
-      if (headerMappingIssuesDetected) {
-        console.log("⚠️  HEADER MAPPING ISSUES DETECTED - Check above for missing headers");
-      }
-    }
-
     insertRows.push([
       fileId,
       sapId,
@@ -960,7 +1155,7 @@ const parseGnbRows = (rows, fallbackDate, fileId) => {
     ]);
   });
 
-  return { insertRows };
+  return { insertRows, errors };
 };
 
 function parseHpodscRows(rows, fallbackDate, fileId) {
@@ -970,33 +1165,15 @@ function parseHpodscRows(rows, fallbackDate, fileId) {
 
   rows.forEach((row, index) => {
 
-    const cleanRow = {};
+    const cleanRow = buildCleanRow(row);
+    if (isBlankRow(cleanRow)) return;
 
-    Object.keys(row).forEach((key) => {
-
-      const normalizedKey = key
-        .toString()
-        .trim()
-        .toLowerCase()
-        .replace(/[\s_]+/g, " ");
-
-      cleanRow[normalizedKey] = row[key];
-    });
-
-    const circle =
-      cleanRow["circle"] ||
-      cleanRow["circle name"];
-
-    const cmp =
-      cleanRow["cmp"] ||
-      cleanRow["cmp name"];
+    const circle = cleanRow["circle"] || cleanRow["circle name"];
+    const cmp = cleanRow["cmp"] || cleanRow["cmp name"];
 
     const date = normalizeDate(fallbackDate);
 
-    if (!circle || !cmp) {
-      errors.push(index + 2);
-      return;
-    }
+    if (!validateRowCircle(circle, cmp, index + 2, errors)) return;
 
     insertRows.push([
 
@@ -1037,29 +1214,83 @@ function parseHpodscRows(rows, fallbackDate, fileId) {
   return { insertRows, errors };
 }
 
-const readWorksheetRows = (fileBuffer) => {
+const throwFileError = (message, details) => {
+  const error = new Error(message);
+  error.statusCode = 400;
+  error.details = details;
+  throw error;
+};
 
-  const workbook = xlsx.read(fileBuffer, {
-    type: "buffer",
-    cellDates: true,
-  });
+/**
+ * Reads the first worksheet and returns its rows together with the sheet name
+ * and normalized header list, so every downstream error can say exactly where
+ * the problem is. Unreadable files, empty workbooks and header-only sheets are
+ * each reported with their own message instead of one generic failure.
+ */
+const readWorksheetRows = (fileBuffer, fileName = "the uploaded file") => {
+  let workbook;
 
-  const sheetName = workbook.SheetNames[0];
-
-  const worksheet = workbook.Sheets[sheetName];
-
-  const rows = xlsx.utils.sheet_to_json(
-    worksheet,
-    { defval: "" }
-  );
-
-  if (!rows.length) {
-    const error = new Error("No rows found in uploaded file");
-    error.statusCode = 400;
-    throw error;
+  try {
+    workbook = xlsx.read(fileBuffer, { type: "buffer", cellDates: true });
+  } catch (parseError) {
+    throwFileError(
+      `"${fileName}" could not be opened as a spreadsheet.\n\n` +
+      `The file is either corrupt, password protected, or was renamed to .xlsx ` +
+      `from another format.\n\n` +
+      `Open it in Excel, use File > Save As to save a fresh .xlsx copy, then ` +
+      `upload that copy.`,
+      { errorType: "unreadable-file", fileName, reason: parseError.message }
+    );
   }
 
-  return rows;
+  const sheetNames = workbook.SheetNames || [];
+
+  if (!sheetNames.length) {
+    throwFileError(
+      `"${fileName}" has no worksheets.\n\n` +
+      `The workbook opened but contains no sheets at all. Upload a file with ` +
+      `the report data on its first sheet.`,
+      { errorType: "no-sheets", fileName }
+    );
+  }
+
+  // Reports are read from the first sheet. If that one is empty but a later
+  // sheet has data, say so — silently reading sheet 1 and reporting "no rows"
+  // sent people hunting for a problem in the wrong place.
+  const sheetName = sheetNames[0];
+  const worksheet = workbook.Sheets[sheetName];
+  const rows = xlsx.utils.sheet_to_json(worksheet, { defval: "" });
+
+  if (!rows.length) {
+    const sheetsWithData = sheetNames.filter((name) => {
+      if (name === sheetName) return false;
+      return xlsx.utils.sheet_to_json(workbook.Sheets[name], { defval: "" }).length > 0;
+    });
+
+    throwFileError(
+      `"${fileName}" has no data rows.\n\n` +
+      `Sheet: ${sheetName}\n\n` +
+      (sheetsWithData.length
+        ? `The first sheet is empty, but these sheets do have data: ` +
+          `${sheetsWithData.join(", ")}.\n\n` +
+          `Reports are always read from the first sheet. Move "${sheetsWithData[0]}" ` +
+          `to the front of the workbook, or delete the empty sheet, and upload again.`
+        : `The sheet has a header row but no data underneath it, or it is ` +
+          `completely blank.\n\nAdd your data starting at row 2 and upload again.`),
+      {
+        errorType: "empty-sheet",
+        fileName,
+        sheetName,
+        availableSheets: sheetNames,
+      }
+    );
+  }
+
+  // With defval set, every row object carries the full set of header keys, so
+  // the first row is the header list — no need to walk a million rows for it.
+  const headers = [...new Set(Object.keys(rows[0]).map(normalizeHeaderKey))];
+
+  return { rows, sheetName, headers, sheetNames };
 };
 
 const normalizeSiteTypeValue = (value = "") =>
@@ -1191,42 +1422,87 @@ const getLatestEnbTrendDatasets = async (authUser) => {
   return buildEnbTrendDatasets(rows);
 };
 
-const processSiteUploadRows = async ({ siteType, rows, date, fileId }) => {
+/**
+ * Parses and validates one file's rows and returns the INSERT plus the value
+ * tuples, WITHOUT writing anything. Any table creation happens here (DDL cannot
+ * live inside the transaction), so the caller can validate every file first and
+ * then commit all of them together.
+ *
+ * The returned tuples carry a placeholder at FILE_ID_COLUMN_INDEX;
+ * insertPreparedRows stamps the real file_id in at write time.
+ */
+const prepareSiteUploadRows = async ({
+  siteType,
+  rows,
+  date,
+  fileName,
+  sheetName,
+  headers = [],
+}) => {
   const normalizedSiteType = String(siteType || "").trim().toLowerCase();
+  const fileId = null; // placeholder — replaced by insertPreparedRows
+
+  // Checked first: an unknown Site Type should say so, rather than complain
+  // about columns for a template that does not exist.
+  if (!reportDataTables.has(normalizedSiteType)) {
+    const error = new Error(
+      `"${siteType}" is not a Site Type this page can upload.\n\n` +
+      `Supported Site Types: ${[...reportDataTables]
+        .map((name) => name.toUpperCase())
+        .sort()
+        .join(", ")}.`
+    );
+    error.statusCode = 400;
+    error.details = { errorType: "unsupported-site-type", siteType, fileName, sheetName };
+    throw error;
+  }
+
+  // Where the problem is, attached to every error this function raises.
+  const context = {
+    fileName,
+    sheetName,
+    detectedHeaders: headers.slice(0, 40),
+    totalRows: rows.length,
+  };
+
+  // The header row is checked before any data row, so a file uploaded under the
+  // wrong Site Type reports "wrong template" instead of thousands of identical
+  // "Circle is blank" row errors.
+  assertTemplateHeaders(headers, normalizedSiteType.toUpperCase(), {
+    fileName,
+    sheetName,
+  });
 
   if (normalizedSiteType === "enb") {
     await ensureEnbTable();
     const { insertRows, errors } = parseEnbRows(rows, date, fileId);
 
-  if (errors.length) {
-  const error = new Error(errors.join("\n\n"));
-  error.statusCode = 400;
-  throw error;
-}
+    if (errors.length) throwRowErrors(errors, "ENB", context);
+    if (!insertRows.length) throwNoValidRows("ENB", context);
 
-    await insertEnbRows(insertRows);
-    return insertRows.length;
+    return { insertSql: insertStatements.enb, values: insertRows };
   }
 
   if (normalizedSiteType === "esc") {
     await ensureEscTable();
     const { insertRows, errors } = parseEscRows(rows, date, fileId);
 
- if (errors.length) {
-  const error = new Error(errors.join("\n\n"));
-  error.statusCode = 400;
-  throw error;
-} 
+    if (errors.length) throwRowErrors(errors, "ESC", context);
+    if (!insertRows.length) throwNoValidRows("ESC", context);
 
-    await insertEscRows(insertRows);
-    return insertRows.length;
+    return { insertSql: insertStatements.esc, values: insertRows };
   }
 
   if (normalizedSiteType === "hpodsc") {
     await ensureHpodscTable();
-    const { insertRows } = parseHpodscRows(rows, date, fileId);
-    await insertHpodscRows(insertRows);
-    return insertRows.length;
+    // These errors used to be destructured away, so a file with blank Circle
+    // values reported success while quietly dropping those rows.
+    const { insertRows, errors } = parseHpodscRows(rows, date, fileId);
+
+    if (errors.length) throwRowErrors(errors, "HPODSC", context);
+    if (!insertRows.length) throwNoValidRows("HPODSC", context);
+
+    return { insertSql: insertStatements.hpodsc, values: insertRows };
   }
 
   if (normalizedSiteType === "isc") {
@@ -1234,26 +1510,10 @@ const processSiteUploadRows = async ({ siteType, rows, date, fileId }) => {
 
     const insertRows = [];
     const errors = [];
-    const headerKeys = new Set();
-
-    const normalizeKey = (key) =>
-      key.toString().trim().toLowerCase().replace(/[\s_]+/g, " ");
-
-    const pickByPrefix = (obj, prefix) => {
-      const key = Object.keys(obj).find(
-        (k) => k === prefix || k.startsWith(prefix + " ")
-      );
-      return key ? obj[key] : undefined;
-    };
 
     rows.forEach((row, index) => {
-      const cleanRow = {};
-
-      Object.keys(row).forEach((key) => {
-        const normalized = normalizeKey(key);
-        cleanRow[normalized] = row[key];
-        headerKeys.add(normalized);
-      });
+      const cleanRow = buildCleanRow(row);
+      if (isBlankRow(cleanRow)) return;
 
       const circle =
         cleanRow["circle"] ||
@@ -1267,45 +1527,15 @@ const processSiteUploadRows = async ({ siteType, rows, date, fileId }) => {
 
       const dateValue = normalizeDate(date);
 
-    if (!circle || !cmp) {
-  errors.push(`Row ${index + 2}: Circle or CMP is missing.`);
-  return;
-}
-
-if (!isValidCircle(circle)) {
-  errors.push(
-    `Row ${index + 2}: Invalid Circle "${circle}".\n\n` +
-    `Allowed Circle Names:\n` +
-    `• Delhi\n` +
-    `• Haryana\n` +
-    `• Punjab\n` +
-    `• Uttar Pradesh (East)\n\n` +
-    `Please correct the Circle name in the Excel file and upload it again.`
-  );
-  return;
-}
+      if (!validateRowCircle(circle, cmp, index + 2, errors)) return;
 
       insertRows.push([fileId, String(circle).trim(), String(cmp).trim(), dateValue, 1]);
     });
 
-    if (!insertRows.length) {
-      const error = new Error(
-        "ISC upload failed: no rows contained valid Circle/CMP values. Please verify the file headers."
-      );
-      error.statusCode = 400;
-      error.details = { detectedHeaders: Array.from(headerKeys).slice(0, 30) };
-      throw error;
-    }
+    if (errors.length) throwRowErrors(errors, "ISC", context);
+    if (!insertRows.length) throwNoValidRows("ISC", context);
 
-  if (errors.length) {
-  const error = new Error(errors.join("\n\n"));
-  error.statusCode = 400;
-  error.details = { detectedHeaders: Array.from(headerKeys).slice(0, 30) };
-  throw error;
-}
-
-    await query(`INSERT INTO isc (file_id, circle, cmp, date, kpi_value) VALUES ?`, [insertRows]);
-    return insertRows.length;
+    return { insertSql: insertStatements.isc, values: insertRows };
   }
 
   if (normalizedSiteType === "osc") {
@@ -1313,10 +1543,8 @@ if (!isValidCircle(circle)) {
     await ensureColumn("osc", "kpi_value", "DECIMAL(12,4) NULL");
 
     const insertRows = [];
+    const errors = [];
     const headerKeys = new Set();
-
-    const normalizeKey = (key) =>
-      key.toString().trim().toLowerCase().replace(/[\s_]+/g, " ");
 
     const getValue = (obj, keys) => {
   for (const key of keys) {
@@ -1338,14 +1566,9 @@ if (!isValidCircle(circle)) {
       return key ? obj[key] : undefined;
     };
 
-    rows.forEach((row) => {
-      const cleanRow = {};
-
-      Object.keys(row).forEach((key) => {
-        const normalized = normalizeKey(key);
-        cleanRow[normalized] = row[key];
-        headerKeys.add(normalized);
-      });
+    rows.forEach((row, index) => {
+      const cleanRow = buildCleanRow(row);
+      if (isBlankRow(cleanRow)) return;
 
       const circle =
         cleanRow["circle"] ||
@@ -1359,7 +1582,9 @@ if (!isValidCircle(circle)) {
 
       const dateValue = normalizeDate(date);
 
-      if (!circle || !cmp) return;
+      // OSC used to drop invalid rows silently, so a file with half its Circle
+      // column blank still reported a fully successful upload.
+      if (!validateRowCircle(circle, cmp, index + 2, errors)) return;
 
       // Store the availability exactly as uploaded (0, 0.1, 0.5, 1.0, ...).
       // kpi_value mirrors it so dashboards averaging either column are correct.
@@ -1465,32 +1690,26 @@ if (!isValidCircle(circle)) {
 ]);
     });
 
-    if (!insertRows.length) {
-      const error = new Error(
-        "OSC upload failed: no rows contained valid Circle/CMP values. Please verify the file headers."
-      );
-      error.statusCode = 400;
-      error.details = { detectedHeaders: Array.from(headerKeys).slice(0, 30) };
-      throw error;
-    }
+    if (errors.length) throwRowErrors(errors, "OSC", context);
+    if (!insertRows.length) throwNoValidRows("OSC", context);
 
-    await insertOscRows(insertRows);
-    return insertRows.length;
+    return { insertSql: insertStatements.osc, values: insertRows };
   }
 
   if (normalizedSiteType === "gnb") {
 
     await ensureGnbTable();
 
-    const { insertRows } = parseGnbRows(
+    const { insertRows, errors } = parseGnbRows(
       rows,
       date,
       fileId
     );
 
-    await insertGnbRows(insertRows);
+    if (errors.length) throwRowErrors(errors, "GNB", context);
+    if (!insertRows.length) throwNoValidRows("GNB", context);
 
-    return insertRows.length;
+    return { insertSql: insertStatements.gnb, values: insertRows };
   }
 
   if (["ag1", "ag2", "ila", "gsc", "wifi"].includes(normalizedSiteType)) {
@@ -1513,23 +1732,11 @@ if (!isValidCircle(circle)) {
     await ensureColumn(tableName, "availability", "DECIMAL(12,4) NULL");
 
     const insertRows = [];
+    const errors = [];
 
-    const normalizeKey = (key) =>
-      key.toString().trim().toLowerCase().replace(/[\s_]+/g, " ");
-
-    const pickByPrefix = (obj, prefix) => {
-      const key = Object.keys(obj).find(
-        (k) => k === prefix || k.startsWith(prefix + " ")
-      );
-      return key ? obj[key] : undefined;
-    };
-
-    rows.forEach((row) => {
-      const cleanRow = {};
-
-      Object.keys(row).forEach((key) => {
-        cleanRow[normalizeKey(key)] = row[key];
-      });
+    rows.forEach((row, index) => {
+      const cleanRow = buildCleanRow(row);
+      if (isBlankRow(cleanRow)) return;
 
       const circle =
         cleanRow["circle"] ||
@@ -1543,7 +1750,7 @@ if (!isValidCircle(circle)) {
 
       const dateValue = normalizeDate(date);
 
-      if (!circle || !cmp) return;
+      if (!validateRowCircle(circle, cmp, index + 2, errors)) return;
 
       const availabilityValue = toExactNumber(
         findHeaderValue(cleanRow, [
@@ -1557,29 +1764,28 @@ if (!isValidCircle(circle)) {
       insertRows.push([fileId, String(circle).trim(), String(cmp).trim(), dateValue, 1, availabilityValue]);
     });
 
-    if (!insertRows.length) {
-      const error = new Error(`${tableName.toUpperCase()} upload failed: no valid rows`);
-      error.statusCode = 400;
-      throw error;
-    }
+    const label = tableName.toUpperCase();
+    if (errors.length) throwRowErrors(errors, label, context);
+    if (!insertRows.length) throwNoValidRows(label, context);
 
-    await query(`INSERT INTO ${tableName} (file_id, circle, cmp, date, kpi_value, availability) VALUES ?`, [
-      insertRows,
-    ]);
-    return insertRows.length;
+    return { insertSql: simpleKpiInsertStatement(tableName), values: insertRows };
   }
 
-  const error = new Error(`Unsupported site type: ${siteType}`);
-  error.statusCode = 400;
+  // Unreachable: the whitelist check above admits only types with a branch.
+  // Kept so adding a table to reportDataTables without a parser fails loudly.
+  const error = new Error(
+    `"${siteType}" has no upload parser configured. Please contact your administrator.`
+  );
+  error.statusCode = 500;
+  error.details = { errorType: "missing-parser", siteType, fileName, sheetName };
   throw error;
 };
 
 // ✅ List reports
 
-router.get("/", async (req, res) => {
+router.get("/", requirePagePermission("tower-reports", "view"), async (req, res) => {
   try {
     const siteCategory = req.query.siteCategory || "tower";
-    const circleFilter = (req.query.circle || "").trim();
     await ensureUploadsTable();
 
     const allRows = await query(
@@ -1588,67 +1794,52 @@ router.get("/", async (req, res) => {
               file_name, total_records, file_id, uploaded_at
        FROM report_uploads
        WHERE site_category = ?
-       ORDER BY uploaded_at DESC`,
+       ORDER BY report_date DESC, uploaded_at DESC, id DESC`,
       [siteCategory]
     );
 
-    let rows = await filterAccessibleUploads(allRows, req.authUser);
+    // One grouped query per site-type table gives both the circle labels and the
+    // access decision. The previous code ran a separate COUNT per upload row —
+    // ~400 full scans of multi-million-row tables on every page load.
+    const circlesByFileId = await buildFileCircleIndex(allRows);
 
-    // Group file_ids by site_type so we can fetch circles in one query per table
-    const siteTypeGroups = {};
-    rows.forEach((row) => {
-      if (!row.file_id || !row.site_type) return;
-      const tableName = String(row.site_type).toLowerCase();
-      if (!reportDataTables.has(tableName)) return;
-      if (!siteTypeGroups[tableName]) siteTypeGroups[tableName] = [];
-      siteTypeGroups[tableName].push(Number(row.file_id));
-    });
+    const viewerCircle = normalizeCircle(req.authUser?.circle).toLowerCase();
+    const seesEveryCircle = isAllCircle(req.authUser);
 
-    // One query per site type table to get circle for each file_id
-    const circleMap = {};
-    for (const [tableName, fileIds] of Object.entries(siteTypeGroups)) {
-      try {
-        const placeholders = fileIds.map(() => "?").join(",");
-        const circleRows = await query(
-          `SELECT file_id, TRIM(circle) AS circle
-           FROM ${tableName}
-           WHERE file_id IN (${placeholders})
-             AND circle IS NOT NULL AND TRIM(circle) != ''
-           GROUP BY file_id`,
-          fileIds
-        );
-        circleRows.forEach(({ file_id, circle }) => {
-          if (circle) circleMap[Number(file_id)] = circle.trim();
-        });
-      } catch {
-        // table may not exist yet — skip
-      }
-    }
+    const rows = allRows
+      .filter((row) => {
+        if (seesEveryCircle) return true;
+        const circles = circlesByFileId.get(Number(row.file_id));
+        // Uploads with no resolvable circle stay hidden from circle-scoped users.
+        if (!circles || circles.size === 0) return false;
+        return [...circles].some((circle) => circle.toLowerCase() === viewerCircle);
+      })
+      .map((row) => {
+        const circles = [...(circlesByFileId.get(Number(row.file_id)) || [])].sort();
+        return {
+          ...row,
+          // A report file covers several circles, so the old single `circle`
+          // value showed an arbitrary one. Send the full list and a label.
+          circles,
+          circle:
+            circles.length === 0 ? null
+              : circles.length === 1 ? circles[0]
+                : `${circles.length} Circles`,
+          file_missing: false,
+        };
+      });
 
-    // Attach circle to each row, then apply circle filter
-    let rowsWithCircle = rows.map((row) => ({
-      ...row,
-      circle: circleMap[Number(row.file_id)] || null,
-      file_missing: false,
-    }));
-
-    if (circleFilter) {
-      rowsWithCircle = rowsWithCircle.filter(
-        (row) =>
-          String(row.circle || "").trim().toLowerCase() ===
-          circleFilter.trim().toLowerCase()
-      );
-    }
-
-    res.json({ rows: rowsWithCircle });
+    res.json({ rows });
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Server error" });
+    console.error("Report list error:", error);
+    res.status(500).json({
+      message: "Unable to load reports. Please refresh the page and try again.",
+    });
   }
 });
 
 // ✅ Latest upload summary (file name + date + record count)
-router.get("/latest-summary", async (req, res) => {
+router.get("/latest-summary", requirePagePermission("tower-reports", "view"), async (req, res) => {
   try {
     const siteCategory = (req.query.siteCategory || "tower").toLowerCase();
     const latest = await getLatestUploadRow(siteCategory, req.authUser);
@@ -1673,7 +1864,7 @@ router.get("/latest-summary", async (req, res) => {
 });
 
 // ✅ Latest upload info only
-router.get("/latest", async (req, res) => {
+router.get("/latest", requirePagePermission("tower-reports", "view"), async (req, res) => {
   try {
     const siteCategory = (req.query.siteCategory || "tower").toLowerCase();
     const latest = await getLatestUploadRow(siteCategory, req.authUser);
@@ -1693,7 +1884,7 @@ router.get("/latest", async (req, res) => {
 });
 
 // ✅ Latest upload record count only
-router.get("/latest/count", async (req, res) => {
+router.get("/latest/count", requirePagePermission("tower-reports", "view"), async (req, res) => {
   try {
     const siteCategory = (req.query.siteCategory || "tower").toLowerCase();
     const latest = await getLatestUploadRow(siteCategory, req.authUser);
@@ -1709,7 +1900,7 @@ router.get("/latest/count", async (req, res) => {
   }
 });
 
-router.get("/enb/uptime-trend", async (req, res) => {
+router.get("/enb/uptime-trend", requirePagePermission("tower-reports", "view"), async (req, res) => {
   try {
     const trends = await getLatestEnbTrendDatasets(req.authUser);
     res.json(trends);
@@ -1729,25 +1920,42 @@ router.post("/upload", requirePagePermission("tower-reports", "edit"), (req, res
   uploadAnyReportFiles(req, res, async (err) => {
 
     if (err) {
-      return res.status(400).json({ message: err.message });
+      console.error("Upload transport error:", err.code, err.message);
+      return res.status(400).json({ message: uploadLimitMessage(err) });
     }
 
     try {
-      const { site_type, report_type, date, uploadedBy } = req.body;
+      const { site_type, report_type, date } = req.body;
+
+      // Defaults to the signed-in account, but the form field can override it
+      // (e.g. filing a report on someone else's behalf).
+      const uploadedBy =
+        String(req.body.uploadedBy || "").trim() ||
+        req.authUser?.name || req.authUser?.username || req.authUser?.email || "Unknown user";
       const duplicateAction = String(req.body.duplicateAction || "").toLowerCase();
       const site_category = (req.body.siteCategory || "tower").toLowerCase();
-      const normalizeSiteTypeValue = (value = "") =>
-      value.toString().trim().toUpperCase();
-      const normalizedSiteType = normalizeSiteTypeValue(site_type); 
+      const normalizedSiteType = normalizeSiteTypeValue(site_type);
       const files = getUploadedReportFiles(req);
-      const detectedUploadType = files.length > 1 ? "bulk" : "single";
+
+      // The mode comes from what the user picked in the UI, not from the file
+      // count. Inferring it meant a Bulk upload of exactly one file was treated
+      // as Single, so the date was taken from the date picker instead of the
+      // file name — silently filing the report under the wrong day.
+      const detectedUploadType =
+        String(req.body.upload_type || "").trim().toLowerCase() === "bulk"
+          ? "bulk"
+          : "single";
+
+      if (detectedUploadType === "single" && files.length > 1) {
+        return res.status(400).json({
+          message: "Single Upload accepts one file at a time.\n\nSwitch to Bulk Upload to send multiple files.",
+        });
+      }
+
       const finalDate = detectedUploadType === "single" ? normalizeDate(date) : null;
 
       if (detectedUploadType === "single" && !finalDate) {
         return res.status(400).json({ message: "Please select report date." });
-      }
-      if (!uploadedBy) {
-        return res.status(400).json({ message: "Please enter Uploaded By." });
       }
       if (!site_type) {
         return res.status(400).json({ message: "Please select Site Type." });
@@ -1772,26 +1980,61 @@ router.post("/upload", requirePagePermission("tower-reports", "edit"), (req, res
 
       await ensureUploadsTable();
 
+      // Every file name is checked before any file is parsed, so a batch of
+      // twelve reports lists all of its naming problems at once instead of
+      // failing on the first one, twelve times over.
+      if (detectedUploadType === "bulk") {
+        const nameProblems = files
+          .map((file) => {
+            const name = String(file.originalname || "");
+            if (extractDateFromFileName(name)) return null;
+
+            const hasDatePart = /\d{4}-\d{2}-\d{2}/.test(name);
+            return {
+              fileName: name,
+              reason: hasDatePart
+                ? "The date in the name is not a real calendar date, or the name has extra separators before it."
+                : "The name has no YYYY-MM-DD date, so the report date cannot be determined.",
+            };
+          })
+          .filter(Boolean);
+
+        if (nameProblems.length) {
+          return res.status(400).json({
+            success: false,
+            errorType: "file-name",
+            message:
+              `${nameProblems.length} of ${files.length} file name${files.length === 1 ? "" : "s"} ` +
+              `could not be read, so nothing was uploaded.\n\n` +
+              nameProblems
+                .map((item) => `• ${item.fileName}\n  ${item.reason}`)
+                .join("\n") +
+              `\n\n${bulkFileNameFormatHelp}\nExample: outage_2026-07-27.xlsx`,
+            errors: nameProblems.map((item) => ({
+              row: null,
+              column: "File name",
+              value: item.fileName,
+              expected: "reporttype_YYYY-MM-DD.xlsx",
+              reason: item.reason,
+              fix: "Rename the file to reporttype_YYYY-MM-DD.xlsx and select it again.",
+            })),
+          });
+        }
+      }
+
       const pendingUploads = [];
 
       for (const file of files) {
-        const rows = readWorksheetRows(file.buffer);
+        const { rows, sheetName, headers } = readWorksheetRows(
+          file.buffer,
+          file.originalname
+        );
         assertRowsAllowedCircle(req.authUser, rows, getRawCircle);
 
-        let fileReportDate = finalDate;
-
-        if (detectedUploadType === "bulk") {
-          fileReportDate = extractDateFromFileName(file.originalname);
-
-          if (!fileReportDate) {
-            const isMissingDate = !/\d{4}-\d{2}-\d{2}/.test(String(file.originalname || ""));
-            return res.status(400).json({
-              message: isMissingDate
-                ? bulkFileNameCorrectionMessage
-                : bulkInvalidFileNameMessage,
-            });
-          }
-        }
+        const fileReportDate =
+          detectedUploadType === "bulk"
+            ? extractDateFromFileName(file.originalname)
+            : finalDate;
 
         const existingUploads = await query(
           `SELECT id, site_type, file_id, report_date, file_name
@@ -1810,6 +2053,8 @@ router.post("/upload", requirePagePermission("tower-reports", "edit"), (req, res
         pendingUploads.push({
           file,
           rows,
+          sheetName,
+          headers,
           reportDate: fileReportDate,
           duplicates: accessibleExistingUploads,
         });
@@ -1843,47 +2088,28 @@ router.post("/upload", requirePagePermission("tower-reports", "edit"), (req, res
         });
       }
 
-      if (duplicateAction === "replace") {
-        for (const item of duplicateFiles) {
-          for (const duplicate of item.duplicates) {
-            await deleteUploadData(duplicate);
-          }
-        }
-      }
-
       const uploadsToProcess =
         duplicateAction === "skip"
           ? pendingUploads.filter((item) => item.duplicates.length === 0)
           : pendingUploads;
 
-      const reportInsertRows = [];
-      const uploadedAt = new Date();
-      const baseFileId = Date.now();
-
-      for (const [index, item] of uploadsToProcess.entries()) {
-        const fileId = baseFileId + index;
-        const totalRecords = await processSiteUploadRows({
+      // PHASE 1 — parse and validate every file before a single row is written.
+      // Table creation also happens here: DDL implicitly commits, so it must not
+      // run inside the transaction below.
+      const preparedUploads = [];
+      for (const item of uploadsToProcess) {
+        const prepared = await prepareSiteUploadRows({
           siteType: normalizedSiteType,
           rows: item.rows,
           date: item.reportDate,
-          fileId,
+          fileName: item.file.originalname,
+          sheetName: item.sheetName,
+          headers: item.headers,
         });
-
-  reportInsertRows.push([
-  site_category,
-  item.reportDate,
-  normalizedSiteType.toUpperCase(),
-  report_type,
-  detectedUploadType,
-  uploadedBy,
-  item.file.originalname,
-  fileId,
-  totalRecords,
-  uploadedAt,
-]);
+        preparedUploads.push({ item, prepared });
       }
 
-      if (!reportInsertRows.length) {
+      if (!preparedUploads.length) {
         return res.status(200).json({
           success: true,
           message: "No reports uploaded.",
@@ -1892,40 +2118,77 @@ router.post("/upload", requirePagePermission("tower-reports", "edit"), (req, res
         });
       }
 
-      await query(
-        `INSERT INTO report_uploads (
-          site_category,
-          report_date,
-          site_type,
-          report_type,
-          upload_type,
-          uploaded_by,
-          file_name,
-          file_id,
-          total_records,
-          uploaded_at
-        ) VALUES ?`,
-        [reportInsertRows]
-      );
+      // PHASE 2 — one transaction for every write. A failure anywhere rolls the
+      // whole batch back, so a part-uploaded file can no longer leave data rows
+      // behind with no report_uploads row pointing at them.
+      const uploadedAt = new Date();
+
+      await withTransaction(async (run) => {
+        if (duplicateAction === "replace") {
+          for (const item of duplicateFiles) {
+            for (const duplicate of item.duplicates) {
+              await deleteUploadDataWith(run, duplicate);
+            }
+          }
+        }
+
+        for (const { item, prepared } of preparedUploads) {
+          // The metadata row is written first so its auto-increment id can be
+          // reused as the file_id. Clock-based ids collided whenever two uploads
+          // landed in the same millisecond.
+          const result = await run(
+            `INSERT INTO report_uploads (
+              site_category, report_date, site_type, report_type, upload_type,
+              uploaded_by, file_name, total_records, uploaded_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+              site_category,
+              item.reportDate,
+              normalizedSiteType.toUpperCase(),
+              report_type,
+              detectedUploadType,
+              uploadedBy,
+              item.file.originalname,
+              prepared.values.length,
+              uploadedAt,
+            ]
+          );
+
+          const uploadId = result.insertId;
+          const fileId = uploadId;
+
+          await run(`UPDATE report_uploads SET file_id = ? WHERE id = ?`, [fileId, uploadId]);
+          await insertPreparedRows(prepared, fileId, run);
+        }
+      });
+
+      const uploadedCount = preparedUploads.length;
 
       res.status(200).json({
         success: true,
-        count: reportInsertRows.length,
+        count: uploadedCount,
         skipped: duplicateAction === "skip" ? duplicateFiles.length : 0,
         uploadType: detectedUploadType,
         message:
           duplicateAction === "skip" && duplicateFiles.length
-            ? `${reportInsertRows.length} file(s) uploaded successfully. ${duplicateFiles.length} existing file(s) skipped.`
-            : `${reportInsertRows.length} file(s) uploaded successfully.`,
+            ? `${uploadedCount} file(s) uploaded successfully. ${duplicateFiles.length} existing file(s) skipped.`
+            : `${uploadedCount} file(s) uploaded successfully.`,
       });
     } catch (error) {
-      console.error(error);
+      console.error("Report upload error:", error);
       const isDatabaseError = error?.code && String(error.code).startsWith("ER_");
+
+      // The parsers build a full breakdown (sheet, row, column, found value,
+      // expected value, reason). It used to be thrown away here, leaving the
+      // user with a wall of text and no way to work through the problems.
+      const details = isDatabaseError ? null : error.details;
+
       res.status(error.statusCode || 500).json({
         success: false,
         message: isDatabaseError
           ? "Unable to upload reports.\n\nPlease try again or contact administrator."
           : error.message || "Upload failed.\n\nPlease check your files and try again.",
+        ...(details || {}),
       });
     }
   });
@@ -1934,26 +2197,30 @@ router.post("/upload", requirePagePermission("tower-reports", "edit"), (req, res
 router.post("/bulk-delete", requirePagePermission("tower-reports", "delete"), async (req, res) => {
   try {
 
-    let { ids } = req.body;
-
-    // 🔥 FIX: convert + remove invalid values
-    ids = ids
+    const ids = (Array.isArray(req.body?.ids) ? req.body.ids : [])
       .map((id) => Number(id))
-      .filter((id) => !isNaN(id));
+      .filter((id) => Number.isInteger(id) && id > 0);
 
-    if (!ids || ids.length === 0) {
-      return res.status(400).json({ message: "Invalid IDs" });
+    if (!ids.length) {
+      return res.status(400).json({
+        message: "No reports selected. Please select at least one report to delete.",
+      });
     }
 
-    // 🔥 GET FULL DATA (IMPORTANT)
     const placeholders = ids.map(() => "?").join(",");
 
     const rows = await query(
-      `SELECT id, file_name, site_type, file_id 
-      FROM report_uploads 
-      WHERE id IN (${placeholders})`,
-      ids   // 🔥 NOT [ids]
+      `SELECT id, file_name, site_type, file_id
+       FROM report_uploads
+       WHERE id IN (${placeholders})`,
+      ids
     );
+
+    if (!rows.length) {
+      return res.status(404).json({
+        message: "The selected reports were not found. Please refresh the page and try again.",
+      });
+    }
 
     const accessChecks = await Promise.all(
       rows.map((row) => isUploadAccessible(row, req.authUser, true))
@@ -1962,155 +2229,35 @@ router.post("/bulk-delete", requirePagePermission("tower-reports", "delete"), as
       return res.status(403).json({ message: "You cannot delete another circle's data." });
     }
 
-    // 🔥 DELETE FILE
-
-
-    // 🔥 DELETE FROM ALL TABLES BASED ON TYPE
-    for (const row of rows) {
-      const file_id = parseInt(row.file_id); // 🔥 FIX
-      const type = String(row.site_type).toLowerCase();
-
-      if (!file_id) {
-        console.log("❌ Invalid file_id:", row);
-        continue;
+    // One transaction for the whole selection. Deleting in a loop on separate
+    // connections meant a failure partway through left some reports gone and
+    // the rest untouched, with the caller told only that it failed.
+    await withTransaction(async (run) => {
+      for (const row of rows) {
+        await deleteUploadDataWith(run, row);
       }
+    });
 
-      console.log("✅ Bulk deleting:", type, file_id);
+    const missing = ids.length - rows.length;
 
-      if (type === "enb") {
-        await query("DELETE FROM enb WHERE file_id = ?", [file_id]);
-
-        const after = await query(`SELECT COUNT(*) as count FROM enb WHERE file_id = ?`, [file_id]);
-        console.log("After delete ENB:", after[0].count);
-      }
-
-      if (type === "esc") {
-        await query("DELETE FROM esc WHERE file_id = ?", [file_id]);
-
-        const after = await query(`SELECT COUNT(*) as count FROM esc WHERE file_id = ?`, [file_id]);
-        console.log("After delete ESC:", after[0].count);
-      }
-
-      if (type === "isc") {
-        await query("DELETE FROM isc WHERE file_id = ?", [file_id]);
-
-        const after = await query(`SELECT COUNT(*) as count FROM isc WHERE file_id = ?`, [file_id]);
-        console.log("After delete ISC:", after[0].count);
-      }
-
-      if (type === "osc") {
-        await query("DELETE FROM osc WHERE file_id = ?", [file_id]);
-
-        const after = await query(`SELECT COUNT(*) as count FROM osc WHERE file_id = ?`, [file_id]);
-        console.log("After delete OSC:", after[0].count);
-      }
-
-      if (type === "hpodsc") {
-        await query("DELETE FROM hpodsc WHERE file_id = ?", [file_id]);
-
-        const after = await query(`SELECT COUNT(*) as count FROM hpodsc WHERE file_id = ?`, [file_id]);
-        console.log("After delete HPODSC:", after[0].count);
-      }
-
-      if (type === "gnb") {
-        await query(
-          "DELETE FROM gnb WHERE file_id = ?",
-          [file_id]
-        );
-
-        const after = await query(
-          `SELECT COUNT(*) as count
-      FROM gnb
-      WHERE file_id = ?`,
-          [file_id]
-        );
-
-        console.log(
-          "After delete GNB:",
-          after[0].count
-        );
-      }
-
-    }
-
-    // 🔥 DELETE FROM uploads table (LAST)
-    await query(
-      `DELETE FROM report_uploads WHERE id IN (${placeholders})`,
-      ids
-    );
-
-    // 🔥 FINAL CLEANUP (REMOVE ORPHAN DATA)
-    await query(`DELETE FROM enb WHERE file_id NOT IN (SELECT file_id FROM report_uploads)`);
-    await query(`DELETE FROM esc WHERE file_id NOT IN (SELECT file_id FROM report_uploads)`);
-    await query(`DELETE FROM isc WHERE file_id NOT IN (SELECT file_id FROM report_uploads)`);
-    await query(`DELETE FROM osc WHERE file_id NOT IN (SELECT file_id FROM report_uploads)`);
-    await query(`DELETE FROM hpodsc WHERE file_id NOT IN (SELECT file_id FROM report_uploads)`);
-
-    await query(`
-      DELETE FROM gnb
-      WHERE file_id NOT IN (
-      SELECT file_id
-      FROM report_uploads
-    )
-    `);
-
-    res.json({ message: "Bulk delete successful (file + data)" });
+    res.json({
+      message:
+        `${rows.length} report${rows.length === 1 ? "" : "s"} deleted successfully.` +
+        (missing > 0
+          ? ` ${missing} had already been removed by someone else.`
+          : ""),
+      deleted: rows.length,
+    });
 
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Bulk delete failed" });
+    console.error("Bulk delete error:", err);
+    res.status(500).json({
+      message: "Unable to delete the selected reports. Please try again, or contact your administrator if the problem continues.",
+    });
   }
 });
 
-const bulkExportTables = new Set([
-  "ag1",
-  "ag2",
-  "enb",
-  "esc",
-  "gnb",
-  "gsc",
-  "hpodsc",
-  "ila",
-  "isc",
-  "osc",
-  "wifi",
-]);
-const bulkExportMonths = [
-  "January",
-  "February",
-  "March",
-  "April",
-  "May",
-  "June",
-  "July",
-  "August",
-  "September",
-  "October",
-  "November",
-  "December",
-];
 const bulkExportHighWaterMark = 1000;
-const maxExcelDataRowsPerSheet = 1048575;
-
-const parseBulkExportIds = (value) => {
-  let rawIds = value;
-
-  if (typeof rawIds === "string") {
-    try {
-      rawIds = JSON.parse(rawIds);
-    } catch {
-      rawIds = rawIds.split(",");
-    }
-  }
-
-  if (!Array.isArray(rawIds)) return [];
-
-  return [...new Set(
-    rawIds
-      .map((id) => Number(id))
-      .filter((id) => Number.isInteger(id) && id > 0)
-  )];
-};
 
 const streamBulkExportRows = async function* (sql, params) {
   const connection = await new Promise((resolve, reject) => {
@@ -2140,160 +2287,6 @@ const streamBulkExportRows = async function* (sql, params) {
   }
 };
 
-router.post("/download-bulk", requirePagePermission("tower-reports", "download"), express.urlencoded({ extended: false }), async (req, res) => {
-  let workbook;
-
-  try {
-    const ids = parseBulkExportIds(req.body?.ids);
-    const month = Number(req.body?.month);
-
-    if (!ids.length) {
-      return res.status(400).json({ message: "No IDs provided" });
-    }
-
-    if (!Number.isInteger(month) || month < 1 || month > 12) {
-      return res.status(400).json({ message: "Invalid month" });
-    }
-
-    const placeholders = ids.map(() => "?").join(",");
-    const uploads = await query(
-      `SELECT id, site_type, file_id, report_date
-                  FROM report_uploads
-                  WHERE id IN (${placeholders})
-                    AND MONTH(report_date) = ?
-                  ORDER BY report_date ASC, id ASC`,
-      [...ids, month]
-    );
-    const accessibleUploads = await filterAccessibleUploads(uploads, req.authUser);
-    if (accessibleUploads.length !== uploads.length) {
-      return res.status(403).json({ message: "You cannot download another circle's data." });
-    }
-
-    if (!uploads.length) {
-      return res.status(404).json({
-        message: `No selected reports found for ${bulkExportMonths[month - 1]}`,
-      });
-    }
-
-    const tableNames = [...new Set(
-      accessibleUploads.map((upload) => String(upload.site_type || "").toLowerCase())
-    )];
-    const invalidTable = tableNames.find((tableName) => !bulkExportTables.has(tableName));
-
-    if (invalidTable) {
-      return res.status(400).json({ message: "Unsupported report type" });
-    }
-
-    const dataColumns = [];
-    const seenColumns = new Set();
-
-    for (const tableName of tableNames) {
-      const columns = await query(
-        `SELECT COLUMN_NAME
-                    FROM INFORMATION_SCHEMA.COLUMNS
-                    WHERE TABLE_SCHEMA = DATABASE()
-                      AND TABLE_NAME = ?
-                    ORDER BY ORDINAL_POSITION`,
-        [tableName]
-      );
-
-      columns.forEach(({ COLUMN_NAME: columnName }) => {
-        if (!seenColumns.has(columnName)) {
-          seenColumns.add(columnName);
-          dataColumns.push(columnName);
-        }
-      });
-    }
-
-    const monthName = bulkExportMonths[month - 1];
-    const exportColumns = [
-      "source_site_type",
-      "source_report_date",
-      "source_upload_id",
-      ...dataColumns,
-    ];
-
-    res.setHeader(
-      "Content-Disposition",
-      `attachment; filename="${monthName}_Report.xlsx"`
-    );
-    res.setHeader(
-      "Content-Type",
-      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    );
-
-    workbook = new ExcelJS.stream.xlsx.WorkbookWriter({
-      stream: res,
-      useStyles: false,
-      useSharedStrings: false,
-    });
-
-    let worksheet;
-    let sheetNumber = 0;
-    let sheetDataRows = 0;
-
-    const addWorksheet = () => {
-      sheetNumber += 1;
-      sheetDataRows = 0;
-      worksheet = workbook.addWorksheet(
-        sheetNumber === 1 ? "Reports" : `Reports_${sheetNumber}`
-      );
-      worksheet.columns = exportColumns.map((columnName) => ({
-        header: columnName,
-        key: columnName,
-      }));
-    };
-
-    addWorksheet();
-
-    for (const upload of accessibleUploads) {
-      const tableName = String(upload.site_type).toLowerCase();
-      const rows = streamBulkExportRows(
-        `SELECT *
-                    FROM ${tableName}
-                    WHERE file_id = ?${isAllCircle(req.authUser)
-          ? ""
-          : " AND LOWER(TRIM(circle)) = LOWER(TRIM(?))"
-        }
-                    ORDER BY id ASC`,
-        isAllCircle(req.authUser)
-          ? [upload.file_id]
-          : [upload.file_id, req.authUser.circle]
-      );
-
-      for await (const row of rows) {
-        if (res.destroyed) {
-          throw new Error("Client disconnected during bulk download");
-        }
-
-        if (sheetDataRows >= maxExcelDataRowsPerSheet) {
-          worksheet.commit();
-          addWorksheet();
-        }
-
-        worksheet.addRow({
-          source_site_type: String(upload.site_type).toUpperCase(),
-          source_report_date: upload.report_date,
-          source_upload_id: upload.id,
-          ...row,
-        }).commit();
-        sheetDataRows += 1;
-      }
-    }
-
-    worksheet.commit();
-    await workbook.commit();
-  } catch (err) {
-    console.error("BULK DOWNLOAD ERROR:", err);
-
-    if (!res.headersSent) {
-      return res.status(500).json({ message: "Download failed" });
-    }
-
-    res.destroy(err);
-  }
-});
-
 function extractDateFromFileName(fileName = "") {
   const normalizedFileName = String(fileName || "").trim();
   const validFormatMatch = normalizedFileName.match(
@@ -2312,15 +2305,20 @@ function extractDateFromFileName(fileName = "") {
   return isValidDate ? validFormatMatch[1] : null;
 }
 
-async function deleteUploadData(upload) {
+/**
+ * Removes an upload's data rows and its metadata row using the supplied
+ * executor, so it can take part in a caller's transaction. `tableName` is
+ * checked against the reportDataTables whitelist before interpolation.
+ */
+async function deleteUploadDataWith(execute, upload) {
   const tableName = String(upload.site_type || "").toLowerCase();
   const fileId = Number(upload.file_id);
 
   if (reportDataTables.has(tableName) && Number.isFinite(fileId)) {
-    await query(`DELETE FROM ${tableName} WHERE file_id = ?`, [fileId]);
+    await execute(`DELETE FROM ${tableName} WHERE file_id = ?`, [fileId]);
   }
 
-  await query("DELETE FROM report_uploads WHERE id = ?", [upload.id]);
+  await execute("DELETE FROM report_uploads WHERE id = ?", [upload.id]);
 }
 
 
@@ -2331,123 +2329,104 @@ router.get("/download/:id", requirePagePermission("tower-reports", "download"), 
 
     const id = Number(req.params.id);
 
+    if (!Number.isInteger(id) || id <= 0) {
+      return res.status(400).json({ message: "Invalid report reference." });
+    }
+
     const uploadRows = await query(
-      `
-        SELECT site_type, file_id
-        FROM report_uploads
-        WHERE id = ?
-        `,
+      `SELECT id, site_type, file_id, file_name, report_date
+       FROM report_uploads
+       WHERE id = ?`,
       [id]
     );
 
     if (!uploadRows.length) {
       return res.status(404).json({
-        message: "Report not found",
+        message: "This report no longer exists. Please refresh the page and try again.",
       });
     }
 
-    const siteType = uploadRows[0].site_type.toLowerCase();
+    const upload = uploadRows[0];
+    const siteType = String(upload.site_type || "").toLowerCase();
+
     if (!reportDataTables.has(siteType)) {
-      return res.status(400).json({ message: "Unsupported report type" });
+      return res.status(400).json({
+        message:
+          `"${upload.site_type}" reports cannot be downloaded.\n\n` +
+          `Downloadable Site Types: ${[...reportDataTables]
+            .map((name) => name.toUpperCase())
+            .sort()
+            .join(", ")}.`,
+      });
     }
 
-    const fileId = Number(uploadRows[0].file_id);
+    const fileId = Number(upload.file_id);
+    const seesEveryCircle = isAllCircle(req.authUser);
 
     const rows = await query(
-      `
-  SELECT *
-  FROM ${siteType}
-  WHERE file_id = ?${isAllCircle(req.authUser)
-        ? ""
-        : " AND LOWER(TRIM(circle)) = LOWER(TRIM(?))"
-      }
-  `,
-      isAllCircle(req.authUser)
-        ? [fileId]
-        : [fileId, req.authUser.circle]
+      `SELECT *
+         FROM ${siteType}
+        WHERE file_id = ?${seesEveryCircle ? "" : " AND LOWER(TRIM(circle)) = LOWER(TRIM(?))"}`,
+      seesEveryCircle ? [fileId] : [fileId, req.authUser.circle]
     );
 
-    console.log("DOWNLOAD ID:", id);
-    console.log("FILE ID:", fileId);
-    console.log("SITE TYPE:", siteType);
-    console.log("ROWS FOUND:", rows.length);
-
     if (!rows.length) {
-      console.log("NO ROWS FOUND FOR DOWNLOAD");
+      // Distinguish "the upload is empty" from "none of it is yours" — the old
+      // shared "No data found" sent circle users looking for a missing file.
+      const [totals] = await query(
+        `SELECT COUNT(*) AS total FROM ${siteType} WHERE file_id = ?`,
+        [fileId]
+      );
 
       return res.status(404).json({
-        message: "No data found",
+        message: Number(totals?.total || 0) > 0
+          ? `"${upload.file_name || upload.site_type}" contains no ${normalizeCircle(req.authUser?.circle)} rows, so there is nothing for you to download.`
+          : `"${upload.file_name || upload.site_type}" has no data rows stored against it.\n\nDelete this entry and upload the file again.`,
       });
     }
 
     const workbook = xlsx.utils.book_new();
-
-    const worksheet =
-      xlsx.utils.json_to_sheet(rows);
-
     xlsx.utils.book_append_sheet(
       workbook,
-      worksheet,
+      xlsx.utils.json_to_sheet(rows),
       `${siteType.toUpperCase()} Report`
     );
 
-    const buffer = xlsx.write(workbook, {
-      type: "buffer",
-      bookType: "xlsb",
-    });
+    // Was bookType "xlsb" while the name and Content-Type both said .xlsx, so
+    // every download was a Binary Workbook wearing an OOXML label. Excel coped;
+    // Sheets, Numbers and most parsers did not.
+    const buffer = xlsx.write(workbook, { type: "buffer", bookType: "xlsx" });
 
-    console.log("BUFFER SIZE:", buffer.length);
-    console.log("ROWS EXPORTED:", rows.length);
+    const downloadName =
+      `${siteType.toUpperCase()}_${formatDateOnly(upload.report_date) || "report"}.xlsx`;
 
-    console.log("CONTENT TYPE:", res.getHeader("Content-Type"));
-    console.log("FILE NAME:", `${siteType}_report.xlsx`);
-
-
-    res.setHeader(
-      "Content-Disposition",
-      `attachment; filename=${siteType}_report.xlsx`
-    );
-
+    res.setHeader("Content-Disposition", `attachment; filename="${downloadName}"`);
     res.setHeader(
       "Content-Type",
       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     );
+    res.setHeader("Content-Length", buffer.length);
 
     res.send(buffer);
 
   } catch (err) {
-
-    console.error("DOWNLOAD ERROR:", err);
-
+    console.error("Report download error:", err);
     res.status(500).json({
-      message: "Download failed",
+      message: "Unable to prepare this download. Please try again, or contact your administrator if the problem continues.",
     });
-
   }
 
 });
 
-router.get("/circles", async (req, res) => {
-  try {
-    const tables = [...reportDataTables];
-    const circleSet = new Set();
+// The circle list is a fixed four-value set, so it is served from the constant
+// rather than by scanning eleven multi-million-row tables on every page load.
+// Circle-scoped users only ever see their own circle here.
+router.get("/circles", requirePagePermission("tower-reports", "view"), (req, res) => {
+  const circles = isAllCircle(req.authUser)
+    ? [...VALID_CIRCLES].sort()
+    : [normalizeCircle(req.authUser?.circle)].filter(Boolean);
 
-    for (const table of tables) {
-      try {
-        const rows = await query(
-          `SELECT DISTINCT TRIM(circle) AS circle FROM ${table} WHERE circle IS NOT NULL AND TRIM(circle) != ''`
-        );
-        rows.forEach((r) => { if (r.circle) circleSet.add(r.circle.trim()); });
-      } catch {
-        // table may not exist yet — skip
-      }
-    }
-
-    res.json({ circles: [...circleSet].sort() });
-  } catch (err) {
-    console.error("Circles error:", err);
-    res.json({ circles: [] });
-  }
+  res.json({ circles });
 });
 
 router.get("/export-excel", requirePagePermission("tower-reports", "download"), async (req, res) => {
@@ -2460,11 +2439,22 @@ router.get("/export-excel", requirePagePermission("tower-reports", "download"), 
       toDate
     } = req.query;
 
-    console.log("[EXPORT QUERY] siteType:", siteType, "fromDate:", fromDate, "toDate:", toDate);
+    if (!siteType) {
+      return res.status(400).json({ message: "Please select a Site Type." });
+    }
 
-    if (!siteType || !fromDate || !toDate) {
+    const isIsoDate = (value) => /^\d{4}-\d{2}-\d{2}$/.test(String(value || ""));
+
+    if (!isIsoDate(fromDate) || !isIsoDate(toDate)) {
       return res.status(400).json({
-        message: "Missing parameters"
+        message: "Please choose a valid From date and To date.",
+      });
+    }
+
+    // String comparison is safe here because both are ISO yyyy-mm-dd.
+    if (fromDate > toDate) {
+      return res.status(400).json({
+        message: "The From date must be on or before the To date.\n\nPlease swap the dates and try again.",
       });
     }
 
@@ -2472,7 +2462,53 @@ router.get("/export-excel", requirePagePermission("tower-reports", "download"), 
 
     // validate table name whitelist to avoid SQL injection
     if (!reportDataTables.has(tableName)) {
-      return res.status(400).json({ message: "Unsupported site type" });
+      return res.status(400).json({
+        message:
+          `"${siteType}" cannot be exported.\n\n` +
+          `Exportable Site Types: ${[...reportDataTables]
+            .map((name) => name.toUpperCase())
+            .sort()
+            .join(", ")}.`,
+      });
+    }
+
+    const scopedToCircle = !isAllCircle(req.authUser);
+    const circleClause = scopedToCircle
+      ? " AND LOWER(TRIM(circle)) = LOWER(TRIM(?))"
+      : "";
+    const circleParams = scopedToCircle ? [req.authUser.circle] : [];
+
+    // Counted before any header is written. Streaming first meant an empty
+    // range produced a "successful" download of a workbook with one bare
+    // column, and there was no way to say why it was empty.
+    const [totals] = await query(
+      `SELECT COUNT(*) AS total FROM ${tableName} WHERE date BETWEEN ? AND ?${circleClause}`,
+      [fromDate, toDate, ...circleParams]
+    );
+
+    if (!Number(totals?.total || 0)) {
+      const [available] = await query(
+        `SELECT MIN(date) AS first_date, MAX(date) AS last_date
+           FROM ${tableName}
+          WHERE date IS NOT NULL${circleClause}`,
+        circleParams
+      );
+
+      const firstDate = formatDateOnly(available?.first_date);
+      const lastDate = formatDateOnly(available?.last_date);
+
+      return res.status(404).json({
+        message:
+          `No ${String(siteType).toUpperCase()} records found between ` +
+          `${fromDate} and ${toDate}` +
+          (scopedToCircle ? ` for ${normalizeCircle(req.authUser.circle)}` : "") +
+          `.\n\n` +
+          (firstDate
+            ? `${String(siteType).toUpperCase()} data is available from ${firstDate} to ${lastDate}. ` +
+              `Pick a range inside those dates and try again.`
+            : `No ${String(siteType).toUpperCase()} reports have been uploaded yet. ` +
+              `Upload a report first, then export.`),
+      });
     }
 
     res.setHeader(
@@ -2495,31 +2531,16 @@ router.get("/export-excel", requirePagePermission("tower-reports", "download"), 
 
     let columnsAdded = false;
 
-    // Build SQL with optional circle restriction
-    let sql = `
-  SELECT *
-  FROM ${tableName}
-  WHERE date BETWEEN ? AND ?
-  `;
-    const params = [fromDate, toDate];
-    if (!isAllCircle(req.authUser)) {
-      sql += ` AND LOWER(TRIM(circle)) = LOWER(TRIM(?))`;
-      params.push(req.authUser.circle);
-    }
-    sql += ` ORDER BY date ASC`;
-
-    const rows = streamBulkExportRows(sql, params);
-
-    let exportRowCount = 0;
+    const rows = streamBulkExportRows(
+      `SELECT *
+         FROM ${tableName}
+        WHERE date BETWEEN ? AND ?${circleClause}
+        ORDER BY date ASC, id ASC`,
+      [fromDate, toDate, ...circleParams]
+    );
 
     try {
       for await (const row of rows) {
-        exportRowCount += 1;
-
-        if (exportRowCount === 1) {
-          console.log("[EXPORT ROW SAMPLE] row.date:", row.date, "type:", typeof row.date, "isDate:", row.date instanceof Date, "toISOString:", row.date?.toISOString?.());
-        }
-
         if (res.destroyed) throw new Error("Client disconnected during export");
 
         if (!columnsAdded) {
@@ -2540,7 +2561,8 @@ router.get("/export-excel", requirePagePermission("tower-reports", "download"), 
         worksheet.addRow(cleanRow).commit();
       }
 
-      // If no rows were emitted, create an empty sheet with at least the `date` column
+      // The COUNT above guarantees rows exist, but a concurrent delete could
+      // still empty the stream. Keep a valid workbook rather than a corrupt one.
       if (!columnsAdded) {
         worksheet.columns = [{ header: "date", key: "date" }];
       }
@@ -2550,9 +2572,11 @@ router.get("/export-excel", requirePagePermission("tower-reports", "download"), 
       return;
     } catch (innerErr) {
       // if an error happens after headers sent, destroy the response to terminate stream
-      console.error("EXPORT STREAM ERROR:", innerErr);
+      console.error("Export stream error:", innerErr);
       if (!res.headersSent) {
-        return res.status(500).json({ message: "Export failed" });
+        return res.status(500).json({
+          message: "Unable to build the export file. Please try a shorter date range, or contact your administrator if the problem continues.",
+        });
       }
       res.destroy(innerErr);
       return;
@@ -2560,11 +2584,11 @@ router.get("/export-excel", requirePagePermission("tower-reports", "download"), 
 
   } catch (err) {
 
-    console.error("EXPORT ERROR:", err);
+    console.error("Export error:", err);
 
     if (!res.headersSent) {
       res.status(500).json({
-        message: "Export failed"
+        message: "Unable to build the export file. Please try again, or contact your administrator if the problem continues.",
       });
     }
 
@@ -2574,154 +2598,123 @@ router.get("/export-excel", requirePagePermission("tower-reports", "download"), 
 
 router.delete("/:id", requirePagePermission("tower-reports", "delete"), async (req, res) => {
   try {
-    const id = req.params.id;
+    const id = Number(req.params.id);
+
+    if (!Number.isInteger(id) || id <= 0) {
+      return res.status(400).json({ message: "Invalid report reference." });
+    }
 
     const rows = await query(
-      "SELECT file_name, report_date, site_type, file_id FROM report_uploads WHERE id = ?",
+      "SELECT id, file_name, report_date, site_type, file_id FROM report_uploads WHERE id = ?",
       [id]
     );
 
     if (!rows.length) {
-      return res.status(404).json({ message: "Record not found" });
+      return res.status(404).json({
+        message: "This report no longer exists. Please refresh the page.",
+      });
     }
 
     if (!(await isUploadAccessible(rows[0], req.authUser, true))) {
       return res.status(403).json({ message: "You cannot delete another circle's data." });
     }
 
-    const { file_name, report_date, site_type } = rows[0];
-    const file_id = Number(rows[0].file_id);
+    // deleteUploadDataWith covers every table in reportDataTables, so site
+    // types such as AG1/AG2/ILA/GSC/WIFI are cleaned up instead of being
+    // orphaned. Run inside a transaction so a failure between the data-table
+    // delete and the report_uploads delete can't leave one without the other.
+    await withTransaction((run) => deleteUploadDataWith(run, rows[0]));
 
-    {/* ENB */ }
-
-    if (site_type.toLowerCase() === "enb") {
-      await query("DELETE FROM enb WHERE file_id = ?", [file_id]);
-
-      // 🔥 EXTRA SAFETY (remove orphan data if mismatch)
-      await query(`
-        DELETE FROM enb 
-        WHERE file_id NOT IN (SELECT file_id FROM report_uploads)
-      `);
-    }
-
-    {/* ESC */ }
-
-    if (site_type.toLowerCase() === "esc") {
-      const file_id = Number(rows[0].file_id);
-
-      console.log("Deleting ESC file_id:", file_id);
-
-      await query("DELETE FROM esc WHERE file_id = ?", [file_id]);
-
-      // 🔥 safety cleanup (optional but recommended)
-      await query(`
-        DELETE FROM esc 
-        WHERE file_id NOT IN (SELECT file_id FROM report_uploads)
-      `);
-    }
-
-    {/* ISC */ }
-
-    if (site_type.toLowerCase() === "isc") {
-      const file_id = Number(rows[0].file_id);
-
-      console.log("Deleting ISC file_id:", file_id);
-
-      await query("DELETE FROM isc WHERE file_id = ?", [file_id]);
-
-      // 🔥 safety cleanup (recommended)
-      await query(`
-        DELETE FROM isc
-        WHERE file_id NOT IN (SELECT file_id FROM report_uploads)
-      `);
-    }
-
-    { /* OSC */ }
-
-    if (site_type.toLowerCase() === "osc") {
-      const file_id = Number(rows[0].file_id);
-
-      console.log("Deleting OSC file_id:", file_id);
-
-      await query("DELETE FROM osc WHERE file_id = ?", [file_id]);
-
-      // 🔥 safety cleanup
-      await query(`
-        DELETE FROM osc
-        WHERE file_id NOT IN (SELECT file_id FROM report_uploads)
-      `);
-    }
-
-    {/* HPODSC */ }
-
-    if (site_type.toLowerCase() === "hpodsc") {
-      const file_id = Number(rows[0].file_id);
-
-      console.log("Deleting HPODSC file_id:", file_id);
-
-      await query("DELETE FROM hpodsc WHERE file_id = ?", [file_id]);
-
-      // 🔥 safety cleanup
-      await query(`
-        DELETE FROM hpodsc
-        WHERE file_id NOT IN (SELECT file_id FROM report_uploads)
-      `);
-    }
-
-    {/* GNB */ }
-
-    if (site_type.toLowerCase() === "gnb") {
-
-      await query(
-        "DELETE FROM gnb WHERE file_id = ?",
-        [file_id]
-      );
-
-      await query(`
-      DELETE FROM gnb
-      WHERE file_id NOT IN (
-        SELECT file_id
-        FROM report_uploads
-      )
-    `);
-    }
-
-    // delete from uploads table
-    await query("DELETE FROM report_uploads WHERE id = ?", [id]);
-
-    res.json({ message: "Deleted successfully (file + data)" });
+    res.json({ message: "Report deleted successfully." });
 
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Delete failed" });
+    console.error("Delete report error:", err);
+    res.status(500).json({
+      message: "Unable to delete this report. Please try again, or contact your administrator if the problem continues.",
+    });
   }
 });
 
+const VALID_REPORT_TYPES = ["Outage", "Performance"];
+
 router.put("/:id", requirePagePermission("tower-reports", "edit"), async (req, res) => {
   try {
-    const id = req.params.id;
-    const { site_type, report_type, upload_type, uploaded_by, report_date } =
-      req.body;
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) {
+      return res.status(400).json({ message: "Invalid report reference." });
+    }
+
+    const { site_type, report_type, report_date } = req.body;
 
     const [existing] = await query(
-      `SELECT site_type, file_id FROM report_uploads WHERE id = ? LIMIT 1`,
+      `SELECT id, site_type, file_id, report_date FROM report_uploads WHERE id = ? LIMIT 1`,
       [id]
     );
-    if (!existing || !(await isUploadAccessible(existing, req.authUser, true))) {
+
+    if (!existing) {
+      return res.status(404).json({
+        message: "This report no longer exists. Please refresh the page.",
+      });
+    }
+    if (!(await isUploadAccessible(existing, req.authUser, true))) {
       return res.status(403).json({ message: "You cannot edit another circle's data." });
     }
 
-    await query(
-      `UPDATE report_uploads 
-                  SET site_type=?, report_type=?, upload_type=?, uploaded_by=?, report_date=?
-                  WHERE id=?`,
-      [site_type, report_type, upload_type, uploaded_by, report_date, id]
-    );
+    // Site Type decides which table the uploaded rows physically live in.
+    // Changing it here would leave the data stranded in the old table: download
+    // would find nothing and delete would clean the wrong table. Reject it
+    // rather than silently corrupting the record.
+    if (site_type && normalizeSiteTypeValue(site_type) !== normalizeSiteTypeValue(existing.site_type)) {
+      return res.status(400).json({
+        message:
+          "Site Type cannot be changed after upload.\n\n" +
+          "The uploaded data is stored under the original Site Type. " +
+          "To correct it, delete this report and upload the file again with the right Site Type.",
+      });
+    }
 
-    res.json({ message: "Updated successfully" });
+    if (!VALID_REPORT_TYPES.includes(report_type)) {
+      return res.status(400).json({
+        message: `Please select a valid Report Type (${VALID_REPORT_TYPES.join(" or ")}).`,
+      });
+    }
+
+    const newReportDate = normalizeDate(report_date);
+    if (!newReportDate || !/^\d{4}-\d{2}-\d{2}$/.test(newReportDate)) {
+      return res.status(400).json({ message: "Please select a valid report date." });
+    }
+
+    // Defaults to the signed-in account, but the form field can override it.
+    const uploadedByValue =
+      String(req.body.uploaded_by || "").trim() ||
+      req.authUser?.name || req.authUser?.username || req.authUser?.email || "Unknown user";
+
+    const tableName = String(existing.site_type || "").toLowerCase();
+    const fileId = Number(existing.file_id);
+    const dateChanged =
+      formatDateOnly(existing.report_date) !== newReportDate;
+
+    // Metadata and the data rows carry the same report date, so they have to
+    // move together or the record becomes inconsistent.
+    await withTransaction(async (run) => {
+      await run(
+        `UPDATE report_uploads
+            SET report_type = ?, uploaded_by = ?, report_date = ?
+          WHERE id = ?`,
+        [report_type, uploadedByValue, newReportDate, id]
+      );
+
+      if (dateChanged && reportDataTables.has(tableName) && Number.isFinite(fileId)) {
+        await run(`UPDATE ${tableName} SET date = ? WHERE file_id = ?`, [newReportDate, fileId]);
+      }
+    });
+
+    res.json({ message: "Report updated successfully." });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Update failed" });
+    console.error("Update report error:", err);
+    res.status(500).json({
+      message: "Unable to update this report. Please try again, or contact your administrator if the problem continues.",
+    });
   }
 });
 

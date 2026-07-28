@@ -122,9 +122,6 @@ const formatChartDate = (dateStr, period, multiYear = false) => {
 // embed it in the report as if it were the chart — scope to recharts' surface.
 const findChartSvg = (root) => root?.querySelector(".recharts-wrapper svg") || null;
 
-const formatClock = (date) =>
-  date ? date.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "";
-
 // ─── Loading skeleton ────────────────────────────────────────────────────────
 // Shown only on the very first load so the page paints its layout instantly.
 // Later refreshes keep the previous data on screen (see `refreshing`).
@@ -866,7 +863,6 @@ function KpiDashboard() {
   const [loading, setLoading]       = useState(true);   // first paint only
   const [refreshing, setRefreshing] = useState(false);  // subsequent fetches
   const [error, setError]           = useState(null);
-  const [lastUpdated, setLastUpdated] = useState(null);
   const [analyticsPopup, setAnalyticsPopup] = useState(null);
   const [exporting, setExporting]   = useState(false);
 
@@ -932,7 +928,6 @@ function KpiDashboard() {
         if (cancelled) return;
 
         setTowerCards(Array.isArray(data) ? data : []);
-        setLastUpdated(new Date());
       } catch (err) {
         if (err.name === "AbortError") return; // superseded by a newer request
         console.error("Tower uptime fetch error:", err);
@@ -1065,13 +1060,7 @@ function KpiDashboard() {
           <div className="min-w-0">
             <h1 className="text-base font-semibold text-text-primary">Uptime Overview</h1>
             <p className="truncate text-sm text-text-muted">Monitor network uptime performance across circles over time.</p>
-            <p className="mt-0.5 flex items-center gap-1.5 text-[11px] text-text-muted">
-              {refreshing ? (
-                <><RefreshCw className="h-3 w-3 animate-spin" /> Updating…</>
-              ) : lastUpdated ? (
-                <>Last updated {formatClock(lastUpdated)}</>
-              ) : null}
-            </p>
+           
           </div>
         </div>
 

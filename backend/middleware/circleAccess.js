@@ -1,7 +1,31 @@
 const jwt = require("jsonwebtoken");
 const { ensureAccessTables, query } = require("../services/accessControl");
 
+// Without JWT_SECRET the app signs and verifies tokens with a well-known string
+// that is published in this repository, so anyone can mint a token for any user
+// (including an admin). Set JWT_SECRET in every environment.
+//
+// This warns rather than exits on purpose: a hard failure here would take a
+// running deployment offline the moment it restarts. Once JWT_SECRET is set in
+// all environments, replace this block with a startup throw.
 const JWT_SECRET = process.env.JWT_SECRET || "SECRET_KEY";
+
+if (!process.env.JWT_SECRET) {
+  console.error(
+    "\n" +
+    "=".repeat(78) + "\n" +
+    "  SECURITY WARNING: JWT_SECRET is not set.\n" +
+    "\n" +
+    "  Authentication is falling back to a hardcoded value that is visible in\n" +
+    "  the source code. Anyone who knows it can sign a token for any account,\n" +
+    "  including an administrator.\n" +
+    "\n" +
+    "  Fix: generate a secret and set JWT_SECRET in this environment, then\n" +
+    "  restart. All users will need to sign in again once. Generate one with:\n" +
+    "    node -e \"console.log(require('crypto').randomBytes(48).toString('base64url'))\"\n" +
+    "=".repeat(78) + "\n"
+  );
+}
 
 function normalizeCircle(value) {
   return String(value || "").trim();
