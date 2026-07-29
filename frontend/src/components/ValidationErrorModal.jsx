@@ -25,7 +25,7 @@ function getExpectedValues(field) {
     return ["Active", "Inactive", "Pending", "Not Applicable"];
   if (f.includes("job role")) return ["See allowed job roles list"];
   if (f.includes("circle"))
-    return ["Punjab", "Delhi", "Haryana", "UP East", "UP West", "..."];
+    return ["Punjab", "Haryana", "Delhi", "UP East"];
   if (f.includes("cmp")) return ["Valid CMP for selected Circle"];
   if (f.includes("aadhaar")) return ["Valid Aadhaar Number"];
   return ["See format template"];
@@ -240,7 +240,14 @@ const FALLBACK_ERROR = {
 
 const ROWS_PER_PAGE = 10;
 
-export default function ValidationErrorModal({ isOpen, onClose, errorData }) {
+export default function ValidationErrorModal({
+  isOpen,
+  onClose,
+  errorData,
+  title = "File Upload Validation Failed",
+  subtitle = "We found validation errors in your uploaded Excel file. Please correct the highlighted records and upload again.",
+  tone = "error",
+}) {
   const [searchTerm, setSearchTerm] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [sortConfig, setSortConfig] = useState({
@@ -460,23 +467,24 @@ export default function ValidationErrorModal({ isOpen, onClose, errorData }) {
             style={{
               width: 48,
               height: 48,
-              background: "linear-gradient(135deg,#FEE2E2,#FECACA)",
+              background:
+                tone === "warning"
+                  ? "linear-gradient(135deg,#FEF3C7,#FDE68A)"
+                  : "linear-gradient(135deg,#FEE2E2,#FECACA)",
             }}
           >
-            <AlertTriangle className="w-6 h-6" style={{ color: "#DC2626" }} />
+            <AlertTriangle
+              className="w-6 h-6"
+              style={{ color: tone === "warning" ? "#D97706" : "#DC2626" }}
+            />
           </div>
 
           {/* Title */}
           <div className="flex-1 min-w-0">
             <h2 className="text-xl font-semibold text-text-primary leading-tight">
-              File Upload Validation Failed
+              {title}
             </h2>
-            <p className="text-sm text-text-muted mt-0.5">
-              We found validation errors in your uploaded Excel file.{" "}
-              <span className="font-medium text-text-secondary">
-                Please correct the highlighted records and upload again.
-              </span>
-            </p>
+            <p className="text-sm text-text-muted mt-0.5">{subtitle}</p>
           </div>
 
           {/* Actions */}

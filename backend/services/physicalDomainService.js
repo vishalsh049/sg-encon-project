@@ -341,6 +341,17 @@ function createExecutor(queryFn) {
   };
 }
 
+// Wraps a single mysql2 pooled connection (already inside a transaction) in
+// the same { query(sql, params) } executor shape as createExecutor(), so the
+// insertAuditLog/insertTimelineEvent/insertNotification helpers below work
+// identically whether called against the pool or a single transactional
+// connection.
+function createConnectionExecutor(conn) {
+  return createExecutor((sql, params = []) =>
+    conn.promise().query(sql, params).then(([rows]) => rows)
+  );
+}
+
 function getSoftDeleteClause(alias = "physical") {
   return `COALESCE(${alias}.is_deleted, 0) = 0`;
 }
@@ -541,6 +552,7 @@ module.exports = {
   buildPhysicalFilters,
   clearPhysicalCache,
   createExecutor,
+  createConnectionExecutor,
   ensurePhysicalInfrastructure,
   findDuplicateEmployees,
   getActorContext,

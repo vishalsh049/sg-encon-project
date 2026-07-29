@@ -32,6 +32,8 @@ import {
 import { authFetch, buildApiUrl } from "../lib/api";
 import { getStoredSession } from "../lib/session";
 import useDesignationOptions from "../hooks/useDesignationOptions";
+import useCircleOptions from "../hooks/useCircleOptions";
+import ValidationErrorModal from "../components/ValidationErrorModal";
 
 const selectStyles = {
   control: (provided, state) => ({
@@ -302,12 +304,14 @@ export default function NewJoining() {
   const [showModal, setShowModal] = useState(false);
   const [excelFile, setExcelFile] = useState(null);
   const [uploadingExcel, setUploadingExcel] = useState(false);
+  const [circleCmpReport, setCircleCmpReport] = useState(null);
   const [savingEmployee, setSavingEmployee] = useState(false);
   // null = existing default order (id DESC); "desc" = latest uploaded first
   const [uploadedSort, setUploadedSort] = useState(null);
   const [now, setNow] = useState(() => new Date());
 
   const { options: designationSelectOptions } = useDesignationOptions();
+  const { circles, getCmpOptions } = useCircleOptions();
 
   const isAllCircleUser = useMemo(
     () => isAllCircleAccess(getStoredSession()?.circle),
@@ -328,52 +332,6 @@ export default function NewJoining() {
     );
     return Boolean(entry?.delete);
   }, []);
-
-  const circleCmpData = {
-    Delhi: [
-      "Delhi SHQ",
-      "Delhi-1 (West)",
-      "Delhi-2 (South)",
-      "Delhi-3 (Central-East)",
-      "Delhi-4 (North)",
-      "Faridabad (NCR)",
-      "Ghaziabad (NCR)",
-      "Gurgaon (NCR)",
-      "Noida (NCR)",
-    ],
-    Haryana: [
-      "Haryana SHQ",
-      "Ambala",
-      "Hissar",
-      "Karnal",
-      "Panipat",
-      "Palwal",
-      "Rewari",
-      "Rohtak",
-    ],
-    Punjab: [
-      "Punjab SHQ",
-      "Amritsar",
-      "Bathinda",
-      "Chandigarh",
-      "Jalandhar",
-      "Ludhiana-1",
-      "Ludhiana-2",
-      "Pathankot",
-      "Patiala",
-      "Sangrur",
-    ],
-    "UP East": [
-      "UP East SHQ",
-      "Allahabad",
-      "Azamgarh",
-      "Faizabad",
-      "Gorakhpur",
-      "Nanded",
-      "Raibareilly",
-      "Varanasi",
-    ],
-  };
 
  const [employeeForm, setEmployeeForm] = useState({
   employee_code: "",
@@ -792,6 +750,35 @@ export default function NewJoining() {
   };
 
   const handleStatusUpdate = async (id, status, item) => {
+    if (status === "Joined") {
+      const confirmTransfer = window.confirm(
+        `Mark ${item?.employee_name || "this employee"} as Joined and move to Physical Manpower?`
+      );
+      if (!confirmTransfer) return;
+
+      try {
+        const response = await authFetch(
+          buildApiUrl(`/api/new-joining/${id}/transfer-to-physical`),
+          { method: "POST" }
+        );
+
+        const result = await response.json();
+
+        if (!response.ok || !result.success) {
+          toast.error(result.message || "Failed to move employee to Physical Manpower.");
+          return;
+        }
+
+        toast.success(result.message);
+        await loadData();
+      } catch (error) {
+        console.log(error);
+        toast.error("Something went wrong while moving the employee.");
+      }
+
+      return;
+    }
+
     const confirmUpdate = window.confirm(
       `Are you sure you want to mark this employee as ${status}?`
     );
@@ -799,8 +786,6 @@ export default function NewJoining() {
     if (!confirmUpdate) return;
 
     try {
-      const employee_status = status === "Joined" ? "Active" : "Inactive";
-
       const response = await authFetch(
         buildApiUrl(`/api/new-joining/update-status/${id}`),
         {
@@ -809,8 +794,8 @@ export default function NewJoining() {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            joining_status: status === "Joined" ? "Joined" : "Not Joined",
-              employee_status,
+            joining_status: "Not Joined",
+            employee_status: "Inactive",
           }),
         }
       );
@@ -818,25 +803,14 @@ export default function NewJoining() {
       const result = await response.json();
 
       if (!response.ok || !result.success) {
-        alert("Status update failed");
+        toast.error(result.message || "Status update failed");
         return;
-      }
-
-      if (status === "Joined") {
-        const goPhysical = window.confirm(
-          "Employee Joined Successfully.\n\nGo To Physical Page?"
-        );
-
-        if (goPhysical) {
-          localStorage.setItem("newJoiningEmployee", JSON.stringify(item));
-          window.location.href = "/dashboard/manpower/physical";
-        }
       }
 
       await loadData();
     } catch (error) {
       console.log(error);
-      alert("Something went wrong");
+      toast.error("Something went wrong");
     }
   };
 
@@ -1017,11 +991,18 @@ if (!confirmUpdate) return;
         return;
       }
 
-     alert("Excel Uploaded Successfully");
+     toast.success("Excel Uploaded Successfully");
 
 setExcelFile(null);
 
 setShowModal(false); // Close popup automatically
+
+if (result.skippedCircleCmp > 0 && Array.isArray(result.circleCmpWarnings)) {
+  setCircleCmpReport({
+    errors: result.circleCmpWarnings,
+    totalRecords: result.totalRecords,
+  });
+}
 
 loadData();
     } catch (error) {
@@ -1790,21 +1771,11 @@ loadData();
                 Select Circle
               </option>
 
-              <option value="Punjab">
-                Punjab
-              </option>
-
-              <option value="Delhi">
-                Delhi
-              </option>
-
-              <option value="Haryana">
-                Haryana
-              </option>
-
-              <option value="UP East">
-                UP East
-              </option>
+              {circles.map((circleName) => (
+                <option key={circleName} value={circleName}>
+                  {circleName}
+                </option>
+              ))}
 
             </select>
 
@@ -1855,9 +1826,7 @@ loadData();
               </option>
 
              {employeeForm.circle &&
-  circleCmpData[
-    employeeForm.circle
-  ]?.map((cmp) => (
+  getCmpOptions(employeeForm.circle).map(({ value: cmp }) => (
                   <option
                     key={cmp}
                     value={cmp}
@@ -2227,6 +2196,15 @@ loadData();
     </motion.div>
   )}
 </AnimatePresence>
+
+<ValidationErrorModal
+  isOpen={Boolean(circleCmpReport)}
+  onClose={() => setCircleCmpReport(null)}
+  errorData={circleCmpReport}
+  title="Some Rows Were Skipped"
+  subtitle="Circle/CMP could not be matched for these rows. The rest of the file uploaded successfully — fix these rows and re-upload only them if needed."
+  tone="warning"
+/>
 
       </div>
     </div>

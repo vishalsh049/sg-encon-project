@@ -19,6 +19,7 @@ import ValidationErrorModal from "../components/ValidationErrorModal";
   import { saveAs } from "file-saver";
   import { authFetch, buildApiUrl } from "../lib/api";
   import useDesignationOptions from "../hooks/useDesignationOptions";
+  import useCircleOptions from "../hooks/useCircleOptions";
 
   function formatCircleTimestamp(value) {
     if (!value) return "Never Uploaded";
@@ -75,6 +76,7 @@ import ValidationErrorModal from "../components/ValidationErrorModal";
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [validationError, setValidationError] = useState(null);
+  const [circleCmpReport, setCircleCmpReport] = useState(null);
   const [jobRoleSearch, setJobRoleSearch] = useState("");
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [viewEmployee, setViewEmployee] = useState(null);
@@ -82,10 +84,10 @@ import ValidationErrorModal from "../components/ValidationErrorModal";
 
   // Prevent background scroll while any modal is open
   useEffect(() => {
-    const anyOpen = showUploadModal || validationError !== null;
+    const anyOpen = showUploadModal || validationError !== null || circleCmpReport !== null;
     document.body.style.overflow = anyOpen ? "hidden" : "";
     return () => { document.body.style.overflow = ""; };
-  }, [showUploadModal, validationError]);
+  }, [showUploadModal, validationError, circleCmpReport]);
 
 const handleView = (item) => {
   setViewEmployee(item);
@@ -350,32 +352,6 @@ useEffect(() => {
     loadCircles();
     loadCircleLastUpdated();
     loadEmploymentStatus();
-
-    const newJoiningEmployee =
-      localStorage.getItem("newJoiningEmployee");
-
-    if (newJoiningEmployee) {
-      const parsedEmployee =
-        JSON.parse(newJoiningEmployee);
-
-      setEmployeeForm((prev) => ({
-        ...prev,
-        circle: parsedEmployee.circle || "",
-        cmp: parsedEmployee.cmp || "",
-        employee_code:
-          parsedEmployee.employee_code || "",
-        employee_name:
-          parsedEmployee.employee_name || "",
-        aadhaar_no:
-          parsedEmployee.aadhaar_no || "",
-        nth_salary:
-          parsedEmployee.nth_salary || "",
-        job_role:
-          parsedEmployee.designation || "",
-      }));
-
-      setShowEmployeeModal(true);
-    }
   }, 100);
 }, []);
 
@@ -498,6 +474,13 @@ useEffect(() => {
                 ${result.duplicateEmployees ?? 0}
             </p>
 
+            ${result.skippedCircleCmp > 0 ? `
+            <p style="color:#d97706">
+                <b>⚠ Skipped (Circle/CMP) :</b>
+                ${result.skippedCircleCmp}
+            </p>
+            ` : ""}
+
         </div>
     `
 });
@@ -507,6 +490,15 @@ useEffect(() => {
 setReportFile(null);
 setReportDate("");
 setUploadedBy("");
+
+if (result.skippedCircleCmp > 0 && Array.isArray(result.circleCmpWarnings)) {
+  setTimeout(() => {
+    setCircleCmpReport({
+      errors: result.circleCmpWarnings,
+      totalRecords: result.totalEmployees,
+    });
+  }, 150);
+}
 
 loadPhysicalData();
 loadJobRoles();
@@ -1124,34 +1116,6 @@ if (!isValidAadhaar(aadhaar)) {
         return;
       }
 
-      // Only remove the source New Joining record once the Physical save has
-      // actually succeeded — deleting it unconditionally (even on a failed
-      // save) would silently lose the employee from both tables.
-      const newJoiningEmployee =
-    localStorage.getItem(
-      "newJoiningEmployee"
-    );
-
-  if (newJoiningEmployee) {
-
-    const parsedEmployee =
-      JSON.parse(newJoiningEmployee);
-
-    await authFetch(
-      buildApiUrl(
-        `/api/new-joining/delete/${parsedEmployee.id}`
-      ),
-      {
-        method: "DELETE",
-      }
-    );
-
-    localStorage.removeItem(
-      "newJoiningEmployee"
-    );
-
-  }
-
     alert(
   employeeForm.id
     ? "Employee Updated Successfully"
@@ -1412,61 +1376,11 @@ setEmployeeForm({
     }
   };
 
-  const circleOptions = [
-  "Delhi",
-  "Haryana",
-  "Punjab",
-  "UP East",
-];
-
-const circleCmpMap = {
-  Delhi: [
-    "Delhi SHQ",
-    "Delhi-1 (West)",
-    "Delhi-2 (South)",
-    "Delhi-3 (Central-East)",
-    "Delhi-4 (North)",
-    "Faridabad (NCR)",
-    "Ghaziabad (NCR)",
-    "Gurgaon (NCR)",
-    "Noida (NCR)",
-  ],
-
-Haryana: [
-  "Haryana SHQ",
-  "Ambala",
-  "Hissar",
-  "Karnal",
-  "Panipat",
-  "Palwal",
-  "Rewari",
-  "Rohtak",
-],
-
-  Punjab: [
-    "Punjab SHQ",
-    "Amritsar",
-    "Bathinda",
-    "Chandigarh",
-    "Jalandhar",
-    "Ludhiana-1",
-    "Ludhiana-2",
-    "Pathankot",
-    "Patiala",
-    "Sangrur",
-  ],
-
-  "UP East": [
-    "UP East SHQ",
-    "Allahabad",
-    "Azamgarh",
-    "Faizabad",
-    "Gorakhpur",
-    "Raibareilly",
-    "Varanasi",
-    "Mohali"
-  ],
-};
+  // The approved Circle list and per-circle CMP allow-list are fetched from
+  // the backend at runtime (see useCircleOptions / GET /api/circles) so they
+  // stay a single source of truth shared with the New Joining page and the
+  // server-side validation.
+  const { circles: masterCircles, getCmpOptions } = useCircleOptions();
 
 // The approved Job Role list is fetched from the backend at runtime (see
 // useDesignationOptions / GET /api/designations) so it stays a single source
@@ -2509,6 +2423,16 @@ records
               errorData={validationError}
             />
 
+            {/* Circle/CMP Skipped Rows Report (upload still succeeded) */}
+            <ValidationErrorModal
+              isOpen={circleCmpReport !== null}
+              onClose={() => setCircleCmpReport(null)}
+              errorData={circleCmpReport}
+              title="Some Rows Were Skipped"
+              subtitle="Circle/CMP could not be matched for these rows. The rest of the file uploaded successfully — fix these rows and re-upload only them if needed."
+              tone="warning"
+            />
+
             {/* Popup Modal */}
 
     {showUploadModal && (
@@ -2931,7 +2855,7 @@ records
 >
   <option value="">Select Circle</option>
 
-  {circleOptions.map((circle) => (
+  {masterCircles.map((circle) => (
     <option key={circle} value={circle}>
       {circle}
     </option>
@@ -2957,7 +2881,7 @@ records
     <>
       <option value="">Select CMP</option>
 
-      {(circleCmpMap[employeeForm.circle] || []).map((cmp) => (
+      {getCmpOptions(employeeForm.circle).map(({ value: cmp }) => (
         <option key={cmp} value={cmp}>
           {cmp}
         </option>

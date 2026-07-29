@@ -16,6 +16,7 @@
       buildPhysicalFilters,
       clearPhysicalCache,
       createExecutor,
+      createConnectionExecutor,
       ensurePhysicalInfrastructure,
       findDuplicateEmployees,
       getActorContext,
@@ -27,6 +28,7 @@
       setCachedValue,
     } = require("../services/physicalDomainService");
     const { resolveDesignation } = require("../constants/designations");
+    const { resolveCircle, resolveCmp, CIRCLES, CIRCLE_CMP_MAP } = require("../constants/circles");
 
     const router = express.Router();
     const storage = multer.memoryStorage();
@@ -394,65 +396,6 @@
       const text = String(value).trim();
       return text ? text : null;
     }
-
-    function createConnectionExecutor(conn) {
-      return createExecutor((sql, params = []) =>
-        conn.promise().query(sql, params).then(([rows]) => rows)
-      );
-    }
-
-    
-    const circleCmpMap = {
-
-      Delhi: [
-        "Delhi SHQ",
-        "Delhi-1 (West)",
-        "Delhi-2 (South)",
-        "Delhi-3 (Central-East)",
-        "Delhi-4 (North)",
-        "Faridabad (NCR)",
-        "Ghaziabad (NCR)",
-        "Gurgaon (NCR)",
-        "Noida (NCR)",
-      ],
-
-    Haryana: [
-      "Haryana SHQ",
-      "Ambala",
-      "Hissar",
-      "Karnal",
-      "Panipat",
-      "Palwal",
-      "Rewari",
-      "Rohtak",
-    ],
-
-      Punjab: [
-        "Punjab SHQ",
-        "Amritsar",
-        "Bathinda",
-        "Chandigarh",
-        "Jalandhar",
-        "Ludhiana-1",
-        "Ludhiana-2",
-        "Pathankot",
-        "Patiala",
-        "Sangrur",
-      ],
-
-      "UP East": [
-        "UP East SHQ",
-        "Allahabad",
-        "Azamgarh",
-        "Faizabad",
-        "Gorakhpur",
-        "Nanded",
-        "Raibareilly",
-        "Varanasi",
-        "Mohali",
-      ],
-
-    };
 
     function mapPhysicalRow(row, reportId) {
 
@@ -1332,12 +1275,27 @@ toText(
         const sheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[sheetName];
         const rows = XLSX.utils.sheet_to_json(worksheet, { defval: null });
-        assertRowsAllowedCircle(req.authUser, rows, (row) => row["Circle"] || row["circle"] || "");
+        assertRowsAllowedCircle(req.authUser, rows, (row) => {
+          const raw = row["Circle"] || row["circle"] || "";
+          return resolveCircle(raw) || raw;
+        });
         console.log(
       "Excel Headers:",
       Object.keys(rows[0] || {})
     );
-    for (const row of rows) {
+
+    // Circle/CMP validation: unlike Job Role/Employment Status/PPRJ/GTLI
+    // below (which hard-reject the whole file), a bad Circle or CMP only
+    // skips that one row — the rest of the file still uploads — and is
+    // reported back to the caller as a structured warning.
+    const circleCmpSkipRows = new Set();
+    const circleCmpWarnings = [];
+    let skippedCircleCmp = 0;
+
+    for (let index = 0; index < rows.length; index++) {
+
+    const row = rows[index];
+    const excelRowNumber = index + 2;
 
     const circle = String(
       row["Circle"] ||
@@ -1346,13 +1304,6 @@ toText(
     )
     .replace(/\s+/g, " ")
     .trim();
-
-    console.log(
-      "Circle=>",
-      JSON.stringify(circle),
-      "Length=>",
-      circle.length
-    );
 
     const cmp = String(
       row["CMP"] ||
@@ -1364,33 +1315,44 @@ toText(
     )
     .replace(/\s+/g, " ")
     .trim();
-      // CHECK CIRCLE
 
-      if (!circleCmpMap[circle]) {
+    const employeeCode = row["Employee Code"] || "-";
+    const employeeName = row["Employee Name"] || "-";
 
-        return res.status(400).json({
-          success: false,
-          message: `Invalid Circle: ${circle}`,
-        });
+    const resolvedRowCircle = resolveCircle(circle);
+    if (!resolvedRowCircle) {
+      circleCmpSkipRows.add(row);
+      skippedCircleCmp++;
+      circleCmpWarnings.push({
+        row: excelRowNumber,
+        employee: employeeName,
+        employeeCode,
+        column: "Circle",
+        currentValue: circle,
+        error: `Invalid Circle: "${circle}"`,
+        expected: CIRCLES,
+      });
+      continue;
+    }
 
-      }
+    const resolvedRowCmp = resolveCmp(resolvedRowCircle, cmp);
+    if (!resolvedRowCmp) {
+      circleCmpSkipRows.add(row);
+      skippedCircleCmp++;
+      circleCmpWarnings.push({
+        row: excelRowNumber,
+        employee: employeeName,
+        employeeCode,
+        column: "CMP",
+        currentValue: cmp,
+        error: `Invalid CMP "${cmp}" for Circle "${resolvedRowCircle}"`,
+        expected: CIRCLE_CMP_MAP[resolvedRowCircle],
+      });
+      continue;
+    }
 
-      // CHECK CMP
-
-    const validCmp = circleCmpMap[circle].some(
-      item =>
-        item.trim().toLowerCase() ===
-        cmp.trim().toLowerCase()
-    );
-
-    if (!validCmp) {
-
-        return res.status(400).json({
-          success: false,
-          message: `Invalid CMP "${cmp}" for Circle "${circle}"`,
-        });
-
-      }
+    row["Circle"] = resolvedRowCircle;
+    row["CMP"] = resolvedRowCmp;
 
     }
 
@@ -1652,6 +1614,10 @@ let duplicateEmployees=0;
 
 for(const row of rows){
 
+    if (circleCmpSkipRows.has(row)) {
+      continue;
+    }
+
     const aadhaarNo=String(
         row["AADHAAR No"]||
         row["AADHAAR NO"]||
@@ -1772,6 +1738,7 @@ insertRows
         const uploadedCircles = Array.from(
           new Set(
             rows
+              .filter((row) => !circleCmpSkipRows.has(row))
               .map((row) =>
                 String(row["Circle"] || row["circle"] || "")
                   .replace(/\s+/g, " ")
@@ -1836,7 +1803,9 @@ insertRows
  addedEmployees: insertRows.length,
 
 updatedEmployees: updatedEmployees,
-duplicateEmployees: duplicateEmployees
+duplicateEmployees: duplicateEmployees,
+skippedCircleCmp: skippedCircleCmp,
+circleCmpWarnings: circleCmpWarnings
 });
       } catch (error) {
         if (conn) {
@@ -1867,13 +1836,10 @@ duplicateEmployees: duplicateEmployees
       const data = req.body;
       const actor = getActorContext(req);
 
-      if (!canAccessCircle(req.authUser, data.circle)) {
-        return forbid(res);
-      }
-
       // VALIDATE CIRCLE
 
-      if (!circleCmpMap[data.circle]) {
+      const resolvedCircle = resolveCircle(data.circle);
+      if (!resolvedCircle) {
 
         return res.status(400).json({
           success: false,
@@ -1882,13 +1848,14 @@ duplicateEmployees: duplicateEmployees
 
       }
 
+      if (!canAccessCircle(req.authUser, resolvedCircle)) {
+        return forbid(res);
+      }
+
       // VALIDATE CMP
 
-      if (
-        !circleCmpMap[data.circle].includes(
-          data.cmp
-        )
-      ) {
+      const resolvedCmp = resolveCmp(resolvedCircle, data.cmp);
+      if (!resolvedCmp) {
 
         return res.status(400).json({
           success: false,
@@ -1980,8 +1947,8 @@ duplicateEmployees: duplicateEmployees
             `,
             [
 
-              data.circle || "",
-              data.cmp || "",
+              resolvedCircle,
+              resolvedCmp,
               data.pprj_status || "",
               data.pprj_code || "",
               data.employee_code || "",
@@ -3394,12 +3361,32 @@ duplicateEmployees: duplicateEmployees
           const [existing] = await query(`SELECT * FROM physical WHERE id = ? AND COALESCE(is_deleted, 0) = 0 LIMIT 1`, [
             req.params.id,
           ]);
-          if (
-            !existing ||
-            !canAccessCircle(req.authUser, existing.circle) ||
-            !canAccessCircle(req.authUser, data.circle)
-          ) {
+          if (!existing || !canAccessCircle(req.authUser, existing.circle)) {
             return forbid(res);
+          }
+
+          // VALIDATE CIRCLE
+
+          const resolvedCircle = resolveCircle(data.circle);
+          if (!resolvedCircle) {
+            return res.status(400).json({
+              success: false,
+              message: "Invalid Circle",
+            });
+          }
+
+          if (!canAccessCircle(req.authUser, resolvedCircle)) {
+            return forbid(res);
+          }
+
+          // VALIDATE CMP
+
+          const resolvedCmp = resolveCmp(resolvedCircle, data.cmp);
+          if (!resolvedCmp) {
+            return res.status(400).json({
+              success: false,
+              message: "Invalid CMP for selected Circle",
+            });
           }
 
           // VALIDATE JOB ROLE (only when provided, to match the previous
@@ -3479,8 +3466,8 @@ duplicateEmployees: duplicateEmployees
             `,
             [
 
-              data.circle || "",
-              data.cmp || "",
+              resolvedCircle,
+              resolvedCmp,
               data.pprj_status || "",
               data.pprj_code || "",
               data.employee_code || "",

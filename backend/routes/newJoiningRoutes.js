@@ -31,6 +31,16 @@ const EMPLOYEE_CODE_PREFIX = "SG";
 const EMPLOYEE_CODE_DIGITS = 6;
 
 const { resolveDesignation } = require("../constants/designations");
+const { resolveCircle, resolveCmp, CIRCLES, CIRCLE_CMP_MAP } = require("../constants/circles");
+const {
+  createConnectionExecutor,
+  findDuplicateEmployees,
+  getActorContext,
+  insertAuditLog,
+  insertTimelineEvent,
+  insertNotification,
+  clearPhysicalCache,
+} = require("../services/physicalDomainService");
 
 async function findNextEmployeeCode() {
   const rows = await query(
@@ -154,10 +164,6 @@ router.post("/add-employee", requirePagePermission("New Joining", "edit"), async
   employee_code_auto,
 } = req.body || {};
 
-    if (!canAccessCircle(req.authUser, circle)) {
-      return forbid(res);
-    }
-
     const employeeCodeValue = sanitizeText(employee_code);
     const employeeNameValue = sanitizeText(employee_name);
     const circleValue = sanitizeText(circle);
@@ -190,6 +196,26 @@ router.post("/add-employee", requirePagePermission("New Joining", "edit"), async
       return res.status(400).json({
         success: false,
         message: "Please select CMP.",
+      });
+    }
+
+    const resolvedCircle = resolveCircle(circleValue);
+    if (!resolvedCircle) {
+      return res.status(400).json({
+        success: false,
+        message: `Invalid Circle: "${circleValue}". Please select a valid circle.`,
+      });
+    }
+
+    if (!canAccessCircle(req.authUser, resolvedCircle)) {
+      return forbid(res);
+    }
+
+    const resolvedCmp = resolveCmp(resolvedCircle, cmpValue);
+    if (!resolvedCmp) {
+      return res.status(400).json({
+        success: false,
+        message: `Invalid CMP "${cmpValue}" for Circle "${resolvedCircle}". Valid CMPs: ${CIRCLE_CMP_MAP[resolvedCircle].join(", ")}.`,
       });
     }
 
@@ -273,8 +299,8 @@ router.post("/add-employee", requirePagePermission("New Joining", "edit"), async
       [
         finalEmployeeCode,
         employeeNameValue,
-        circleValue,
-        cmpValue,
+        resolvedCircle,
+        resolvedCmp,
         canonicalDesignation,
         aadhaarValue,
          nth_salary || 0,
@@ -559,6 +585,275 @@ router.put("/l2-status/:id", requirePagePermission("New Joining", "edit"), async
 
 });
 
+// Atomically transfers a New Joining record into Physical Manpower: inserts
+// a new Physical employee if none exists yet, blocks (no writes) if a match
+// already exists and is Active, or reactivates+updates an existing Inactive
+// match. Replaces the old client-side localStorage handoff between the New
+// Joining and Physical pages, which was neither atomic nor duplicate-safe.
+router.post(
+  "/:id/transfer-to-physical",
+  requirePagePermission("New Joining", "edit"),
+  async (req, res) => {
+
+    let conn;
+
+    try {
+
+      conn = await getConnection();
+      await beginTransaction(conn);
+      const executor = createConnectionExecutor(conn);
+      const actor = getActorContext(req);
+
+      const rows = await executor.query(
+        `SELECT * FROM new_joining WHERE id = ? LIMIT 1`,
+        [req.params.id]
+      );
+      const nj = rows[0];
+
+      if (!nj) {
+        await rollbackTransaction(conn);
+        return res.status(404).json({
+          success: false,
+          message: "New Joining record not found.",
+        });
+      }
+
+      if (!canAccessCircle(req.authUser, nj.circle)) {
+        await rollbackTransaction(conn);
+        return forbid(res);
+      }
+
+      const resolvedCircle = resolveCircle(nj.circle);
+      const resolvedCmp = resolvedCircle ? resolveCmp(resolvedCircle, nj.cmp) : null;
+      const canonicalDesignation = resolveDesignation(nj.designation);
+
+      if (!resolvedCircle || !resolvedCmp || !canonicalDesignation) {
+        await rollbackTransaction(conn);
+        return res.status(400).json({
+          success: false,
+          message: `Cannot transfer: Circle "${nj.circle}" / CMP "${nj.cmp}" could not be matched to an approved value. Please correct this employee's Circle/CMP before transferring.`,
+        });
+      }
+
+      const duplicateRows = await findDuplicateEmployees(
+        (sql, params) => executor.query(sql, params),
+        { employee_code: nj.employee_code, aadhaar_no: nj.aadhaar_no }
+      );
+
+      const trimmedEmployeeCode = String(nj.employee_code || "").trim();
+      const trimmedAadhaar = String(nj.aadhaar_no || "").trim();
+
+      const matchedDuplicate =
+        (trimmedEmployeeCode &&
+          duplicateRows.find(
+            (r) => String(r.employee_code || "").trim() === trimmedEmployeeCode
+          )) ||
+        (trimmedAadhaar &&
+          duplicateRows.find(
+            (r) => String(r.aadhaar_no || "").trim() === trimmedAadhaar
+          )) ||
+        null;
+
+      // findDuplicateEmployees() only selects a handful of unique-identifier
+      // columns (not employment_status), so re-fetch the full row here before
+      // branching on its status.
+      let existingPhysical = null;
+      if (matchedDuplicate) {
+        const fullRows = await executor.query(
+          `SELECT * FROM physical WHERE id = ? LIMIT 1`,
+          [matchedDuplicate.id]
+        );
+        existingPhysical = fullRows[0] || null;
+      }
+
+      let physicalEmployeeId;
+      let outcome;
+
+      if (!existingPhysical) {
+
+        // CASE 1: no existing Physical record — create one.
+        const result = await executor.query(
+          `
+          INSERT INTO physical (
+            circle, cmp, employee_code, employee_name, job_role,
+            aadhaar_no, nth_salary, employment_status, uploaded_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())
+          `,
+          [
+            resolvedCircle,
+            resolvedCmp,
+            nj.employee_code,
+            nj.employee_name,
+            canonicalDesignation,
+            nj.aadhaar_no,
+            nj.nth_salary || 0,
+            "Active",
+          ]
+        );
+
+        physicalEmployeeId = result.insertId;
+
+        const insertedRows = await executor.query(
+          `SELECT * FROM physical WHERE id = ? LIMIT 1`,
+          [physicalEmployeeId]
+        );
+        const inserted = insertedRows[0];
+
+        await insertAuditLog(executor, {
+          ...actor,
+          entityType: "employee",
+          entityId: physicalEmployeeId,
+          action: "EMPLOYEE_TRANSFER_FROM_NEW_JOINING",
+          circle: inserted.circle,
+          cmp: inserted.cmp,
+          newData: inserted,
+        });
+
+        await insertTimelineEvent(executor, {
+          employeeId: physicalEmployeeId,
+          action: "CREATED",
+          actorUserId: actor.actorUserId,
+          actorName: actor.actorName,
+          circle: inserted.circle,
+          cmp: inserted.cmp,
+          newData: inserted,
+        });
+
+        await insertNotification(executor, {
+          moduleName: "physical",
+          eventType: "employee_created",
+          title: "Physical employee created",
+          message: `${inserted.employee_name || "Employee"} was transferred from New Joining.`,
+          circle: inserted.circle,
+          cmp: inserted.cmp,
+          actorUserId: req.authUser.id || null,
+          referenceId: physicalEmployeeId,
+          referenceType: "physical_employee",
+        });
+
+        await executor.query(`DELETE FROM new_joining WHERE id = ?`, [req.params.id]);
+        outcome = "inserted";
+
+      } else if (String(existingPhysical.employment_status || "").trim().toLowerCase() === "active") {
+
+        // CASE 2: already exists and Active — block, no writes at all.
+        physicalEmployeeId = existingPhysical.id;
+        outcome = "already_active";
+
+      } else {
+
+        // CASE 3: exists but not Active — reactivate and update.
+        physicalEmployeeId = existingPhysical.id;
+        const previous = existingPhysical;
+
+        await executor.query(
+          `
+          UPDATE physical
+          SET circle = ?,
+              cmp = ?,
+              employee_name = ?,
+              job_role = ?,
+              employment_status = 'Active',
+              resigned_date = NULL,
+              last_working_date = NULL,
+              nth_salary = COALESCE(NULLIF(?, 0), nth_salary),
+              updated_at = NOW()
+          WHERE id = ?
+          `,
+          [
+            resolvedCircle,
+            resolvedCmp,
+            nj.employee_name,
+            canonicalDesignation,
+            nj.nth_salary || 0,
+            physicalEmployeeId,
+          ]
+        );
+
+        const updatedRows = await executor.query(
+          `SELECT * FROM physical WHERE id = ? LIMIT 1`,
+          [physicalEmployeeId]
+        );
+        const updated = updatedRows[0];
+
+        await insertAuditLog(executor, {
+          ...actor,
+          entityType: "employee",
+          entityId: physicalEmployeeId,
+          action: "EMPLOYEE_REACTIVATE",
+          circle: updated.circle,
+          cmp: updated.cmp,
+          previousData: previous,
+          newData: updated,
+        });
+
+        await insertTimelineEvent(executor, {
+          employeeId: physicalEmployeeId,
+          action: "REACTIVATED",
+          actorUserId: actor.actorUserId,
+          actorName: actor.actorName,
+          circle: updated.circle,
+          cmp: updated.cmp,
+          previousData: previous,
+          newData: updated,
+        });
+
+        await insertNotification(executor, {
+          moduleName: "physical",
+          eventType: "employee_reactivated",
+          title: "Physical employee reactivated",
+          message: `${updated.employee_name || "Employee"} was reactivated and transferred from New Joining.`,
+          circle: updated.circle,
+          cmp: updated.cmp,
+          actorUserId: req.authUser.id || null,
+          referenceId: physicalEmployeeId,
+          referenceType: "physical_employee",
+        });
+
+        await executor.query(`DELETE FROM new_joining WHERE id = ?`, [req.params.id]);
+        outcome = "reactivated";
+      }
+
+      await commitTransaction(conn);
+      clearPhysicalCache();
+
+      const MESSAGES = {
+        inserted: "Employee successfully moved to Physical Manpower.",
+        already_active: "Employee already exists in Physical Manpower and is currently Active.",
+        reactivated: "Existing inactive employee has been reactivated and moved successfully.",
+      };
+
+      res.json({
+        success: true,
+        outcome,
+        message: MESSAGES[outcome],
+        physicalEmployeeId,
+      });
+
+    } catch (error) {
+
+      if (conn) {
+        await rollbackTransaction(conn);
+      }
+
+      console.log("TRANSFER TO PHYSICAL ERROR:", error);
+
+      res.status(500).json({
+        success: false,
+        message: "Failed to transfer employee to Physical Manpower.",
+      });
+
+    } finally {
+
+      if (conn) {
+        conn.release();
+      }
+
+    }
+
+  }
+);
+
 function normalizeHeaderKey(value) {
   return String(value || "")
     .toLowerCase()
@@ -653,7 +948,10 @@ router.post(
       assertRowsAllowedCircle(
         req.authUser,
         rows,
-        (row) => sanitizeText(row.circle || row["Circle"] || "")
+        (row) => {
+          const raw = sanitizeText(row.circle || row["Circle"] || "");
+          return resolveCircle(raw) || raw;
+        }
       );
 
 const excelAadhaarNumbers = rows
@@ -684,6 +982,8 @@ if (excelAadhaarNumbers.length) {
 
 const seenAadhaarInFile = new Set();
 let skippedDuplicates = 0;
+const circleCmpWarnings = [];
+let skippedCircleCmp = 0;
 
 // One upload timestamp for the whole batch; mysql2 converts the Date using
 // the pool's +05:30 timezone so it lands as IST, same as NOW() elsewhere.
@@ -722,6 +1022,36 @@ for (let rowIndex = 0; rowIndex < rows.length; rowIndex++) {
     row["Cluster"] ||
     ""
   );
+
+  // Circle/CMP resolution: unlike Designation and L2 Status below (which
+  // still hard-reject the whole upload on the first bad value), a bad
+  // Circle/CMP only skips this one row — recorded in circleCmpWarnings and
+  // applied at the very end of the loop body, after every other per-row
+  // check has had a chance to hard-reject the whole file as before.
+  const resolvedRowCircle = resolveCircle(circle);
+  const resolvedRowCmp = resolvedRowCircle ? resolveCmp(resolvedRowCircle, cmp) : null;
+  let circleCmpWarning = null;
+  if (!resolvedRowCircle) {
+    circleCmpWarning = {
+      row: excelRowNumber,
+      employee: employee_name,
+      employeeCode: employee_code,
+      column: "Circle",
+      currentValue: circle,
+      error: `Invalid Circle: "${circle}"`,
+      expected: CIRCLES,
+    };
+  } else if (!resolvedRowCmp) {
+    circleCmpWarning = {
+      row: excelRowNumber,
+      employee: employee_name,
+      employeeCode: employee_code,
+      column: "CMP",
+      currentValue: cmp,
+      error: `Invalid CMP "${cmp}" for Circle "${resolvedRowCircle}"`,
+      expected: CIRCLE_CMP_MAP[resolvedRowCircle],
+    };
+  }
 
   const designationRaw = sanitizeText(
     row.designation ||
@@ -805,11 +1135,17 @@ console.log(
   l2_status
 );
 
+if (circleCmpWarning) {
+  circleCmpWarnings.push(circleCmpWarning);
+  skippedCircleCmp++;
+  continue;
+}
+
 values.push([
   employee_code,
   employee_name,
-  circle,
-  cmp,
+  resolvedRowCircle,
+  resolvedRowCmp,
   designation,
   aadhaar_no,
   nth_salary,
@@ -865,6 +1201,8 @@ if (insertedCodes.length) {
         totalRecords: rows.length,
         insertedRecords: values.length,
         skippedDuplicates,
+        skippedCircleCmp,
+        circleCmpWarnings,
       });
 
     } catch (error) {
