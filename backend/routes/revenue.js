@@ -18,7 +18,7 @@ function applyRevenueCircleFilter(filters, params, authUser, column = "r.circle"
   addCircleFilter(filters, params, authUser, column);
 }
 
-async function assertRevenueFilesAllowed(fileIds, authUser) {
+async function assertRevenueFilesAllowed(fileIds, authUser, message) {
   if (isAllCircle(authUser)) return;
   if (!fileIds.length) return;
 
@@ -30,7 +30,7 @@ async function assertRevenueFilesAllowed(fileIds, authUser) {
     fileIds
   );
 
-  assertRowsAllowedCircle(authUser, rows, (row) => row.circle);
+  assertRowsAllowedCircle(authUser, rows, (row) => row.circle, message);
 }
 
 const mapRevenueRowToExcel = (row) => ({
@@ -134,6 +134,14 @@ router.post("/upload", requirePagePermission("revenue", "edit"), upload.single("
     const { uploadedBy, uploadTime, billingMonth } = req.body;
     const fileName = req.file.originalname;
 
+    if (!String(billingMonth || "").trim()) {
+      return res.status(400).json({ message: "Billing month is required" });
+    }
+
+    if (!String(uploadedBy || "").trim()) {
+      return res.status(400).json({ message: "Uploaded-by name is required" });
+    }
+
     const workbook = XLSX.readFile(filePath);
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
 
@@ -227,9 +235,6 @@ router.post("/upload", requirePagePermission("revenue", "edit"), upload.single("
       })
       .filter(hasMeaningfulRevenueData);
 
-    console.log("Parsed rows:", data.length);
-    console.log("Headers:", Object.keys(data[0] || {}));
-
     const values = data.map((row) => [
       row.circle || null,
       row.location || null,
@@ -263,24 +268,30 @@ router.post("/upload", requirePagePermission("revenue", "edit"), upload.single("
 
     assertRowsAllowedCircle(req.authUser, data, (row) => row.circle);
 
-    const [uploadResult] = await db.promise().query(
-      `INSERT INTO revenue_upload
-       (file_name, file_path, uploaded_by, upload_time, billing_month)
-       VALUES (?, ?, ?, ?, ?)`,
-      [fileName, filePath, uploadedBy, uploadTime, billingMonth]
+    // Same circle + billing month already uploaded -> reject rather than
+    // silently double-counting that month's revenue totals.
+    const distinctCircles = Array.from(
+      new Set(data.map((row) => String(row.circle || "").trim()).filter(Boolean))
     );
 
-    const fileId = uploadResult.insertId;
+    if (distinctCircles.length && billingMonth) {
+      const [existing] = await db.promise().query(
+        `SELECT DISTINCT r.circle
+         FROM revenue r
+         INNER JOIN revenue_upload ru ON ru.file_id = r.file_id
+         WHERE ru.billing_month = ?
+           AND LOWER(TRIM(r.circle)) IN (${distinctCircles.map(() => "LOWER(TRIM(?))").join(",")})`,
+        [billingMonth, ...distinctCircles]
+      );
 
-    await db.promise().query(
-      "UPDATE revenue_upload SET file_id = ? WHERE id = ?",
-      [fileId, fileId]
-    );
+      if (existing.length) {
+        return res.status(409).json({
+          message: `Revenue for ${existing.map((r) => r.circle).join(", ")} is already uploaded for ${billingMonth}. Delete the existing upload first if you want to replace it.`,
+        });
+      }
+    }
 
-    const preparedValues = values.map((rowValues) => [
-      ...rowValues.slice(0, -1),
-      fileId,
-    ]);
+    const preparedValuesTemplate = values.map((rowValues) => rowValues.slice(0, -1));
 
     const insertRevenueQuery = `
       INSERT INTO revenue (
@@ -308,16 +319,43 @@ router.post("/upload", requirePagePermission("revenue", "edit"), upload.single("
       ) VALUES ?
     `;
 
-    const valueChunks = chunkArray(preparedValues, 1000);
+    // Everything below runs in one transaction: a failure partway through a
+    // large chunked insert must not leave a revenue_upload row pointing at
+    // half-loaded data.
+    const connection = await db.promise().getConnection();
+    let fileId;
 
-    for (const chunk of valueChunks) {
-      await db.promise().query(insertRevenueQuery, [chunk]);
+    try {
+      await connection.beginTransaction();
+
+      const [uploadResult] = await connection.query(
+        `INSERT INTO revenue_upload
+         (file_name, file_path, uploaded_by, upload_time, billing_month)
+         VALUES (?, ?, ?, ?, ?)`,
+        [fileName, filePath, uploadedBy, uploadTime, billingMonth]
+      );
+
+      fileId = uploadResult.insertId;
+
+      await connection.query(
+        "UPDATE revenue_upload SET file_id = ? WHERE id = ?",
+        [fileId, fileId]
+      );
+
+      const preparedValues = preparedValuesTemplate.map((rowValues) => [...rowValues, fileId]);
+      const valueChunks = chunkArray(preparedValues, 1000);
+
+      for (const chunk of valueChunks) {
+        await connection.query(insertRevenueQuery, [chunk]);
+      }
+
+      await connection.commit();
+    } catch (txErr) {
+      await connection.rollback();
+      throw txErr;
+    } finally {
+      connection.release();
     }
-
-    console.log("Sending response:", {
-      file_id: fileId,
-      total_rows: preparedValues.length,
-    });
 
     res.json({
       message: "Excel data inserted successfully",
@@ -326,15 +364,13 @@ router.post("/upload", requirePagePermission("revenue", "edit"), upload.single("
     });
   } catch (err) {
     console.error("ERROR:", err);
-    res.status(500).json({ error: err.message });
+    res.status(err.statusCode || 500).json({ error: err.message });
   }
 });
 
 router.post("/delete-bulk", requirePagePermission("revenue", "delete"), async (req, res) => {
   try {
     const ids = normalizeIds(req.body.ids);
-
-    console.log("DELETE IDS:", ids);
 
     if (ids.length === 0) {
       return res.status(400).json({ message: "No IDs provided" });
@@ -347,7 +383,11 @@ router.post("/delete-bulk", requirePagePermission("revenue", "delete"), async (r
       ids
     );
 
-    await assertRevenueFilesAllowed(ids, req.authUser);
+    await assertRevenueFilesAllowed(
+      ids,
+      req.authUser,
+      "You cannot delete another circle's data."
+    );
 
     await db.promise().query(
       `DELETE FROM revenue WHERE file_id IN (${placeholders})`,
@@ -369,30 +409,59 @@ router.post("/delete-bulk", requirePagePermission("revenue", "delete"), async (r
       }
     }
 
-    console.log("DELETE SUCCESS");
     res.json({ message: "Deleted successfully" });
   } catch (err) {
     console.error("DELETE ERROR:", err);
-    res.status(500).json({ error: err.message });
+    res.status(err.statusCode || 500).json({ error: err.message });
   }
 });
 
-router.get("/upload-history", async (req, res) => {
+router.get("/upload-history", requirePagePermission("revenue", "view"), async (req, res) => {
   try {
     const params = [];
     const filters = [];
     applyRevenueCircleFilter(filters, params, req.authUser, "r.circle");
 
+    // revenue_upload itself has no circle column (one upload can contain
+    // several circles' rows) -> derive it per-upload from revenue so the
+    // frontend has something real to filter/search/display against. Scoped
+    // by the same circle-access filter so a restricted user never sees a
+    // foreign circle's name even when they share a mixed upload.
+    const circleFilterSql = filters.length ? ` AND ${filters.join(" AND ")}` : "";
+
     const [rows] = await db.promise().query(
-      `SELECT ru.*
+      `SELECT ru.*,
+         (SELECT GROUP_CONCAT(DISTINCT r.circle ORDER BY r.circle SEPARATOR ', ')
+          FROM revenue r
+          WHERE r.file_id = ru.file_id${circleFilterSql}) AS circles
        FROM revenue_upload ru
        ${filters.length ? "WHERE EXISTS (SELECT 1 FROM revenue r WHERE r.file_id = ru.file_id AND " + filters.join(" AND ") + ")" : ""}
        ORDER BY ru.id DESC`,
-      params
+      [...(filters.length ? params : []), ...params]
     );
     res.json(rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+router.get("/circles", requirePagePermission("revenue", "view"), async (req, res) => {
+  try {
+    const params = [];
+    const filters = ["circle IS NOT NULL", "TRIM(circle) != ''"];
+    applyRevenueCircleFilter(filters, params, req.authUser, "circle");
+
+    const [rows] = await db.promise().query(
+      `SELECT DISTINCT TRIM(circle) AS circle
+       FROM revenue
+       WHERE ${filters.join(" AND ")}
+       ORDER BY circle`,
+      params
+    );
+
+    res.json({ circles: rows.map((r) => r.circle).filter(Boolean) });
+  } catch (err) {
+    res.status(500).json({ error: err.message, circles: [] });
   }
 });
 
@@ -415,7 +484,11 @@ router.post("/download-bulk", requirePagePermission("revenue", "download"), asyn
       return res.status(404).send("No uploads found");
     }
 
-    await assertRevenueFilesAllowed(ids, req.authUser);
+    await assertRevenueFilesAllowed(
+      ids,
+      req.authUser,
+      "You cannot download another circle's data."
+    );
 
     res.setHeader("Content-Type", "application/zip");
     res.setHeader(
@@ -491,34 +564,7 @@ router.post("/download-bulk", requirePagePermission("revenue", "download"), asyn
     await archive.finalize();
   } catch (err) {
     console.error(err);
-    res.status(500).send("ZIP download failed");
-  }
-});
-
-router.get("/data", async (req, res) => {
-  try {
-    const params = [];
-    const filters = [];
-    applyRevenueCircleFilter(filters, params, req.authUser, "r.circle");
-
-    const [rows] = await db.promise().query(`
-      SELECT
-        cm_rate,
-        pm_rate,
-        cm_qty,
-        pm_qty,
-        cm_amount,
-        pm_amount,
-        ideal_pm_amount,
-        pm_loss
-      FROM revenue r
-      ${filters.length ? `WHERE ${filters.join(" AND ")}` : ""}
-    `, params);
-
-    res.json(rows);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: err.message });
+    res.status(err.statusCode || 500).send(err.message || "ZIP download failed");
   }
 });
 
@@ -535,7 +581,11 @@ router.get("/download/:fileId", requirePagePermission("revenue", "download"), as
       return res.status(404).send("File not found");
     }
 
-    await assertRevenueFilesAllowed([fileId], req.authUser);
+    await assertRevenueFilesAllowed(
+      [fileId],
+      req.authUser,
+      "You cannot download another circle's data."
+    );
 
     const file = rows[0];
 
@@ -546,11 +596,11 @@ router.get("/download/:fileId", requirePagePermission("revenue", "download"), as
     return res.download(file.file_path, file.file_name);
   } catch (err) {
     console.error(err);
-    res.status(500).send("Download error");
+    res.status(err.statusCode || 500).send(err.message || "Download error");
   }
 });
 
-router.get("/kpi-data", async (req, res) => {
+router.get("/kpi-data", requirePagePermission("revenue", "view"), async (req, res) => {
   try {
   let query = `
   SELECT
@@ -599,12 +649,19 @@ router.get("/kpi-data", async (req, res) => {
 
     const filters = [];
     applyRevenueCircleFilter(filters, params, req.authUser, "r.circle");
+
+    // A circle-restricted user's own circle is already enforced above; an
+    // all-circle user picking a specific circle from the dashboard dropdown
+    // narrows the KPI totals to just that circle.
+    const requestedCircle = String(req.query.circle || "").trim();
+    if (requestedCircle && isAllCircle(req.authUser)) {
+      filters.push("LOWER(TRIM(r.circle)) = LOWER(TRIM(?))");
+      params.push(requestedCircle);
+    }
+
     if (filters.length) {
       query += ` AND ${filters.join(" AND ")}`;
     }
-
-    console.log("KPI query:", query);
-    console.log("KPI params:", params);
 
     const [rows] = await db.promise().query(query, params);
     res.json(rows[0]);

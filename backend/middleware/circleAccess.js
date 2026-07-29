@@ -60,12 +60,12 @@ function circleUploadMessage(authUser) {
   return `Upload failed: You can upload only ${normalizeCircle(authUser?.circle)} circle data.`;
 }
 
-function assertRowsAllowedCircle(authUser, rows, getCircle) {
+function assertRowsAllowedCircle(authUser, rows, getCircle, message) {
   if (isAllCircle(authUser)) return;
 
   const hasForeignCircle = rows.some((row) => !canAccessCircle(authUser, getCircle(row)));
   if (hasForeignCircle) {
-    const error = new Error(circleUploadMessage(authUser));
+    const error = new Error(message || circleUploadMessage(authUser));
     error.statusCode = 403;
     throw error;
   }

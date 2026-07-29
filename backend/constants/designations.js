@@ -56,6 +56,7 @@ const DESIGNATIONS = [
   "HR MANAGER",
   "O & M HEAD",
   "Fiber Engineer",
+  "Fiber Helper",
   "Utility Engineer",
   "State Planning Manager",
   "Warehouse Incharge",

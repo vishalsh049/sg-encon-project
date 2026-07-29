@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { buildApiUrl, getAuthHeaders } from "../lib/api";
 import {
@@ -6,7 +6,6 @@ import {
   Search,
   RotateCcw,
   ChevronDown,
-  TrendingUp,
   IndianRupee,
   Layers,
   Network,
@@ -19,59 +18,6 @@ import {
 function formatNumber(value) {
   const n = Number(value || 0);
   return n.toLocaleString();
-}
-
-function pctFromSeed(seed) {
-  // UI-only growth badge. Keeps stable visual without new API fields.
-  const x = Math.abs(Math.sin(seed) * 100);
-  const v = 2 + (x % 18); // 2% - 20%
-  return `${v.toFixed(1)}%`;
-}
-
-function Sparkline({ strokeClassName, values }) {
-  const w = 220;
-  const h = 44;
-  const pad = 4;
-
-  const max = Math.max(...values, 1);
-  const min = Math.min(...values, 0);
-  const span = Math.max(max - min, 1);
-
-  const xStep = (w - pad * 2) / Math.max(values.length - 1, 1);
-
-  const points = values.map((v, i) => {
-    const x = pad + i * xStep;
-    const y = pad + (h - pad * 2) * (1 - (v - min) / span);
-    return `${x.toFixed(2)},${y.toFixed(2)}`;
-  });
-
-  return (
-    <div className="mt-3">
-      <svg width="100%" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none">
-        <defs>
-          <linearGradient id="sparkGrad" x1="0" y1="0" x2="1" y2="0">
-            <stop offset="0%" stopColor="rgba(99,102,241,0.18)" />
-            <stop offset="100%" stopColor="rgba(168,85,247,0.18)" />
-          </linearGradient>
-        </defs>
-        <polyline
-          points={points.join(" ")}
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2.4"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          className={strokeClassName}
-        />
-        <polyline
-          points={points.join(" ") + ` ${w - pad},${h - pad} ${pad},${h - pad}`}
-          fill="url(#sparkGrad)"
-          stroke="none"
-          opacity="0.9"
-        />
-      </svg>
-    </div>
-  );
 }
 
 export default function RevenuePage() {
@@ -88,22 +34,23 @@ export default function RevenuePage() {
 
 
     // Filters / UI state
-    const [filterDate, setFilterDate] = useState("");
+    const [filterDate, setFilterDate] = useState(""); // YYYY-MM, matches billing_month
     const [filterCircle, setFilterCircle] = useState(""); // dropdown value ('' = all)
     const [searchQuery, setSearchQuery] = useState("");
+    const [circleList, setCircleList] = useState([]);
 
     const [selectedRows, setSelectedRows] = useState([]);
     const [currentPage, setCurrentPage] = useState(1);
     const rowsPerPage = 5;
 
-    // 🔥 FETCH DATA FROM DB (connectivity unchanged)
-    useEffect(() => {
-      axios
+    const fetchUploadHistory = useCallback(() => {
+      return axios
         .get(buildApiUrl("/api/revenue/upload-history"), {
           headers: getAuthHeaders(),
         })
         .then((res) => {
           setData(Array.isArray(res.data) ? res.data : []);
+          setError(null);
         })
         .catch((err) => {
           console.error(err);
@@ -112,24 +59,42 @@ export default function RevenuePage() {
         .finally(() => setLoading(false));
     }, []);
 
+    const fetchKpi = useCallback(() => {
+      return axios
+        .get(buildApiUrl("/api/revenue/kpi-data"), {
+          headers: getAuthHeaders(),
+          params: {
+            circle: filterCircle || undefined,
+          },
+        })
+        .then((res) => {
+          setKpi(res.data);
+        })
+        .catch((err) => {
+          console.error(err);
+        });
+    }, [filterCircle]);
+
     useEffect(() => {
-    axios
-      .get(buildApiUrl("/api/revenue/kpi-data"), {
-        headers: getAuthHeaders(),
-        params: {
-          circle: filterCircle || undefined,
-        },
-      })
-      .then((res) => {
-        setKpi(res.data);
-      })
-      .catch((err) => {
-        console.error(err);
-      });
-  }, [filterCircle]);
+      fetchUploadHistory();
+    }, [fetchUploadHistory]);
 
+    useEffect(() => {
+      fetchKpi();
+    }, [fetchKpi]);
 
-  const circles = ["Punjab", "Haryana", "Delhi", "UP East", "UPE-2"];
+    // Circle list comes from real uploaded data, not a hardcoded guess.
+    useEffect(() => {
+      axios
+        .get(buildApiUrl("/api/revenue/circles"), { headers: getAuthHeaders() })
+        .then((res) => {
+          setCircleList(Array.isArray(res.data?.circles) ? res.data.circles : []);
+        })
+        .catch((err) => {
+          console.error(err);
+          setCircleList([]);
+        });
+    }, []);
 
     const rowsFiltered = useMemo(() => {
       const q = searchQuery.trim().toLowerCase();
@@ -139,8 +104,8 @@ export default function RevenuePage() {
 
         const fileName = (row?.file_name || "").toString().toLowerCase();
         const uploadedByVal = (row?.uploaded_by || "").toString().toLowerCase();
-        const circleVal = (row?.circle || "").toString().toLowerCase();
-        const uploadDateVal = (row?.billing_month || "").toLowerCase();
+        const circleVal = (row?.circles || "").toString().toLowerCase();
+        const uploadDateVal = (row?.billing_month || "").toString().toLowerCase();
         const uploadTimeVal = (row?.upload_time || "").toString().toLowerCase();
 
         return (
@@ -155,7 +120,8 @@ export default function RevenuePage() {
       return data.filter((row) => {
         const dateOk = !filterDate || row.billing_month === filterDate;
         const circleOk =
-          !filterCircle || (row?.circle || "").toLowerCase() === filterCircle.toLowerCase();
+          !filterCircle ||
+          (row?.circles || "").toLowerCase().includes(filterCircle.toLowerCase());
         const searchOk = matchesSearch(row);
         return dateOk && circleOk && searchOk;
       });
@@ -165,12 +131,31 @@ export default function RevenuePage() {
       return Math.max(1, Math.ceil(rowsFiltered.length / rowsPerPage));
     }, [rowsFiltered.length]);
 
-    // clamp currentPage if filters reduce results
-    useEffect(() => {
-      setCurrentPage((p) => Math.min(Math.max(p, 1), totalPages));
-    }, [totalPages]);
+    // Clamp derived at render time (not via effect) so a filter that shrinks
+    // totalPages doesn't leave currentPage pointing past the last page for
+    // one extra render.
+    const safeCurrentPage = Math.min(Math.max(currentPage, 1), totalPages);
 
-    const indexOfLast = currentPage * rowsPerPage;
+    // Windowed page numbers: first, last, and the current page +/- 1 -
+    // computed over the full page range so it stays correct past page 7.
+    const pageNumbers = useMemo(() => {
+      const pages = [];
+      for (let page = 1; page <= totalPages; page += 1) {
+        if (
+          totalPages <= 7 ||
+          page === 1 ||
+          page === totalPages ||
+          page === safeCurrentPage ||
+          page === safeCurrentPage - 1 ||
+          page === safeCurrentPage + 1
+        ) {
+          pages.push(page);
+        }
+      }
+      return pages;
+    }, [totalPages, safeCurrentPage]);
+
+    const indexOfLast = safeCurrentPage * rowsPerPage;
     const indexOfFirst = indexOfLast - rowsPerPage;
 
     const currentData = useMemo(() => {
@@ -194,7 +179,16 @@ export default function RevenuePage() {
         return;
       }
 
-      const now = new Date();
+      if (!selectedDate) {
+        alert("Please select a billing month");
+        return;
+      }
+
+      if (!uploadedBy.trim()) {
+        alert("Please enter who is uploading this file");
+        return;
+      }
+
       const istTime = new Date()
         .toLocaleString("sv-SE", {
           timeZone: "Asia/Kolkata",
@@ -221,11 +215,14 @@ export default function RevenuePage() {
         alert("Uploaded!");
         setShowUpload(false);
         setFile(null);
-        window.location.reload();
+        setUploadedBy("");
+        setSelectedDate("");
+        fetchUploadHistory();
+        fetchKpi();
       } catch (err) {
         setUploading(false);
         console.error(err);
-        alert("Upload failed");
+        alert(err.response?.data?.message || "Upload failed");
       }
     };
 
@@ -287,6 +284,11 @@ export default function RevenuePage() {
         return;
       }
 
+      const confirmDelete = window.confirm(
+        `Delete ${selectedRows.length} selected upload(s) and their revenue rows? This cannot be undone.`
+      );
+      if (!confirmDelete) return;
+
       try {
         await axios.post(
           buildApiUrl("/api/revenue/delete-bulk"),
@@ -298,9 +300,10 @@ export default function RevenuePage() {
 
         setData((prev) => prev.filter((row) => !selectedRows.includes(row.file_id)));
         setSelectedRows([]);
+        fetchKpi();
       } catch (err) {
         console.error(err);
-        alert("Delete failed");
+        alert(err.response?.data?.message || "Delete failed");
       }
     };
 
@@ -320,9 +323,10 @@ export default function RevenuePage() {
         alert("Deleted successfully");
         setData((prev) => prev.filter((row) => Number(row.file_id) !== Number(fileId)));
         setSelectedRows((prev) => prev.filter((id) => Number(id) !== Number(fileId)));
+        fetchKpi();
       } catch (err) {
         console.error(err);
-        alert("Delete failed");
+        alert(err.response?.data?.message || "Delete failed");
       }
     };
 
@@ -412,12 +416,6 @@ export default function RevenuePage() {
                   <div className="flex items-start justify-between">
                     <div>
                       <p className="text-text-secondary text-sm font-semibold tracking-[0.10em]">Total Revenue</p>
-                      <div className="mt-2 flex items-center gap-2">
-                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold bg-emerald-50 dark:bg-emerald-500/10/80 border border-emerald-100 dark:border-emerald-500/20 text-emerald-700 dark:text-emerald-400">
-                          +{pctFromSeed(Number(kpi.totalRevenue || 0) + 1)}
-                        </span>
-                        <span className="text-xs text-text-muted">vs last period</span>
-                      </div>
                     </div>
 
                     <div className="h-9 w-9 rounded-2xl bg-gradient-to-br from-emerald-100 to-emerald-50 border border-emerald-200 dark:border-emerald-500/20 flex items-center justify-center text-emerald-700 dark:text-emerald-400 shadow-[0_16px_40px_rgba(16,185,129,0.14)]">
@@ -438,12 +436,6 @@ export default function RevenuePage() {
                   <div className="flex items-start justify-between">
                     <div>
                       <p className="text-text-secondary text-sm font-semibold tracking-[0.10em]">Total FTTx</p>
-                      <div className="mt-2 flex items-center gap-2">
-                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold bg-indigo-50 dark:bg-indigo-500/10/80 border border-indigo-100 dark:border-indigo-500/20 text-indigo-700 dark:text-indigo-400">
-                          +{pctFromSeed(Number(kpi.totalFTTx || 0) + 2)}
-                        </span>
-                        <span className="text-xs text-text-muted">vs last period</span>
-                      </div>
                     </div>
 
                     <div className="h-9 w-9 rounded-2xl bg-gradient-to-br from-indigo-100 to-violet-50 border border-indigo-200 dark:border-indigo-500/20 flex items-center justify-center text-indigo-700 dark:text-indigo-400 shadow-[0_16px_40px_rgba(79,70,229,0.14)]">
@@ -464,12 +456,6 @@ export default function RevenuePage() {
                   <div className="flex items-start justify-between">
                     <div>
                       <p className="text-text-secondary text-sm font-semibold tracking-[0.10em]">Total Fiber</p>
-                      <div className="mt-2 flex items-center gap-2">
-                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold bg-violet-50 dark:bg-violet-500/10/80 border border-violet-100 dark:border-violet-500/20 text-violet-700 dark:text-violet-400">
-                          +{pctFromSeed(Number(kpi.totalFiber || 0) + 3)}
-                        </span>
-                        <span className="text-xs text-text-muted">vs last period</span>
-                      </div>
                     </div>
 
                     <div className="h-9 w-9 rounded-2xl bg-gradient-to-br from-violet-100 to-purple-50 border border-violet-200 dark:border-violet-500/20 flex items-center justify-center text-violet-700 dark:text-violet-400 shadow-[0_16px_40px_rgba(139,92,246,0.14)]">
@@ -489,12 +475,6 @@ export default function RevenuePage() {
                   <div className="flex items-start justify-between">
                     <div>
                       <p className="text-text-secondary text-sm font-semibold tracking-[0.10em]">Total Tower</p>
-                      <div className="mt-2 flex items-center gap-2">
-                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold bg-orange-50 dark:bg-orange-500/10/80 border border-orange-100 dark:border-orange-500/20 text-orange-700 dark:text-orange-400">
-                          +{pctFromSeed(Number(kpi.totalTower || 0) + 4)}
-                        </span>
-                        <span className="text-xs text-text-muted">vs last period</span>
-                      </div>
                     </div>
 
                     <div className="h-9 w-9 rounded-2xl bg-gradient-to-br from-orange-100 to-amber-50 border border-orange-200 dark:border-orange-500/20 flex items-center justify-center text-orange-700 dark:text-orange-400 shadow-[0_16px_40px_rgba(251,146,60,0.16)]">
@@ -531,15 +511,16 @@ export default function RevenuePage() {
                       />
                     </div>
 
-                    {/* Date filter */}
+                    {/* Billing month filter */}
                     <div className="col-span-6 md:col-span-3">
                       <input
-                        type="date"
+                        type="month"
                         value={filterDate}
                         onChange={(e) => {
                           setFilterDate(e.target.value);
                           setCurrentPage(1);
                         }}
+                        title="Filter by billing month"
                         className="w-full px-3 py-2 rounded-[18px] bg-surface/80 border border-slate/60 text-text-primary outline-none focus:ring-2 focus:ring-indigo-200"
                       />
                     </div>
@@ -555,7 +536,7 @@ export default function RevenuePage() {
                         className="w-full appearance-none px-3 py-2 rounded-[18px] bg-surface/80 border border-slate/60 text-text-primary outline-none focus:ring-2 focus:ring-indigo-200"
                       >
                         <option value="">All Circles</option>
-                        {circles.map((c) => (
+                        {circleList.map((c) => (
                           <option key={c} value={c}>
                             {c}
                           </option>
@@ -580,14 +561,14 @@ export default function RevenuePage() {
                     <div className="flex gap-2">
                       <button
                         onClick={handleBulkDownload}
-                        className="px-4 py-2 rounded-[18px] bg-emerald-50 dark:bg-emerald-500/10/80 border border-emerald-200 dark:border-emerald-500/20 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 hover:dark:bg-emerald-500/15 transition shadow-sm flex items-center gap-2"
+                        className="px-4 py-2 rounded-[18px] bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-500/15 transition shadow-sm flex items-center gap-2"
                       >
                         <Download size={14} />
                         Download Selected
                       </button>
                       <button
                         onClick={handleBulkDelete}
-                        className="px-4 py-2 rounded-[18px] bg-rose-50 dark:bg-rose-500/10/80 border border-rose-200 dark:border-rose-500/20 text-rose-700 dark:text-rose-400 hover:bg-rose-100 hover:dark:bg-rose-500/15 transition shadow-sm flex items-center gap-2"
+                        className="px-4 py-2 rounded-[18px] bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 text-rose-700 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-500/15 transition shadow-sm flex items-center gap-2"
                       >
                         <Trash2 size={14} />
                         Delete Selected
@@ -638,6 +619,7 @@ export default function RevenuePage() {
                           />
                         </th>
                         <th className="p-3 text-left font-medium">Billing Month</th>
+                        <th className="p-3 text-left font-medium">Circle</th>
                         <th className="p-3 text-left font-medium">Uploaded By</th>
                         <th className="p-3 text-left font-medium">File Name</th>
                         <th className="p-3 text-left font-medium">Uploaded At</th>
@@ -678,6 +660,12 @@ export default function RevenuePage() {
                               </td>
 
                               <td className="p-3 text-text-primary">
+                                <span className="block max-w-[220px] truncate">
+                                  {row?.circles || "-"}
+                                </span>
+                              </td>
+
+                              <td className="p-3 text-text-primary">
                                 <span className="inline-flex items-center gap-2">
                                   {row?.uploaded_by || "-"}
                                 </span>
@@ -697,14 +685,14 @@ export default function RevenuePage() {
                                 <div className="flex items-center justify-center gap-2">
                                   <button
                                     onClick={() => handleDownload(row.file_id)}
-                                    className="group inline-flex items-center gap-2 px-3 py-1.5 text-sm rounded-xl bg-emerald-50 dark:bg-emerald-500/10/80 border border-emerald-200 dark:border-emerald-500/20/80 text-emerald-800 dark:text-emerald-300 hover:bg-emerald-100 hover:dark:bg-emerald-500/15 transition shadow-[0_10px_25px_rgba(16,185,129,0.10)]"
+                                    className="group inline-flex items-center gap-2 px-3 py-1.5 text-sm rounded-xl bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 text-emerald-800 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-500/15 transition shadow-[0_10px_25px_rgba(16,185,129,0.10)]"
                                   >
                                     <Download size={16} className="text-emerald-700 dark:text-emerald-400/90" />
                                     Download
                                   </button>
                                   <button
                                     onClick={() => handleDelete(row.file_id)}
-                                    className="group inline-flex items-center gap-2 px-3 py-1.5 text-sm rounded-xl bg-rose-50 dark:bg-rose-500/10/80 border border-rose-200 dark:border-rose-500/20/80 text-rose-800 dark:text-rose-300 hover:bg-rose-100 hover:dark:bg-rose-500/15 transition shadow-[0_10px_25px_rgba(244,63,94,0.10)]"
+                                    className="group inline-flex items-center gap-2 px-3 py-1.5 text-sm rounded-xl bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 text-rose-800 dark:text-rose-300 hover:bg-rose-100 dark:hover:bg-rose-500/15 transition shadow-[0_10px_25px_rgba(244,63,94,0.10)]"
                                   >
                                     <Trash2 size={16} className="text-rose-700 dark:text-rose-400/90" />
                                     Delete
@@ -717,7 +705,7 @@ export default function RevenuePage() {
                         })
                       ) : (
                         <tr>
-                          <td colSpan="6" className="text-center p-8">
+                          <td colSpan="7" className="text-center p-8">
                             <div className="mx-auto max-w-md">
                               <div className="w-12 h-12 rounded-2xl bg-indigo-50 dark:bg-indigo-500/10 border border-indigo-100 dark:border-indigo-500/20 flex items-center justify-center mx-auto">
                                 <Search className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
@@ -744,16 +732,18 @@ export default function RevenuePage() {
               {/* Pagination (Luxury) */}
               <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mt-4">
                 <div className="text-xs text-text-secondary">
-                  Page <span className="text-text-primary font-semibold">{currentPage}</span> of{" "}
+                  Showing <span className="text-text-primary font-semibold">{rangeLabel}</span>
+                  <span className="mx-1.5">·</span>
+                  Page <span className="text-text-primary font-semibold">{safeCurrentPage}</span> of{" "}
                   <span className="text-text-primary font-semibold">{totalPages}</span>
                 </div>
 
                 <div className="flex items-center gap-2 bg-surface/60 backdrop-blur-xl border border-white/60 rounded-[18px] px-2 py-2 shadow-[0_18px_45px_rgba(79,70,229,0.06)]">
                   <button
                     onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
-                    disabled={currentPage === 1}
+                    disabled={safeCurrentPage === 1}
                     className={`px-3 py-2 rounded-[16px] border text-sm transition shadow-sm ${
-                      currentPage === 1
+                      safeCurrentPage === 1
                         ? "bg-surface/60 border-white/70 text-text-muted cursor-not-allowed"
                         : "bg-surface/80 border-white/70 text-text-primary hover:bg-surface"
                     }`}
@@ -762,40 +752,35 @@ export default function RevenuePage() {
                   </button>
 
                   <div className="hidden sm:flex items-center gap-1">
-                    {Array.from({ length: totalPages }).slice(0, 7).map((_, idx) => {
-                      const page = idx + 1;
-                      if (totalPages > 7) {
-                        if (
-                          page !== 1 &&
-                          page !== totalPages &&
-                          page !== currentPage &&
-                          page !== currentPage - 1 &&
-                          page !== currentPage + 1
-                        ) {
-                          return null;
-                        }
-                      }
+                    {pageNumbers.map((page, idx) => {
+                      const prevPage = pageNumbers[idx - 1];
+                      const showEllipsis = prevPage !== undefined && page - prevPage > 1;
+
                       return (
-                        <button
-                          key={page}
-                          onClick={() => setCurrentPage(page)}
-                          className={`px-3 py-2 rounded-[16px] border text-sm transition shadow-sm ${
-                            page === currentPage
-                              ? "bg-gradient-to-r from-blue-600/15 via-indigo-600/15 to-purple-600/15 border-indigo-300 dark:border-indigo-500/30/70 text-indigo-800 dark:text-indigo-300 shadow-[0_0_0_4px_rgba(99,102,241,0.18)]"
-                              : "bg-surface/80 border-white/70 text-text-primary hover:bg-surface"
-                          }`}
-                        >
-                          {page}
-                        </button>
+                        <span key={page} className="flex items-center gap-1">
+                          {showEllipsis && (
+                            <span className="px-1 text-text-muted select-none">…</span>
+                          )}
+                          <button
+                            onClick={() => setCurrentPage(page)}
+                            className={`px-3 py-2 rounded-[16px] border text-sm transition shadow-sm ${
+                              page === safeCurrentPage
+                                ? "bg-gradient-to-r from-blue-600/15 via-indigo-600/15 to-purple-600/15 border-indigo-300 dark:border-indigo-500/30 text-indigo-800 dark:text-indigo-300 shadow-[0_0_0_4px_rgba(99,102,241,0.18)]"
+                                : "bg-surface/80 border-white/70 text-text-primary hover:bg-surface"
+                            }`}
+                          >
+                            {page}
+                          </button>
+                        </span>
                       );
                     })}
                   </div>
 
                   <button
                     onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))}
-                    disabled={currentPage === totalPages}
+                    disabled={safeCurrentPage === totalPages}
                     className={`px-3 py-2 rounded-[16px] border text-sm transition shadow-sm ${
-                      currentPage === totalPages
+                      safeCurrentPage === totalPages
                         ? "bg-surface/60 border-white/70 text-text-muted cursor-not-allowed"
                         : "bg-surface/80 border-white/70 text-text-primary hover:bg-surface"
                     }`}
