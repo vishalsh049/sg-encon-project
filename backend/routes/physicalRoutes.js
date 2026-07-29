@@ -122,6 +122,31 @@
         params.push(dateTo);
       }
 
+      // Mirrors the search clause in buildPhysicalFilters() so the KPI/summary
+      // cards on the list page agree with the table's search results.
+      const search = String(req.query.search || "").trim();
+      if (search) {
+        const wildcard = `%${search}%`;
+        conditions.push(`
+          (
+            employee_name LIKE ?
+            OR employee_code LIKE ?
+            OR aadhaar_no LIKE ?
+            OR mobile_number LIKE ?
+            OR pan_no LIKE ?
+            OR pf_no LIKE ?
+            OR uan_no LIKE ?
+            OR circle LIKE ?
+            OR cmp LIKE ?
+            OR reporting_manager LIKE ?
+          )
+        `);
+        params.push(
+          wildcard, wildcard, wildcard, wildcard, wildcard,
+          wildcard, wildcard, wildcard, wildcard, wildcard
+        );
+      }
+
       return {
         whereClause: `WHERE ${conditions.join(" AND ")}`,
         params,

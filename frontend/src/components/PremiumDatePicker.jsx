@@ -45,9 +45,25 @@ function buildCalendarDays(viewDate) {
   });
 }
 
-const POPOVER_WIDTH = 280;
+const POPOVER_WIDTH = 336;
 const POPOVER_GAP = 8;
 const VIEWPORT_MARGIN = 8;
+
+const MONTH_NAMES = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
+
+// Wide enough to cover birth-year lookups (DOB) through near-future report
+// dates, without making users click "previous month" hundreds of times.
+function buildYearOptions() {
+  const currentYear = new Date().getFullYear();
+  const start = currentYear - 100;
+  const end = currentYear + 10;
+  return Array.from({ length: end - start + 1 }, (_, index) => end - index);
+}
+
+const YEAR_OPTIONS = buildYearOptions();
 
 function PremiumDatePicker({
   value,
@@ -174,10 +190,7 @@ function PremiumDatePicker({
     setIsOpen(false);
   };
 
-  const monthLabel = viewDate.toLocaleDateString("en-US", {
-    month: "long",
-    year: "numeric",
-  });
+  const goToToday = () => handleSelectDate(new Date());
 
   return (
     <div ref={rootRef} className={`relative overflow-visible ${className}`}>
@@ -191,7 +204,7 @@ function PremiumDatePicker({
           onFocus={openPicker}
           onChange={(event) => setInputText(event.target.value)}
           onBlur={commitInputValue}
-          className="app-date-input w-full h-10 rounded-lg border px-3"
+          className="app-date-input"
         />
         <button
           type="button"
@@ -217,7 +230,7 @@ function PremiumDatePicker({
                   ? { bottom: window.innerHeight - coords.top }
                   : { top: coords.top }),
               }}
-              className="z-[9999] rounded-2xl bg-surface border border-border-color shadow-[0_20px_60px_rgba(0,0,0,0.12)]"
+              className="app-date-popover z-[9999]"
             >
               <div className="app-date-header">
                 <button
@@ -233,7 +246,43 @@ function PremiumDatePicker({
                   <ChevronLeft size={16} />
                 </button>
 
-                <div className="app-date-title">{monthLabel}</div>
+                <div className="app-date-select-group">
+                  <select
+                    value={viewDate.getMonth()}
+                    onChange={(event) =>
+                      setViewDate(
+                        (prev) =>
+                          new Date(prev.getFullYear(), Number(event.target.value), 1)
+                      )
+                    }
+                    className="app-date-select"
+                    aria-label="Select month"
+                  >
+                    {MONTH_NAMES.map((month, index) => (
+                      <option key={month} value={index}>
+                        {month}
+                      </option>
+                    ))}
+                  </select>
+
+                  <select
+                    value={viewDate.getFullYear()}
+                    onChange={(event) =>
+                      setViewDate(
+                        (prev) =>
+                          new Date(Number(event.target.value), prev.getMonth(), 1)
+                      )
+                    }
+                    className="app-date-select"
+                    aria-label="Select year"
+                  >
+                    {YEAR_OPTIONS.map((year) => (
+                      <option key={year} value={year}>
+                        {year}
+                      </option>
+                    ))}
+                  </select>
+                </div>
 
                 <button
                   type="button"
@@ -256,10 +305,11 @@ function PremiumDatePicker({
               </div>
 
               <div className="app-date-grid">
-                {calendarDays.map((date) => {
+                {calendarDays.map((date, index) => {
                   const isSelected = selectedDate ? isSameDay(date, selectedDate) : false;
                   const isToday = isSameDay(date, today);
                   const isOutsideMonth = date.getMonth() !== viewDate.getMonth();
+                  const isWeekend = index % 7 === 0 || index % 7 === 6;
                   const disabledDate = isDateDisabled ? isDateDisabled(date) : false;
 
                   return (
@@ -270,9 +320,10 @@ function PremiumDatePicker({
                       onClick={() => !disabledDate && handleSelectDate(date)}
                       className={`app-date-cell
                         ${isOutsideMonth ? "app-date-cell-outside" : ""}
-                        ${isToday ? "app-date-cell-today" : ""}
+                        ${isWeekend && !isOutsideMonth ? "app-date-cell-weekend" : ""}
+                        ${isToday && !isSelected ? "app-date-cell-today" : ""}
                         ${isSelected ? "app-date-cell-selected" : ""}
-                        ${disabledDate ? "opacity-40 cursor-not-allowed" : ""}
+                        ${disabledDate ? "opacity-40 cursor-not-allowed hover:scale-100" : ""}
                       `}
                     >
                       {date.getDate()}
@@ -281,13 +332,17 @@ function PremiumDatePicker({
                 })}
               </div>
 
-              {/* "Today" was hardcoded disabled={true} — a permanently dead
-                  control on every page using this picker. Removed rather than
-                  left greyed out, since several callers block today's date on
-                  purpose. */}
               <div className="app-date-footer">
                 <button type="button" onClick={clearValue} className="app-date-link">
                   Clear
+                </button>
+                <button
+                  type="button"
+                  onClick={goToToday}
+                  disabled={isDateDisabled ? isDateDisabled(new Date()) : false}
+                  className="app-date-link app-date-link-primary disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
+                >
+                  Today
                 </button>
               </div>
             </div>,
