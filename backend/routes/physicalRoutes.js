@@ -2799,7 +2799,7 @@ circleCmpWarnings: circleCmpWarnings
         `, scope.params);
 
         const updatesByCircle = new Map(rows.map((row) => [row.circle, row]));
-        const knownCircles = Object.keys(circleCmpMap);
+        const knownCircles = Object.keys(CIRCLE_CMP_MAP);
 
         let circleList;
         if (isAllCircle(req.authUser)) {
