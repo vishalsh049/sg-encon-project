@@ -632,6 +632,59 @@ toText(
       }
     }
 
+    // Column order must exactly match the `values` array each caller builds
+    // for an update (see the upload-report handler below).
+    const PHYSICAL_UPDATE_COLUMNS = [
+      "pprj_status", "pprj_code", "employee_code", "employee_name", "father_name",
+      "function_name", "job_role_actual_cmp_verify", "job_role", "manpower_signoff_scope",
+      "scrum_job_role", "circle", "cluster", "mobile_number", "dob", "age",
+      "date_of_joining", "employment_status", "resigned_date", "last_working_date",
+      "rm_code", "reporting_manager", "company_email_id", "laptop_status",
+      "ifsc_code", "bank_account_no", "pan_no", "uan_no", "esic_ip_no", "pf_no",
+      "gtli", "nth_salary", "remarks", "cmp",
+    ];
+
+    // Re-uploading a report that overlaps with existing employees (matched by
+    // Aadhaar) used to run one UPDATE per row, awaited in series — for a
+    // multi-thousand-row file that's a multi-thousand-row-trip wait on every
+    // upload. This collapses each chunk of matched rows into a single
+    // CASE-WHEN bulk UPDATE, cutting the round trips from one-per-row to
+    // one-per-chunk while keeping every row's values independent (unlike
+    // INSERT ... ON DUPLICATE KEY UPDATE, this needs no unique key on
+    // aadhaar_no, so it's safe against any pre-existing duplicate data).
+    async function updatePhysicalRowsBulk(conn, updates) {
+      if (!updates.length) return;
+
+      const chunkSize = 200;
+
+      for (let start = 0; start < updates.length; start += chunkSize) {
+        const chunk = updates.slice(start, start + chunkSize);
+        const ids = chunk.map((u) => u.id);
+
+        const setClauses = PHYSICAL_UPDATE_COLUMNS.map((column) => {
+          const cases = chunk.map(() => "WHEN ? THEN ?").join(" ");
+          return `${column} = CASE id ${cases} ELSE ${column} END`;
+        });
+
+        const params = [];
+        PHYSICAL_UPDATE_COLUMNS.forEach((_column, columnIndex) => {
+          chunk.forEach((u) => {
+            params.push(u.id, u.values[columnIndex]);
+          });
+        });
+        params.push(...ids);
+
+        await conn.promise().query(
+          `
+            UPDATE physical
+            SET ${setClauses.join(",\n            ")}
+            WHERE id IN (${ids.map(() => "?").join(",")})
+          `,
+          params
+        );
+      }
+    }
+
     // Employees whose PF/ESIC field carries an explicit "not applicable" marker
     // are exempted rather than pending. For ESIC, employees above the statutory
     // wage ceiling are also exempt even when the field is blank.
@@ -1354,8 +1407,9 @@ toText(
         employeeCode,
         column: "Circle",
         currentValue: circle,
-        error: `Invalid Circle: "${circle}"`,
+        error: "Invalid Circle",
         expected: CIRCLES,
+        howToFix: "Use a valid circle name from the dropdown.",
       });
       continue;
     }
@@ -1370,8 +1424,9 @@ toText(
         employeeCode,
         column: "CMP",
         currentValue: cmp,
-        error: `Invalid CMP "${cmp}" for Circle "${resolvedRowCircle}"`,
+        error: `Invalid CMP for Circle "${resolvedRowCircle}"`,
         expected: CIRCLE_CMP_MAP[resolvedRowCircle],
+        howToFix: `Use a valid CMP for circle "${resolvedRowCircle}".`,
       });
       continue;
     }
@@ -1406,9 +1461,16 @@ toText(
 
 if (!aadhaarNo) {
 
-    validationErrors.push(
-        `❌ Row ${excelRowNumber} - ${employeeName} (${employeeCode}) : Aadhaar Number is mandatory. Please fill Aadhaar Number and upload again.`
-    );
+    validationErrors.push({
+      row: excelRowNumber,
+      employee: employeeName,
+      employeeCode,
+      column: "Aadhaar Number",
+      currentValue: "(Blank)",
+      error: "Aadhaar Number is mandatory",
+      expected: ["12-digit Aadhaar Number"],
+      howToFix: "Enter a valid 12-digit Aadhaar Number in this row and re-upload.",
+    });
 
 }
 
@@ -1418,9 +1480,16 @@ const jobRole = String(row["Job Role"] ?? "").trim();
 
 if (!jobRole) {
 
-  validationErrors.push(
-    `❌ Row ${excelRowNumber} - ${employeeName} (${employeeCode}) : Job Role is blank`
-  );
+  validationErrors.push({
+    row: excelRowNumber,
+    employee: employeeName,
+    employeeCode,
+    column: "Job Role",
+    currentValue: "(Blank)",
+    error: "Job Role is blank",
+    expected: ["See allowed Job Role list"],
+    howToFix: "Enter a Job Role from the approved designation list.",
+  });
 
 } else {
 
@@ -1428,9 +1497,16 @@ if (!jobRole) {
 
   if (!matchedRole) {
 
-  validationErrors.push(
-    `❌ Row ${excelRowNumber} - ${employeeName} (${employeeCode}) : Invalid Designation: "${jobRole}" at Row ${excelRowNumber}. Please use a valid designation from the approved list.`
-  );
+  validationErrors.push({
+    row: excelRowNumber,
+    employee: employeeName,
+    employeeCode,
+    column: "Job Role",
+    currentValue: jobRole,
+    error: "Invalid Job Role",
+    expected: ["See allowed Job Role list"],
+    howToFix: "Replace with a Job Role from the approved designation list.",
+  });
 
   } else {
 
@@ -1450,9 +1526,16 @@ if (!jobRole) {
 
     if (!employmentStatus) {
 
-      validationErrors.push(
-        `❌ Row ${excelRowNumber} - ${employeeName} (${employeeCode}) : Employment Status is blank`
-      );
+      validationErrors.push({
+        row: excelRowNumber,
+        employee: employeeName,
+        employeeCode,
+        column: "Employment Status",
+        currentValue: "(Blank)",
+        error: "Employment Status is blank",
+        expected: ["Active", "Inactive"],
+        howToFix: "Set Employment Status to Active or Inactive.",
+      });
 
     } else {
 
@@ -1463,9 +1546,16 @@ if (!jobRole) {
         normalizedStatus !== "inactive"
       ) {
 
-        validationErrors.push(
-          `❌ Row ${excelRowNumber} - ${employeeName} (${employeeCode}) : Invalid Employment Status "${employmentStatus}"`
-        );
+        validationErrors.push({
+          row: excelRowNumber,
+          employee: employeeName,
+          employeeCode,
+          column: "Employment Status",
+          currentValue: employmentStatus,
+          error: "Invalid Employment Status",
+          expected: ["Active", "Inactive"],
+          howToFix: "Set Employment Status to Active or Inactive.",
+        });
 
       } else {
 
@@ -1487,9 +1577,16 @@ if (!jobRole) {
 
     if (!pprjStatus) {
 
-      validationErrors.push(
-        `❌ Row ${excelRowNumber} - ${employeeName} (${employeeCode}) : PPRJ Status is blank`
-      );
+      validationErrors.push({
+        row: excelRowNumber,
+        employee: employeeName,
+        employeeCode,
+        column: "PPRJ Status",
+        currentValue: "(Blank)",
+        error: "PPRJ Status is blank",
+        expected: ["Active", "Inactive", "Pending", "Not Applicable"],
+        howToFix: "Set PPRJ Status to Active, Inactive, Pending, or Not Applicable.",
+      });
 
     } else {
 
@@ -1507,9 +1604,16 @@ if (!jobRole) {
         !validPprjStatuses.includes(normalizedPprjStatus)
       ) {
 
-        validationErrors.push(
-          `❌ Row ${excelRowNumber} - ${employeeName} (${employeeCode}) : Invalid PPRJ Status "${pprjStatus}"`
-        );
+        validationErrors.push({
+          row: excelRowNumber,
+          employee: employeeName,
+          employeeCode,
+          column: "PPRJ Status",
+          currentValue: pprjStatus,
+          error: "Invalid PPRJ Status",
+          expected: ["Active", "Inactive", "Pending", "Not Applicable"],
+          howToFix: "Set PPRJ Status to Active, Inactive, Pending, or Not Applicable.",
+        });
 
       } else {
 
@@ -1532,9 +1636,16 @@ const gtli = String(
 
 if (!gtli) {
 
-  validationErrors.push(
-    `❌ Row ${excelRowNumber} - ${employeeName} (${employeeCode}) : GTLI is blank`
-  );
+  validationErrors.push({
+    row: excelRowNumber,
+    employee: employeeName,
+    employeeCode,
+    column: "GTLI",
+    currentValue: "(Blank)",
+    error: "GTLI is blank",
+    expected: ["Covered", "Pending", "Not Applicable"],
+    howToFix: "Set GTLI to Covered, Pending, or Not Applicable.",
+  });
 
 } else {
 
@@ -1548,9 +1659,16 @@ if (!gtli) {
 
   if (!validGtli.includes(normalizedGtli)) {
 
-    validationErrors.push(
-      `❌ Row ${excelRowNumber} - ${employeeName} (${employeeCode}) : Invalid GTLI "${gtli}". Allowed values are Covered, Pending, Not Applicable.`
-    );
+    validationErrors.push({
+      row: excelRowNumber,
+      employee: employeeName,
+      employeeCode,
+      column: "GTLI",
+      currentValue: gtli,
+      error: "Invalid GTLI",
+      expected: ["Covered", "Pending", "Not Applicable"],
+      howToFix: "Set GTLI to Covered, Pending, or Not Applicable.",
+    });
 
   } else {
 
@@ -1579,7 +1697,9 @@ if (!gtli) {
     errors: validationErrors,
     totalErrors: validationErrors.length,
     totalRecords: rows.length,
-    message: validationErrors.join("\n")
+    message: `${validationErrors.length} validation error${
+      validationErrors.length === 1 ? "" : "s"
+    } found. See the detailed report below.`,
   });
 
 }
@@ -1634,6 +1754,7 @@ existingEmployees.forEach(emp=>{
 const excelAadhaarSet=new Set();
 
 const insertRows=[];
+const updateRows=[];
 let updatedEmployees=0;
 let duplicateEmployees=0;
 
@@ -1660,88 +1781,46 @@ for(const row of rows){
 
     if(employeeMap.has(aadhaarNo)){
 
-        // UPDATE EMPLOYEE
-
-        await conn.promise().query(
-        `
-        UPDATE physical
-        SET
-
-        pprj_status=?,
-        pprj_code=?,
-        employee_code=?,
-        employee_name=?,
-        father_name=?,
-        function_name=?,
-        job_role_actual_cmp_verify=?,
-        job_role=?,
-        manpower_signoff_scope=?,
-        scrum_job_role=?,
-        circle=?,
-        cluster=?,
-        mobile_number=?,
-        dob=?,
-        age=?,
-        date_of_joining=?,
-        employment_status=?,
-        resigned_date=?,
-        last_working_date=?,
-        rm_code=?,
-        reporting_manager=?,
-        company_email_id=?,
-        laptop_status=?,
-        ifsc_code=?,
-        bank_account_no=?,
-        pan_no=?,
-        uan_no=?,
-        esic_ip_no=?,
-        pf_no=?,
-        gtli=?,
-        nth_salary=?,
-        remarks=?,
-        cmp=?
-
-        WHERE id=?
-        `,
-        [
-
-        toText(row["PPRJ Status"]),
-        toText(row["PPRJ Code"]||row["PPRJ code"]),
-        toText(row["Employee Code"]),
-        toText(row["Employee Name"]),
-        toText(row["Father Name"]),
-        toText(row["Function"]),
-        toText(row["Job Role Actual CMP Verify"]||row["Job Role_Actual_CMP Verify"]),
-        row["Job Role"],
-        toText(row["Manpower SignOff Scope"]||row["Manpower Signoff Scope"]),
-        toText(row["Scrum Job Role"]),
-        toText(row["Circle"]),
-        toText(row["Cluster"]),
-        toText(row["Mobile number"]||row["Mobile Number"]),
-        normalizeDate(row["DOB"]),
-        toNullableInt(row["AGE"]||row["Age"]),
-        normalizeDate(row["Date of joining"]||row["Date Of Joining"]),
-        row["Employment Status"],
-        normalizeDate(row["Resigned Date"]),
-        normalizeDate(row["Last Working Date"]),
-        toText(row["RM Code"]),
-        toText(row["Reporting manager"]||row["Reporting Manager"]),
-        toText(row["Company Email id"]||row["Company Email"]),
-        toText(row["Laptop Status"]),
-        toText(row["IFSC Code"]),
-        toText(row["Bank Account No."]||row["Bank Account No"]),
-        toText(row["PAN No"]||row["PANNO"]),
-        toText(row["UAN No"]),
-        toText(row["ESIC IP No "]||row["ESIC IP No"]),
-        toText(row["PF No"]||row["PF NO"]||row["PF Number"]),
-        toText(row["GTLI"]),
-        toNullableInt(row["NTH Salary"]||row["Nth Salary"]||row["Salary"]),
-        toText(row["Remarks"]),
-        toText(row["CMP"]),
-        employeeMap.get(aadhaarNo)
-
-        ]
-        );
+        // Collected here and applied in one bulk UPDATE per chunk after this
+        // loop — see updatePhysicalRowsBulk().
+        updateRows.push({
+          id: employeeMap.get(aadhaarNo),
+          values: [
+            toText(row["PPRJ Status"]),
+            toText(row["PPRJ Code"]||row["PPRJ code"]),
+            toText(row["Employee Code"]),
+            toText(row["Employee Name"]),
+            toText(row["Father Name"]),
+            toText(row["Function"]),
+            toText(row["Job Role Actual CMP Verify"]||row["Job Role_Actual_CMP Verify"]),
+            row["Job Role"],
+            toText(row["Manpower SignOff Scope"]||row["Manpower Signoff Scope"]),
+            toText(row["Scrum Job Role"]),
+            toText(row["Circle"]),
+            toText(row["Cluster"]),
+            toText(row["Mobile number"]||row["Mobile Number"]),
+            normalizeDate(row["DOB"]),
+            toNullableInt(row["AGE"]||row["Age"]),
+            normalizeDate(row["Date of joining"]||row["Date Of Joining"]),
+            row["Employment Status"],
+            normalizeDate(row["Resigned Date"]),
+            normalizeDate(row["Last Working Date"]),
+            toText(row["RM Code"]),
+            toText(row["Reporting manager"]||row["Reporting Manager"]),
+            toText(row["Company Email id"]||row["Company Email"]),
+            toText(row["Laptop Status"]),
+            toText(row["IFSC Code"]),
+            toText(row["Bank Account No."]||row["Bank Account No"]),
+            toText(row["PAN No"]||row["PANNO"]),
+            toText(row["UAN No"]),
+            toText(row["ESIC IP No "]||row["ESIC IP No"]),
+            toText(row["PF No"]||row["PF NO"]||row["PF Number"]),
+            toText(row["GTLI"]),
+            toNullableInt(row["NTH Salary"]||row["Nth Salary"]||row["Salary"]),
+            toText(row["Remarks"]),
+            toText(row["CMP"]),
+          ],
+        });
 
         updatedEmployees++;
 
@@ -1752,6 +1831,9 @@ for(const row of rows){
     }
 
 }
+
+// UPDATE EXISTING EMPLOYEES (bulk, chunked)
+await updatePhysicalRowsBulk(conn, updateRows);
 
 // INSERT NEW EMPLOYEES
 await insertPhysicalRows(

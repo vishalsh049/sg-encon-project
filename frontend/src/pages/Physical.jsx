@@ -35,6 +35,9 @@
   BadgeCheck,
   RefreshCw,
   History,
+  AlertTriangle,
+  FileSpreadsheet,
+  UploadCloud,
 } from "lucide-react";
 import Swal from "sweetalert2";
 import { motion } from "framer-motion";
@@ -266,6 +269,7 @@ import ValidationErrorModal from "../components/ValidationErrorModal";
     const [uploadedBy, setUploadedBy] = useState("");
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [uploadFormError, setUploadFormError] = useState("");
   const [validationError, setValidationError] = useState(null);
   const [circleCmpReport, setCircleCmpReport] = useState(null);
   const [jobRoleSearch, setJobRoleSearch] = useState("");
@@ -765,13 +769,20 @@ useEffect(() => {
 
   const handleReportUpload = async () => {
 
+    setUploadFormError("");
+
     if (!reportFile) {
-      alert("Please select file");
+      setUploadFormError("Please select an Excel file to upload.");
       return;
     }
 
     if (!reportDate) {
-      alert("Please select report date");
+      setUploadFormError("Please select the report date.");
+      return;
+    }
+
+    if (!uploadedBy.trim()) {
+      setUploadFormError("Please enter your name.");
       return;
     }
 
@@ -809,15 +820,21 @@ useEffect(() => {
       }
 
  if (!response.ok || !result || !result.success) {
-  setShowUploadModal(false);
-  // Wait for upload modal to unmount, then open validation modal
-  setTimeout(
-    () =>
-      setValidationError(
-        result || { message: "Upload failed. Please try again." }
-      ),
-    150
-  );
+  // Row-by-row Excel validation failures come back as a structured
+  // `errors` list — those are worth the full row/column breakdown
+  // modal. Everything else (missing file, wrong file type, no rows,
+  // circle access denied, server error) is a single plain-language
+  // message, so show it right here instead of losing it inside a
+  // modal built for per-row errors.
+  if (Array.isArray(result?.errors) && result.errors.length > 0) {
+    setShowUploadModal(false);
+    // Wait for upload modal to unmount, then open validation modal
+    setTimeout(() => setValidationError(result), 150);
+  } else {
+    setUploadFormError(
+      result?.message || "Upload failed. Please try again."
+    );
+  }
   return;
 }
 
@@ -882,7 +899,7 @@ loadDashboardSummary();
 
       console.log(error);
 
-      alert("Upload Failed");
+      setUploadFormError("Upload failed. Please check your connection and try again.");
     }
     finally {
 
@@ -890,6 +907,20 @@ loadDashboardSummary();
 
   }
   };
+
+const openUploadModal = () => {
+  setUploadFormError("");
+  setReportFile(null);
+  setReportDate("");
+  setUploadedBy("");
+  setShowUploadModal(true);
+};
+
+const closeUploadModal = () => {
+  if (uploading) return;
+  setShowUploadModal(false);
+  setUploadFormError("");
+};
 
 const paginatedData = data;
 
@@ -1938,7 +1969,7 @@ const inactiveCount = dashboardSummary.inactiveEmployees || 0;
   </button>
 
   <button
-    onClick={() => setShowUploadModal(true)}
+    onClick={openUploadModal}
     className="
       group
       flex items-center gap-2
@@ -2748,136 +2779,174 @@ records
             {/* Popup Modal */}
 
     {showUploadModal && (
-<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md p-4">
+<div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-2 backdrop-blur-sm sm:p-6">
+  <motion.div
+    initial={{ opacity: 0, y: 16 }}
+    animate={{ opacity: 1, y: 0 }}
+    transition={{ duration: 0.2, ease: "easeOut" }}
+    className="flex w-full max-w-lg max-h-[95vh] flex-col overflow-hidden rounded-[20px] bg-white shadow-[0_30px_80px_rgba(15,23,42,0.35)]"
+  >
 
-  <div className="w-full max-w-lg overflow-visible rounded-3xl bg-surface shadow-[0_20px_60px_rgba(0,0,0,0.15)]">
-
-    {/* Header */}
-    <div className="flex items-center justify-between border-b px-7 py-5">
-
-      <div>
-        <h2 className="text-2xl font-bold text-text-primary">
-          Upload Report
-        </h2>
-
-        <p className="mt-1 text-sm text-text-muted">
-          Upload manpower physical report
-        </p>
+    {/* HEADER */}
+    <div className="flex items-center justify-between gap-4 border-b border-slate-100 bg-white px-6 py-4">
+      <div className="flex items-center gap-3">
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[14px] bg-gradient-to-br from-emerald-50 to-green-100 text-emerald-600">
+          <UploadCloud className="h-5 w-5" />
+        </div>
+        <div>
+          <h2 className="text-lg font-bold tracking-tight text-slate-900">
+            Upload Report
+          </h2>
+          <p className="text-xs text-slate-500">
+            Bulk-import employees from an Excel report
+          </p>
+        </div>
       </div>
 
       <button
-        onClick={() => setShowUploadModal(false)}
-        className="flex h-10 w-10 items-center justify-center rounded-full bg-surface-muted text-xl text-text-muted hover:bg-red-50 hover:dark:bg-red-500/10 hover:text-red-600 hover:dark:text-red-400"
+        type="button"
+        onClick={closeUploadModal}
+        className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-500 transition hover:bg-red-50 hover:text-red-600"
       >
-        ×
+        <X className="h-4 w-4" />
       </button>
-
     </div>
 
-    <div className="space-y-6 p-7 overflow-visible">
+    {/* BODY */}
+    <div className="flex-1 space-y-5 overflow-y-auto px-6 py-5">
 
-      {/* Date */}
+      {uploadFormError && (
+        <div className="flex items-start gap-2.5 rounded-xl border border-rose-100 bg-rose-50 px-4 py-3 text-[13px] text-rose-700">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+          <p>{uploadFormError}</p>
+        </div>
+      )}
+
+      {/* Report Date */}
       <div>
-        <label className="mb-2 block text-sm font-semibold text-text-secondary">
-          Report Date
+        <label className="mb-1.5 block px-0.5 text-[12px] font-semibold text-slate-600">
+          Report Date <span className="text-rose-500">*</span>
         </label>
 
-      <PremiumDatePicker
-  value={reportDate}
-  onChange={setReportDate}
-  className="w-full"
-  isDateDisabled={(date) => {
-    const today = new Date();
+        <PremiumDatePicker
+          value={reportDate}
+          onChange={setReportDate}
+          className="w-full"
+          isDateDisabled={(date) => {
+            const today = new Date();
 
-    today.setHours(0, 0, 0, 0);
-    date.setHours(0, 0, 0, 0);
+            today.setHours(0, 0, 0, 0);
+            date.setHours(0, 0, 0, 0);
 
-    return date >= today; // Disable today and future dates
-  }}
-/>
+            return date >= today; // Disable today and future dates
+          }}
+        />
       </div>
 
       {/* Uploaded By */}
       <div>
-        <label className="mb-2 block text-sm font-semibold text-text-secondary">
-          Uploaded By
+        <label className="mb-1.5 block px-0.5 text-[12px] font-semibold text-slate-600">
+          Uploaded By <span className="text-rose-500">*</span>
         </label>
 
         <input
           type="text"
           value={uploadedBy}
-          onChange={(e)=>setUploadedBy(e.target.value)}
-          placeholder="Enter uploaded by"
-          className="w-full rounded-2xl border border-border-color px-5 py-3 outline-none focus:border-indigo-500"
+          onChange={(e) => setUploadedBy(e.target.value)}
+          placeholder="Enter your name"
+          className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3.5 text-[13px] text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-indigo-400 focus:ring-4 focus:ring-indigo-50"
         />
       </div>
 
-      {/* File Upload */}
+      {/* Excel File */}
       <div>
-
-        <div className="mb-3 flex items-center justify-between">
-
-          <label className="text-sm font-semibold text-text-secondary">
-            Excel File
+        <div className="mb-1.5 flex items-center justify-between px-0.5">
+          <label className="text-[12px] font-semibold text-slate-600">
+            Excel File <span className="text-rose-500">*</span>
           </label>
 
           <a
             href="/formats/physical_format.xlsx"
             download
-            className="rounded-xl bg-blue-600 px-4 py-2 text-xs font-semibold text-white"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-50 px-3 py-1.5 text-[11px] font-semibold text-indigo-600 transition hover:bg-indigo-100"
           >
+            <Download className="h-3.5 w-3.5" />
             Download Format
           </a>
-
         </div>
 
-        <label className="flex cursor-pointer flex-col items-center justify-center rounded-3xl border-2 border-dashed border-border-strong bg-surface-muted p-8 hover:border-indigo-500">
-
-          <div className="text-sm font-semibold text-text-secondary">
-            {reportFile
-              ? reportFile.name
-              : "Choose Excel File"}
+        <label className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50 px-6 py-8 text-center transition hover:border-indigo-400 hover:bg-indigo-50/40">
+          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-indigo-500 shadow-sm">
+            <FileSpreadsheet className="h-5 w-5" />
           </div>
 
-          <div className="mt-1 text-xs text-text-muted">
-            XLSX / XLS / CSV
+          <div className="text-[13px] font-semibold text-slate-700">
+            {reportFile ? reportFile.name : "Click to choose an Excel file"}
+          </div>
+
+          <div className="text-[11px] text-slate-400">
+            {reportFile
+              ? `${(reportFile.size / 1024).toFixed(1)} KB`
+              : "Accepted formats: XLSX, XLS, CSV"}
           </div>
 
           <input
             type="file"
             accept=".xlsx,.xls,.csv"
             className="hidden"
-            onChange={(e)=>setReportFile(e.target.files[0])}
+            onChange={(e) => setReportFile(e.target.files[0] || null)}
           />
-
         </label>
 
+        {reportFile && (
+          <button
+            type="button"
+            onClick={() => setReportFile(null)}
+            className="mt-2 text-[11px] font-semibold text-slate-400 transition hover:text-rose-600"
+          >
+            Remove selected file
+          </button>
+        )}
       </div>
-
     </div>
 
-    {/* Footer */}
-    <div className="flex justify-end gap-3 border-t bg-surface-muted px-7 py-5">
+    {/* FOOTER */}
+    <div className="flex items-center justify-between gap-3 border-t border-slate-100 bg-white px-6 py-4">
+      <p className="text-[11px] text-slate-400">
+        Fields marked with <span className="text-rose-500">*</span> are mandatory.
+      </p>
 
-      <button
-        onClick={()=>setShowUploadModal(false)}
-        className="rounded-2xl border border-border-color bg-surface px-6 py-3 font-semibold text-text-secondary"
-      >
-        Cancel
-      </button>
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={closeUploadModal}
+          className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50"
+        >
+          Cancel
+        </button>
 
-      <button
-        onClick={handleReportUpload}
-        disabled={uploading}
-        className="rounded-2xl bg-gradient-to-r from-emerald-500 to-green-600 px-7 py-3 font-semibold text-white shadow-lg disabled:opacity-60"
-      >
-        {uploading ? "Uploading..." : "Upload Report"}
-      </button>
-
+        <button
+          type="button"
+          onClick={handleReportUpload}
+          disabled={uploading}
+          className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 to-green-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {uploading ? (
+            <>
+              <RefreshCw className="h-4 w-4 animate-spin" />
+              Uploading...
+            </>
+          ) : (
+            <>
+              <UploadCloud className="h-4 w-4" />
+              Upload Report
+            </>
+          )}
+        </button>
+      </div>
     </div>
 
-  </div>
-
+  </motion.div>
 </div>
 )}
 

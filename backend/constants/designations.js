@@ -94,6 +94,7 @@ const DESIGNATIONS = [
   "Material Cordinator",
   "Analyst MIS",
   "Zonal Fiber SME",
+  "Other Roles - Temporary Technician",
 ];
 
 // Case-insensitive, whitespace-collapsed comparison so "  fttx   technician ",

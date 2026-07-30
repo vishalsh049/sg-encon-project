@@ -13,6 +13,8 @@ import {
   FileUp,
   Download,
   Trash2,
+  Table2,
+  ListFilter,
 } from "lucide-react";
 
 function formatNumber(value) {
@@ -42,6 +44,22 @@ export default function RevenuePage() {
     const [selectedRows, setSelectedRows] = useState([]);
     const [currentPage, setCurrentPage] = useState(1);
     const rowsPerPage = 5;
+
+    // Revenue Data tab: actual line items (circle/location/CO type/amounts...),
+    // server-paginated since the underlying table can grow large.
+    const [activeTab, setActiveTab] = useState("uploads"); // 'uploads' | 'data'
+    const [dataRows, setDataRows] = useState([]);
+    const [dataTotal, setDataTotal] = useState(0);
+    const [dataPage, setDataPage] = useState(1);
+    const dataPageSize = 25;
+    const [dataLoading, setDataLoading] = useState(true);
+    const [dataError, setDataError] = useState(null);
+    const [dataSearchInput, setDataSearchInput] = useState("");
+    const [dataSearch, setDataSearch] = useState("");
+    const [dataBillingMonth, setDataBillingMonth] = useState("");
+    const [dataCircle, setDataCircle] = useState("");
+    const [dataDomain, setDataDomain] = useState("");
+    const [exportingData, setExportingData] = useState(false);
 
     const fetchUploadHistory = useCallback(() => {
       return axios
@@ -95,6 +113,86 @@ export default function RevenuePage() {
           setCircleList([]);
         });
     }, []);
+
+    // Debounce free-text search before it drives a server request.
+    useEffect(() => {
+      const timer = setTimeout(() => {
+        setDataSearch(dataSearchInput.trim());
+        setDataPage(1);
+      }, 400);
+      return () => clearTimeout(timer);
+    }, [dataSearchInput]);
+
+    const fetchRevenueData = useCallback(() => {
+      return axios
+        .get(buildApiUrl("/api/revenue/data"), {
+          headers: getAuthHeaders(),
+          params: {
+            page: dataPage,
+            pageSize: dataPageSize,
+            search: dataSearch || undefined,
+            billingMonth: dataBillingMonth || undefined,
+            circle: dataCircle || undefined,
+            domain: dataDomain || undefined,
+          },
+        })
+        .then((res) => {
+          setDataRows(Array.isArray(res.data?.rows) ? res.data.rows : []);
+          setDataTotal(Number(res.data?.total) || 0);
+          setDataError(null);
+        })
+        .catch((err) => {
+          console.error(err);
+          setDataError("Failed to load revenue data");
+        })
+        .finally(() => setDataLoading(false));
+    }, [dataPage, dataSearch, dataBillingMonth, dataCircle, dataDomain]);
+
+    useEffect(() => {
+      if (activeTab === "data") {
+        fetchRevenueData();
+      }
+    }, [activeTab, fetchRevenueData]);
+
+    const dataTotalPages = Math.max(1, Math.ceil(dataTotal / dataPageSize));
+
+    const handleResetDataFilters = () => {
+      setDataSearchInput("");
+      setDataSearch("");
+      setDataBillingMonth("");
+      setDataCircle("");
+      setDataDomain("");
+      setDataPage(1);
+    };
+
+    const handleExportData = async () => {
+      setExportingData(true);
+      try {
+        const response = await axios.get(buildApiUrl("/api/revenue/data/export"), {
+          headers: getAuthHeaders(),
+          responseType: "blob",
+          params: {
+            search: dataSearch || undefined,
+            billingMonth: dataBillingMonth || undefined,
+            circle: dataCircle || undefined,
+            domain: dataDomain || undefined,
+          },
+        });
+
+        const url = window.URL.createObjectURL(new Blob([response.data]));
+        const link = document.createElement("a");
+        link.href = url;
+        link.setAttribute("download", "revenue_data_export.xlsx");
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+      } catch (err) {
+        console.error(err);
+        alert("Export failed");
+      } finally {
+        setExportingData(false);
+      }
+    };
 
     const rowsFiltered = useMemo(() => {
       const q = searchQuery.trim().toLowerCase();
@@ -491,6 +589,34 @@ export default function RevenuePage() {
               </div>
 
 
+              {/* TAB SWITCHER */}
+              <div className="inline-flex items-center gap-1 p-1 mb-4 rounded-2xl bg-surface/70 backdrop-blur-xl border border-white/60 shadow-sm">
+                <button
+                  onClick={() => setActiveTab("uploads")}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition ${
+                    activeTab === "uploads"
+                      ? "bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600 text-white shadow-sm"
+                      : "text-text-secondary hover:bg-surface-muted"
+                  }`}
+                >
+                  <FileUp size={14} />
+                  Uploaded Files
+                </button>
+                <button
+                  onClick={() => setActiveTab("data")}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition ${
+                    activeTab === "data"
+                      ? "bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600 text-white shadow-sm"
+                      : "text-text-secondary hover:bg-surface-muted"
+                  }`}
+                >
+                  <Table2 size={14} />
+                  Revenue Data
+                </button>
+              </div>
+
+              {activeTab === "uploads" && (
+              <>
               {/* TOOLBAR: Search + filters + reset */}
               <div className="bg-surface/70 backdrop-blur-xl border border-white/60 rounded-[24px] shadow-[0_18px_45px_rgba(79,70,229,0.06)] p-4 sm:p-5 mb-4">
                 <div className="flex flex-col lg:flex-row gap-3 lg:items-center lg:justify-between">
@@ -789,6 +915,236 @@ export default function RevenuePage() {
                   </button>
                 </div>
               </div>
+              </>
+              )}
+
+              {activeTab === "data" && (
+                <>
+                  {/* TOOLBAR: search + filters + reset + export */}
+                  <div className="bg-surface/70 backdrop-blur-xl border border-white/60 rounded-[24px] shadow-[0_18px_45px_rgba(79,70,229,0.06)] p-4 sm:p-5 mb-4">
+                    <div className="flex flex-col lg:flex-row gap-3 lg:items-center lg:justify-between">
+                      <div className="flex-1 grid grid-cols-12 gap-3 items-center">
+                        <div className="relative col-span-12 md:col-span-5">
+                          <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
+                            <Search className="w-4 h-4 text-text-muted" />
+                          </div>
+                          <input
+                            value={dataSearchInput}
+                            onChange={(e) => setDataSearchInput(e.target.value)}
+                            placeholder="Search location, description, CO type..."
+                            className="w-full pl-10 pr-2 py-2 rounded-[18px] bg-surface/80 border border-slate/60 text-text-primary placeholder:text-text-muted outline-none focus:ring-2 focus:ring-indigo-200"
+                          />
+                        </div>
+
+                        <div className="col-span-6 md:col-span-2">
+                          <input
+                            type="month"
+                            value={dataBillingMonth}
+                            onChange={(e) => {
+                              setDataBillingMonth(e.target.value);
+                              setDataPage(1);
+                            }}
+                            title="Filter by billing month"
+                            className="w-full px-3 py-2 rounded-[18px] bg-surface/80 border border-slate/60 text-text-primary outline-none focus:ring-2 focus:ring-indigo-200"
+                          />
+                        </div>
+
+                        <div className="relative col-span-6 md:col-span-2">
+                          <select
+                            value={dataCircle}
+                            onChange={(e) => {
+                              setDataCircle(e.target.value);
+                              setDataPage(1);
+                            }}
+                            className="w-full appearance-none px-3 py-2 rounded-[18px] bg-surface/80 border border-slate/60 text-text-primary outline-none focus:ring-2 focus:ring-indigo-200"
+                          >
+                            <option value="">All Circles</option>
+                            {circleList.map((c) => (
+                              <option key={c} value={c}>
+                                {c}
+                              </option>
+                            ))}
+                          </select>
+                          <div className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2">
+                            <ChevronDown className="w-4 h-4 text-text-muted" />
+                          </div>
+                        </div>
+
+                        <div className="relative col-span-6 md:col-span-2">
+                          <select
+                            value={dataDomain}
+                            onChange={(e) => {
+                              setDataDomain(e.target.value);
+                              setDataPage(1);
+                            }}
+                            className="w-full appearance-none px-3 py-2 rounded-[18px] bg-surface/80 border border-slate/60 text-text-primary outline-none focus:ring-2 focus:ring-indigo-200"
+                          >
+                            <option value="">All Domains</option>
+                            <option value="FTTx">FTTx</option>
+                            <option value="Fiber">Fiber</option>
+                            <option value="Tower">Tower</option>
+                          </select>
+                          <div className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2">
+                            <ChevronDown className="w-4 h-4 text-text-muted" />
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex gap-2 sm:justify-end">
+                        <button
+                          onClick={handleResetDataFilters}
+                          className="flex items-center justify-center gap-2 px-4 py-2 rounded-[18px] bg-surface/80 border border-slate/60 text-text-primary hover:bg-surface transition shadow-sm"
+                        >
+                          <RotateCcw size={14} />
+                          Reset
+                        </button>
+                        <button
+                          onClick={handleExportData}
+                          disabled={exportingData}
+                          className={`flex items-center justify-center gap-2 px-4 py-2 rounded-[18px] border transition shadow-sm ${
+                            exportingData
+                              ? "bg-surface/60 border-white/70 text-text-muted cursor-not-allowed"
+                              : "bg-emerald-50 dark:bg-emerald-500/10 border-emerald-200 dark:border-emerald-500/20 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-500/15"
+                          }`}
+                        >
+                          <Download size={14} />
+                          {exportingData ? "Exporting..." : "Export"}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {dataError && (
+                    <p className="text-red-700 dark:text-red-400 text-sm bg-red-100 dark:bg-red-500/15 border border-red-200 dark:border-red-500/20 rounded-lg px-3 py-2 mb-4">
+                      {dataError}
+                    </p>
+                  )}
+
+                  {/* TABLE: revenue line items */}
+                  <div className="rounded-[24px] border border-white/70 bg-surface/60 backdrop-blur-xl shadow-[0_18px_45px_rgba(79,70,229,0.06)] overflow-hidden">
+                    <div className="p-4 sm:p-4 border-b border-white/70 flex items-center justify-between">
+                      <div>
+                        <h2 className="text-text-primary font-semibold text-base">Revenue Data</h2>
+                        <p className="text-text-secondary text-xs">All uploaded revenue line items, live from the database.</p>
+                      </div>
+                      <div className="hidden md:flex items-center gap-2 text-text-muted">
+                        <ListFilter size={14} />
+                        <span className="text-xs font-semibold">{formatNumber(dataTotal)} rows</span>
+                      </div>
+                    </div>
+
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead className="bg-gradient-to-r from-indigo-500/10 via-blue-500/10 to-purple-500/10 text-text-primary">
+                          <tr>
+                            <th className="p-3 text-left font-medium">Billing Month</th>
+                            <th className="p-3 text-left font-medium">Circle</th>
+                            <th className="p-3 text-left font-medium">Location</th>
+                            <th className="p-3 text-left font-medium">CO Type</th>
+                            <th className="p-3 text-left font-medium">Domain</th>
+                            <th className="p-3 text-right font-medium">CM Amount</th>
+                            <th className="p-3 text-right font-medium">PM Amount</th>
+                            <th className="p-3 text-right font-medium">Total</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {dataLoading ? (
+                            <tr>
+                              <td colSpan="8" className="text-center p-8 text-text-secondary">
+                                Loading...
+                              </td>
+                            </tr>
+                          ) : dataRows.length > 0 ? (
+                            dataRows.map((row) => (
+                              <tr
+                                key={row.id}
+                                className="border-b border-border-color hover:bg-surface-muted transition"
+                              >
+                                <td className="p-3 text-text-primary">
+                                  {row?.billing_month
+                                    ? new Date(row.billing_month + "-01").toLocaleString("en-US", {
+                                        month: "long",
+                                        year: "numeric",
+                                      })
+                                    : "-"}
+                                </td>
+                                <td className="p-3 text-text-primary">{row?.circle || "-"}</td>
+                                <td className="p-3 text-text-primary">
+                                  <span className="block max-w-[220px] truncate">{row?.location || "-"}</span>
+                                </td>
+                                <td className="p-3 text-text-primary">
+                                  <span className="block max-w-[180px] truncate">{row?.co_type || "-"}</span>
+                                </td>
+                                <td className="p-3 text-text-primary">{row?.domain || "-"}</td>
+                                <td className="p-3 text-right text-text-primary">{formatNumber(row?.cm_amount)}</td>
+                                <td className="p-3 text-right text-text-primary">{formatNumber(row?.pm_amount)}</td>
+                                <td className="p-3 text-right font-semibold text-text-primary">
+                                  {formatNumber(Number(row?.cm_amount || 0) + Number(row?.pm_amount || 0))}
+                                </td>
+                              </tr>
+                            ))
+                          ) : (
+                            <tr>
+                              <td colSpan="8" className="text-center p-8">
+                                <div className="mx-auto max-w-md">
+                                  <div className="w-12 h-12 rounded-2xl bg-indigo-50 dark:bg-indigo-500/10 border border-indigo-100 dark:border-indigo-500/20 flex items-center justify-center mx-auto">
+                                    <Search className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+                                  </div>
+                                  <p className="mt-4 text-text-primary font-semibold">No results found</p>
+                                  <p className="text-text-muted text-xs mt-1">
+                                    Try clearing filters or changing your search query.
+                                  </p>
+                                  <button
+                                    onClick={handleResetDataFilters}
+                                    className="mt-4 px-4 py-2 rounded-xl bg-surface border border-border-color text-text-primary hover:bg-surface-muted transition shadow-sm"
+                                  >
+                                    Reset filters
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  {/* Pagination */}
+                  <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mt-4">
+                    <div className="text-xs text-text-secondary">
+                      Page <span className="text-text-primary font-semibold">{dataPage}</span> of{" "}
+                      <span className="text-text-primary font-semibold">{dataTotalPages}</span>
+                      <span className="mx-1.5">·</span>
+                      <span className="text-text-primary font-semibold">{formatNumber(dataTotal)}</span> total rows
+                    </div>
+
+                    <div className="flex items-center gap-2 bg-surface/60 backdrop-blur-xl border border-white/60 rounded-[18px] px-2 py-2 shadow-[0_18px_45px_rgba(79,70,229,0.06)]">
+                      <button
+                        onClick={() => setDataPage((p) => Math.max(p - 1, 1))}
+                        disabled={dataPage === 1}
+                        className={`px-3 py-2 rounded-[16px] border text-sm transition shadow-sm ${
+                          dataPage === 1
+                            ? "bg-surface/60 border-white/70 text-text-muted cursor-not-allowed"
+                            : "bg-surface/80 border-white/70 text-text-primary hover:bg-surface"
+                        }`}
+                      >
+                        Prev
+                      </button>
+                      <button
+                        onClick={() => setDataPage((p) => Math.min(p + 1, dataTotalPages))}
+                        disabled={dataPage === dataTotalPages}
+                        className={`px-3 py-2 rounded-[16px] border text-sm transition shadow-sm ${
+                          dataPage === dataTotalPages
+                            ? "bg-surface/60 border-white/70 text-text-muted cursor-not-allowed"
+                            : "bg-surface/80 border-white/70 text-text-primary hover:bg-surface"
+                        }`}
+                      >
+                        Next
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
 
               {/* POPUP UPLOAD (UI only changes) */}
               {showUpload && (

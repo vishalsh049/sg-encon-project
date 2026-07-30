@@ -56,6 +56,79 @@ const mapRevenueRowToExcel = (row) => ({
   Domain: row.domain,
 });
 
+const REVENUE_EXPORT_HEADERS = [
+  "Circle",
+  "Location",
+  "CO Type",
+  "CO Type Sub Catg",
+  "JIO/RCOM",
+  "Sub category",
+  "Description",
+  "Item Code CM",
+  "Item Code PM",
+  "Service Description",
+  "UOM",
+  "CM Rate",
+  "PM Rate",
+  "CM Qty",
+  "PM Qty",
+  "CM Amount",
+  "PM Amount",
+  "Ideal PM Amount",
+  "PM Loss",
+  "Domain",
+];
+
+function buildRevenueWorkbookBuffer(rows) {
+  const worksheet = XLSX.utils.json_to_sheet(rows.map(mapRevenueRowToExcel), {
+    header: REVENUE_EXPORT_HEADERS,
+  });
+
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, "Revenue");
+
+  return XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
+}
+
+// Shared WHERE-clause builder for the line-item data view and its export -
+// keeps the two endpoints (paginated vs. full) from drifting apart.
+function buildRevenueDataFilters(req) {
+  const filters = [];
+  const params = [];
+  applyRevenueCircleFilter(filters, params, req.authUser, "r.circle");
+
+  const billingMonth = String(req.query.billingMonth || "").trim();
+  if (billingMonth) {
+    filters.push("ru.billing_month = ?");
+    params.push(billingMonth);
+  }
+
+  // An all-circle user narrowing to one circle from the dropdown; a
+  // circle-restricted user is already scoped by applyRevenueCircleFilter above.
+  const circle = String(req.query.circle || "").trim();
+  if (circle && isAllCircle(req.authUser)) {
+    filters.push("LOWER(TRIM(r.circle)) = LOWER(TRIM(?))");
+    params.push(circle);
+  }
+
+  const domain = String(req.query.domain || "").trim();
+  if (domain) {
+    filters.push("r.domain = ?");
+    params.push(domain);
+  }
+
+  const search = String(req.query.search || "").trim();
+  if (search) {
+    filters.push(
+      "(r.location LIKE ? OR r.description LIKE ? OR r.co_type LIKE ? OR r.co_type_sub_catg LIKE ? OR r.service_description LIKE ? OR r.sub_category LIKE ?)"
+    );
+    const like = `%${search}%`;
+    params.push(like, like, like, like, like, like);
+  }
+
+  return { filters, params };
+}
+
 const cleanNumber = (value) => {
   if (value === null || value === undefined || value === "" || value === "-") {
     return 0;
@@ -357,6 +430,10 @@ router.post("/upload", requirePagePermission("revenue", "edit"), upload.single("
       connection.release();
     }
 
+    // Parsed rows are now the source of truth in the DB - downloads are
+    // regenerated from there, so the raw upload doesn't need to persist on disk.
+    fs.promises.unlink(filePath).catch(() => {});
+
     res.json({
       message: "Excel data inserted successfully",
       file_id: fileId,
@@ -465,6 +542,77 @@ router.get("/circles", requirePagePermission("revenue", "view"), async (req, res
   }
 });
 
+router.get("/data", requirePagePermission("revenue", "view"), async (req, res) => {
+  try {
+    const page = Math.max(1, Number(req.query.page) || 1);
+    const pageSize = Math.min(100, Math.max(1, Number(req.query.pageSize) || 25));
+    const offset = (page - 1) * pageSize;
+
+    const { filters, params } = buildRevenueDataFilters(req);
+    const whereSql = filters.length ? `WHERE ${filters.join(" AND ")}` : "";
+
+    const [countRows] = await db.promise().query(
+      `SELECT COUNT(*) AS total
+       FROM revenue r
+       INNER JOIN revenue_upload ru ON ru.file_id = r.file_id
+       ${whereSql}`,
+      params
+    );
+
+    const [rows] = await db.promise().query(
+      `SELECT r.*, ru.billing_month
+       FROM revenue r
+       INNER JOIN revenue_upload ru ON ru.file_id = r.file_id
+       ${whereSql}
+       ORDER BY r.id DESC
+       LIMIT ? OFFSET ?`,
+      [...params, pageSize, offset]
+    );
+
+    res.json({
+      rows,
+      total: countRows[0]?.total || 0,
+      page,
+      pageSize,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get("/data/export", requirePagePermission("revenue", "download"), async (req, res) => {
+  try {
+    const { filters, params } = buildRevenueDataFilters(req);
+    const whereSql = filters.length ? `WHERE ${filters.join(" AND ")}` : "";
+
+    const [rows] = await db.promise().query(
+      `SELECT r.*
+       FROM revenue r
+       INNER JOIN revenue_upload ru ON ru.file_id = r.file_id
+       ${whereSql}
+       ORDER BY r.id DESC`,
+      params
+    );
+
+    if (!rows.length) {
+      return res.status(404).send("No revenue data found for the selected filters");
+    }
+
+    const buffer = buildRevenueWorkbookBuffer(rows);
+
+    res.setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    );
+    res.setHeader("Content-Disposition", 'attachment; filename="revenue_data_export.xlsx"');
+    res.send(buffer);
+  } catch (err) {
+    console.error(err);
+    res.status(err.statusCode || 500).send(err.message || "Export failed");
+  }
+});
+
 router.post("/download-bulk", requirePagePermission("revenue", "download"), async (req, res) => {
   try {
     const ids = normalizeIds(req.body.ids);
@@ -524,39 +672,7 @@ router.post("/download-bulk", requirePagePermission("revenue", "download"), asyn
         ? `${uploadMeta.file_name.replace(/\.[^.]+$/, "") || `revenue_${fileId}`}.xlsx`
         : `revenue_${fileId}.xlsx`;
 
-      const exportRows = rows.map(mapRevenueRowToExcel);
-      const worksheet = XLSX.utils.json_to_sheet(exportRows, {
-        header: [
-          "Circle",
-          "Location",
-          "CO Type",
-          "CO Type Sub Catg",
-          "JIO/RCOM",
-          "Sub category",
-          "Description",
-          "Item Code CM",
-          "Item Code PM",
-          "Service Description",
-          "UOM",
-          "CM Rate",
-          "PM Rate",
-          "CM Qty",
-          "PM Qty",
-          "CM Amount",
-          "PM Amount",
-          "Ideal PM Amount",
-          "PM Loss",
-          "Domain",
-        ],
-      });
-
-      const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, worksheet, "Revenue");
-
-      const buffer = XLSX.write(workbook, {
-        type: "buffer",
-        bookType: "xlsx",
-      });
+      const buffer = buildRevenueWorkbookBuffer(rows);
 
       archive.append(buffer, { name: filename });
     }
@@ -572,12 +688,12 @@ router.get("/download/:fileId", requirePagePermission("revenue", "download"), as
   try {
     const fileId = Number(req.params.fileId);
 
-    const [rows] = await db.promise().query(
-      "SELECT file_name, file_path FROM revenue_upload WHERE file_id = ?",
+    const [uploadRows] = await db.promise().query(
+      "SELECT file_name FROM revenue_upload WHERE file_id = ?",
       [fileId]
     );
 
-    if (!rows.length) {
+    if (!uploadRows.length) {
       return res.status(404).send("File not found");
     }
 
@@ -587,13 +703,31 @@ router.get("/download/:fileId", requirePagePermission("revenue", "download"), as
       "You cannot download another circle's data."
     );
 
-    const file = rows[0];
+    // Rebuilt from the revenue table rather than served off disk - the raw
+    // upload isn't kept around (see /upload), and this way a download can
+    // never go stale relative to what's actually in the DB.
+    const [rows] = await db.promise().query(
+      `SELECT *
+       FROM revenue r
+       WHERE r.file_id = ?${isAllCircle(req.authUser) ? "" : " AND LOWER(TRIM(r.circle)) = LOWER(TRIM(?))"}`,
+      isAllCircle(req.authUser) ? [fileId] : [fileId, req.authUser.circle]
+    );
 
-    if (!file.file_path || !fs.existsSync(file.file_path)) {
-      return res.status(404).send("Stored file not found on server");
+    if (!rows.length) {
+      return res.status(404).send("No revenue rows found for this upload");
     }
 
-    return res.download(file.file_path, file.file_name);
+    const buffer = buildRevenueWorkbookBuffer(rows);
+    const baseName =
+      uploadRows[0].file_name?.replace(/\.[^.]+$/, "").replace(/["\r\n]/g, "") ||
+      `revenue_${fileId}`;
+
+    res.setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    );
+    res.setHeader("Content-Disposition", `attachment; filename="${baseName}.xlsx"`);
+    res.send(buffer);
   } catch (err) {
     console.error(err);
     res.status(err.statusCode || 500).send(err.message || "Download error");
