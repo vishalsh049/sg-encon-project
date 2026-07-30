@@ -65,6 +65,7 @@ const pageAccessList = [
   title: "Manpower",
  pages: [
  "HR Dashboard",
+ "HR Analytics V2",
  "Physical",
  "Scrum",
  "Scrum Dashboard",

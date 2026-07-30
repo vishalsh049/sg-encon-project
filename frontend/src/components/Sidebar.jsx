@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { hasAccess } from "../utils/access";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
+  BarChart3,
   BriefcaseBusiness,
   FileText,
   GraduationCap,
@@ -119,6 +120,16 @@ function Sidebar({ closeSidebar, collapsed, onExpandRequest }) {
   icon: BriefcaseBusiness,
   accessPage: "HR Dashboard",
   section: "MANPOWER",
+},
+
+{
+  // Testing page. Admins see it automatically (hasAccess() in utils/access.js);
+  // grant it to other users via Users & Access -> Manpower -> "HR Analytics V2".
+  key: "hr-analytics-v2",
+  label: "HR Analytics V2",
+  path: "/dashboard/hr-analytics-v2",
+  icon: BarChart3,
+  accessPage: "HR Analytics V2",
 },
 
 {

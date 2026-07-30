@@ -9,11 +9,14 @@ import {
   CheckCircle2,
   Clock3,
   Globe,
+  Inbox,
+  Loader2,
   Plus,
   RadioTower,
   ReceiptText,
   RotateCcw,
-  Sparkles
+  SearchX,
+  X
 } from "lucide-react";
 
 const months = [
@@ -305,38 +308,6 @@ export default function BillingStatus() {
     }
   };
 
-  const [card1Filter, setCard1Filter] = useState({
-    month: "",
-    circle: "",
-    billingType: ""
-  });
-
-  const [card2Filter, setCard2Filter] = useState({
-    month: "",
-    circle: "",
-    billingType: ""
-  });
-
-  const [card3Filter, setCard3Filter] = useState({
-    month: "",
-    circle: "",
-    billingType: ""
-  });
-
-  const card1Data = data.filter((row) => {
-    const monthFilter = getFilteredMonths();
-    const rowMonth = normalizeMonthValue(row.month);
-    const rowCircle = normalizeText(row.circle);
-    const rowBillingType = normalizeText(row.billing_type);
-
-    return (
-      (!timeFilter || monthFilter.includes(rowMonth)) &&
-      (!card1Filter.month || normalizeMonthValue(card1Filter.month) === rowMonth) &&
-      (!card1Filter.circle || normalizeText(card1Filter.circle) === rowCircle) &&
-      (!card1Filter.billingType || normalizeText(card1Filter.billingType) === rowBillingType)
-    );
-  });
-
   const filteredStatsData = data.filter((row) => {
     const monthFilter = getFilteredMonths();
     const rowMonth = normalizeMonthValue(row.month);
@@ -386,35 +357,6 @@ const pendingTasks = totalTasks - completedTasks;
 
     return () => cancelAnimationFrame(frameId);
   }, [totalTasks, completedTasks, pendingTasks]);
-
-  const card2Data = data.filter((row) => {
-    const monthFilter = getFilteredMonths();
-
-    return (
-      (!timeFilter || monthFilter.includes(row.month)) &&
-      (!card2Filter.month || row.month === card2Filter.month) &&
-      (!card2Filter.circle || row.circle === card2Filter.circle) &&
-      (!card2Filter.billingType || row.billing_type === card2Filter.billingType)
-    );
-  });
-
-  const card3Data = data.filter((row) => {
-    const monthFilter = getFilteredMonths();
-
-    return (
-      (!timeFilter || monthFilter.includes(row.month)) &&
-      (!card3Filter.month || row.month === card3Filter.month) &&
-      (!card3Filter.circle || row.circle === card3Filter.circle) &&
-      (!card3Filter.billingType || row.billing_type === card3Filter.billingType)
-    );
-  });
-
-  void card1Data;
-  void card2Data;
-  void card3Data;
-  void setCard1Filter;
-  void setCard2Filter;
-  void setCard3Filter;
 
   const handleChange = (e) => {
     setForm((prev) => ({
@@ -480,7 +422,7 @@ const pendingTasks = totalTasks - completedTasks;
     }
 
     alert("Saved successfully");
-    setShowForm(false);
+    closeForm();
     fetchBillingStatus();
 
   } catch (err) {
@@ -490,6 +432,28 @@ const pendingTasks = totalTasks - completedTasks;
     setIsSaving(false); // always reset
   }
 };
+
+  const emptyForm = {
+    circle: "",
+    billingType: "",
+    month: "",
+    sixty: "",
+    sixty_note: "",
+    forty: "",
+    forty_note: "",
+    kpi: "",
+    kpi_note: ""
+  };
+
+  const openAddForm = () => {
+    setForm(emptyForm);
+    setShowForm(true);
+  };
+
+  const closeForm = () => {
+    setShowForm(false);
+    setForm(emptyForm);
+  };
 
   const normalizeRow = (row) => {
     const get = (keys) => {
@@ -590,7 +554,7 @@ const pendingTasks = totalTasks - completedTasks;
         </div>
 
      <button
-       onClick={() => setShowForm(true)}
+       onClick={openAddForm}
        className="inline-flex items-center justify-center gap-1 self-start rounded-full
        bg-gradient-to-r from-blue-600 via-indigo-500 to-violet-500 px-4 py-2 text-sm font-semibold
        text-white shadow-[0_20px_40px_rgba(79,70,229,0.30)] transition duration-300 hover:scale-[1.02]
@@ -683,9 +647,76 @@ const pendingTasks = totalTasks - completedTasks;
 
 </div>
 
- </div>   
+ </div>
 
-  {(timeFilter ? getFilteredMonths() : months).map((monthName) => {
+  {isLoading && (
+    <div className="space-y-3">
+      {[0, 1].map((i) => (
+        <div key={i} className="animate-pulse rounded-[18px] border border-white/85 bg-surface/70 p-4 backdrop-blur-2xl">
+          <div className="mb-3 h-5 w-32 rounded-full bg-surface-muted" />
+          <div className="space-y-2">
+            {[0, 1, 2].map((j) => (
+              <div key={j} className="h-20 rounded-[22px] bg-surface-muted" />
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  )}
+
+  {!isLoading && data.length === 0 && (
+    <div className="flex flex-col items-center justify-center gap-3 rounded-[24px] border border-white/85
+     bg-surface/70 p-12 text-center shadow-[0_30px_110px_rgba(15,23,42,0.10)] backdrop-blur-2xl">
+      <div className="flex h-14 w-14 items-center justify-center rounded-full bg-blue-100 text-blue-600 dark:bg-blue-500/15 dark:text-blue-400">
+        <Inbox className="h-6 w-6" />
+      </div>
+      <h3 className="text-base font-semibold text-text-primary">No billing data yet</h3>
+      <p className="max-w-sm text-sm text-text-muted">
+        Start tracking billing checkpoints by adding the first record for a circle and billing type.
+      </p>
+      <button
+        onClick={openAddForm}
+        className="mt-2 inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-blue-600 via-indigo-500 to-violet-500
+         px-4 py-2 text-sm font-semibold text-white shadow-[0_20px_40px_rgba(79,70,229,0.30)] transition hover:scale-[1.02]"
+      >
+        <Plus className="h-4 w-4" />
+        Add Data
+      </button>
+    </div>
+  )}
+
+  {!isLoading && data.length > 0 && !(timeFilter ? getFilteredMonths() : months).some((monthName) =>
+    data.some((row) =>
+      normalizeMonthValue(row.month) === monthName &&
+      (!circleFilter || normalizeText(row.circle) === normalizeText(circleFilter)) &&
+      (!billingFilter || normalizeText(row.billing_type) === normalizeText(billingFilter))
+    )
+  ) && (
+    <div className="flex flex-col items-center justify-center gap-3 rounded-[24px] border border-white/85
+     bg-surface/70 p-12 text-center shadow-[0_30px_110px_rgba(15,23,42,0.10)] backdrop-blur-2xl">
+      <div className="flex h-14 w-14 items-center justify-center rounded-full bg-amber-100 text-amber-600 dark:bg-amber-500/15 dark:text-amber-400">
+        <SearchX className="h-6 w-6" />
+      </div>
+      <h3 className="text-base font-semibold text-text-primary">No records match your filters</h3>
+      <p className="max-w-sm text-sm text-text-muted">
+        Try widening the time range or clearing the circle / billing type filters.
+      </p>
+      <button
+        onClick={() => {
+          setTimeFilter("3");
+          setCircleFilter("");
+          setBillingFilter("");
+        }}
+        className="mt-2 inline-flex items-center gap-2 rounded-full border border-white/70 bg-surface/65
+         px-4 py-2 text-xs font-semibold shadow-[0_24px_70px_rgba(15,23,42,0.10)] transition"
+      >
+        <RotateCcw className="h-3 w-3" />
+        Reset Filters
+      </button>
+    </div>
+  )}
+
+  {!isLoading && (timeFilter ? getFilteredMonths() : months).map((monthName) => {
      const filteredData = data.filter((row) => {
        return (
          normalizeMonthValue(row.month) === monthName &&
@@ -696,19 +727,41 @@ const pendingTasks = totalTasks - completedTasks;
 
      if (filteredData.length === 0) return null;
 
+     const monthDone = filteredData.reduce((acc, row) => {
+       const r = normalizeRow(row);
+       return acc + [r.sixty, r.forty, r.kpi].filter((s) => s === "Done").length;
+     }, 0);
+     const monthTotal = filteredData.length * 3;
+     const monthPercent = monthTotal ? Math.round((monthDone / monthTotal) * 100) : 0;
+
     return (
      <div key={monthName}
-      className="relative rounded-[18px] border border-white/85 bg-surface/70 p-3 
+      className="relative rounded-[18px] border border-white/85 bg-surface/70 p-3
       shadow-[0_30px_110px_rgba(15,23,42,0.10)] backdrop-blur-2xl lg:px-4 overflow-visible"
      >
-     <div className="mb-1 flex items-center justify-between gap-4 border-b border-border-color/70 pb-2">
+     <div className="mb-1 flex flex-wrap items-center justify-between gap-3 border-b border-border-color/70 pb-2">
         <h2 className="text-lg font-semibold tracking-tight text-text-primary">
              {fullMonthMap[monthName] || monthName}
         </h2>
-      <div className="rounded-full bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2 text-xs 
-      font-semibold uppercase tracking-[0.12em] text-white ring-1 ring-white/30 shadow-[0_18px_50px_rgba(37,99,235,0.25)]">
-         {filteredData.length} Records
+
+      <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
+          <div className="h-1.5 w-24 overflow-hidden rounded-full bg-surface-muted">
+            <div
+              className={`h-full rounded-full ${
+                monthPercent === 100 ? "bg-emerald-500" : monthPercent >= 50 ? "bg-amber-500" : "bg-rose-500"
+              }`}
+              style={{ width: `${monthPercent}%` }}
+            />
+          </div>
+          <span className="text-xs font-semibold text-text-secondary">{monthPercent}%</span>
         </div>
+
+        <div className="rounded-full bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2 text-xs
+        font-semibold uppercase tracking-[0.12em] text-white ring-1 ring-white/30 shadow-[0_18px_50px_rgba(37,99,235,0.25)]">
+           {filteredData.length} Records
+          </div>
+      </div>
      </div>
 
      <div className="mb-2 hidden grid-cols-[0.8fr_1.1fr_1.1fr_1.1fr] gap-4 rounded-[20px] bg-surface-muted 
@@ -722,10 +775,11 @@ const pendingTasks = totalTasks - completedTasks;
      <div className="mt-1">
         {filteredData.map((row, i) => {
        const r = normalizeRow(row);
+       const doneCount = [r.sixty, r.forty, r.kpi].filter((s) => s === "Done").length;
 
   return (
-    <div key={i}
-    className="mb-1 grid gap-2 rounded-[22px] border border-white/70
+    <div key={row.id ?? i}
+    className="relative mb-1 grid gap-2 rounded-[22px] border border-white/70
      bg-[linear-gradient(135deg,rgba(255,255,255,0.96),rgba(248,250,252,0.92),rgba(241,245,255,0.75))]
      p-3 shadow-[0_10px_35px_rgba(15,23,42,0.06)]
      transition duration-300 hover:-translate-y-0.5
@@ -733,19 +787,28 @@ const pendingTasks = totalTasks - completedTasks;
      lg:grid-cols-[0.7fr_1fr_1fr_1fr] lg:items-center"
       >
         <div className="flex items-start gap-4">
-         <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-full 
+         <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-full
           bg-gradient-to-br from-blue-100 via-white to-violet-100 text-blue-700 dark:text-blue-400 ring-1 ring-blue-200">
           <span className="text-sm font-bold">
               {(r.circle || "?").slice(0, 2).toUpperCase()}
            </span>
          </div>
-      
+
        <div>
          <p className="text-base font-semibold text-text-primary">
             {r.circle}
          </p>
-          <p className="mt-1 text-sm text-text-muted">
+          <p className="mt-1 flex items-center gap-2 text-sm text-text-muted">
            {r.billing_type}
+           <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+             doneCount === 3
+               ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400"
+               : doneCount === 0
+               ? "bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-400"
+               : "bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400"
+           }`}>
+             {doneCount}/3 Done
+           </span>
           </p>
            </div>
         </div>
@@ -775,9 +838,18 @@ const pendingTasks = totalTasks - completedTasks;
 
   {/* CENTER MODAL */}
     <div className="flex min-h-screen items-center justify-center p-4">
-      <div className="mx-auto w-full max-w-4xl rounded-[28px] border border-white/70 p-10 
+      <div className="relative mx-auto w-full max-w-4xl rounded-[28px] border border-white/70 p-10
       bg-[linear-gradient(135deg,rgba(255,255,255,0.96),rgba(248,250,252,0.92),rgba(243,232,255,0.92))]
       shadow-[0_30px_90px_rgba(15,23,42,0.24)] backdrop-blur-2xl">
+       <button
+         type="button"
+         onClick={closeForm}
+         title="Close"
+         className="absolute right-6 top-6 flex h-9 w-9 items-center justify-center rounded-full border border-white/70 bg-surface/80 text-text-muted transition hover:text-text-primary hover:dark:border-blue-500/20"
+       >
+         <X className="h-4 w-4" />
+       </button>
+
        <h2 className="mb-2 text-2xl font-semibold tracking-tight text-text-primary">
               Add Billing Data
        </h2>
@@ -843,7 +915,7 @@ const pendingTasks = totalTasks - completedTasks;
     <span className={form.circle ? "text-black" : "text-text-muted"}>
        {form.circle || "Select Circle"}
     </span>
-      <span className="text-xs">▼</span>  
+      <span className="text-xs">▼</span>
    </div>
  </div>
 
@@ -858,7 +930,7 @@ const pendingTasks = totalTasks - completedTasks;
       }}
     className="cursor-pointer px-4 py-2 hover:bg-purple-100 hover:dark:bg-purple-500/15"
    >
-      {c}  
+      {c}
      </div>
      ))}
    </div>
@@ -968,7 +1040,7 @@ const pendingTasks = totalTasks - completedTasks;
 
               <div className="mt-8 flex justify-end gap-4">
                 <button
-                  onClick={() => setShowForm(false)}
+                  onClick={closeForm}
                   className="rounded-full border border-border-strong bg-surface px-6 py-3 text-sm font-medium text-text-secondary transition hover:bg-surface-muted"
                 >
                   Cancel
@@ -977,9 +1049,10 @@ const pendingTasks = totalTasks - completedTasks;
                 <button
               onClick={handleSubmit}
               disabled={isSaving}
-               className="rounded-full bg-gradient-to-r from-indigo-600 to-purple-600 px-6 py-3 text-sm 
+               className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-indigo-600 to-purple-600 px-6 py-3 text-sm
                font-semibold text-white shadow-[0_18px_40px_rgba(99,102,241,0.30)] transition duration-300
                 hover:scale-[1.02] disabled:opacity-70 disabled:cursor-not-allowed">
+                  {isSaving && <Loader2 className="h-4 w-4 animate-spin" />}
                   {isSaving ? "Saving..." : "Save Changes"}
                 </button>
               </div>

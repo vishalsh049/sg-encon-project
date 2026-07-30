@@ -192,6 +192,7 @@ registerRoute("./routes/uptimeRoutes", "/api/site-uptime");
 registerRoute("./routes/reportRoutes", "/api/reports");
 registerRoute("./routes/accessRoutes", "/api/access");
 registerRoute("./routes/signoff", "/api/signoff");
+registerRoute("./routes/hrAnalyticsV2Routes", "/api/hr-analytics-v2");
 registerRoute("./routes/nsoRoutes", "/api/nso"); 
 registerRoute("./routes/nsoDashboardRoutes", "/api/nso/dashboard");
 registerRoute("./routes/fiberRoutes", "/api/fiber");

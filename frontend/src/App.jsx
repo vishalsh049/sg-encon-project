@@ -21,6 +21,7 @@ import BillingStatus from "./pages/BillingStatus";
 import BillingDashboard from "./pages/BillingDashboard";
 import Revenue from "./pages/Revenue";
 import HrDashboard from "./pages/HrDashboard";
+import HrAnalyticsV2 from "./pages/HrAnalyticsV2";
 import Signoff from "./pages/Signoff";
 import NewJoining from "./pages/NewJoining";
 import TrainingDashboard from "./pages/Training/Dashboard";
@@ -207,6 +208,12 @@ function App() {
   <Route path="hr-dashboard" element={
   <ProtectedRoute page={"HR Dashboard"}>
     <HrDashboard />
+  </ProtectedRoute>
+} />
+
+  <Route path="hr-analytics-v2" element={
+  <ProtectedRoute page={"HR Analytics V2"}>
+    <HrAnalyticsV2 />
   </ProtectedRoute>
 } />
 
