@@ -375,8 +375,8 @@ export default function HrAnalyticsV2() {
         <KpiCardsRow overview={overview} loading={loading} showOfferedSalary={SHOW_OFFERED_SALARY_SECTION} />
         <WorkforceOverviewFunnel overview={overview} loading={loading} showOfferedSalary={SHOW_OFFERED_SALARY_SECTION} />
 
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-          <div className="lg:col-span-2">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+ <div className="lg:col-span-2">
             <CircleWorkforcePanel
               circles={circles}
               loading={loading}
@@ -385,9 +385,11 @@ export default function HrAnalyticsV2() {
               showOfferedSalary={SHOW_OFFERED_SALARY_SECTION}
             />
           </div>
+          
+        </div>
+        <div>
           <WorkforceHealthScore overview={overview} loading={loading} />
         </div>
-
         <CmpAnalyticsPanel
           cmps={cmps}
           loading={loading}

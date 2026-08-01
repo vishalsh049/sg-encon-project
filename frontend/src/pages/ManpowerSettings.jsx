@@ -27,7 +27,6 @@ import {
 const TABS = [
   { key: "profiles", label: "Main & Sub Profiles" },
   { key: "circles", label: "Circles & CMPs" },
-  { key: "validation-rules", label: "Validation Rules" },
 ];
 
 const card = "rounded-[14px] border border-white/70 bg-surface/80 px-4 py-3";
@@ -99,7 +98,7 @@ export default function ManpowerSettings() {
         <p className="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">MANPOWER</p>
         <h1 className="text-lg font-semibold text-text-primary">Manpower Settings</h1>
         <p className="mt-1 text-xs text-text-muted">
-          Single source of truth for Main Profiles, Sub Profiles, Circles/CMPs and Validation Rules used across
+          Single source of truth for Main Profiles, Sub Profiles, Circles/CMPs used across
           Physical, New Joining, Scrum and HR Dashboard. Changes here take effect without a redeploy.
         </p>
       </div>
