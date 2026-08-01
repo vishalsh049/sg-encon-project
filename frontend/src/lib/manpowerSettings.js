@@ -33,6 +33,18 @@ export function fetchManpowerConfig() {
   return inFlightRequest;
 }
 
+// How many current physical/new_joining/scrum_manpower records use each Sub
+// Profile right now — no caching (admin-only page, small payload, and it
+// should reflect live data every time the tab is opened).
+export async function fetchUsageSummary() {
+  const response = await authFetch(buildApiUrl("/api/manpower-settings/usage-summary"));
+  const result = await response.json();
+  if (!result?.success) {
+    throw new Error(result?.message || "Failed to load usage summary");
+  }
+  return result.data;
+}
+
 async function request(method, path, body) {
   const response = await authFetch(buildApiUrl(`/api/manpower-settings${path}`), {
     method,
@@ -52,6 +64,7 @@ export const updateMainProfile = (id, payload) => request("PUT", `/main-profiles
 export const deleteMainProfile = (id) => request("DELETE", `/main-profiles/${id}`);
 
 export const createSubProfile = (payload) => request("POST", "/sub-profiles", payload);
+export const bulkCreateSubProfiles = (payload) => request("POST", "/sub-profiles/bulk", payload);
 export const updateSubProfile = (id, payload) => request("PUT", `/sub-profiles/${id}`, payload);
 export const deleteSubProfile = (id) => request("DELETE", `/sub-profiles/${id}`);
 

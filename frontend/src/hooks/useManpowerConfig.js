@@ -17,9 +17,8 @@ export default function useManpowerConfig() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  const load = useCallback(() => {
-    setLoading(true);
-    return fetchManpowerConfig()
+  const applyResult = useCallback((promise) => {
+    return promise
       .then((data) => {
         setConfig(data);
         setError(null);
@@ -31,19 +30,18 @@ export default function useManpowerConfig() {
       .finally(() => setLoading(false));
   }, []);
 
+  // No setLoading(true) here: `loading` already starts true, and the effect
+  // body's first statement is the fetch itself (not a synchronous setState),
+  // so a mount-time fetch never triggers a same-render cascading update.
   useEffect(() => {
-    let isMounted = true;
-    load().catch(() => {});
-    return () => {
-      isMounted = false;
-      void isMounted;
-    };
-  }, [load]);
+    applyResult(fetchManpowerConfig());
+  }, [applyResult]);
 
   const refresh = useCallback(() => {
     invalidateManpowerConfig();
-    return load();
-  }, [load]);
+    setLoading(true);
+    return applyResult(fetchManpowerConfig());
+  }, [applyResult]);
 
   const activeMainProfiles = config.mainProfiles
     .filter((p) => p.isActive)

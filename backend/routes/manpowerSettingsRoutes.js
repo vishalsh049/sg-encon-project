@@ -8,6 +8,7 @@ const {
   ensureManpowerTables,
   clearManpowerConfigCache,
   getManpowerConfigPayload,
+  normalizeRoleText,
 } = require("../services/manpowerConfigService");
 
 router.use(authMiddleware);
@@ -34,6 +35,59 @@ router.get("/config", async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ success: false, message: "Failed to load manpower settings" });
+  }
+});
+
+// How many current physical/new_joining/scrum_manpower records use each Sub
+// Profile's designation text right now — lets an admin see the real-world
+// impact of deactivating one before doing it. Grouped by raw text first (a
+// handful of distinct values) rather than counted per-employee, so this
+// stays cheap even as headcount grows.
+router.get("/usage-summary", async (req, res) => {
+  try {
+    const [subProfiles, physicalRows, newJoiningRows, scrumRows] = await Promise.all([
+      query(`SELECT id, designation_label, match_type FROM manpower_sub_profiles WHERE is_active = 1`),
+      query(
+        `SELECT job_role AS raw_value, COUNT(*) AS cnt FROM physical
+         WHERE COALESCE(is_deleted, 0) = 0 AND job_role IS NOT NULL AND job_role != ''
+         GROUP BY job_role`
+      ),
+      query(
+        `SELECT designation AS raw_value, COUNT(*) AS cnt FROM new_joining
+         WHERE designation IS NOT NULL AND designation != ''
+         GROUP BY designation`
+      ),
+      query(
+        `SELECT job_role AS raw_value, COUNT(*) AS cnt FROM scrum_manpower
+         WHERE job_role IS NOT NULL AND job_role != ''
+         GROUP BY job_role`
+      ),
+    ]);
+
+    const sumMatches = (rows, subProfile) => {
+      const normalizedLabel = normalizeRoleText(subProfile.designation_label);
+      return rows.reduce((sum, row) => {
+        const normalizedRaw = normalizeRoleText(row.raw_value);
+        const matches =
+          subProfile.match_type === "prefix"
+            ? normalizedRaw.startsWith(normalizedLabel)
+            : normalizedRaw === normalizedLabel;
+        return matches ? sum + Number(row.cnt) : sum;
+      }, 0);
+    };
+
+    const data = {};
+    subProfiles.forEach((sp) => {
+      const physical = sumMatches(physicalRows, sp);
+      const newJoining = sumMatches(newJoiningRows, sp);
+      const scrum = sumMatches(scrumRows, sp);
+      data[sp.id] = { physical, newJoining, scrum, total: physical + newJoining + scrum };
+    });
+
+    res.json({ success: true, data });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, message: "Failed to load usage summary" });
   }
 });
 
@@ -122,6 +176,51 @@ router.post("/sub-profiles", EDIT, async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ success: false, message: "Failed to create Sub Profile" });
+  }
+});
+
+// Add many designations to one Main Profile at once (e.g. onboarding a new
+// vendor's job-title list) instead of one-at-a-time. Skips any label that's
+// already an active Sub Profile under this Main Profile with the same match
+// type, so re-running an import (or pasting an overlapping list) is safe.
+router.post("/sub-profiles/bulk", EDIT, async (req, res) => {
+  try {
+    const { mainProfileId = null, designationLabels = [], matchType = "exact", sourceScope = "both" } = req.body;
+    const labels = designationLabels
+      .map((label) => String(label || "").trim())
+      .filter(Boolean);
+
+    if (!labels.length) {
+      return res.status(400).json({ success: false, message: "At least one designation label is required" });
+    }
+
+    const existing = await query(
+      `SELECT designation_label FROM manpower_sub_profiles
+       WHERE is_active = 1 AND match_type = ? AND ${mainProfileId ? "main_profile_id = ?" : "main_profile_id IS NULL"}`,
+      mainProfileId ? [matchType, mainProfileId] : [matchType]
+    );
+    const existingNormalized = new Set(existing.map((row) => normalizeRoleText(row.designation_label)));
+
+    let created = 0;
+    let skipped = 0;
+    for (const label of labels) {
+      if (existingNormalized.has(normalizeRoleText(label))) {
+        skipped += 1;
+        continue;
+      }
+      await query(
+        `INSERT INTO manpower_sub_profiles (main_profile_id, designation_label, match_type, source_scope) VALUES (?, ?, ?, ?)`,
+        [mainProfileId, label, matchType, sourceScope]
+      );
+      existingNormalized.add(normalizeRoleText(label));
+      created += 1;
+    }
+
+    clearManpowerConfigCache();
+    res.status(201).json({ success: true, created, skipped });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, message: "Failed to bulk-import Sub Profiles" });
   }
 });
 

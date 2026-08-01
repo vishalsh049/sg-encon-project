@@ -1,13 +1,15 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
-import { Plus, Pencil, Trash2, RotateCcw, Save, X } from "lucide-react";
+import { Plus, Pencil, Trash2, RotateCcw, Save, X, ChevronDown, ChevronRight, Search, Upload } from "lucide-react";
 
 import useManpowerConfig from "../hooks/useManpowerConfig";
+import ConfirmDialog from "../components/ConfirmDialog";
 import {
   createMainProfile,
   updateMainProfile,
   deleteMainProfile,
   createSubProfile,
+  bulkCreateSubProfiles,
   updateSubProfile,
   deleteSubProfile,
   createCircle,
@@ -19,11 +21,11 @@ import {
   createValidationRule,
   updateValidationRule,
   deleteValidationRule,
+  fetchUsageSummary,
 } from "../lib/manpowerSettings";
 
 const TABS = [
-  { key: "main-profiles", label: "Main Profiles" },
-  { key: "sub-profiles", label: "Sub Profiles" },
+  { key: "profiles", label: "Main & Sub Profiles" },
   { key: "circles", label: "Circles & CMPs" },
   { key: "validation-rules", label: "Validation Rules" },
 ];
@@ -47,8 +49,49 @@ async function runOrToast(fn, successMessage) {
 }
 
 export default function ManpowerSettings() {
-  const [activeTab, setActiveTab] = useState("main-profiles");
+  const [activeTab, setActiveTab] = useState("profiles");
   const manpower = useManpowerConfig();
+
+  const [usageSummary, setUsageSummary] = useState({});
+  const [usageLoading, setUsageLoading] = useState(true);
+  const applyUsage = (promise) =>
+    promise
+      .then(setUsageSummary)
+      .catch((error) => console.error("Failed to load usage summary:", error))
+      .finally(() => setUsageLoading(false));
+  const loadUsage = () => {
+    setUsageLoading(true);
+    applyUsage(fetchUsageSummary());
+  };
+  // No setUsageLoading(true) here — see loadUsage() above for the
+  // refresh-triggered case; on mount, usageLoading already starts true.
+  useEffect(() => {
+    applyUsage(fetchUsageSummary());
+  }, []);
+
+  // Shared "are you sure?" dialog for every deactivate action across every
+  // tab — replaces window.confirm and the old fire-immediately buttons, so a
+  // misclick can't quietly turn off a live mapping.
+  const [confirmState, setConfirmState] = useState(null);
+  const [confirmBusy, setConfirmBusy] = useState(false);
+  const requestConfirm = ({ title, description, confirmLabel = "Deactivate", onConfirm }) => {
+    setConfirmState({ title, description, confirmLabel, onConfirm });
+  };
+  const handleConfirm = async () => {
+    if (!confirmState?.onConfirm) return;
+    setConfirmBusy(true);
+    try {
+      await confirmState.onConfirm();
+    } finally {
+      setConfirmBusy(false);
+      setConfirmState(null);
+    }
+  };
+
+  const refreshAll = () => {
+    manpower.refresh();
+    loadUsage();
+  };
 
   return (
     <div className="min-h-screen space-y-3">
@@ -84,243 +127,392 @@ export default function ManpowerSettings() {
 
       {!manpower.loading && !manpower.error && (
         <>
-          {activeTab === "main-profiles" && <MainProfilesTab manpower={manpower} />}
-          {activeTab === "sub-profiles" && <SubProfilesTab manpower={manpower} />}
-          {activeTab === "circles" && <CirclesTab manpower={manpower} />}
-          {activeTab === "validation-rules" && <ValidationRulesTab manpower={manpower} />}
+          {activeTab === "profiles" && (
+            <ProfilesTab
+              manpower={manpower}
+              refresh={refreshAll}
+              requestConfirm={requestConfirm}
+              usageSummary={usageSummary}
+              usageLoading={usageLoading}
+            />
+          )}
+          {activeTab === "circles" && <CirclesTab manpower={manpower} refresh={refreshAll} requestConfirm={requestConfirm} />}
+          {activeTab === "validation-rules" && (
+            <ValidationRulesTab manpower={manpower} refresh={refreshAll} requestConfirm={requestConfirm} />
+          )}
         </>
       )}
+
+      <ConfirmDialog
+        open={Boolean(confirmState)}
+        title={confirmState?.title}
+        description={confirmState?.description}
+        confirmLabel={confirmState?.confirmLabel}
+        busy={confirmBusy}
+        onConfirm={handleConfirm}
+        onCancel={() => {
+          if (!confirmBusy) setConfirmState(null);
+        }}
+      />
     </div>
   );
 }
 
-/* ------------------------------ Main Profiles ------------------------------ */
+/* --------------------------- Main & Sub Profiles --------------------------- */
 
-function MainProfilesTab({ manpower }) {
-  const { config, refresh } = manpower;
-  const [adding, setAdding] = useState(false);
-  const [draft, setDraft] = useState({ roleKey: "", label: "", hasSignoffColumn: true, displayOrder: 0 });
-  const [editingId, setEditingId] = useState(null);
-  const [editDraft, setEditDraft] = useState({});
+function UsageBadge({ usage, loading }) {
+  if (loading) return <span className="text-xs text-text-muted">…</span>;
+  if (!usage || usage.total === 0) {
+    return (
+      <span className="rounded-full bg-surface-muted px-2 py-0.5 text-[11px] text-text-muted" title="Not used by any current record">
+        unused
+      </span>
+    );
+  }
+  return (
+    <span
+      className="rounded-full bg-blue-500/10 px-2 py-0.5 text-[11px] text-blue-600"
+      title={`Physical: ${usage.physical} · New Joining: ${usage.newJoining} · Scrum: ${usage.scrum}`}
+    >
+      {usage.total} record{usage.total === 1 ? "" : "s"}
+    </span>
+  );
+}
 
-  const sorted = [...config.mainProfiles].sort((a, b) => a.displayOrder - b.displayOrder);
+function ProfilesTab({ manpower, refresh, requestConfirm, usageSummary, usageLoading }) {
+  const { config } = manpower;
+  const [search, setSearch] = useState("");
+  const [expanded, setExpanded] = useState({});
+  const [addingMainProfile, setAddingMainProfile] = useState(false);
+  const [mpDraft, setMpDraft] = useState({ roleKey: "", label: "", hasSignoffColumn: true, displayOrder: 0 });
 
-  const handleCreate = async () => {
-    if (!draft.roleKey.trim() || !draft.label.trim()) {
+  const normalizedSearch = search.trim().toLowerCase();
+  const mainProfiles = [...config.mainProfiles].sort((a, b) => a.displayOrder - b.displayOrder);
+
+  const subProfilesFor = (roleKey) => config.subProfiles.filter((sp) => sp.mainProfileRoleKey === roleKey);
+  const unmapped = config.subProfiles.filter((sp) => !sp.mainProfileId);
+
+  // A Main Profile is visible if its own label/key match, or any of its
+  // Sub Profiles do — and in the latter case it auto-expands so the match
+  // isn't hidden inside a collapsed card.
+  const visibleMainProfiles = useMemo(() => {
+    if (!normalizedSearch) return mainProfiles;
+    return mainProfiles.filter((mp) => {
+      const ownMatch = mp.label.toLowerCase().includes(normalizedSearch) || mp.roleKey.toLowerCase().includes(normalizedSearch);
+      const childMatch = subProfilesFor(mp.roleKey).some((sp) => sp.designationLabel.toLowerCase().includes(normalizedSearch));
+      return ownMatch || childMatch;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [normalizedSearch, config.mainProfiles, config.subProfiles]);
+
+  // Derived at render time rather than synced into state via an effect —
+  // while searching, every visible card auto-expands; manual toggles (via
+  // `expanded`) still apply once the search box is cleared again.
+  const isExpanded = (roleKey) => Boolean(normalizedSearch) || Boolean(expanded[roleKey]);
+
+  const visibleUnmapped = normalizedSearch
+    ? unmapped.filter((sp) => sp.designationLabel.toLowerCase().includes(normalizedSearch))
+    : unmapped;
+
+  const handleCreateMainProfile = async () => {
+    if (!mpDraft.roleKey.trim() || !mpDraft.label.trim()) {
       toast.error("Role key and label are required");
       return;
     }
     const ok = await runOrToast(
-      () => createMainProfile({ ...draft, displayOrder: Number(draft.displayOrder) || sorted.length }),
+      () => createMainProfile({ ...mpDraft, displayOrder: Number(mpDraft.displayOrder) || mainProfiles.length }),
       "Main Profile created"
     );
     if (ok) {
-      setDraft({ roleKey: "", label: "", hasSignoffColumn: true, displayOrder: 0 });
-      setAdding(false);
+      setMpDraft({ roleKey: "", label: "", hasSignoffColumn: true, displayOrder: 0 });
+      setAddingMainProfile(false);
       refresh();
     }
   };
 
-  const startEdit = (row) => {
-    setEditingId(row.id);
-    setEditDraft({ label: row.label, hasSignoffColumn: row.hasSignoffColumn, displayOrder: row.displayOrder });
+  const handleDeactivateMainProfile = (row) => {
+    const childCount = subProfilesFor(row.roleKey).length;
+    requestConfirm({
+      title: `Deactivate "${row.label}"?`,
+      description: `This Main Profile has ${childCount} Sub Profile${childCount === 1 ? "" : "s"} under it. Deactivating it hides it from Physical/HR Dashboard, but its Sub Profiles stay assigned to it — reactivating restores everything.`,
+      confirmLabel: "Deactivate",
+      onConfirm: async () => {
+        const ok = await runOrToast(() => deleteMainProfile(row.id), "Main Profile deactivated");
+        if (ok) refresh();
+      },
+    });
   };
 
-  const handleSaveEdit = async (id) => {
-    const ok = await runOrToast(() => updateMainProfile(id, editDraft), "Main Profile updated");
-    if (ok) {
-      setEditingId(null);
-      refresh();
-    }
-  };
-
-  const handleToggleActive = async (row) => {
-    const ok = row.isActive
-      ? await runOrToast(() => deleteMainProfile(row.id), "Main Profile deactivated")
-      : await runOrToast(() => updateMainProfile(row.id, { isActive: true }), "Main Profile reactivated");
+  const handleReactivateMainProfile = async (row) => {
+    const ok = await runOrToast(() => updateMainProfile(row.id, { isActive: true }), "Main Profile reactivated");
     if (ok) refresh();
   };
 
   return (
-    <div className={card}>
-      <div className="mb-2 flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-text-primary">Main Profiles</h2>
-        <button className={primaryBtn} onClick={() => setAdding((v) => !v)}>
-          <Plus size={14} /> Add Main Profile
-        </button>
-      </div>
-
-      {adding && (
-        <div className="mb-3 flex flex-wrap items-end gap-2 rounded-lg border border-dashed border-border-color p-2">
-          <Field label="Role Key (unique, e.g. quality_lead)">
-            <input className={input} value={draft.roleKey} onChange={(e) => setDraft({ ...draft, roleKey: e.target.value })} />
-          </Field>
-          <Field label="Label">
-            <input className={input} value={draft.label} onChange={(e) => setDraft({ ...draft, label: e.target.value })} />
-          </Field>
-          <Field label="Display Order">
+    <div className="space-y-3">
+      <div className={card}>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="relative w-full max-w-xs">
+            <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-text-muted" />
             <input
-              type="number"
-              className={input}
-              value={draft.displayOrder}
-              onChange={(e) => setDraft({ ...draft, displayOrder: e.target.value })}
+              className={`${input} pl-8`}
+              placeholder="Search main or sub profiles…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
             />
-          </Field>
-          <label className="flex items-center gap-1 pb-1 text-xs text-text-secondary">
-            <input
-              type="checkbox"
-              checked={draft.hasSignoffColumn}
-              onChange={(e) => setDraft({ ...draft, hasSignoffColumn: e.target.checked })}
-            />
-            Backed by a Signoff column
-          </label>
-          <button className={primaryBtn} onClick={handleCreate}>
-            <Save size={14} /> Save
+          </div>
+          <button className={primaryBtn} onClick={() => setAddingMainProfile((v) => !v)}>
+            <Plus size={14} /> Add Main Profile
           </button>
         </div>
+
+        {addingMainProfile && (
+          <div className="mt-3 flex flex-wrap items-end gap-2 rounded-lg border border-dashed border-border-color p-2">
+            <Field label="Role Key (unique, e.g. quality_lead)">
+              <input className={input} value={mpDraft.roleKey} onChange={(e) => setMpDraft({ ...mpDraft, roleKey: e.target.value })} />
+            </Field>
+            <Field label="Label">
+              <input className={input} value={mpDraft.label} onChange={(e) => setMpDraft({ ...mpDraft, label: e.target.value })} />
+            </Field>
+            <Field label="Display Order">
+              <input
+                type="number"
+                className={input}
+                value={mpDraft.displayOrder}
+                onChange={(e) => setMpDraft({ ...mpDraft, displayOrder: e.target.value })}
+              />
+            </Field>
+            <label className="flex items-center gap-1 pb-1 text-xs text-text-secondary">
+              <input
+                type="checkbox"
+                checked={mpDraft.hasSignoffColumn}
+                onChange={(e) => setMpDraft({ ...mpDraft, hasSignoffColumn: e.target.checked })}
+              />
+              Backed by a Signoff column
+            </label>
+            <button className={primaryBtn} onClick={handleCreateMainProfile}>
+              <Save size={14} /> Save
+            </button>
+          </div>
+        )}
+      </div>
+
+      {normalizedSearch && visibleMainProfiles.length === 0 && visibleUnmapped.length === 0 && (
+        <div className={`${card} text-sm text-text-muted`}>No profiles match "{search}".</div>
       )}
 
-      <div className="overflow-x-auto">
-        <table className="w-full border-collapse">
-          <thead>
-            <tr>
-              <th className={th}>Order</th>
-              <th className={th}>Role Key</th>
-              <th className={th}>Label</th>
-              <th className={th}>Signoff column?</th>
-              <th className={th}>Status</th>
-              <th className={th}>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {sorted.map((row) => (
-              <tr key={row.id} className={row.isActive ? "" : "opacity-50"}>
-                <td className={td}>{row.displayOrder}</td>
-                <td className={td}>
-                  <code className="text-xs">{row.roleKey}</code>
-                </td>
-                <td className={td}>
-                  {editingId === row.id ? (
-                    <input
-                      className={input}
-                      value={editDraft.label}
-                      onChange={(e) => setEditDraft({ ...editDraft, label: e.target.value })}
-                    />
-                  ) : (
-                    row.label
-                  )}
-                </td>
-                <td className={td}>{row.hasSignoffColumn ? "Yes" : "No"}</td>
-                <td className={td}>{row.isActive ? "Active" : "Inactive"}</td>
-                <td className={td}>
-                  <div className="flex gap-1">
-                    {editingId === row.id ? (
-                      <>
-                        <button className={iconBtn} onClick={() => handleSaveEdit(row.id)} title="Save">
-                          <Save size={14} />
-                        </button>
-                        <button className={iconBtn} onClick={() => setEditingId(null)} title="Cancel">
-                          <X size={14} />
-                        </button>
-                      </>
-                    ) : (
-                      <button className={iconBtn} onClick={() => startEdit(row)} title="Edit">
-                        <Pencil size={14} />
-                      </button>
-                    )}
-                    <button
-                      className={iconBtn}
-                      onClick={() => handleToggleActive(row)}
-                      title={row.isActive ? "Deactivate" : "Reactivate"}
-                    >
-                      {row.isActive ? <Trash2 size={14} /> : <RotateCcw size={14} />}
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      {visibleMainProfiles.map((mp) => (
+        <MainProfileCard
+          key={mp.id}
+          mainProfile={mp}
+          subProfiles={subProfilesFor(mp.roleKey).filter(
+            (sp) => !normalizedSearch || sp.designationLabel.toLowerCase().includes(normalizedSearch) || mp.label.toLowerCase().includes(normalizedSearch) || mp.roleKey.toLowerCase().includes(normalizedSearch)
+          )}
+          expanded={isExpanded(mp.roleKey)}
+          onToggle={() => setExpanded((prev) => ({ ...prev, [mp.roleKey]: !prev[mp.roleKey] }))}
+          onDeactivate={() => handleDeactivateMainProfile(mp)}
+          onReactivate={() => handleReactivateMainProfile(mp)}
+          refresh={refresh}
+          requestConfirm={requestConfirm}
+          usageSummary={usageSummary}
+          usageLoading={usageLoading}
+        />
+      ))}
+
+      {visibleUnmapped.length > 0 && (
+        <UnmappedCard
+          subProfiles={visibleUnmapped}
+          mainProfiles={mainProfiles}
+          refresh={refresh}
+          requestConfirm={requestConfirm}
+          usageSummary={usageSummary}
+          usageLoading={usageLoading}
+        />
+      )}
     </div>
   );
 }
 
-/* ------------------------------ Sub Profiles ------------------------------ */
+function MainProfileCard({
+  mainProfile,
+  subProfiles,
+  expanded,
+  onToggle,
+  onDeactivate,
+  onReactivate,
+  refresh,
+  requestConfirm,
+  usageSummary,
+  usageLoading,
+}) {
+  const [editing, setEditing] = useState(false);
+  const [editDraft, setEditDraft] = useState({ label: mainProfile.label, hasSignoffColumn: mainProfile.hasSignoffColumn });
 
-function SubProfilesTab({ manpower }) {
-  const { config, refresh } = manpower;
-  const [filterMainProfileId, setFilterMainProfileId] = useState("");
-  const [adding, setAdding] = useState(false);
-  const [draft, setDraft] = useState({ mainProfileId: "", designationLabel: "", matchType: "exact", sourceScope: "both" });
+  const handleSaveEdit = async () => {
+    const ok = await runOrToast(() => updateMainProfile(mainProfile.id, editDraft), "Main Profile updated");
+    if (ok) {
+      setEditing(false);
+      refresh();
+    }
+  };
 
-  const mainProfiles = [...config.mainProfiles].sort((a, b) => a.displayOrder - b.displayOrder);
-  const rows = useMemo(
-    () =>
-      config.subProfiles.filter((sp) =>
-        filterMainProfileId ? String(sp.mainProfileId) === String(filterMainProfileId) : true
-      ),
-    [config.subProfiles, filterMainProfileId]
+  return (
+    <div className={`${card} ${mainProfile.isActive ? "" : "opacity-50"}`}>
+      <div className="flex items-center justify-between gap-2">
+        <button className="flex min-w-0 flex-1 items-center gap-2 text-left" onClick={onToggle}>
+          {expanded ? <ChevronDown size={16} className="flex-shrink-0 text-text-muted" /> : <ChevronRight size={16} className="flex-shrink-0 text-text-muted" />}
+          <code className="flex-shrink-0 text-xs text-text-muted">{mainProfile.roleKey}</code>
+          {editing ? (
+            <input
+              className={`${input} max-w-xs`}
+              value={editDraft.label}
+              onClick={(e) => e.stopPropagation()}
+              onChange={(e) => setEditDraft({ ...editDraft, label: e.target.value })}
+            />
+          ) : (
+            <span className="truncate text-sm font-semibold text-text-primary">{mainProfile.label}</span>
+          )}
+          <span className="flex-shrink-0 text-xs text-text-muted">
+            {subProfiles.length} sub profile{subProfiles.length === 1 ? "" : "s"}
+          </span>
+          {!mainProfile.hasSignoffColumn && (
+            <span className="flex-shrink-0 rounded-full bg-amber-500/10 px-2 py-0.5 text-[11px] text-amber-600">no Signoff column</span>
+          )}
+          {!mainProfile.isActive && <span className="flex-shrink-0 rounded-full bg-surface-muted px-2 py-0.5 text-[11px] text-text-muted">inactive</span>}
+        </button>
+
+        <div className="flex flex-shrink-0 gap-1">
+          {editing ? (
+            <>
+              <button className={iconBtn} onClick={handleSaveEdit} title="Save">
+                <Save size={14} />
+              </button>
+              <button className={iconBtn} onClick={() => setEditing(false)} title="Cancel">
+                <X size={14} />
+              </button>
+            </>
+          ) : (
+            <button className={iconBtn} onClick={() => setEditing(true)} title="Rename">
+              <Pencil size={14} />
+            </button>
+          )}
+          <button
+            className={iconBtn}
+            onClick={mainProfile.isActive ? onDeactivate : onReactivate}
+            title={mainProfile.isActive ? "Deactivate" : "Reactivate"}
+          >
+            {mainProfile.isActive ? <Trash2 size={14} /> : <RotateCcw size={14} />}
+          </button>
+        </div>
+      </div>
+
+      {expanded && (
+        <div className="mt-3 border-t border-border-color pt-3">
+          <SubProfileTable
+            subProfiles={subProfiles}
+            mainProfileId={mainProfile.id}
+            refresh={refresh}
+            requestConfirm={requestConfirm}
+            usageSummary={usageSummary}
+            usageLoading={usageLoading}
+          />
+        </div>
+      )}
+    </div>
   );
+}
+
+function SubProfileTable({ subProfiles, mainProfileId, refresh, requestConfirm, usageSummary, usageLoading, allowReassign, mainProfiles }) {
+  const [adding, setAdding] = useState(false);
+  const [draft, setDraft] = useState({ designationLabel: "", matchType: "exact", sourceScope: "both" });
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkText, setBulkText] = useState("");
+  const [bulkMatchType, setBulkMatchType] = useState("exact");
+  const [bulkScope, setBulkScope] = useState("both");
+  const [reassignTarget, setReassignTarget] = useState({});
 
   const handleCreate = async () => {
     if (!draft.designationLabel.trim()) {
       toast.error("Designation label is required");
       return;
     }
-    const ok = await runOrToast(
-      () => createSubProfile({ ...draft, mainProfileId: draft.mainProfileId || null }),
-      "Sub Profile created"
-    );
+    const ok = await runOrToast(() => createSubProfile({ ...draft, mainProfileId }), "Sub Profile created");
     if (ok) {
-      setDraft({ mainProfileId: "", designationLabel: "", matchType: "exact", sourceScope: "both" });
+      setDraft({ designationLabel: "", matchType: "exact", sourceScope: "both" });
       setAdding(false);
       refresh();
     }
   };
 
-  const handleToggleActive = async (row) => {
-    const ok = row.isActive
-      ? await runOrToast(() => deleteSubProfile(row.id), "Sub Profile deactivated")
-      : await runOrToast(() => updateSubProfile(row.id, { isActive: true }), "Sub Profile reactivated");
+  const handleBulkImport = async () => {
+    const labels = bulkText
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean);
+    if (!labels.length) {
+      toast.error("Paste at least one designation, one per line");
+      return;
+    }
+    try {
+      const result = await bulkCreateSubProfiles({
+        mainProfileId,
+        designationLabels: labels,
+        matchType: bulkMatchType,
+        sourceScope: bulkScope,
+      });
+      toast.success(`Added ${result.created}, skipped ${result.skipped} already-existing`);
+      setBulkText("");
+      setBulkOpen(false);
+      refresh();
+    } catch (error) {
+      toast.error(error.message || "Bulk import failed");
+    }
+  };
+
+  const handleDeactivate = (row) => {
+    const usage = usageSummary[row.id];
+    requestConfirm({
+      title: `Deactivate "${row.designationLabel}"?`,
+      description:
+        usage && usage.total > 0
+          ? `${usage.total} current record${usage.total === 1 ? "" : "s"} (Physical: ${usage.physical}, New Joining: ${usage.newJoining}, Scrum: ${usage.scrum}) use this designation. Deactivating it means those records will stop counting toward "${row.mainProfileRoleKey || "any"}" in the dashboards.`
+          : "This designation isn't used by any current record, so this is safe.",
+      confirmLabel: "Deactivate",
+      onConfirm: async () => {
+        const ok = await runOrToast(() => deleteSubProfile(row.id), "Sub Profile deactivated");
+        if (ok) refresh();
+      },
+    });
+  };
+
+  const handleReactivate = async (row) => {
+    const ok = await runOrToast(() => updateSubProfile(row.id, { isActive: true }), "Sub Profile reactivated");
+    if (ok) refresh();
+  };
+
+  const handleReassign = async (row) => {
+    const targetId = reassignTarget[row.id];
+    if (!targetId) {
+      toast.error("Pick a Main Profile first");
+      return;
+    }
+    const ok = await runOrToast(() => updateSubProfile(row.id, { mainProfileId: targetId }), "Sub Profile assigned");
     if (ok) refresh();
   };
 
   return (
-    <div className={card}>
-      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-sm font-semibold text-text-primary">Sub Profiles (Designation → Main Profile mapping)</h2>
-        <div className="flex items-center gap-2">
-          <select className={input} value={filterMainProfileId} onChange={(e) => setFilterMainProfileId(e.target.value)}>
-            <option value="">All Main Profiles</option>
-            {mainProfiles.map((mp) => (
-              <option key={mp.id} value={mp.id}>
-                {mp.label}
-              </option>
-            ))}
-          </select>
-          <button className={primaryBtn} onClick={() => setAdding((v) => !v)}>
-            <Plus size={14} /> Add Sub Profile
-          </button>
-        </div>
+    <div>
+      <div className="mb-2 flex flex-wrap gap-2">
+        <button className={primaryBtn} onClick={() => setAdding((v) => !v)}>
+          <Plus size={14} /> Add Sub Profile
+        </button>
+        <button className={primaryBtn} onClick={() => setBulkOpen((v) => !v)}>
+          <Upload size={14} /> Bulk Add
+        </button>
       </div>
 
       {adding && (
         <div className="mb-3 flex flex-wrap items-end gap-2 rounded-lg border border-dashed border-border-color p-2">
-          <Field label="Main Profile (blank = unmapped)">
-            <select
-              className={input}
-              value={draft.mainProfileId}
-              onChange={(e) => setDraft({ ...draft, mainProfileId: e.target.value })}
-            >
-              <option value="">— Unmapped —</option>
-              {mainProfiles.map((mp) => (
-                <option key={mp.id} value={mp.id}>
-                  {mp.label}
-                </option>
-              ))}
-            </select>
-          </Field>
           <Field label="Designation Label">
             <input
               className={input}
@@ -347,48 +539,128 @@ function SubProfilesTab({ manpower }) {
         </div>
       )}
 
-      <div className="max-h-[520px] overflow-auto">
-        <table className="w-full border-collapse">
-          <thead>
-            <tr>
-              <th className={th}>Designation</th>
-              <th className={th}>Main Profile</th>
-              <th className={th}>Match</th>
-              <th className={th}>Applies To</th>
-              <th className={th}>Status</th>
-              <th className={th}>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row) => (
-              <tr key={row.id} className={row.isActive ? "" : "opacity-50"}>
-                <td className={td}>{row.designationLabel}</td>
-                <td className={td}>{row.mainProfileRoleKey || <em className="text-text-muted">unmapped</em>}</td>
-                <td className={td}>{row.matchType}</td>
-                <td className={td}>{row.sourceScope}</td>
-                <td className={td}>{row.isActive ? "Active" : "Inactive"}</td>
-                <td className={td}>
-                  <button
-                    className={iconBtn}
-                    onClick={() => handleToggleActive(row)}
-                    title={row.isActive ? "Deactivate" : "Reactivate"}
-                  >
-                    {row.isActive ? <Trash2 size={14} /> : <RotateCcw size={14} />}
-                  </button>
-                </td>
+      {bulkOpen && (
+        <div className="mb-3 space-y-2 rounded-lg border border-dashed border-border-color p-2">
+          <p className="text-xs text-text-muted">Paste one designation per line — existing ones are skipped automatically.</p>
+          <textarea
+            className={`${input} h-28 font-mono text-xs`}
+            placeholder={"State Fiber SME\nState ISP SME\nState Utility SME"}
+            value={bulkText}
+            onChange={(e) => setBulkText(e.target.value)}
+          />
+          <div className="flex flex-wrap items-end gap-2">
+            <Field label="Match Type">
+              <select className={input} value={bulkMatchType} onChange={(e) => setBulkMatchType(e.target.value)}>
+                <option value="exact">Exact</option>
+                <option value="prefix">Prefix</option>
+              </select>
+            </Field>
+            <Field label="Applies To">
+              <select className={input} value={bulkScope} onChange={(e) => setBulkScope(e.target.value)}>
+                <option value="both">Physical & Scrum</option>
+                <option value="physical">Physical / New Joining only</option>
+                <option value="scrum">Scrum only</option>
+              </select>
+            </Field>
+            <button className={primaryBtn} onClick={handleBulkImport}>
+              <Upload size={14} /> Import {bulkText.split("\n").map((l) => l.trim()).filter(Boolean).length || ""}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {subProfiles.length === 0 ? (
+        <p className="text-xs text-text-muted">No Sub Profiles yet.</p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse">
+            <thead>
+              <tr>
+                <th className={th}>Designation</th>
+                <th className={th}>Match</th>
+                <th className={th}>Applies To</th>
+                <th className={th}>Usage</th>
+                <th className={th}>Status</th>
+                {allowReassign && <th className={th}>Reassign</th>}
+                <th className={th}>Actions</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody>
+              {subProfiles.map((row) => (
+                <tr key={row.id} className={row.isActive ? "" : "opacity-50"}>
+                  <td className={td}>{row.designationLabel}</td>
+                  <td className={td}>{row.matchType}</td>
+                  <td className={td}>{row.sourceScope}</td>
+                  <td className={td}>
+                    <UsageBadge usage={usageSummary[row.id]} loading={usageLoading} />
+                  </td>
+                  <td className={td}>{row.isActive ? "Active" : "Inactive"}</td>
+                  {allowReassign && (
+                    <td className={td}>
+                      <div className="flex gap-1">
+                        <select
+                          className={input}
+                          value={reassignTarget[row.id] || ""}
+                          onChange={(e) => setReassignTarget({ ...reassignTarget, [row.id]: e.target.value })}
+                        >
+                          <option value="">Pick Main Profile…</option>
+                          {mainProfiles.map((mp) => (
+                            <option key={mp.id} value={mp.id}>
+                              {mp.label}
+                            </option>
+                          ))}
+                        </select>
+                        <button className={iconBtn} onClick={() => handleReassign(row)} title="Assign">
+                          <Save size={14} />
+                        </button>
+                      </div>
+                    </td>
+                  )}
+                  <td className={td}>
+                    <button
+                      className={iconBtn}
+                      onClick={() => (row.isActive ? handleDeactivate(row) : handleReactivate(row))}
+                      title={row.isActive ? "Deactivate" : "Reactivate"}
+                    >
+                      {row.isActive ? <Trash2 size={14} /> : <RotateCcw size={14} />}
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function UnmappedCard({ subProfiles, mainProfiles, refresh, requestConfirm, usageSummary, usageLoading }) {
+  return (
+    <div className={card}>
+      <h3 className="mb-1 text-sm font-semibold text-text-primary">Unmapped Designations</h3>
+      <p className="mb-2 text-xs text-text-muted">
+        Valid designations that don't roll up into any Main Profile — they still show up in dropdowns but never count
+        toward a headcount bucket. Assign one to a Main Profile below if it should.
+      </p>
+      <SubProfileTable
+        subProfiles={subProfiles}
+        mainProfileId={null}
+        refresh={refresh}
+        requestConfirm={requestConfirm}
+        usageSummary={usageSummary}
+        usageLoading={usageLoading}
+        allowReassign
+        mainProfiles={mainProfiles}
+      />
     </div>
   );
 }
 
 /* -------------------------------- Circles -------------------------------- */
 
-function CirclesTab({ manpower }) {
-  const { config, refresh } = manpower;
+function CirclesTab({ manpower, refresh, requestConfirm }) {
+  const { config } = manpower;
   const [addingCircle, setAddingCircle] = useState(false);
   const [circleDraft, setCircleDraft] = useState({ name: "", displayOrder: 0 });
   const [cmpDraftByCircle, setCmpDraftByCircle] = useState({});
@@ -408,10 +680,21 @@ function CirclesTab({ manpower }) {
     }
   };
 
-  const handleToggleCircle = async (row) => {
-    const ok = row.isActive
-      ? await runOrToast(() => deleteCircle(row.id), "Circle deactivated")
-      : await runOrToast(() => updateCircle(row.id, { isActive: true }), "Circle reactivated");
+  const handleDeactivateCircle = (row) => {
+    const cmpCount = config.cmps.filter((c) => c.circleId === row.id && c.isActive).length;
+    requestConfirm({
+      title: `Deactivate "${row.name}"?`,
+      description: `This circle has ${cmpCount} active CMP${cmpCount === 1 ? "" : "s"} under it. They'll stop appearing in dropdowns until this circle is reactivated.`,
+      confirmLabel: "Deactivate",
+      onConfirm: async () => {
+        const ok = await runOrToast(() => deleteCircle(row.id), "Circle deactivated");
+        if (ok) refresh();
+      },
+    });
+  };
+
+  const handleReactivateCircle = async (row) => {
+    const ok = await runOrToast(() => updateCircle(row.id, { isActive: true }), "Circle reactivated");
     if (ok) refresh();
   };
 
@@ -428,10 +711,20 @@ function CirclesTab({ manpower }) {
     }
   };
 
-  const handleToggleCmp = async (row) => {
-    const ok = row.isActive
-      ? await runOrToast(() => deleteCmp(row.id), "CMP deactivated")
-      : await runOrToast(() => updateCmp(row.id, { isActive: true }), "CMP reactivated");
+  const handleDeactivateCmp = (row) => {
+    requestConfirm({
+      title: `Deactivate CMP "${row.name}"?`,
+      description: "It will stop appearing in Circle/CMP dropdowns until reactivated.",
+      confirmLabel: "Deactivate",
+      onConfirm: async () => {
+        const ok = await runOrToast(() => deleteCmp(row.id), "CMP deactivated");
+        if (ok) refresh();
+      },
+    });
+  };
+
+  const handleReactivateCmp = async (row) => {
+    const ok = await runOrToast(() => updateCmp(row.id, { isActive: true }), "CMP reactivated");
     if (ok) refresh();
   };
 
@@ -462,7 +755,7 @@ function CirclesTab({ manpower }) {
             <h3 className="text-sm font-semibold text-text-primary">{circle.name}</h3>
             <button
               className={iconBtn}
-              onClick={() => handleToggleCircle(circle)}
+              onClick={() => (circle.isActive ? handleDeactivateCircle(circle) : handleReactivateCircle(circle))}
               title={circle.isActive ? "Deactivate circle" : "Reactivate circle"}
             >
               {circle.isActive ? <Trash2 size={14} /> : <RotateCcw size={14} />}
@@ -479,30 +772,20 @@ function CirclesTab({ manpower }) {
                 </tr>
               </thead>
               <tbody>
-                {manpower.cmpsForCircle(circle.name).length === 0 &&
-                  config.cmps
-                    .filter((c) => c.circleId === circle.id)
-                    .map((c) => (
-                      <tr key={c.id} className="opacity-50">
-                        <td className={td}>{c.name}</td>
-                        <td className={td}>Inactive</td>
-                        <td className={td}>
-                          <button className={iconBtn} onClick={() => handleToggleCmp(c)} title="Reactivate">
-                            <RotateCcw size={14} />
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
                 {config.cmps
-                  .filter((c) => c.circleId === circle.id && c.isActive)
+                  .filter((c) => c.circleId === circle.id)
                   .sort((a, b) => a.displayOrder - b.displayOrder)
                   .map((c) => (
-                    <tr key={c.id}>
+                    <tr key={c.id} className={c.isActive ? "" : "opacity-50"}>
                       <td className={td}>{c.name}</td>
-                      <td className={td}>Active</td>
+                      <td className={td}>{c.isActive ? "Active" : "Inactive"}</td>
                       <td className={td}>
-                        <button className={iconBtn} onClick={() => handleToggleCmp(c)} title="Deactivate">
-                          <Trash2 size={14} />
+                        <button
+                          className={iconBtn}
+                          onClick={() => (c.isActive ? handleDeactivateCmp(c) : handleReactivateCmp(c))}
+                          title={c.isActive ? "Deactivate" : "Reactivate"}
+                        >
+                          {c.isActive ? <Trash2 size={14} /> : <RotateCcw size={14} />}
                         </button>
                       </td>
                     </tr>
@@ -531,8 +814,8 @@ function CirclesTab({ manpower }) {
 
 /* --------------------------- Validation Rules --------------------------- */
 
-function ValidationRulesTab({ manpower }) {
-  const { config, refresh } = manpower;
+function ValidationRulesTab({ manpower, refresh, requestConfirm }) {
+  const { config } = manpower;
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState({ fieldKey: "", ruleType: "regex", ruleValue: "", errorMessage: "", appliesTo: "physical" });
   const [editingId, setEditingId] = useState(null);
@@ -581,10 +864,20 @@ function ValidationRulesTab({ manpower }) {
     }
   };
 
-  const handleToggleActive = async (row) => {
-    const ok = row.isActive
-      ? await runOrToast(() => deleteValidationRule(row.id), "Rule deactivated")
-      : await runOrToast(() => updateValidationRule(row.id, { isActive: true }), "Rule reactivated");
+  const handleDeactivate = (row) => {
+    requestConfirm({
+      title: `Deactivate rule for "${row.fieldKey}"?`,
+      description: `Forms will stop enforcing this ${row.ruleType} rule until it's reactivated.`,
+      confirmLabel: "Deactivate",
+      onConfirm: async () => {
+        const ok = await runOrToast(() => deleteValidationRule(row.id), "Rule deactivated");
+        if (ok) refresh();
+      },
+    });
+  };
+
+  const handleReactivate = async (row) => {
+    const ok = await runOrToast(() => updateValidationRule(row.id, { isActive: true }), "Rule reactivated");
     if (ok) refresh();
   };
 
@@ -673,7 +966,7 @@ function ValidationRulesTab({ manpower }) {
                     )}
                     <button
                       className={iconBtn}
-                      onClick={() => handleToggleActive(row)}
+                      onClick={() => (row.isActive ? handleDeactivate(row) : handleReactivate(row))}
                       title={row.isActive ? "Deactivate" : "Reactivate"}
                     >
                       {row.isActive ? <Trash2 size={14} /> : <RotateCcw size={14} />}
