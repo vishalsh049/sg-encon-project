@@ -12,6 +12,12 @@ const {
   buildFilteredGroups,
 } = require("../utils/hrDashboardExportShared");
 const { buildRagWorkbook } = require("../utils/hrDashboardWorkbook");
+const { resolveRoleKey } = require("../services/manpowerConfigService");
+// Still used below by buildPhysicalAvailableBaseSql()/buildScrumAvailableBaseSql()
+// — those build a *row-level* (not aggregated) derived table that gets
+// filtered/paginated/sorted in SQL, so they stay on the SQL CASE-WHEN
+// classifier for now rather than moving to the JS resolver used by
+// fetchPhysicalActiveData()/fetchScrumActiveData() above.
 const {
   normalizeRoleSql,
   physicalRoleKeyCaseSql,
@@ -99,179 +105,74 @@ async function fetchPhysicalActiveData(req) {
   const physicalScope = getCircleScope(req);
   const newJoiningScope = getCircleScope(req);
 
-  return query(
-    `
-    SELECT
-      combined.cmp,
-      combined.role_key,
-      SUM(combined.physical_count) AS physical_count,
-      SUM(combined.new_joining_count) AS new_joining_count,
-      SUM(combined.physical_count) + SUM(combined.new_joining_count) AS total
-    FROM (
-      SELECT
-        physical_roles.cmp,
-        physical_roles.role_key,
-        COUNT(*) AS physical_count,
-        0 AS new_joining_count
-      FROM (
-        SELECT
-          cmp,
-          CASE
-            WHEN normalized_role IN (
-              'stateenergymanager',
-              'statefibersme',
-              'stateispsme',
-              'statematerialmanager',
-              'stateoperationhead',
-              'stateplanningmanager',
-              'stateutilitysme'
-            )
-            THEN 'state_leadership_team'
-            WHEN normalized_role = 'nocexecutive' THEN 'noc_executive'
-            WHEN normalized_role LIKE 'analyst%' THEN 'analyst'
-            WHEN normalized_role = 'cmplead' THEN 'cmp_lead'
-            WHEN normalized_role = 'technician' THEN 'technician'
-            WHEN normalized_role = 'rigger' THEN 'rigger'
-            WHEN normalized_role = 'utilitysupervisor' THEN 'utility_supervisor'
-            WHEN normalized_role = 'utilityengineer' THEN 'utility_engineer'
-            WHEN normalized_role = 'ispengineer' THEN 'isp_engineer'
-            WHEN normalized_role IN ('whinchargecumsecurity', 'warehouseincharge', 'warehouseinchargecumsecurity')
-            THEN 'wh_incharge_cum_security'
-            WHEN normalized_role = 'splicer' THEN 'splicer'
-            WHEN normalized_role = 'assistantsplicer' THEN 'assistant_splicer'
-            WHEN normalized_role IN ('fiberhelper', 'fibrehelper', 'frthelper') THEN 'fiber_helper'
-            WHEN normalized_role = 'patroller' THEN 'patroller'
-            WHEN normalized_role IN ('fibersupervisor', 'fibresupervisor') THEN 'fiber_supervisor'
-            WHEN normalized_role IN ('fiberengineer', 'fibreengineer') THEN 'fibre_engineer'
-            WHEN normalized_role = 'fttxsplicer' THEN 'fttx_splicer'
-            WHEN normalized_role = 'fttxassistantsplicer' THEN 'fttx_assistant_splicer'
-            WHEN normalized_role = 'fttxsupervisor' THEN 'fttx_supervisor'
-            WHEN normalized_role = 'fttxhelper' THEN 'fttx_helper'
-            WHEN normalized_role = 'fttxengineer' THEN 'fttx_engineer'
-            WHEN normalized_role = 'fttxtechnician' THEN 'fttx_technician'
-            WHEN normalized_role = 'technicianb' THEN 'technicianb'
-            WHEN normalized_role = 'riggerb' THEN 'riggerb'
-            ELSE NULL
-          END AS role_key
-        FROM (
-          SELECT
-            cmp,
-            LOWER(
-              REPLACE(
-                REPLACE(
-                  REPLACE(
-                    REPLACE(TRIM(job_role), ' ', ''),
-                    '-',
-                    ''
-                  ),
-                  '_',
-                  ''
-                ),
-                '.',
-                ''
-              )
-            ) AS normalized_role
-          FROM physical
-          WHERE LOWER(TRIM(COALESCE(employment_status, ''))) = 'active'
-            AND cmp IS NOT NULL
-            AND cmp != ''
-            AND job_role IS NOT NULL
-            AND job_role != ''
-            ${physicalScope.sql}
-        ) AS physical_source
-      ) AS physical_roles
-      WHERE physical_roles.role_key IS NOT NULL
-      GROUP BY physical_roles.cmp, physical_roles.role_key
+  // Role-key classification now comes from manpower_sub_profiles (see
+  // backend/services/manpowerConfigService.js) instead of a hardcoded SQL
+  // CASE-WHEN — pull raw (cmp, job_role/designation) counts and
+  // resolve+aggregate them in JS. Mirrors GET /api/physical/active-job-role-cmp-count.
+  const [physicalRows, newJoiningRows] = await Promise.all([
+    query(
+      `
+      SELECT cmp, job_role, COUNT(*) AS cnt
+      FROM physical
+      WHERE LOWER(TRIM(COALESCE(employment_status, ''))) = 'active'
+        AND cmp IS NOT NULL
+        AND cmp != ''
+        AND job_role IS NOT NULL
+        AND job_role != ''
+        ${physicalScope.sql}
+      GROUP BY cmp, job_role
+      `,
+      physicalScope.params
+    ),
+    query(
+      `
+      SELECT new_joining.cmp, new_joining.designation, COUNT(*) AS cnt
+      FROM new_joining
+      WHERE LOWER(TRIM(COALESCE(joining_status, ''))) = 'joined'
+        AND cmp IS NOT NULL
+        AND cmp != ''
+        AND designation IS NOT NULL
+        AND designation != ''
+        AND NOT EXISTS (
+          SELECT 1
+          FROM physical dedupe
+          WHERE TRIM(COALESCE(new_joining.aadhaar_no, '')) != ''
+            AND TRIM(COALESCE(dedupe.aadhaar_no, '')) = TRIM(new_joining.aadhaar_no)
+            AND LOWER(TRIM(COALESCE(dedupe.employment_status, ''))) = 'active'
+        )
+        ${newJoiningScope.sql}
+      GROUP BY new_joining.cmp, new_joining.designation
+      `,
+      newJoiningScope.params
+    ),
+  ]);
 
-      UNION ALL
+  const buckets = new Map();
+  const addCount = async (cmp, rawRole, cnt, countKey) => {
+    const resolved = await resolveRoleKey(rawRole, "physical");
+    if (!resolved) return;
 
-      SELECT
-        new_joining_roles.cmp,
-        new_joining_roles.role_key,
-        0 AS physical_count,
-        COUNT(*) AS new_joining_count
-      FROM (
-        SELECT
-          cmp,
-          CASE
-            WHEN normalized_role IN (
-              'stateenergymanager',
-              'statefibersme',
-              'stateispsme',
-              'statematerialmanager',
-              'stateoperationhead',
-              'stateplanningmanager',
-              'stateutilitysme'
-            )
-            THEN 'state_leadership_team'
-            WHEN normalized_role = 'nocexecutive' THEN 'noc_executive'
-            WHEN normalized_role LIKE 'analyst%' THEN 'analyst'
-            WHEN normalized_role = 'cmplead' THEN 'cmp_lead'
-            WHEN normalized_role = 'technician' THEN 'technician'
-            WHEN normalized_role = 'rigger' THEN 'rigger'
-            WHEN normalized_role = 'utilitysupervisor' THEN 'utility_supervisor'
-            WHEN normalized_role = 'utilityengineer' THEN 'utility_engineer'
-            WHEN normalized_role = 'ispengineer' THEN 'isp_engineer'
-            WHEN normalized_role IN ('whinchargecumsecurity', 'warehouseincharge', 'warehouseinchargecumsecurity')
-            THEN 'wh_incharge_cum_security'
-            WHEN normalized_role = 'splicer' THEN 'splicer'
-            WHEN normalized_role = 'assistantsplicer' THEN 'assistant_splicer'
-            WHEN normalized_role IN ('fiberhelper', 'fibrehelper', 'frthelper') THEN 'fiber_helper'
-            WHEN normalized_role = 'patroller' THEN 'patroller'
-            WHEN normalized_role IN ('fibersupervisor', 'fibresupervisor') THEN 'fiber_supervisor'
-            WHEN normalized_role IN ('fiberengineer', 'fibreengineer') THEN 'fibre_engineer'
-            WHEN normalized_role = 'fttxsplicer' THEN 'fttx_splicer'
-            WHEN normalized_role = 'fttxassistantsplicer' THEN 'fttx_assistant_splicer'
-            WHEN normalized_role = 'fttxsupervisor' THEN 'fttx_supervisor'
-            WHEN normalized_role = 'fttxhelper' THEN 'fttx_helper'
-            WHEN normalized_role = 'fttxengineer' THEN 'fttx_engineer'
-            WHEN normalized_role = 'fttxtechnician' THEN 'fttx_technician'
-            WHEN normalized_role = 'technicianb' THEN 'technicianb'
-            WHEN normalized_role = 'riggerb' THEN 'riggerb'
-            ELSE NULL
-          END AS role_key
-        FROM (
-          SELECT
-            cmp,
-            LOWER(
-              REPLACE(
-                REPLACE(
-                  REPLACE(
-                    REPLACE(TRIM(designation), ' ', ''),
-                    '-',
-                    ''
-                  ),
-                  '_',
-                  ''
-                ),
-                '.',
-                ''
-              )
-            ) AS normalized_role
-          FROM new_joining
-          WHERE LOWER(TRIM(COALESCE(joining_status, ''))) = 'joined'
-            AND cmp IS NOT NULL
-            AND cmp != ''
-            AND designation IS NOT NULL
-            AND designation != ''
-            AND NOT EXISTS (
-              SELECT 1
-              FROM physical dedupe
-              WHERE TRIM(COALESCE(new_joining.aadhaar_no, '')) != ''
-                AND TRIM(COALESCE(dedupe.aadhaar_no, '')) = TRIM(new_joining.aadhaar_no)
-                AND LOWER(TRIM(COALESCE(dedupe.employment_status, ''))) = 'active'
-            )
-            ${newJoiningScope.sql}
-        ) AS new_joining_source
-      ) AS new_joining_roles
-      WHERE new_joining_roles.role_key IS NOT NULL
-      GROUP BY new_joining_roles.cmp, new_joining_roles.role_key
-    ) AS combined
-    GROUP BY combined.cmp, combined.role_key
-    ORDER BY combined.cmp ASC, combined.role_key ASC
-    `,
-    [...physicalScope.params, ...newJoiningScope.params]
-  );
+    const key = `${cmp}::${resolved.roleKey}`;
+    const bucket = buckets.get(key) || {
+      cmp,
+      role_key: resolved.roleKey,
+      physical_count: 0,
+      new_joining_count: 0,
+    };
+    bucket[countKey] += cnt;
+    buckets.set(key, bucket);
+  };
+
+  for (const row of physicalRows) {
+    await addCount(row.cmp, row.job_role, Number(row.cnt) || 0, "physical_count");
+  }
+  for (const row of newJoiningRows) {
+    await addCount(row.cmp, row.designation, Number(row.cnt) || 0, "new_joining_count");
+  }
+
+  return Array.from(buckets.values())
+    .map((bucket) => ({ ...bucket, total: bucket.physical_count + bucket.new_joining_count }))
+    .sort((a, b) => a.cmp.localeCompare(b.cmp) || a.role_key.localeCompare(b.role_key));
 }
 
 // Verbatim copy of GET /api/manpower/scrum/cmp-role-count
@@ -294,82 +195,41 @@ async function fetchScrumActiveData(req) {
   // users, and therefore returns 1..N ids — hence IN, not =).
   const latestBatchSubquery = buildLatestScrumBatchSubquery(req);
 
-  const rows = await query(
+  // Role-key classification now comes from manpower_sub_profiles (see
+  // backend/services/manpowerConfigService.js) instead of a hardcoded SQL
+  // CASE-WHEN — pull raw (cmp, job_role) counts and resolve+aggregate in JS.
+  const rawRows = await query(
     `
-    SELECT
-      cmp,
-      role_key,
-      COUNT(*) AS total
-    FROM (
-      SELECT
-        maintenance_point AS cmp,
-        CASE
-          WHEN normalized_job_role IN ('stateleadershipteam', 'stateleadership') THEN 'state_leadership_team'
-          WHEN normalized_job_role = 'nocexecutive' THEN 'noc_executive'
-          WHEN normalized_job_role = 'analyst' THEN 'analyst'
-          WHEN normalized_job_role = 'cmplead' THEN 'cmp_lead'
-          WHEN normalized_job_role = 'technician' THEN 'technician'
-          WHEN normalized_job_role = 'rigger' THEN 'rigger'
-          WHEN normalized_job_role = 'utilitysupervisor' THEN 'utility_supervisor'
-          WHEN normalized_job_role = 'utilityengineer' THEN 'utility_engineer'
-          WHEN normalized_job_role = 'ispengineer' THEN 'isp_engineer'
-          WHEN normalized_job_role IN ('warehouseinchargecumsecurity', 'whinchargecumsecurity') THEN 'wh_incharge_cum_security'
-          WHEN normalized_job_role = 'splicer' THEN 'splicer'
-          WHEN normalized_job_role = 'assistantsplicer' THEN 'assistant_splicer'
-          WHEN normalized_job_role IN ('fiberhelper', 'fibrehelper') THEN 'fiber_helper'
-          WHEN normalized_job_role = 'patroller' THEN 'patroller'
-          WHEN normalized_job_role IN ('fibersupervisor', 'fibresupervisor') THEN 'fiber_supervisor'
-          WHEN normalized_job_role IN ('fiberengineer', 'fibreengineer') THEN 'fibre_engineer'
-          WHEN normalized_job_role = 'fttxsplicer' THEN 'fttx_splicer'
-          WHEN normalized_job_role = 'fttxassistantsplicer' THEN 'fttx_assistant_splicer'
-          WHEN normalized_job_role = 'fttxsupervisor' THEN 'fttx_supervisor'
-          WHEN normalized_job_role = 'fttxhelper' THEN 'fttx_helper'
-          WHEN normalized_job_role = 'fttxengineer' THEN 'fttx_engineer'
-          WHEN normalized_job_role = 'fttxtechnician' THEN 'fttx_technician'
-          WHEN normalized_job_role = 'technicianb' THEN 'technicianb'
-          WHEN normalized_job_role = 'riggerb' THEN 'riggerb'
-          ELSE NULL
-        END AS role_key
-      FROM (
-        SELECT
-          maintenance_point,
-          LOWER(
-            REPLACE(
-              REPLACE(
-                REPLACE(
-                  REPLACE(TRIM(job_role), ' ', ''),
-                  '-',
-                  ''
-                ),
-                '_',
-                ''
-              ),
-              '.',
-              ''
-            )
-          ) AS normalized_job_role
-        FROM scrum_manpower
-        ${whereClause}
-          AND upload_batch_id IN (
-            ${latestBatchSubquery}
-          )
-          AND UPPER(TRIM(COALESCE(status, ''))) = 'ACTIVE'
-          AND maintenance_point IS NOT NULL
-          AND maintenance_point != ''
-          AND job_role IS NOT NULL
-          AND job_role != ''
-      ) AS normalized_roles
-    ) AS role_counts
-    WHERE cmp IS NOT NULL
-      AND cmp != ''
-      AND role_key IS NOT NULL
-    GROUP BY cmp, role_key
-    ORDER BY cmp ASC, role_key ASC
+    SELECT maintenance_point AS cmp, job_role, COUNT(*) AS cnt
+    FROM scrum_manpower
+    ${whereClause}
+      AND upload_batch_id IN (
+        ${latestBatchSubquery}
+      )
+      AND UPPER(TRIM(COALESCE(status, ''))) = 'ACTIVE'
+      AND maintenance_point IS NOT NULL
+      AND maintenance_point != ''
+      AND job_role IS NOT NULL
+      AND job_role != ''
+    GROUP BY maintenance_point, job_role
     `,
     [...params, ...(!isAllCircle(req.authUser) ? [req.authUser.circle] : [])]
   );
 
-  return rows;
+  const buckets = new Map();
+  for (const row of rawRows) {
+    const resolved = await resolveRoleKey(row.job_role, "scrum");
+    if (!resolved) continue;
+
+    const key = `${row.cmp}::${resolved.roleKey}`;
+    const bucket = buckets.get(key) || { cmp: row.cmp, role_key: resolved.roleKey, total: 0 };
+    bucket.total += Number(row.cnt) || 0;
+    buckets.set(key, bucket);
+  }
+
+  return Array.from(buckets.values()).sort(
+    (a, b) => a.cmp.localeCompare(b.cmp) || a.role_key.localeCompare(b.role_key)
+  );
 }
 
 // Builds the complete workbook into an in-memory buffer *before* touching the

@@ -43,7 +43,7 @@ export default function SmartInsights({ insights, loading }) {
       </div>
 
       {loading ? (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {[0, 1, 2].map((i) => (
             <div key={i} className={`${CARD_SHELL} h-20 animate-pulse`} />
           ))}
@@ -51,7 +51,7 @@ export default function SmartInsights({ insights, loading }) {
       ) : !insights?.length ? (
         <div className={`${CARD_SHELL} p-6 text-center text-sm text-text-muted`}>No insights for the current filters.</div>
       ) : (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {insights.map((insight, index) => {
             const Icon = ICONS[insight.type] || Lightbulb;
             const colorClasses = COLOR_CLASSES[insight.type] || "from-slate-500 to-slate-400";

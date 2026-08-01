@@ -36,7 +36,7 @@ export default function AvailableEmployeeTrend({ monthlyTrend, loading }) {
         </div>
       ) : (
         <>
-          <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
+          <div className="mb-4 grid grid-cols-3 gap-2 sm:gap-3">
             <div className="rounded-lg bg-surface-muted/60 py-3 text-center">
               <div className="text-lg font-bold text-text-primary">{latest?.activeEmployees ?? 0}</div>
               <div className="text-[9px] font-semibold uppercase tracking-wide text-text-muted">Available Now</div>

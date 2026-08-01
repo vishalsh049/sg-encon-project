@@ -42,7 +42,7 @@ export default function CmpAnalyticsPanel({ cmps, loading, onOpenDrilldown, show
         <h2 className={`${SECTION_HEADING} text-violet-600 dark:text-violet-400 flex items-center gap-1.5`}>
           <Building2 size={14} /> CMP Analytics
         </h2>
-        <div className="flex items-center gap-1 text-[11px]">
+        <div className="flex flex-wrap items-center gap-1 text-[11px]">
           <span className="text-text-muted">Rank by</span>
           {sortOptions.map((option) => (
             <button
@@ -126,7 +126,7 @@ export default function CmpAnalyticsPanel({ cmps, loading, onOpenDrilldown, show
                     {isOpen && (
                       <tr>
                         <td colSpan={10} className="bg-surface-muted/40 px-3 py-2">
-                          <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3 xl:grid-cols-4">
+                          <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3 lg:grid-cols-4">
                             {cmp.designations.map((d) => {
                               const clickable = DRILLDOWN_ELIGIBLE.has(d.roleKey) && (d.requirement > 0 || d.available > 0);
                               return (

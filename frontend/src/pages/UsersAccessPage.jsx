@@ -71,6 +71,7 @@ const pageAccessList = [
  "Scrum Dashboard",
  "New Joining",
  "Signoff",
+ "Manpower Settings",
 ],
 },
 

@@ -23,6 +23,7 @@ import Revenue from "./pages/Revenue";
 import HrDashboard from "./pages/HrDashboard";
 import HrAnalyticsV2 from "./pages/HrAnalyticsV2";
 import Signoff from "./pages/Signoff";
+import ManpowerSettings from "./pages/ManpowerSettings";
 import NewJoining from "./pages/NewJoining";
 import TrainingDashboard from "./pages/Training/Dashboard";
 import TrainingNewRegistrations from "./pages/Training/NewRegistrations";
@@ -222,6 +223,15 @@ function App() {
   element={
     <ProtectedRoute page={"Signoff"}>
       <Signoff />
+    </ProtectedRoute>
+  }
+/>
+
+<Route
+  path="manpower/settings"
+  element={
+    <ProtectedRoute page={"Manpower Settings"}>
+      <ManpowerSettings />
     </ProtectedRoute>
   }
 />

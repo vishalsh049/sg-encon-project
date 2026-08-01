@@ -29,33 +29,7 @@ import { getStoredSession } from "../lib/session";
 import { cmpGroups, circleLabelFromTitle } from "../lib/cmpGroups";
 import { HrDashboardCircleContext } from "../components/hrDashboard/hrDashboardCircleContext";
 import DrilldownModal from "../components/hrDashboard/DrilldownModal";
-
-const physicalDesignationColumns = [
-  { key: "state_leadership_team", label: "State Leadership Team" },
-  { key: "noc_executive", label: "NOC Executive" },
-  { key: "analyst", label: "Analyst" },
-  { key: "cmp_lead", label: "CMP Lead" },
-  { key: "technician", label: "Technician" },
-  { key: "rigger", label: "Rigger" },
-  { key: "utility_supervisor", label: "Utility Supervisor" },
-  { key: "utility_engineer", label: "Utility Engineer" },
-  { key: "isp_engineer", label: "ISP Engineer" },
-  { key: "wh_incharge_cum_security", label: "WH Incharge cum Security" },
-  { key: "splicer", label: "Splicer" },
-  { key: "assistant_splicer", label: "Assistant Splicer" },
-  { key: "fiber_helper", label: "Fiber Helper" },
-  { key: "patroller", label: "Patroller" },
-  { key: "fiber_supervisor", label: "Fiber Supervisor" },
-  { key: "fibre_engineer", label: "Fibre Engineer" },
-  { key: "fttx_splicer", label: "FTTx Splicer" },
-  { key: "fttx_assistant_splicer", label: "FTTx Assistant Splicer" },
-  { key: "fttx_supervisor", label: "FTTx Supervisor" },
-  { key: "fttx_helper", label: "FTTx Helper" },
-  { key: "fttx_engineer", label: "FTTx Engineer" },
-  { key: "fttx_technician", label: "FTTx Technician" },
-];
-
-const scrumDesignationColumns = physicalDesignationColumns;
+import useManpowerConfig from "../hooks/useManpowerConfig";
 
 const statCardConfig = [
   {
@@ -286,6 +260,17 @@ const printRagPdf = ({ title, filtersSummary, header, rows }) => {
 };
 
 function HrDashboard() {
+  // Main Profile list now comes from the Manpower Settings page
+  // (backend/services/manpowerConfigService.js) instead of a hardcoded
+  // module-level array — add/rename/reorder a Main Profile there and it
+  // shows up here without a redeploy.
+  const { activeMainProfiles } = useManpowerConfig();
+  const physicalDesignationColumns = useMemo(
+    () => activeMainProfiles.map((profile) => ({ key: profile.roleKey, label: profile.label })),
+    [activeMainProfiles]
+  );
+  const scrumDesignationColumns = physicalDesignationColumns;
+
   const [jobRoles, setJobRoles] = useState([]);
   const [circles, setCircles] = useState([]);
   const [employmentStatus, setEmploymentStatus] = useState([]);

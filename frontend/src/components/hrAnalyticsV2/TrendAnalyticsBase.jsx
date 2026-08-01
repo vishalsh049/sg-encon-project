@@ -66,7 +66,7 @@ export default function TrendAnalyticsBase({ title, icon: Icon, accentClass, bar
         <h2 className={`${SECTION_HEADING} ${accentClass} flex items-center gap-1.5`}>
           <Icon size={14} /> {title}
         </h2>
-        <div className="flex items-center gap-1 text-[11px]">
+        <div className="flex flex-wrap items-center gap-1 text-[11px]">
           {GRANULARITY_OPTIONS.map((option) => (
             <button
               key={option.key}
@@ -100,7 +100,7 @@ export default function TrendAnalyticsBase({ title, icon: Icon, accentClass, bar
               <div className="text-xl font-bold text-indigo-700 dark:text-indigo-400">{periodTotal}</div>
             </div>
           ) : (
-            <div className="mb-4 grid grid-cols-5 gap-2 text-center">
+            <div className="mb-4 grid grid-cols-3 gap-2 text-center sm:grid-cols-5">
               {[
                 ["Today", summary.today],
                 ["This Week", summary.week],

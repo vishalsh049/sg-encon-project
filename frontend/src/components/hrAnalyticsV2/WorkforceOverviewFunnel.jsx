@@ -46,7 +46,7 @@ export default function WorkforceOverviewFunnel({ overview, loading, showOffered
   const maxValue = Math.max(1, ...steps.map((s) => (typeof s.value === "number" ? s.value : 0)));
 
   return (
-    <div className={`${CARD_SHELL} p-5`}>
+    <div className={`${CARD_SHELL} p-4`}>
       <h2 className={`${SECTION_HEADING} mb-4 text-indigo-600 dark:text-indigo-400`}>
         Workforce Overview
       </h2>
@@ -54,7 +54,7 @@ export default function WorkforceOverviewFunnel({ overview, loading, showOffered
       {loading ? (
         <div className="h-40 animate-pulse rounded-xl bg-surface-muted" />
       ) : (
-        <div className="flex flex-col gap-1 md:flex-row md:items-stretch md:gap-2">
+        <div className="flex flex-col gap-1 lg:flex-row lg:items-stretch lg:gap-2">
           {steps.map((step, index) => {
             const widthPct = Math.max(
               14,
@@ -75,7 +75,7 @@ export default function WorkforceOverviewFunnel({ overview, loading, showOffered
                   </div>
                 </div>
                 {index < steps.length - 1 && (
-                  <div className="flex items-center justify-center text-text-muted md:rotate-[-90deg]">
+                  <div className="flex items-center justify-center text-text-muted lg:rotate-[-90deg]">
                     <ArrowDown size={16} />
                   </div>
                 )}

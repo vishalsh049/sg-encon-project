@@ -220,7 +220,7 @@ export default function HrAnalyticsV2() {
                   HR Analytics V2 <Sparkles className="h-3.5 w-3.5 text-amber-300" />
                 </h1>
                 <p className="text-xs text-white/85 md:text-sm">
-                  Complete Workforce Analytics & Decision Support — testing build, admin only
+                  Real-Time Workforce Intelligence & Decision Support Platform
                 </p>
               </div>
             </div>
@@ -247,7 +247,7 @@ export default function HrAnalyticsV2() {
 
         {/* FILTER BAR */}
         <div className="rounded-[12px] border border-border-color/70 bg-surface/90 p-2 backdrop-blur-xl">
-          <div className="grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-[1fr_1fr_1fr_0.8fr_0.6fr]">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-[1fr_1fr_1fr_0.8fr_0.6fr]">
             <div className="relative">
               <select
                 value={selectedCircle}
@@ -318,7 +318,7 @@ export default function HrAnalyticsV2() {
             </button>
           </div>
 
-          <div className="mt-2 flex flex-wrap items-center gap-2 border-t border-border-color/60 pt-2">
+          <div className="mt-2 flex flex-col gap-2 border-t border-border-color/60 pt-2 sm:flex-row sm:flex-wrap sm:items-center">
             <span className="text-[11px] font-semibold uppercase tracking-wide text-text-muted">
               Period (New Joining &amp; Resignation panels):
             </span>
@@ -330,7 +330,7 @@ export default function HrAnalyticsV2() {
                   setSelectedMonth(e.target.value);
                   if (e.target.value) setSelectedQuarter("");
                 }}
-                className="h-8 w-40 appearance-none rounded-[10px] border border-border-color bg-surface px-3 pr-8 text-[12px] text-text-secondary outline-none transition focus:border-indigo-300"
+                className="h-8 w-full appearance-none rounded-[10px] border border-border-color bg-surface px-3 pr-8 text-[12px] text-text-secondary outline-none transition focus:border-indigo-300 sm:w-40"
               >
                 <option value="">Month: Live</option>
                 {monthOptionsList.map((option) => (
@@ -347,7 +347,7 @@ export default function HrAnalyticsV2() {
                   setSelectedQuarter(e.target.value);
                   if (e.target.value) setSelectedMonth("");
                 }}
-                className="h-8 w-36 appearance-none rounded-[10px] border border-border-color bg-surface px-3 pr-8 text-[12px] text-text-secondary outline-none transition focus:border-indigo-300"
+                className="h-8 w-full appearance-none rounded-[10px] border border-border-color bg-surface px-3 pr-8 text-[12px] text-text-secondary outline-none transition focus:border-indigo-300 sm:w-36"
               >
                 <option value="">Quarter: Live</option>
                 {quarterOptionsList.map((option) => (
@@ -375,8 +375,8 @@ export default function HrAnalyticsV2() {
         <KpiCardsRow overview={overview} loading={loading} showOfferedSalary={SHOW_OFFERED_SALARY_SECTION} />
         <WorkforceOverviewFunnel overview={overview} loading={loading} showOfferedSalary={SHOW_OFFERED_SALARY_SECTION} />
 
-        <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
-          <div className="xl:col-span-2">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+          <div className="lg:col-span-2">
             <CircleWorkforcePanel
               circles={circles}
               loading={loading}

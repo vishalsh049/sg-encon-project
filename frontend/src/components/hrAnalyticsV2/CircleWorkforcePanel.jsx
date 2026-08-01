@@ -21,7 +21,7 @@ export default function CircleWorkforcePanel({ circles, loading, selectedCircle,
       </div>
 
       {loading ? (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {[0, 1, 2, 3].map((i) => (
             <div key={i} className="h-36 animate-pulse rounded-xl bg-surface-muted" />
           ))}
@@ -31,7 +31,7 @@ export default function CircleWorkforcePanel({ circles, loading, selectedCircle,
           No circle data for the current filters.
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {circles.map((circle) => {
             const status = statusColor(circle.utilizationPct);
             const isActive = selectedCircle === circle.circle;

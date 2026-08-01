@@ -40,7 +40,7 @@ function ListCard({ title, icon: Icon, accent, rows, metricKey, metricLabel }) {
             return (
               <div
                 key={`${row.circle}-${row.cmp}-${row.roleKey}`}
-                className="flex items-center justify-between gap-3 rounded-xl border border-border-color/60 bg-surface-muted/50 px-3 py-2"
+                className="flex flex-col gap-2 rounded-xl border border-border-color/60 bg-surface-muted/50 px-3 py-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3"
               >
                 <div className="min-w-0">
                   <div className="truncate text-sm font-semibold text-text-primary">{row.roleLabel}</div>
@@ -48,7 +48,7 @@ function ListCard({ title, icon: Icon, accent, rows, metricKey, metricLabel }) {
                     {row.circle} · {row.cmp}
                   </div>
                 </div>
-                <div className="flex shrink-0 items-center gap-3 text-right">
+                <div className="flex flex-wrap items-center gap-3 text-right sm:shrink-0">
                   <div className="text-[11px] text-text-muted">
                     Need <span className="font-semibold text-text-secondary">{row.requirement}</span> · Avail{" "}
                     <span className="font-semibold text-text-secondary">{row.available}</span>

@@ -174,6 +174,14 @@ function Sidebar({ closeSidebar, collapsed, onExpandRequest }) {
   accessPage: "Signoff",
 },
 
+{
+  key: "manpower-settings",
+  label: "Manpower Settings",
+  path: "/dashboard/manpower/settings",
+  icon: Database,
+  accessPage: "Manpower Settings",
+},
+
   // TRAINING
 {
   key: "training-dashboard",

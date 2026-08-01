@@ -33,7 +33,7 @@ export default function KpiCardsRow({ overview, loading, showOfferedSalary = tru
       icon: Users,
       accentKey: "neutral",
       value: kpis.totalEmployees ?? 0,
-      description: "Active + Inactive, all circles in scope",
+      description: "Total employees in the selected filters.",
       tooltip: "Every employee currently recorded in the Physical roster, active or inactive.",
     },
     {
@@ -42,7 +42,7 @@ export default function KpiCardsRow({ overview, loading, showOfferedSalary = tru
       icon: UserCheck,
       accentKey: "completed",
       value: kpis.activeEmployees ?? 0,
-      description: "Currently working",
+      description: "Employees currently working.",
       tooltip: "Employees with employment_status = Active in the Physical roster.",
     },
     {
@@ -51,7 +51,7 @@ export default function KpiCardsRow({ overview, loading, showOfferedSalary = tru
       icon: UserX,
       accentKey: "pending",
       value: kpis.inactiveEmployees ?? 0,
-      description: "Not currently working",
+      description: "Employees not currently working.",
       tooltip: "Employees with employment_status = Inactive in the Physical roster.",
     },
     {
@@ -60,9 +60,20 @@ export default function KpiCardsRow({ overview, loading, showOfferedSalary = tru
       icon: UserPlus,
       accentKey: "revenue",
       value: kpis.newJoiningThisMonth ?? 0,
-      description: "Joined this calendar month",
+      description: "Employees joined this month.",
       tooltip: "Physical employees whose Date of Joining falls in the current month, plus New Joining records already marked Joined this month.",
     },
+
+     {
+      key: "pendingJoining",
+      label: "Pending Joining",
+      icon: Clock,
+      accentKey: "pending",
+      value: kpis.pendingJoining ?? 0,
+      description: "Employees waiting to join.",
+      tooltip: "New Joining records whose Joining Status is not yet 'Joined'.",
+    },
+
     {
       key: "resigned",
       label: "Resigned Employees",
@@ -72,51 +83,38 @@ export default function KpiCardsRow({ overview, loading, showOfferedSalary = tru
       description: `${kpis.resignedThisMonth ?? 0} resigned this month`,
       tooltip: "Physical employees with a Resigned Date set.",
     },
-    {
-      key: "pendingJoining",
-      label: "Pending Joining",
-      icon: Clock,
-      accentKey: "pending",
-      value: kpis.pendingJoining ?? 0,
-      description: "In the New Joining pipeline, not yet Joined",
-      tooltip: "New Joining records whose Joining Status is not yet 'Joined'.",
-    },
-    {
-      key: "pendingApproval",
-      label: "Pending Approval",
-      icon: ShieldAlert,
-      accentKey: "pending",
-      value: kpis.pendingApproval ?? 0,
-      description: "Awaiting L2 approval",
-      tooltip: "New Joining records whose L2 Status is Pending.",
-    },
+   
+
     {
       key: "requirement",
       label: "Requirement",
       icon: Target,
       accentKey: "pmLoss",
       value: kpis.requirement ?? 0,
-      description: "Sanctioned headcount (Signoff)",
+      description: "Total approved manpower required.",
       tooltip: "Sum of every designation's sanctioned headcount from the Signoff master data, across the current filter scope.",
     },
-    {
+
+     {
       key: "available",
       label: "Available",
       icon: CheckCircle2,
       accentKey: "completed",
       value: kpis.available ?? 0,
-      description: "Active + joined New Joining (deduped)",
+      description: "Employees available for deployment.",
       tooltip: "Active Physical employees plus New Joining records marked Joined, with duplicates removed by Aadhaar number.",
     },
+
     {
-      key: "gap",
-      label: "Gap",
-      icon: AlertTriangle,
-      accentKey: "penalty",
-      value: kpis.gap ?? 0,
-      description: "Requirement not yet filled",
-      tooltip: "Sum of (Requirement − Available) wherever Requirement exceeds Available.",
+      key: "pendingApproval",
+      label: "Pending Approval",
+      icon: ShieldAlert,
+      accentKey: "pending",
+      value: kpis.pendingApproval ?? 0,
+      description: "Records waiting for L2 approval.",
+      tooltip: "New Joining records whose L2 Status is Pending.",
     },
+    
     {
       key: "extra",
       label: "Extra Employees",
@@ -140,6 +138,17 @@ export default function KpiCardsRow({ overview, loading, showOfferedSalary = tru
           },
         ]
       : []),
+
+       {
+      key: "gap",
+      label: "Gap",
+      icon: AlertTriangle,
+      accentKey: "penalty",
+      value: kpis.gap ?? 0,
+      description: "Additional employees required.",
+      tooltip: "Sum of (Requirement − Available) wherever Requirement exceeds Available.",
+    },
+    
     {
       key: "vacancyPct",
       label: "Vacancy %",
@@ -149,16 +158,17 @@ export default function KpiCardsRow({ overview, loading, showOfferedSalary = tru
       description: "Gap ÷ Requirement",
       tooltip: "Gap as a percentage of total Requirement.",
     },
+
   ];
 
   return (
     <div>
-      <div className="mb-3 flex items-center justify-between px-1">
+      <div className="mb-2 flex items-center justify-between px-1">
         <h2 className={`${SECTION_HEADING} text-indigo-600 dark:text-indigo-400`}>
           Executive Summary
         </h2>
       </div>
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
         {cards.map((card) => (
           <KpiCard
             key={card.key}
