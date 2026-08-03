@@ -41,7 +41,16 @@ const app = express();
 // benefits the JSON report-list/search responses; the `compressible` filter
 // this library uses already skips content types (like .xlsx/.xlsb, which are
 // zip archives) that wouldn't shrink further.
-app.use(compression());
+app.use(
+  compression({
+    // XLSX is already a ZIP container. Keep the completed export byte-for-byte
+    // intact, including its known Content-Length.
+    filter(req, res) {
+      if (req.path === "/api/reports/export-excel") return false;
+      return compression.filter(req, res);
+    },
+  })
+);
 
 function registerRoute(routePath, mountPath) {
   // Resolve to an absolute path and tolerate missing ".js" extension

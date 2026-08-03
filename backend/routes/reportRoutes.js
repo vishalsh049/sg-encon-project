@@ -2,6 +2,12 @@ const express = require("express");
 const multer = require("multer");
 const xlsx = require("xlsx");
 const ExcelJS = require("exceljs");
+const fs = require("fs");
+const fsp = require("fs/promises");
+const os = require("os");
+const path = require("path");
+const { pipeline } = require("stream/promises");
+const { randomUUID } = require("crypto");
 const router = express.Router();
 const { db } = require("../config/db");
 const {
@@ -2262,6 +2268,29 @@ const bulkExportHighWaterMark = 1000;
 // One row is reserved for headers on every export sheet.
 const maxExcelDataRowsPerSheet = 1048575;
 
+const xlsxMimeType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+
+const removeTemporaryExport = async (filePath) => {
+  if (!filePath) return;
+  try {
+    await fsp.unlink(filePath);
+  } catch (err) {
+    if (err.code !== "ENOENT") console.warn("Could not remove temporary export:", err.message);
+  }
+};
+
+const isValidXlsxFile = async (filePath) => {
+  const handle = await fsp.open(filePath, "r");
+  try {
+    const header = Buffer.alloc(4);
+    const { bytesRead } = await handle.read(header, 0, header.length, 0);
+    // XLSX is a ZIP container and must begin with PK\\x03\\x04.
+    return bytesRead === 4 && header.equals(Buffer.from([0x50, 0x4b, 0x03, 0x04]));
+  } finally {
+    await handle.close();
+  }
+};
+
 const runConnectionQuery = (connection, sql, params = []) =>
   new Promise((resolve, reject) => {
     connection.query(sql, params, (err, result) => (err ? reject(err) : resolve(result)));
@@ -2609,15 +2638,14 @@ router.get("/export-excel", requirePagePermission("tower-reports", "download"), 
     // out before the first byte, so once writing starts an error can only be
     // reported by destroying the connection, never by sending JSON/HTML into
     // the .xlsx stream (see the catch block below).
-    const downloadName = `${String(siteType).toUpperCase()}_Report.xlsx`;
-    res.setHeader("Content-Disposition", `attachment; filename="${downloadName}"`);
-    res.setHeader(
-      "Content-Type",
-      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    // Do not start an HTTP download until ExcelJS has completed a valid ZIP.
+    // Otherwise an upstream interruption can become a partial .xlsx with 200.
+    let tempExportPath = path.join(
+      os.tmpdir(),
+      `sg-encon-${process.pid}-${Date.now()}-${randomUUID()}.xlsx`
     );
-
     const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({
-      stream: res,
+      filename: tempExportPath,
       useStyles: false,
       useSharedStrings: false,
     });
@@ -2683,11 +2711,31 @@ router.get("/export-excel", requirePagePermission("tower-reports", "download"), 
 
       worksheet.commit();
       await workbook.commit();
+
+      const exportStats = await fsp.stat(tempExportPath);
+      if (!exportStats.size || !(await isValidXlsxFile(tempExportPath))) {
+        throw new Error("Workbook generation did not produce a valid XLSX ZIP file");
+      }
+
+      const downloadName = `${String(siteType).toUpperCase()} Report.xlsx`;
+      res.setHeader("Content-Disposition", `attachment; filename="${downloadName}"`);
+      res.setHeader("Content-Type", xlsxMimeType);
+      res.setHeader("Content-Length", String(exportStats.size));
+      res.setHeader("Content-Encoding", "identity");
+      res.setHeader("Cache-Control", "no-store, no-transform");
+      res.setHeader("X-Content-Type-Options", "nosniff");
+
+      try {
+        await pipeline(fs.createReadStream(tempExportPath), res);
+      } finally {
+        await removeTemporaryExport(tempExportPath);
+      }
       return;
     } catch (innerErr) {
       // if an error happens after headers sent, destroy the response to terminate stream
       console.error("Export stream error:", innerErr);
       if (!res.headersSent) {
+        await removeTemporaryExport(tempExportPath);
         return res.status(500).json({
           message: "Unable to build the export file. Please try a shorter date range, or contact your administrator if the problem continues.",
         });
