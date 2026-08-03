@@ -48,6 +48,8 @@ ALTER TABLE enb    ADD INDEX idx_enb_file_id    (file_id);
 ALTER TABLE enb    ADD INDEX idx_enb_export_date_id (date, id);
 
 ALTER TABLE gnb    ADD INDEX idx_gnb_file_id    (file_id);
+-- Matches the GNB date-range export's WHERE/ORDER BY pattern.
+ALTER TABLE gnb    ADD INDEX idx_gnb_export_date_id (date, id);
 ALTER TABLE osc    ADD INDEX idx_osc_file_id    (file_id);
 ALTER TABLE hpodsc ADD INDEX idx_hpodsc_file_id (file_id);
 ALTER TABLE esc    ADD INDEX idx_esc_file_id    (file_id);
@@ -100,6 +102,7 @@ ALTER TABLE hpodsc ADD INDEX idx_hpodsc_circle_date (circle, date);
 -- ALTER TABLE enb    DROP INDEX idx_enb_file_id;
 -- ALTER TABLE enb    DROP INDEX idx_enb_export_date_id;
 -- ALTER TABLE gnb    DROP INDEX idx_gnb_file_id;
+-- ALTER TABLE gnb    DROP INDEX idx_gnb_export_date_id;
 -- ALTER TABLE osc    DROP INDEX idx_osc_file_id;
 -- ALTER TABLE hpodsc DROP INDEX idx_hpodsc_file_id;
 -- ALTER TABLE esc    DROP INDEX idx_esc_file_id;

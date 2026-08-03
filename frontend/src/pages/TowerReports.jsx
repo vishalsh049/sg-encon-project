@@ -230,6 +230,8 @@ function TowerReports() {
   const [exportFromDate, setExportFromDate] = useState("");
   const [exportToDate, setExportToDate] = useState("");
   const [exportSiteType, setExportSiteType] = useState("");
+  const [exportCircle, setExportCircle] = useState("");
+  const [exportReportType, setExportReportType] = useState("");
   const [exportError, setExportError] = useState("");
   const [editingId, setEditingId] = useState(null);
   const [sortKey, setSortKey] = useState("report_date");
@@ -631,6 +633,11 @@ setTimeout(() => {
           siteType: exportSiteType,
           fromDate: exportFromDate,
           toDate: exportToDate,
+          // Keep the export request self-contained.  The server still applies
+          // the signed-in user's circle restriction and validates every value.
+          siteCategory: normalizedCategory,
+          ...(exportCircle ? { circle: exportCircle } : {}),
+          ...(exportReportType ? { reportType: exportReportType } : {}),
         },
         responseType: "blob",
         onDownloadProgress: trackDownload(setDownloadProgress),
@@ -1236,6 +1243,10 @@ setTimeout(() => {
                 type="button"
                 onClick={() => {
                   setExportError("");
+                  // Start the export with the filters currently visible in the
+                  // report list, while still allowing them to be changed below.
+                  setExportCircle(filterCircle);
+                  setExportReportType(filterReportType);
                   setExportPopupOpen(true);
                 }}
                 disabled={downloading}
@@ -2455,6 +2466,69 @@ setTimeout(() => {
                       setExportError("");
                     }}
                   />
+                </div>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <span className={fieldLabelClass}>Circle</span>
+                  <Listbox
+                    value={exportCircle}
+                    onChange={(value) => {
+                      setExportCircle(value);
+                      setExportError("");
+                    }}
+                  >
+                    <div className="relative">
+                      <Listbox.Button className={listboxButtonClass}>
+                        <span className="truncate">{exportCircle || "All Circles"}</span>
+                        <ChevronDown size={16} className="flex-shrink-0 text-text-muted" />
+                      </Listbox.Button>
+                      <Listbox.Options
+                        anchor={{ to: "bottom start", gap: "0.5rem" }}
+                        className={listboxOptionsClass}
+                      >
+                        <Listbox.Option value="" className={listboxOptionClass}>
+                          All Circles
+                        </Listbox.Option>
+                        {availableCircles.map((circle) => (
+                          <Listbox.Option key={circle} value={circle} className={listboxOptionClass}>
+                            {circle}
+                          </Listbox.Option>
+                        ))}
+                      </Listbox.Options>
+                    </div>
+                  </Listbox>
+                </div>
+
+                <div>
+                  <span className={fieldLabelClass}>Report type</span>
+                  <Listbox
+                    value={exportReportType}
+                    onChange={(value) => {
+                      setExportReportType(value);
+                      setExportError("");
+                    }}
+                  >
+                    <div className="relative">
+                      <Listbox.Button className={listboxButtonClass}>
+                        <span className="truncate">
+                          {reportOptions.find((option) => option.value === exportReportType)?.label}
+                        </span>
+                        <ChevronDown size={16} className="flex-shrink-0 text-text-muted" />
+                      </Listbox.Button>
+                      <Listbox.Options
+                        anchor={{ to: "bottom start", gap: "0.5rem" }}
+                        className={listboxOptionsClass}
+                      >
+                        {reportOptions.map((option) => (
+                          <Listbox.Option key={option.value} value={option.value} className={listboxOptionClass}>
+                            {option.label}
+                          </Listbox.Option>
+                        ))}
+                      </Listbox.Options>
+                    </div>
+                  </Listbox>
                 </div>
               </div>
 

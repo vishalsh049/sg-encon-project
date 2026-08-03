@@ -2262,6 +2262,11 @@ const bulkExportHighWaterMark = 1000;
 // One row is reserved for headers on every export sheet.
 const maxExcelDataRowsPerSheet = 1048575;
 
+const runConnectionQuery = (connection, sql, params = []) =>
+  new Promise((resolve, reject) => {
+    connection.query(sql, params, (err, result) => (err ? reject(err) : resolve(result)));
+  });
+
 const streamBulkExportRows = async function* (sql, params) {
   const connection = await new Promise((resolve, reject) => {
     db.getConnection((err, pooledConnection) => {
@@ -2270,27 +2275,31 @@ const streamBulkExportRows = async function* (sql, params) {
     });
   });
 
-  let statementTimeoutDisabled = false;
+  // MariaDB calls this max_statement_time while MySQL calls it
+  // max_execution_time.  Do not make exports depend on either server-specific
+  // setting existing: an unknown variable used to abort ENB/GNB exports before
+  // their SELECT even started.
+  let timeoutVariable = null;
 
   try {
-    await new Promise((resolve, reject) => {
-      connection.query("SET time_zone = '+05:30'", (err) => {
-        if (err) return reject(err);
-        resolve();
-      });
-    });
+    await runConnectionQuery(connection, "SET time_zone = '+05:30'");
 
     // Some report tables contain millions of rows. The hosting database has a
     // low max_statement_time, which was cancelling the already-authorized,
     // date-scoped export SELECT before a workbook could be built. Apply this
     // only to this export connection and restore its default before reuse.
-    await new Promise((resolve, reject) => {
-      connection.query("SET SESSION max_statement_time = 0", (err) => {
-        if (err) return reject(err);
-        statementTimeoutDisabled = true;
-        resolve();
-      });
-    });
+    for (const variable of ["max_statement_time", "max_execution_time"]) {
+      try {
+        await runConnectionQuery(connection, `SET SESSION ${variable} = 0`);
+        timeoutVariable = variable;
+        break;
+      } catch (err) {
+        // Try the name used by the other supported MySQL-family server.
+        if (err.code !== "ER_UNKNOWN_SYSTEM_VARIABLE") {
+          console.warn(`Could not disable ${variable} for export:`, err.message);
+        }
+      }
+    }
 
     const rowStream = connection
       .query(sql, params)
@@ -2300,14 +2309,9 @@ const streamBulkExportRows = async function* (sql, params) {
       yield row;
     }
   } finally {
-    if (statementTimeoutDisabled) {
+    if (timeoutVariable) {
       try {
-        await new Promise((resolve, reject) => {
-          connection.query("SET SESSION max_statement_time = DEFAULT", (err) => {
-            if (err) return reject(err);
-            resolve();
-          });
-        });
+        await runConnectionQuery(connection, `SET SESSION ${timeoutVariable} = DEFAULT`);
       } catch (err) {
         // The connection is about to return to the pool. Do not hide the
         // export's original success/failure if the best-effort reset fails.
@@ -2465,16 +2469,35 @@ router.get("/export-excel", requirePagePermission("tower-reports", "download"), 
   try {
 
     const {
-      siteType,
-      fromDate,
-      toDate
+      siteType: requestedSiteType,
+      fromDate: requestedFromDate,
+      toDate: requestedToDate,
+      circle: requestedCircle,
+      reportType: requestedReportType,
+      siteCategory: requestedSiteCategory,
     } = req.query;
+
+    const siteType = typeof requestedSiteType === "string" ? requestedSiteType.trim() : "";
+    const fromDate = typeof requestedFromDate === "string" ? requestedFromDate.trim() : "";
+    const toDate = typeof requestedToDate === "string" ? requestedToDate.trim() : "";
+    const requestedCircleValue = typeof requestedCircle === "string" ? requestedCircle.trim() : "";
+    const reportType = typeof requestedReportType === "string" ? requestedReportType.trim() : "";
+    const siteCategory = typeof requestedSiteCategory === "string"
+      ? requestedSiteCategory.trim().toLowerCase()
+      : "";
 
     if (!siteType) {
       return res.status(400).json({ message: "Please select a Site Type." });
     }
 
-    const isIsoDate = (value) => /^\d{4}-\d{2}-\d{2}$/.test(String(value || ""));
+    const isIsoDate = (value) => {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+      const [year, month, day] = value.split("-").map(Number);
+      const parsed = new Date(Date.UTC(year, month - 1, day));
+      return parsed.getUTCFullYear() === year &&
+        parsed.getUTCMonth() === month - 1 &&
+        parsed.getUTCDate() === day;
+    };
 
     if (!isIsoDate(fromDate) || !isIsoDate(toDate)) {
       return res.status(400).json({
@@ -2503,26 +2526,64 @@ router.get("/export-excel", requirePagePermission("tower-reports", "download"), 
       });
     }
 
+    if (reportType && !VALID_REPORT_TYPES.includes(reportType)) {
+      return res.status(400).json({ message: "Please select a valid Report Type." });
+    }
+
+    if (siteCategory && !["tower", "fiber"].includes(siteCategory)) {
+      return res.status(400).json({ message: "Please select a valid report category." });
+    }
+
+    if (requestedCircleValue && !isValidCircle(requestedCircleValue)) {
+      return res.status(400).json({ message: "Please select a valid Circle." });
+    }
+
+    if (!isAllCircle(req.authUser) && requestedCircleValue &&
+      normalizeCircle(requestedCircleValue).toLowerCase() !==
+        normalizeCircle(req.authUser.circle).toLowerCase()) {
+      return res.status(403).json({ message: "You can only export records from your assigned Circle." });
+    }
+
     const scopedToCircle = !isAllCircle(req.authUser);
-    const circleClause = scopedToCircle
+    const circle = requestedCircleValue || (scopedToCircle ? req.authUser.circle : "");
+    const circleClause = circle
       ? " AND LOWER(TRIM(circle)) = LOWER(TRIM(?))"
       : "";
-    const circleParams = scopedToCircle ? [req.authUser.circle] : [];
+    const circleParams = circle ? [circle] : [];
+
+    // Report type/category live on the upload metadata rather than every
+    // report-data row. EXISTS avoids duplicate rows when legacy metadata has
+    // more than one entry for a file id.
+    const metadataConditions = ["uploads.file_id = export_rows.file_id"];
+    const metadataParams = [];
+    if (reportType) {
+      metadataConditions.push("uploads.report_type = ?");
+      metadataParams.push(reportType);
+    }
+    if (siteCategory) {
+      metadataConditions.push("LOWER(TRIM(uploads.site_category)) = ?");
+      metadataParams.push(siteCategory);
+    }
+    const metadataClause = metadataParams.length
+      ? ` AND EXISTS (SELECT 1 FROM report_uploads AS uploads WHERE ${metadataConditions.join(" AND ")})`
+      : "";
+    const exportWhereClause = `date BETWEEN ? AND ?${circleClause}${metadataClause}`;
+    const exportParams = [fromDate, toDate, ...circleParams, ...metadataParams];
 
     // Counted before any header is written. Streaming first meant an empty
     // range produced a "successful" download of a workbook with one bare
     // column, and there was no way to say why it was empty.
     const [totals] = await query(
-      `SELECT COUNT(*) AS total FROM ${tableName} WHERE date BETWEEN ? AND ?${circleClause}`,
-      [fromDate, toDate, ...circleParams]
+      `SELECT COUNT(*) AS total FROM ${tableName} AS export_rows WHERE ${exportWhereClause}`,
+      exportParams
     );
 
     if (!Number(totals?.total || 0)) {
       const [available] = await query(
         `SELECT MIN(date) AS first_date, MAX(date) AS last_date
-           FROM ${tableName}
-          WHERE date IS NOT NULL${circleClause}`,
-        circleParams
+           FROM ${tableName} AS export_rows
+          WHERE date IS NOT NULL${circleClause}${metadataClause}`,
+        [...circleParams, ...metadataParams]
       );
 
       const firstDate = formatDateOnly(available?.first_date);
@@ -2576,19 +2637,12 @@ router.get("/export-excel", requirePagePermission("tower-reports", "download"), 
       worksheet.columns = columns.map((key) => ({ header: key, key }));
     };
 
-    // The ENB table is large enough that MariaDB's optimizer otherwise picks
-    // a full scan and filesort despite the dedicated (date, id) export index.
-    // FORCE INDEX retains the exact same result set and ordering.
-    const tableHint = tableName === "enb"
-      ? " FORCE INDEX (idx_enb_export_date_id)"
-      : "";
-
     const rows = streamBulkExportRows(
-      `SELECT *
-         FROM ${tableName}${tableHint}
-        WHERE date BETWEEN ? AND ?${circleClause}
-        ORDER BY date ASC, id ASC`,
-      [fromDate, toDate, ...circleParams]
+      `SELECT export_rows.*
+         FROM ${tableName} AS export_rows
+        WHERE ${exportWhereClause}
+        ORDER BY export_rows.date ASC, export_rows.id ASC`,
+      exportParams
     );
 
     try {
