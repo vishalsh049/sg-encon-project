@@ -1843,11 +1843,7 @@ setTimeout(() => {
                           return selected >= startOfToday; // blocks today + future
                         }}
                       />
-                      <p className="mt-1 text-[11px] text-text-muted">
-                        Reports cover a completed day, so today and future dates
-                        cannot be selected.
-                      </p>
-                    </div>
+                        </div>
                   ) : null}
 
                   {/* Uploaded by — defaults to the signed-in account's name,
