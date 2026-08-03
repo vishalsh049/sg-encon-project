@@ -235,6 +235,9 @@ function TowerReports() {
   const [sortKey, setSortKey] = useState("report_date");
   const [sortDirection, setSortDirection] = useState("desc");
   const [modalOpen, setModalOpen] = useState(false);
+  const modalRef = useRef(null);
+  const previousFocusedElement = useRef(null);
+  const firstFocusableRef = useRef(null);
 
   // Full structured payload from a failed upload, rendered by the error dialog.
   const [uploadErrorPayload, setUploadErrorPayload] = useState(null);
@@ -273,10 +276,22 @@ function TowerReports() {
   const closeUploadModal = useCallback(() => {
     closeDuplicateDialog();
     setModalOpen(false);
+
+setTimeout(() => {
+    previousFocusedElement.current?.focus();
+},0);
     setModalMessage("");
     setEditingId(null);
     setUploadProgress(null);
   }, [closeDuplicateDialog]);
+
+  useEffect(() => {
+  if (modalOpen) {
+    setTimeout(() => {
+      firstFocusableRef.current?.focus();
+    }, 0);
+  }
+}, [modalOpen]);
 
   // One lock for every layer. The old effect watched only the upload modal, so
   // the export and duplicate dialogs all let the page scroll behind them.
@@ -624,7 +639,7 @@ function TowerReports() {
       saveBlob(
         response.data,
         response.headers["content-type"],
-        `${exportSiteType}_${exportFromDate}_to_${exportToDate}.xlsx`
+        `${exportSiteType.toUpperCase()}_Report.xlsx`
       );
 
       setExportPopupOpen(false);
@@ -697,6 +712,8 @@ function TowerReports() {
   };
 
   const openUploadModal = () => {
+  previousFocusedElement.current = document.activeElement;
+
     closeDuplicateDialog();
     setEditingId(null);
     setDate(defaultReportDate);
@@ -1091,6 +1108,46 @@ function TowerReports() {
     { key: "file_name", label: "File Name" },
     { key: "uploaded_at", label: "Uploaded At" },
   ];
+
+  const handleFocusTrap = (e) => {
+
+    if (!modalRef.current) return;
+
+    if (e.key !== "Tab") return;
+
+    const focusable = modalRef.current.querySelectorAll(
+
+'button,[href],input,select,textarea,[tabindex]:not([tabindex="-1"])'
+
+    );
+
+    const first = focusable[0];
+
+    const last = focusable[focusable.length-1];
+
+    if (e.shiftKey) {
+
+        if (document.activeElement===first){
+
+            e.preventDefault();
+
+            last.focus();
+
+        }
+
+    }else{
+
+        if(document.activeElement===last){
+
+            e.preventDefault();
+
+            first.focus();
+
+        }
+
+    }
+
+};
 
   return (
     <div className="min-h-screen w-full pb-32 text-text-primary md:pb-24">
@@ -1903,7 +1960,7 @@ function TowerReports() {
                     </p>
                     <a
                       href={`/formats/${siteType.toLowerCase()}_format.xlsx`}
-                      download={`${siteType}_Format.xlsx`}
+                      download={`${siteType}_Format.xlsb`}
                       className="inline-flex h-9 items-center gap-2 rounded-xl border border-violet-200 bg-surface px-3 text-sm font-medium text-violet-700 transition hover:bg-violet-100 dark:border-violet-500/20 dark:text-violet-400 hover:dark:bg-violet-500/15"
                     >
                       <Download size={15} />

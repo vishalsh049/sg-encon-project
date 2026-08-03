@@ -2258,6 +2258,9 @@ router.post("/bulk-delete", requirePagePermission("tower-reports", "delete"), as
 });
 
 const bulkExportHighWaterMark = 1000;
+// Excel workbooks have a hard limit of 1,048,576 total rows per worksheet.
+// One row is reserved for headers on every export sheet.
+const maxExcelDataRowsPerSheet = 1048575;
 
 const streamBulkExportRows = async function* (sql, params) {
   const connection = await new Promise((resolve, reject) => {
@@ -2267,10 +2270,24 @@ const streamBulkExportRows = async function* (sql, params) {
     });
   });
 
+  let statementTimeoutDisabled = false;
+
   try {
     await new Promise((resolve, reject) => {
       connection.query("SET time_zone = '+05:30'", (err) => {
         if (err) return reject(err);
+        resolve();
+      });
+    });
+
+    // Some report tables contain millions of rows. The hosting database has a
+    // low max_statement_time, which was cancelling the already-authorized,
+    // date-scoped export SELECT before a workbook could be built. Apply this
+    // only to this export connection and restore its default before reuse.
+    await new Promise((resolve, reject) => {
+      connection.query("SET SESSION max_statement_time = 0", (err) => {
+        if (err) return reject(err);
+        statementTimeoutDisabled = true;
         resolve();
       });
     });
@@ -2283,6 +2300,20 @@ const streamBulkExportRows = async function* (sql, params) {
       yield row;
     }
   } finally {
+    if (statementTimeoutDisabled) {
+      try {
+        await new Promise((resolve, reject) => {
+          connection.query("SET SESSION max_statement_time = DEFAULT", (err) => {
+            if (err) return reject(err);
+            resolve();
+          });
+        });
+      } catch (err) {
+        // The connection is about to return to the pool. Do not hide the
+        // export's original success/failure if the best-effort reset fails.
+        console.warn("Could not reset export statement timeout:", err.message);
+      }
+    }
     connection.release();
   }
 };
@@ -2511,11 +2542,14 @@ router.get("/export-excel", requirePagePermission("tower-reports", "download"), 
       });
     }
 
-    res.setHeader(
-      "Content-Disposition",
-      `attachment; filename="${String(siteType).toUpperCase()}_Report.xlsx"`
-    );
-
+    // ExcelJS streams each row straight to the HTTP response as it commits, so
+    // memory stays flat regardless of row count — required here because ENB
+    // alone already exceeds a million rows in a single month. Headers must go
+    // out before the first byte, so once writing starts an error can only be
+    // reported by destroying the connection, never by sending JSON/HTML into
+    // the .xlsx stream (see the catch block below).
+    const downloadName = `${String(siteType).toUpperCase()}_Report.xlsx`;
+    res.setHeader("Content-Disposition", `attachment; filename="${downloadName}"`);
     res.setHeader(
       "Content-Type",
       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -2527,13 +2561,31 @@ router.get("/export-excel", requirePagePermission("tower-reports", "download"), 
       useSharedStrings: false,
     });
 
-    const worksheet = workbook.addWorksheet(String(siteType).toUpperCase());
+    let worksheet;
+    let columns;
+    let rowsInWorksheet = 0;
+    let worksheetNumber = 0;
 
-    let columnsAdded = false;
+    const startWorksheet = () => {
+      worksheetNumber += 1;
+      rowsInWorksheet = 0;
+      const sheetName = worksheetNumber === 1
+        ? String(siteType).toUpperCase()
+        : `${String(siteType).toUpperCase()} ${worksheetNumber}`;
+      worksheet = workbook.addWorksheet(sheetName);
+      worksheet.columns = columns.map((key) => ({ header: key, key }));
+    };
+
+    // The ENB table is large enough that MariaDB's optimizer otherwise picks
+    // a full scan and filesort despite the dedicated (date, id) export index.
+    // FORCE INDEX retains the exact same result set and ordering.
+    const tableHint = tableName === "enb"
+      ? " FORCE INDEX (idx_enb_export_date_id)"
+      : "";
 
     const rows = streamBulkExportRows(
       `SELECT *
-         FROM ${tableName}
+         FROM ${tableName}${tableHint}
         WHERE date BETWEEN ? AND ?${circleClause}
         ORDER BY date ASC, id ASC`,
       [fromDate, toDate, ...circleParams]
@@ -2543,12 +2595,19 @@ router.get("/export-excel", requirePagePermission("tower-reports", "download"), 
       for await (const row of rows) {
         if (res.destroyed) throw new Error("Client disconnected during export");
 
-        if (!columnsAdded) {
-          worksheet.columns = Object.keys(row).map((key) => ({ header: key, key }));
-          columnsAdded = true;
+        if (!worksheet) {
+          columns = Object.keys(row);
+          startWorksheet();
         }
 
-        // Replace null/undefined with empty string to avoid Excel repair warnings
+        // Finish the current sheet before adding a row beyond Excel's limit.
+        if (rowsInWorksheet >= maxExcelDataRowsPerSheet) {
+          worksheet.commit();
+          startWorksheet();
+        }
+
+        // Replace null/undefined with empty string to avoid blank-value issues
+        // and retain the previous export's YYYY-MM-DD date representation.
         const cleanRow = {};
         Object.keys(row).forEach((key) => {
           let val = row[key];
@@ -2557,14 +2616,15 @@ router.get("/export-excel", requirePagePermission("tower-reports", "download"), 
           }
           cleanRow[key] = val === undefined || val === null ? "" : val;
         });
-
         worksheet.addRow(cleanRow).commit();
+        rowsInWorksheet += 1;
       }
 
       // The COUNT above guarantees rows exist, but a concurrent delete could
       // still empty the stream. Keep a valid workbook rather than a corrupt one.
-      if (!columnsAdded) {
-        worksheet.columns = [{ header: "date", key: "date" }];
+      if (!worksheet) {
+        columns = ["date"];
+        startWorksheet();
       }
 
       worksheet.commit();

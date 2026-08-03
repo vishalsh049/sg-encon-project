@@ -42,6 +42,11 @@
 -- Largest table. Expect this one to take the longest.
 ALTER TABLE enb    ADD INDEX idx_enb_file_id    (file_id);
 
+-- Matches GET /api/reports/export-excel:
+-- WHERE date BETWEEN ? AND ? ORDER BY date ASC, id ASC.
+-- The existing (date, file_id) index cannot supply this ordering.
+ALTER TABLE enb    ADD INDEX idx_enb_export_date_id (date, id);
+
 ALTER TABLE gnb    ADD INDEX idx_gnb_file_id    (file_id);
 ALTER TABLE osc    ADD INDEX idx_osc_file_id    (file_id);
 ALTER TABLE hpodsc ADD INDEX idx_hpodsc_file_id (file_id);
@@ -93,6 +98,7 @@ ALTER TABLE hpodsc ADD INDEX idx_hpodsc_circle_date (circle, date);
 -- Dropping an index also does not touch row data.
 -- ---------------------------------------------------------------------------
 -- ALTER TABLE enb    DROP INDEX idx_enb_file_id;
+-- ALTER TABLE enb    DROP INDEX idx_enb_export_date_id;
 -- ALTER TABLE gnb    DROP INDEX idx_gnb_file_id;
 -- ALTER TABLE osc    DROP INDEX idx_osc_file_id;
 -- ALTER TABLE hpodsc DROP INDEX idx_hpodsc_file_id;
