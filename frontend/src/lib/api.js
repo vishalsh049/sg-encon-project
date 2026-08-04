@@ -5,7 +5,7 @@ const isLocalhost =
 
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL ||
-  (isLocalhost ? "http://localhost:5000" : "https://api.sgencon.in");
+  (isLocalhost ? "http://localhost:5000" : "https://sg-encon-project.onrender.com");
 
 export function buildApiUrl(path) {
   const normalizedPath = path.startsWith("/") ? path : `/${path}`;
