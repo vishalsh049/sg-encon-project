@@ -1,6 +1,7 @@
 const dotenv = require("dotenv");
 const fs = require("fs");
 const path = require("path");
+// (trivial touch to force a fresh Hostinger build/deploy so env-var changes apply)
 
 // Resolve env file based on NODE_ENV with sensible fallbacks
 function resolveEnvFile() {
