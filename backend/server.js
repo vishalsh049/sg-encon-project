@@ -37,6 +37,21 @@ require("./config/db");
 
 const app = express();
 
+// Hostinger's Node.js App Manager sits behind its own reverse proxy, so
+// req.ip would otherwise always resolve to that proxy's local address —
+// this breaks the per-IP rate limiter below (everyone shares one bucket).
+app.set("trust proxy", 1);
+app.disable("x-powered-by");
+
+// The proxy terminates TLS and forwards plain HTTP internally, setting
+// X-Forwarded-Proto so we can still enforce HTTPS at the app level.
+app.use((req, res, next) => {
+  if (process.env.NODE_ENV === "production" && req.headers["x-forwarded-proto"] !== "https") {
+    return res.redirect(301, `https://${req.headers.host}${req.originalUrl}`);
+  }
+  next();
+});
+
 // Gzip/deflate every response above the default 1KB threshold — mainly
 // benefits the JSON report-list/search responses; the `compressible` filter
 // this library uses already skips content types (like .xlsx/.xlsb, which are
@@ -223,13 +238,24 @@ app.get("/api", (req, res) => {
   res.send("API running ✅");
 });
 
-// Serve frontend build
-app.use(express.static(path.join(__dirname, "../frontend/dist")));
+const frontendDistCandidates = [
+  path.resolve(__dirname, "frontend", "dist"),
+  path.resolve(__dirname, "..", "frontend", "dist"),
+].filter((candidate) => fs.existsSync(candidate));
 
-// ✅ FINAL SAFE FIX (no wildcard crash)
-app.use((req, res) => {
-  res.sendFile(path.join(__dirname, "../frontend/dist/index.html"));
-});
+const frontendDistPath = frontendDistCandidates[0];
+
+if (frontendDistPath) {
+  app.use(express.static(frontendDistPath));
+
+  app.get(/^\/(?!api).*/, (req, res) => {
+    return res.sendFile(path.join(frontendDistPath, "index.html"));
+  });
+} else {
+  app.use((req, res) => {
+    res.status(404).send("Frontend build not available");
+  });
+}
 
 const PORT = process.env.PORT || 5000;
 

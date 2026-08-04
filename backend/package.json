@@ -2,6 +2,9 @@
   "name": "sg-encon-backend",
   "version": "1.0.0",
   "main": "server.js",
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "start": "node server.js",
     "seed": "node seed.js"
@@ -17,7 +20,6 @@
     "jsonwebtoken": "^9.0.3",
     "multer": "^2.1.1",
     "mysql2": "^3.20.0",
-    "sequelize": "^6.37.8",
     "xlsx": "^0.18.5"
   }
 }
