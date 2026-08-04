@@ -93,19 +93,40 @@ const allowedOrigins = (process.env.CORS_ORIGINS || "")
   .map((origin) => origin.trim())
   .filter(Boolean);
 
-if (allowedOrigins.length) {
+// Hostinger serves both the bare domain and its "www." subdomain for the same
+// site, so listing one in CORS_ORIGINS should not silently lock out visitors
+// on the other — expand each configured origin to cover both.
+const allowedOriginSet = new Set(
+  allowedOrigins.flatMap((origin) => {
+    try {
+      const url = new URL(origin);
+      const bareHost = url.host.replace(/^www\./, "");
+      return [`${url.protocol}//${bareHost}`, `${url.protocol}//www.${bareHost}`];
+    } catch {
+      return [origin];
+    }
+  })
+);
+
+if (allowedOriginSet.size) {
   app.use(
     cors({
       origin(origin, callback) {
         // No Origin header = same-origin or a non-browser client (curl, health checks).
-        if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
-        return callback(new Error("Origin not allowed by CORS"));
+        if (!origin || allowedOriginSet.has(origin)) return callback(null, true);
+        // Reject without throwing: an Error here reaches Express's default
+        // error handler, which returns a bare 500 with no CORS headers at
+        // all. A browser reports that identically to the API being totally
+        // unreachable — indistinguishable from a real outage — instead of
+        // the "blocked by CORS policy" console message a clean rejection
+        // produces.
+        return callback(null, false);
       },
       methods: ["GET", "POST", "PUT", "DELETE"],
       allowedHeaders: ["Content-Type", "Authorization"],
     })
   );
-  console.log("CORS restricted to:", allowedOrigins.join(", "));
+  console.log("CORS restricted to:", [...allowedOriginSet].join(", "));
 } else {
   app.use(
     cors({

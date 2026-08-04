@@ -2,12 +2,6 @@ const express = require("express");
 const multer = require("multer");
 const xlsx = require("xlsx");
 const ExcelJS = require("exceljs");
-const fs = require("fs");
-const fsp = require("fs/promises");
-const os = require("os");
-const path = require("path");
-const { pipeline } = require("stream/promises");
-const { randomUUID } = require("crypto");
 const router = express.Router();
 const { db } = require("../config/db");
 const {
@@ -2270,27 +2264,6 @@ const maxExcelDataRowsPerSheet = 1048575;
 
 const xlsxMimeType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
-const removeTemporaryExport = async (filePath) => {
-  if (!filePath) return;
-  try {
-    await fsp.unlink(filePath);
-  } catch (err) {
-    if (err.code !== "ENOENT") console.warn("Could not remove temporary export:", err.message);
-  }
-};
-
-const isValidXlsxFile = async (filePath) => {
-  const handle = await fsp.open(filePath, "r");
-  try {
-    const header = Buffer.alloc(4);
-    const { bytesRead } = await handle.read(header, 0, header.length, 0);
-    // XLSX is a ZIP container and must begin with PK\\x03\\x04.
-    return bytesRead === 4 && header.equals(Buffer.from([0x50, 0x4b, 0x03, 0x04]));
-  } finally {
-    await handle.close();
-  }
-};
-
 const runConnectionQuery = (connection, sql, params = []) =>
   new Promise((resolve, reject) => {
     connection.query(sql, params, (err, result) => (err ? reject(err) : resolve(result)));
@@ -2634,22 +2607,22 @@ router.get("/export-excel", requirePagePermission("tower-reports", "download"), 
 
     // ExcelJS streams each row straight to the HTTP response as it commits, so
     // memory stays flat regardless of row count — required here because ENB
-    // alone already exceeds a million rows in a single month. Headers must go
-    // out before the first byte, so once writing starts an error can only be
-    // reported by destroying the connection, never by sending JSON/HTML into
-    // the .xlsx stream (see the catch block below).
-    // Do not start an HTTP download until ExcelJS has completed a valid ZIP.
-    // Otherwise an upstream interruption can become a partial .xlsx with 200.
-    let tempExportPath = path.join(
-      os.tmpdir(),
-      `sg-encon-${process.pid}-${Date.now()}-${randomUUID()}.xlsx`
-    );
-    const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({
-      filename: tempExportPath,
-      useStyles: false,
-      useSharedStrings: false,
-    });
+    // alone already exceeds a million rows in a single month.
+    //
+    // Headers (and the workbook itself) are only opened once the first row has
+    // actually arrived from the database, in beginStreaming() below. That keeps
+    // an early failure (e.g. the export connection could not be obtained)
+    // reportable as clean JSON, while still getting the first byte to the
+    // browser within a second or two of the COUNT query above — previously
+    // the whole file was built on local disk before a single byte was sent,
+    // so a large date range (100k+ rows) ran past Render/Cloudflare's ~100s
+    // proxy timeout before the response ever started, and the browser reported
+    // it as an unreachable server rather than a slow one. Once writing starts,
+    // an error can only be reported by destroying the connection, never by
+    // sending JSON/HTML into the .xlsx byte stream (see the catch block below).
+    const downloadName = `${String(siteType).toUpperCase()} Report.xlsx`;
 
+    let workbook;
     let worksheet;
     let columns;
     let rowsInWorksheet = 0;
@@ -2663,6 +2636,19 @@ router.get("/export-excel", requirePagePermission("tower-reports", "download"), 
         : `${String(siteType).toUpperCase()} ${worksheetNumber}`;
       worksheet = workbook.addWorksheet(sheetName);
       worksheet.columns = columns.map((key) => ({ header: key, key }));
+    };
+
+    const beginStreaming = () => {
+      res.setHeader("Content-Disposition", `attachment; filename="${downloadName}"`);
+      res.setHeader("Content-Type", xlsxMimeType);
+      res.setHeader("Cache-Control", "no-store, no-transform");
+      res.setHeader("X-Content-Type-Options", "nosniff");
+      workbook = new ExcelJS.stream.xlsx.WorkbookWriter({
+        stream: res,
+        useStyles: false,
+        useSharedStrings: false,
+      });
+      startWorksheet();
     };
 
     const rows = streamBulkExportRows(
@@ -2679,7 +2665,7 @@ router.get("/export-excel", requirePagePermission("tower-reports", "download"), 
 
         if (!worksheet) {
           columns = Object.keys(row);
-          startWorksheet();
+          beginStreaming();
         }
 
         // Finish the current sheet before adding a row beyond Excel's limit.
@@ -2706,36 +2692,17 @@ router.get("/export-excel", requirePagePermission("tower-reports", "download"), 
       // still empty the stream. Keep a valid workbook rather than a corrupt one.
       if (!worksheet) {
         columns = ["date"];
-        startWorksheet();
+        beginStreaming();
       }
 
       worksheet.commit();
       await workbook.commit();
-
-      const exportStats = await fsp.stat(tempExportPath);
-      if (!exportStats.size || !(await isValidXlsxFile(tempExportPath))) {
-        throw new Error("Workbook generation did not produce a valid XLSX ZIP file");
-      }
-
-      const downloadName = `${String(siteType).toUpperCase()} Report.xlsx`;
-      res.setHeader("Content-Disposition", `attachment; filename="${downloadName}"`);
-      res.setHeader("Content-Type", xlsxMimeType);
-      res.setHeader("Content-Length", String(exportStats.size));
-      res.setHeader("Content-Encoding", "identity");
-      res.setHeader("Cache-Control", "no-store, no-transform");
-      res.setHeader("X-Content-Type-Options", "nosniff");
-
-      try {
-        await pipeline(fs.createReadStream(tempExportPath), res);
-      } finally {
-        await removeTemporaryExport(tempExportPath);
-      }
       return;
     } catch (innerErr) {
-      // if an error happens after headers sent, destroy the response to terminate stream
+      // If headers already went out, the client is mid-download — the only way
+      // to signal failure now is to cut the connection.
       console.error("Export stream error:", innerErr);
       if (!res.headersSent) {
-        await removeTemporaryExport(tempExportPath);
         return res.status(500).json({
           message: "Unable to build the export file. Please try a shorter date range, or contact your administrator if the problem continues.",
         });
