@@ -31,16 +31,10 @@ export default function WorkforceOverviewFunnel({ overview, loading, showOffered
       value: kpis.gap ?? 0,
       display: `${kpis.vacancyPct ?? 0}%`,
     },
-    { label: "Extra Employees", value: kpis.extra ?? 0, display: kpis.extra ?? 0 },
     // kpis.payroll sums nth_salary — the salary offered to the employee on
     // record, not a confirmed/actual payroll disbursement. Label it as such
     // so it isn't mistaken for real payroll spend.
     ...(showOfferedSalary ? [{ label: "Offered Salary", value: kpis.payroll ?? 0, display: formatINR(kpis.payroll) }] : []),
-    {
-      label: "Actual Utilization",
-      value: kpis.utilizationPct ?? 0,
-      display: `${kpis.utilizationPct ?? 0}%`,
-    },
   ];
 
   const maxValue = Math.max(1, ...steps.map((s) => (typeof s.value === "number" ? s.value : 0)));
