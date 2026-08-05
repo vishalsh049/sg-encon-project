@@ -12,17 +12,15 @@ const {
   buildFilteredGroups,
 } = require("../utils/hrDashboardExportShared");
 const { buildRagWorkbook } = require("../utils/hrDashboardWorkbook");
-const { resolveRoleKey } = require("../services/manpowerConfigService");
-// Still used below by buildPhysicalAvailableBaseSql()/buildScrumAvailableBaseSql()
-// — those build a *row-level* (not aggregated) derived table that gets
-// filtered/paginated/sorted in SQL, so they stay on the SQL CASE-WHEN
-// classifier for now rather than moving to the JS resolver used by
-// fetchPhysicalActiveData()/fetchScrumActiveData() above.
-const {
-  normalizeRoleSql,
-  physicalRoleKeyCaseSql,
-  scrumRoleKeyCaseSql,
-} = require("../utils/roleKeyMapping");
+const { resolveRoleKey, getRoleKeyMatchers } = require("../services/manpowerConfigService");
+// buildPhysicalAvailableBaseSql()/buildScrumAvailableBaseSql() build a
+// *row-level* (not aggregated) derived table filtered/paginated/sorted in
+// SQL. Role-key filtering there is driven by getRoleKeyMatchers() (live
+// manpower_sub_profiles config) via buildRoleKeyMatchSql() below — the same
+// source of truth fetchPhysicalActiveData()/fetchScrumActiveData() use for
+// the on-screen RAG counts — so the drilldown popup can never drift from
+// what the dashboard shows.
+const { normalizeRoleSql } = require("../utils/roleKeyMapping");
 const { makeEnsureIndex } = require("../utils/dbIndex");
 const {
   buildLatestScrumBatchSubquery,
@@ -389,12 +387,46 @@ function getDrilldownDepartment(roleKey) {
   return group ? group.label : "Other";
 }
 
+// Escapes MariaDB LIKE metacharacters (default ESCAPE is backslash) so a
+// designation label containing a literal % or _ can't alter the pattern.
+function escapeLikePattern(value) {
+  return String(value).replace(/[\\%_]/g, (ch) => `\\${ch}`);
+}
+
+// Builds a SQL predicate that matches `normalizedExpr` (already run through
+// normalizeRoleSql) against the live designation matchers for one role_key —
+// the row-level equivalent of resolveRoleKey(). No active sub-profile maps
+// to this role_key -> "1 = 0", mirroring the old CASE ... ELSE NULL behavior.
+function buildRoleKeyMatchSql(normalizedExpr, matchers) {
+  const clauses = [];
+  const params = [];
+
+  if (matchers.exact.length) {
+    clauses.push(`${normalizedExpr} IN (${matchers.exact.map(() => "?").join(",")})`);
+    params.push(...matchers.exact);
+  }
+
+  matchers.prefix.forEach((prefix) => {
+    clauses.push(`${normalizedExpr} LIKE ?`);
+    params.push(`${escapeLikePattern(prefix)}%`);
+  });
+
+  if (!clauses.length) return { sql: "1 = 0", params: [] };
+
+  return { sql: `(${clauses.join(" OR ")})`, params };
+}
+
 // Row-level version of fetchPhysicalActiveData()'s UNION (physical ∪ deduped
-// new_joining), wrapped as a derived table so role_key can be filtered in an
-// outer WHERE (MySQL can't reference a SELECT-list alias at the same level).
-function buildPhysicalAvailableBaseSql(req) {
+// new_joining), wrapped as a derived table. Role-key filtering happens via
+// getRoleKeyMatchers() (live manpower_sub_profiles config) instead of a
+// SELECT-list CASE + outer WHERE, so a designation the admin maps to this
+// role_key today is picked up immediately — same as the dashboard counts.
+async function buildPhysicalAvailableBaseSql(req, roleKey) {
   const physicalScope = getCircleScope(req, "p.circle");
   const njScope = getCircleScope(req, "nj.circle");
+  const matchers = await getRoleKeyMatchers(roleKey, "physical");
+  const physicalMatch = buildRoleKeyMatchSql(normalizeRoleSql("p.job_role"), matchers);
+  const njMatch = buildRoleKeyMatchSql(normalizeRoleSql("nj.designation"), matchers);
 
   const sql = `
     (
@@ -402,7 +434,6 @@ function buildPhysicalAvailableBaseSql(req) {
         'physical' AS source,
         p.employee_code AS employee_code,
         p.employee_name AS employee_name,
-        ${physicalRoleKeyCaseSql(normalizeRoleSql("p.job_role"))} AS role_key,
         p.circle AS circle,
         p.cmp AS cmp,
         p.cluster AS cluster,
@@ -416,13 +447,13 @@ function buildPhysicalAvailableBaseSql(req) {
         AND LOWER(TRIM(COALESCE(p.employment_status, ''))) = 'active'
         AND p.cmp IS NOT NULL AND p.cmp <> ''
         AND p.job_role IS NOT NULL AND p.job_role <> ''
+        AND ${physicalMatch.sql}
         ${physicalScope.sql}
       UNION ALL
       SELECT
         'new_joining' AS source,
         nj.employee_code AS employee_code,
         nj.employee_name AS employee_name,
-        ${physicalRoleKeyCaseSql(normalizeRoleSql("nj.designation"))} AS role_key,
         nj.circle AS circle,
         nj.cmp AS cmp,
         NULL AS cluster,
@@ -435,6 +466,7 @@ function buildPhysicalAvailableBaseSql(req) {
       WHERE LOWER(TRIM(COALESCE(nj.joining_status, ''))) = 'joined'
         AND nj.cmp IS NOT NULL AND nj.cmp <> ''
         AND nj.designation IS NOT NULL AND nj.designation <> ''
+        AND ${njMatch.sql}
         AND NOT EXISTS (
           SELECT 1 FROM physical dedupe
           WHERE TRIM(COALESCE(nj.aadhaar_no, '')) <> ''
@@ -446,18 +478,29 @@ function buildPhysicalAvailableBaseSql(req) {
     )
   `;
 
-  return { sql, params: [...physicalScope.params, ...njScope.params] };
+  return {
+    sql,
+    params: [
+      ...physicalMatch.params,
+      ...physicalScope.params,
+      ...njMatch.params,
+      ...njScope.params,
+    ],
+  };
 }
 
 // Row-level version of fetchScrumActiveData(): latest upload_batch_id is
 // scoped by req.authUser (not the clicked circle) so the popup's numbers
 // always match whichever batch the on-screen Scrum RAG grid is showing.
-function buildScrumAvailableBaseSql(req) {
+// Role-key filtering mirrors buildPhysicalAvailableBaseSql() above.
+async function buildScrumAvailableBaseSql(req, roleKey) {
   const scope = getCircleScope(req, "sm.state");
   const latestBatchParams = [];
   // Second local copy of the same superseded SQL — also delegated now.
   const latestBatchSql = buildLatestScrumBatchSubquery(req);
   addLatestBatchParam(req, latestBatchParams);
+  const matchers = await getRoleKeyMatchers(roleKey, "scrum");
+  const scrumMatch = buildRoleKeyMatchSql(normalizeRoleSql("sm.job_role"), matchers);
 
   const sql = `
     (
@@ -465,7 +508,6 @@ function buildScrumAvailableBaseSql(req) {
         'scrum' AS source,
         sm.jc_sap_id AS employee_code,
         sm.resource_name AS employee_name,
-        ${scrumRoleKeyCaseSql(normalizeRoleSql("sm.job_role"))} AS role_key,
         sm.state AS circle,
         sm.maintenance_point AS cmp,
         NULL AS cluster,
@@ -480,11 +522,15 @@ function buildScrumAvailableBaseSql(req) {
         AND sm.upload_batch_id IN (${latestBatchSql})
         AND sm.maintenance_point IS NOT NULL AND sm.maintenance_point <> ''
         AND sm.job_role IS NOT NULL AND sm.job_role <> ''
+        AND ${scrumMatch.sql}
         ${scope.sql}
     )
   `;
 
-  return { sql, params: [...latestBatchParams, ...scope.params] };
+  return {
+    sql,
+    params: [...latestBatchParams, ...scrumMatch.params, ...scope.params],
+  };
 }
 
 // Builds the outer WHERE applied on top of the base "available" derived
@@ -492,7 +538,6 @@ function buildScrumAvailableBaseSql(req) {
 // employmentStatus/joiningStatus so the cards never drift from the RAG grid
 // while the user types into the popup's own filters.
 function buildDrilldownWhereParts({
-  roleKey,
   explicitCircle,
   cmp,
   search,
@@ -500,8 +545,8 @@ function buildDrilldownWhereParts({
   employmentStatus,
   joiningStatus,
 }) {
-  const conditions = ["available.role_key = ?"];
-  const params = [roleKey];
+  const conditions = [];
+  const params = [];
 
   if (explicitCircle) {
     conditions.push("LOWER(TRIM(available.circle)) = LOWER(TRIM(?))");
@@ -528,7 +573,10 @@ function buildDrilldownWhereParts({
     params.push(joiningStatus);
   }
 
-  return { whereSql: `WHERE ${conditions.join(" AND ")}`, params };
+  return {
+    whereSql: conditions.length ? `WHERE ${conditions.join(" AND ")}` : "",
+    params,
+  };
 }
 
 // `signoff` only stores a scalar requirement target per (circle, cmp) — no
@@ -598,11 +646,13 @@ async function runDrilldownQuery(req, { isExport = false } = {}) {
     : "employee_name";
   const sortOrder = String(req.query.sortOrder || "asc").toLowerCase() === "desc" ? "DESC" : "ASC";
 
-  const base = panel === "physical" ? buildPhysicalAvailableBaseSql(req) : buildScrumAvailableBaseSql(req);
+  const base =
+    panel === "physical"
+      ? await buildPhysicalAvailableBaseSql(req, roleKey)
+      : await buildScrumAvailableBaseSql(req, roleKey);
 
-  const scopeFilter = buildDrilldownWhereParts({ roleKey, explicitCircle: requestedCircle, cmp });
+  const scopeFilter = buildDrilldownWhereParts({ explicitCircle: requestedCircle, cmp });
   const fullFilter = buildDrilldownWhereParts({
-    roleKey,
     explicitCircle: requestedCircle,
     cmp,
     search,

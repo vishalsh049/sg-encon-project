@@ -318,6 +318,35 @@ async function resolveRoleKey(rawText, sourceScope) {
   return null;
 }
 
+// Inverse of resolveRoleKey(): given a target role_key, returns every
+// normalized designation text (exact + prefix) that resolves to it for the
+// given sourceScope. Lets SQL-level row filtering (drilldown) stay in sync
+// with the same live manpower_sub_profiles config the aggregate counts use,
+// instead of a separately hand-maintained SQL CASE-WHEN.
+async function getRoleKeyMatchers(roleKey, sourceScope) {
+  const { indexes } = await loadRawConfig();
+
+  const exact = [];
+  indexes.exactMap.forEach((candidates, normalized) => {
+    const isMatch = candidates.some(
+      (candidate) =>
+        candidate.roleKey === roleKey &&
+        (candidate.sourceScope === "both" || candidate.sourceScope === sourceScope)
+    );
+    if (isMatch) exact.push(normalized);
+  });
+
+  const prefix = indexes.prefixList
+    .filter(
+      (candidate) =>
+        candidate.roleKey === roleKey &&
+        (candidate.sourceScope === "both" || candidate.sourceScope === sourceScope)
+    )
+    .map((candidate) => candidate.normalized);
+
+  return { exact, prefix };
+}
+
 async function resolveCircle(raw) {
   const { indexes } = await loadRawConfig();
   return indexes.circleAliasLookup.get(normalizeLooseText(raw)) || null;
@@ -453,6 +482,7 @@ module.exports = {
   ensureManpowerTables,
   clearManpowerConfigCache,
   resolveRoleKey,
+  getRoleKeyMatchers,
   resolveCircle,
   resolveCmp,
   getDesignationOptions,
