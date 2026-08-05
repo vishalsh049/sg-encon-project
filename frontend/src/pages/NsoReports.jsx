@@ -810,14 +810,6 @@ const handleDownload = async (row) => {
                         <div className="truncate" title={row.original_name || row.file_name}>
                           {row.original_name || row.file_name || "-"}
                         </div>
-                        {row.file_missing ? (
-                          <div
-                            className="mt-0.5 text-xs font-medium text-amber-600 dark:text-amber-400"
-                            title="The originally uploaded file is no longer on the server. Download still works — it rebuilds the file from the saved report data, not from the original upload."
-                          >
-                            Original file no longer stored
-                          </div>
-                        ) : null}
                       </td>
 
                       <td className="px-5 py-4 text-text-secondary">
