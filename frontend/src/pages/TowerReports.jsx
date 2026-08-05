@@ -164,6 +164,42 @@ const readErrorMessage = async (err, fallback) => {
   return fallback;
 };
 
+const XLSX_MIME_TYPE =
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+
+// A file download can resolve with HTTP 200 and still not be a real, complete
+// .xlsx — a proxy/timeout can cut the stream after headers already went out,
+// or return an HTML/JSON error page with a 200 wrapped around it. Either way
+// the browser would otherwise save it under the requested filename and Excel
+// reports a "file format or extension is not valid" error when opened. This
+// catches that before saveBlob(), so a failed download surfaces as a clear
+// error message instead of a corrupt-looking file on disk.
+const assertValidXlsxBlob = async (blob, contentType) => {
+  if (!blob || blob.size === 0) {
+    throw new Error(
+      "The download did not complete — the file came back empty.\n\n" +
+      "This can happen with a large export on a slow connection. Try a shorter date range, or try again."
+    );
+  }
+
+  if (!contentType || !contentType.includes(XLSX_MIME_TYPE)) {
+    // Not the expected type — see if the server actually sent a JSON error
+    // wrapped in a 200 (or a truncated stream, which won't parse as JSON).
+    let jsonMessage = null;
+    try {
+      jsonMessage = JSON.parse(await blob.text())?.message || null;
+    } catch {
+      jsonMessage = null; // not JSON — a truncated/corrupt stream
+    }
+
+    throw new Error(
+      jsonMessage ||
+      "The download did not complete correctly — the file was not a valid Excel file.\n\n" +
+      "This can happen if the connection was interrupted mid-download. Please try again."
+    );
+  }
+};
+
 const EMPTY_TOAST = { message: "", type: "success" };
 
 function TowerReports() {
@@ -643,6 +679,8 @@ setTimeout(() => {
         onDownloadProgress: trackDownload(setDownloadProgress),
       });
 
+      await assertValidXlsxBlob(response.data, response.headers["content-type"]);
+
       saveBlob(
         response.data,
         response.headers["content-type"],
@@ -655,11 +693,16 @@ setTimeout(() => {
         "success"
       );
     } catch (err) {
+      // assertValidXlsxBlob() throws a plain Error with a message meant to be
+      // shown as-is; axios errors go through readErrorMessage() to unwrap the
+      // server's JSON/blob error body instead.
       setExportError(
-        await readErrorMessage(
-          err,
-          "Export failed. Please try a shorter date range and try again."
-        )
+        err?.isAxiosError
+          ? await readErrorMessage(
+              err,
+              "Export failed. Please try a shorter date range and try again."
+            )
+          : err?.message || "Export failed. Please try a shorter date range and try again."
       );
     } finally {
       setDownloading(false);
@@ -683,6 +726,8 @@ setTimeout(() => {
       const baseName = (fileName || "report").replace(/\.[^./\\]+$/, "");
       const downloadFileName = `${baseName}.xlsx`;
 
+      await assertValidXlsxBlob(response.data, response.headers["content-type"]);
+
       saveBlob(
         response.data,
         response.headers["content-type"],
@@ -692,7 +737,9 @@ setTimeout(() => {
       showToast(`"${downloadFileName}" downloaded successfully.`, "success");
     } catch (err) {
       showToast(
-        await readErrorMessage(err, "Download failed. Please try again."),
+        err?.isAxiosError
+          ? await readErrorMessage(err, "Download failed. Please try again.")
+          : err?.message || "Download failed. Please try again.",
         "error",
         7000
       );
