@@ -82,7 +82,6 @@ export default function CircleWorkforcePanel({ circles, loading, selectedCircle,
 
                 <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] text-text-muted">
                   <span>Active: <span className="font-semibold text-text-secondary">{circle.activeEmployees}</span></span>
-                  <span>Extra: <span className="font-semibold text-text-secondary">{circle.extra}</span></span>
                   <span>New Joining: <span className="font-semibold text-text-secondary">{circle.newJoiningThisMonth}</span></span>
                   <span>Resigned: <span className="font-semibold text-text-secondary">{circle.resignedEmployees}</span></span>
                   <span>Pending: <span className="font-semibold text-text-secondary">{circle.pendingJoining}</span></span>

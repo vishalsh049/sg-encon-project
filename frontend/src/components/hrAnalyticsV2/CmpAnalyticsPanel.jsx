@@ -31,7 +31,6 @@ export default function CmpAnalyticsPanel({ cmps, loading, onOpenDrilldown, show
 
   const sortOptions = [
     { key: "gap", label: "Gap" },
-    { key: "extra", label: "Extra" },
     { key: "available", label: "Available" },
     ...(showOfferedSalary ? [{ key: "payroll", label: "Offered Salary" }] : []),
   ];
@@ -77,7 +76,6 @@ export default function CmpAnalyticsPanel({ cmps, loading, onOpenDrilldown, show
                 <th className="px-3 py-2 text-right font-semibold">Req</th>
                 <th className="px-3 py-2 text-right font-semibold">Avail</th>
                 <th className="px-3 py-2 text-right font-semibold">Gap</th>
-                <th className="px-3 py-2 text-right font-semibold">Extra</th>
                 <th className="px-3 py-2 text-right font-semibold">New Joining</th>
                 <th className="px-3 py-2 text-right font-semibold">Resigned</th>
                 <th className="px-3 py-2 text-right font-semibold">Pending</th>
@@ -114,9 +112,6 @@ export default function CmpAnalyticsPanel({ cmps, loading, onOpenDrilldown, show
                       >
                         {cmp.gap}
                       </td>
-                      <td className={`px-3 py-2 text-right font-semibold ${cmp.extra > 0 ? "text-violet-600 dark:text-violet-400" : "text-text-muted"}`}>
-                        {cmp.extra}
-                      </td>
                       <td className="px-3 py-2 text-right">{cmp.newJoiningThisMonth}</td>
                       <td className="px-3 py-2 text-right">{cmp.resignedEmployees}</td>
                       <td className="px-3 py-2 text-right">{cmp.pendingJoining}</td>
@@ -125,7 +120,7 @@ export default function CmpAnalyticsPanel({ cmps, loading, onOpenDrilldown, show
 
                     {isOpen && (
                       <tr>
-                        <td colSpan={10} className="bg-surface-muted/40 px-3 py-2">
+                        <td colSpan={9} className="bg-surface-muted/40 px-3 py-2">
                           <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3 lg:grid-cols-4">
                             {cmp.designations.map((d) => {
                               const clickable = DRILLDOWN_ELIGIBLE.has(d.roleKey) && (d.requirement > 0 || d.available > 0);

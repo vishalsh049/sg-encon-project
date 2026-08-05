@@ -1,5 +1,5 @@
 import React, { useMemo } from "react";
-import { AlertTriangle, TrendingUp } from "lucide-react";
+import { AlertTriangle } from "lucide-react";
 import { CARD_SHELL, SECTION_HEADING } from "../billingDashboard/theme";
 
 // Flattens the per-CMP designation breakdown (see GET /api/hr-analytics-v2/cmps)
@@ -76,38 +76,19 @@ export default function ShortageSurplusLists({ cmps, loading }) {
     () => [...flattened].filter((r) => r.gap > 0).sort((a, b) => b.gap - a.gap).slice(0, 10),
     [flattened]
   );
-  const extraWorkforce = useMemo(
-    () => [...flattened].filter((r) => r.extra > 0).sort((a, b) => b.extra - a.extra).slice(0, 10),
-    [flattened]
-  );
 
   if (loading) {
-    return (
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <div className={`${CARD_SHELL} h-72 animate-pulse`} />
-        <div className={`${CARD_SHELL} h-72 animate-pulse`} />
-      </div>
-    );
+    return <div className={`${CARD_SHELL} h-72 animate-pulse`} />;
   }
 
   return (
-    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-      <ListCard
-        title="Need Immediate Hiring"
-        icon={AlertTriangle}
-        accent="text-rose-600 dark:text-rose-400"
-        rows={needHiring}
-        metricKey="gap"
-        metricLabel="Gap"
-      />
-      <ListCard
-        title="Extra Workforce"
-        icon={TrendingUp}
-        accent="text-violet-600 dark:text-violet-400"
-        rows={extraWorkforce}
-        metricKey="extra"
-        metricLabel="Extra"
-      />
-    </div>
+    <ListCard
+      title="Need Immediate Hiring"
+      icon={AlertTriangle}
+      accent="text-rose-600 dark:text-rose-400"
+      rows={needHiring}
+      metricKey="gap"
+      metricLabel="Gap"
+    />
   );
 }

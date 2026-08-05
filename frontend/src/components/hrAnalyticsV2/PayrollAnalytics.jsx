@@ -55,14 +55,14 @@ export default function PayrollAnalytics({ payroll, loading }) {
                 <span className="font-semibold">
                   {payroll?.salariedHeadcount ?? 0} of {payroll?.availableHeadcount ?? 0}
                 </span>{" "}
-                available employees ({coveragePct}% coverage). Avg Offered Salary and Extra Offered Salary Estimate
-                below are computed only from the records that do have salary data — treat them as indicative, not
-                company-wide, until more records are filled in.
+                available employees ({coveragePct}% coverage). Avg Offered Salary below is computed only from the
+                records that do have salary data — treat it as indicative, not company-wide, until more records
+                are filled in.
               </span>
             </div>
           )}
 
-          <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div className="mb-4 grid grid-cols-2 gap-3">
             <div className="rounded-xl bg-surface-muted/60 p-3 text-center">
               <div className="text-lg font-bold text-text-primary">{formatINR(payroll?.totalPayroll)}</div>
               <div className="text-[10px] font-semibold uppercase tracking-wide text-text-muted">Total Offered Salary</div>
@@ -72,14 +72,6 @@ export default function PayrollAnalytics({ payroll, loading }) {
               <div className="text-[10px] font-semibold uppercase tracking-wide text-text-muted">
                 Avg Offered Salary {lowCoverage ? `(${coveragePct}% coverage)` : ""}
               </div>
-            </div>
-            <div className="rounded-xl bg-violet-50 dark:bg-violet-500/10 p-3 text-center">
-              <div className="text-lg font-bold text-violet-700 dark:text-violet-400">{payroll?.extraHeadcount ?? 0}</div>
-              <div className="text-[10px] font-semibold uppercase tracking-wide text-violet-600/80 dark:text-violet-400/80">Extra Headcount</div>
-            </div>
-            <div className="rounded-xl bg-rose-50 dark:bg-rose-500/10 p-3 text-center">
-              <div className="text-lg font-bold text-rose-700 dark:text-rose-400">{formatINR(payroll?.extraPayrollEstimate)}</div>
-              <div className="text-[10px] font-semibold uppercase tracking-wide text-rose-600/80 dark:text-rose-400/80">Extra Offered Salary Est.</div>
             </div>
           </div>
 

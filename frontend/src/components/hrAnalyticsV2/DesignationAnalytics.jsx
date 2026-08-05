@@ -65,33 +65,17 @@ export default function DesignationAnalytics({ designations, loading }) {
             </ResponsiveContainer>
           </div>
 
-          <div className="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-2">
-            <div>
-              <div className="mb-2 text-[11px] font-bold uppercase tracking-wide text-text-muted">
-                Top Shortage Designations
-              </div>
-              <div className="space-y-1.5">
-                {[...designations].sort((a, b) => b.gap - a.gap).slice(0, 6).map((d) => (
-                  <div key={d.roleKey} className={`flex items-center justify-between rounded-lg px-2.5 py-1.5 text-xs ${heatColor(d.gap, maxGap)}`}>
-                    <span className="font-semibold">{d.roleLabel}</span>
-                    <span>Gap {d.gap}</span>
-                  </div>
-                ))}
-              </div>
+          <div className="mt-5">
+            <div className="mb-2 text-[11px] font-bold uppercase tracking-wide text-text-muted">
+              Top Shortage Designations
             </div>
-
-            <div>
-              <div className="mb-2 text-[11px] font-bold uppercase tracking-wide text-text-muted">
-                Top Extra Designations
-              </div>
-              <div className="space-y-1.5">
-                {[...designations].sort((a, b) => b.extra - a.extra).slice(0, 6).map((d) => (
-                  <div key={d.roleKey} className="flex items-center justify-between rounded-lg bg-violet-50 dark:bg-violet-500/10 text-violet-700 dark:text-violet-400 px-2.5 py-1.5 text-xs">
-                    <span className="font-semibold">{d.roleLabel}</span>
-                    <span>Extra {d.extra}</span>
-                  </div>
-                ))}
-              </div>
+            <div className="space-y-1.5">
+              {[...designations].sort((a, b) => b.gap - a.gap).slice(0, 6).map((d) => (
+                <div key={d.roleKey} className={`flex items-center justify-between rounded-lg px-2.5 py-1.5 text-xs ${heatColor(d.gap, maxGap)}`}>
+                  <span className="font-semibold">{d.roleLabel}</span>
+                  <span>Gap {d.gap}</span>
+                </div>
+              ))}
             </div>
           </div>
         </>
