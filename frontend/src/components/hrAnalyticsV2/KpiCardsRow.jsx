@@ -8,7 +8,6 @@ import {
   Clock,
   Target,
   AlertTriangle,
-  PlusCircle,
   Wallet,
   ShieldAlert,
   Percent,
@@ -104,16 +103,6 @@ export default function KpiCardsRow({ overview, loading, showOfferedSalary = tru
       tooltip: "New Joining records whose L2 Status is Pending.",
     },
     
-    {
-      key: "extra",
-      label: "Extra Employees",
-      icon: PlusCircle,
-      accentKey: "indigoAccent",
-      value: kpis.extra ?? 0,
-      description: "max(Available − Requirement, 0), summed",
-      tooltip:
-        "For every Circle × CMP × Designation combination, Extra = max(Available − Requirement, 0) — only counted where Available exceeds Requirement, never negative. This total is the sum of that across every combination in the current filter scope. A surplus in one designation never offsets a shortage in another, so Gap and Extra can both be positive for the same circle/CMP at once.",
-    },
     ...(showOfferedSalary
       ? [
           {
