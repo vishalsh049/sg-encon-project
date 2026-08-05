@@ -80,15 +80,11 @@ export default function CircleWorkforcePanel({ circles, loading, selectedCircle,
                 </div>
                 <div className="mt-1 text-[10px] font-semibold text-text-muted">{circle.utilizationPct}% utilization</div>
 
-                <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] text-text-muted">
-                  <span>Active: <span className="font-semibold text-text-secondary">{circle.activeEmployees}</span></span>
-                  <span>New Joining: <span className="font-semibold text-text-secondary">{circle.newJoiningThisMonth}</span></span>
-                  <span>Resigned: <span className="font-semibold text-text-secondary">{circle.resignedEmployees}</span></span>
-                  <span>Pending: <span className="font-semibold text-text-secondary">{circle.pendingJoining}</span></span>
-                  {showOfferedSalary && (
-                    <span>Offered Salary: <span className="font-semibold text-text-secondary">{circle.payroll ? `₹${(circle.payroll / 100000).toFixed(1)}L` : "—"}</span></span>
-                  )}
-                </div>
+                {showOfferedSalary && (
+                  <div className="mt-3 text-[11px] text-text-muted">
+                    Offered Salary: <span className="font-semibold text-text-secondary">{circle.payroll ? `₹${(circle.payroll / 100000).toFixed(1)}L` : "—"}</span>
+                  </div>
+                )}
               </button>
             );
           })}
