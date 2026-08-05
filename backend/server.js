@@ -26,6 +26,11 @@ function resolveEnvFile() {
 const envPath = resolveEnvFile();
 dotenv.config({
   path: envPath,
+  // Hostinger's Node.js App Manager can leave stale/incorrect vars sitting in
+  // process.env from earlier hPanel configuration. dotenv normally refuses to
+  // overwrite already-set vars, which silently ignores a correct bundled .env
+  // in that case — override so the deployed .env is always the source of truth.
+  override: true,
 });
 console.log("Using ENV file:", envPath || "(process env only)");
 
