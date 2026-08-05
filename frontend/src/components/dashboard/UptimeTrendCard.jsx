@@ -8,11 +8,9 @@ import {
   ChevronDown,
   LineChart as LineChartIcon,
   Loader2,
-  Minus,
   RefreshCcw,
   Target,
   TrendingDown,
-  TrendingUp,
   Trophy,
 } from "lucide-react";
 import {
@@ -257,15 +255,6 @@ export default function UptimeTrendCard({ circle = "", cmp = "" }) {
   // Rotate bar value labels when the group density would collide horizontally.
   const rotateBarLabels = chartData.length * Math.max(entities.length, 1) > 16;
 
-  const trendUp = summary?.delta != null && summary.delta > 0.01;
-  const trendDown = summary?.delta != null && summary.delta < -0.01;
-  const TrendIcon = trendUp ? TrendingUp : trendDown ? TrendingDown : Minus;
-  const trendTone = trendUp
-    ? "text-emerald-600 dark:text-emerald-400"
-    : trendDown
-    ? "text-rose-600 dark:text-rose-400"
-    : "text-text-muted";
-
   const activeChartType = CHART_TYPES.find((c) => c.key === chartType) || CHART_TYPES[0];
   const ActiveChartIcon = activeChartType.icon;
 
@@ -406,7 +395,7 @@ export default function UptimeTrendCard({ circle = "", cmp = "" }) {
         <div>
           <h4 className="flex items-center gap-2 text-md font-semibold text-text-primary">
             <Activity size={18} />
-            Uptime Trend
+            Uptime Trend ENB
           </h4>
           <p className="mt-0.5 text-xs text-text-muted">Circle-wise site availability over time</p>
         </div>
@@ -468,22 +457,7 @@ export default function UptimeTrendCard({ circle = "", cmp = "" }) {
 
       {/* Summary strip */}
       {status === "success" && summary && (
-        <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
-          <SummaryTile
-            Icon={Activity}
-            label="Overall Avg"
-            value={`${summary.overallAvg.toFixed(2)}%`}
-            sub={
-              summary.delta != null ? (
-                <span className={`inline-flex items-center gap-1 ${trendTone}`}>
-                  <TrendIcon className="h-3 w-3" />
-                  {`${summary.delta >= 0 ? "+" : ""}${summary.delta.toFixed(2)}% vs prev`}
-                </span>
-              ) : (
-                "No prior period"
-              )
-            }
-          />
+        <div className="mb-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
           <SummaryTile
             Icon={Trophy}
             label="Best Circle"
