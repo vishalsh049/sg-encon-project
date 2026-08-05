@@ -1595,7 +1595,10 @@ const prepareSiteUploadRows = async ({
  insertRows.push([
   fileId,
   dateValue,
-  getValue(cleanRow, ["sap id", "sap_id"]),
+  // osc_format.xlsx has no "SAP ID" column, only "JC SAP ID" — so sap_id was
+  // NULL for every row ever uploaded from the official template (same class
+  // of bug already fixed for ENB/ESC). Fall back to "jc sap id".
+  getValue(cleanRow, ["sap id", "sap_id", "jc sap id", "jc_sap_id"]),
   String(circle).trim(),
   String(cmp).trim(),
 
