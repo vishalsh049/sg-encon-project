@@ -1967,7 +1967,7 @@ setTimeout(() => {
                     </p>
                     <a
                       href={`/formats/${siteType.toLowerCase()}_format.xlsx`}
-                      download={`${siteType}_Format.xlsb`}
+                      download={`${siteType}_Format.xlsx`}
                       className="inline-flex h-9 items-center gap-2 rounded-xl border border-violet-200 bg-surface px-3 text-sm font-medium text-violet-700 transition hover:bg-violet-100 dark:border-violet-500/20 dark:text-violet-400 hover:dark:bg-violet-500/15"
                     >
                       <Download size={15} />
