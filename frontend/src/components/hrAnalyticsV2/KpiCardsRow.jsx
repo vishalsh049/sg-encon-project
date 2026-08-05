@@ -7,7 +7,6 @@ import {
   UserMinus,
   Clock,
   Target,
-  CheckCircle2,
   AlertTriangle,
   PlusCircle,
   Wallet,
@@ -93,16 +92,6 @@ export default function KpiCardsRow({ overview, loading, showOfferedSalary = tru
       value: kpis.requirement ?? 0,
       description: "Total approved manpower required.",
       tooltip: "Sum of every designation's sanctioned headcount from the Signoff master data, across the current filter scope.",
-    },
-
-     {
-      key: "available",
-      label: "Available",
-      icon: CheckCircle2,
-      accentKey: "completed",
-      value: kpis.available ?? 0,
-      description: "Employees available for deployment.",
-      tooltip: "Active Physical employees plus New Joining records marked Joined, with duplicates removed by Aadhaar number.",
     },
 
     {
