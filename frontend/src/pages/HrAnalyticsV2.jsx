@@ -10,7 +10,6 @@ import DrilldownModal from "../components/hrDashboard/DrilldownModal";
 
 import KpiCardsRow from "../components/hrAnalyticsV2/KpiCardsRow";
 import WorkforceOverviewFunnel from "../components/hrAnalyticsV2/WorkforceOverviewFunnel";
-import WorkforceHealthScore from "../components/hrAnalyticsV2/WorkforceHealthScore";
 import CircleWorkforcePanel from "../components/hrAnalyticsV2/CircleWorkforcePanel";
 import CmpAnalyticsPanel from "../components/hrAnalyticsV2/CmpAnalyticsPanel";
 import DesignationAnalytics from "../components/hrAnalyticsV2/DesignationAnalytics";
@@ -386,9 +385,6 @@ export default function HrAnalyticsV2() {
             />
           </div>
           
-        </div>
-        <div>
-          <WorkforceHealthScore overview={overview} loading={loading} />
         </div>
         <CmpAnalyticsPanel
           cmps={cmps}
