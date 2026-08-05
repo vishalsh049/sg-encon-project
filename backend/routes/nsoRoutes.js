@@ -62,7 +62,25 @@ function accessibleNsoFileExistsSql(authUser) {
       )`;
 }
 
+// ensureNsoTable() ran on every single request to almost every NSO route
+// (list, summary, circle-count, export, upload, edit, bulk-delete) —
+// including two full-table UPDATE statements (one with an INNER JOIN) meant
+// to backfill legacy rows just once. New rows are already inserted correctly
+// (original_file_name/report_date are set at insert time), so nothing after
+// the very first run of this per server start ever has real work to do.
+// Same "run once, cache the promise" fix already applied to reportRoutes.js.
+let ensureNsoTablePromise = null;
 async function ensureNsoTable() {
+  if (!ensureNsoTablePromise) {
+    ensureNsoTablePromise = ensureNsoTableOnce().catch((error) => {
+      ensureNsoTablePromise = null;
+      throw error;
+    });
+  }
+  return ensureNsoTablePromise;
+}
+
+async function ensureNsoTableOnce() {
 
   await query(`
     CREATE TABLE IF NOT EXISTS nso_report_files (
@@ -150,6 +168,86 @@ function normalizeDate(value) {
     return parsed.toISOString().split("T")[0];
   }
   return null;
+}
+
+function formatSqlDateTime(date) {
+  const y = date.getFullYear();
+  const mo = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  const h = String(date.getHours()).padStart(2, "0");
+  const mi = String(date.getMinutes()).padStart(2, "0");
+  const s = String(date.getSeconds()).padStart(2, "0");
+  return `${y}-${mo}-${d} ${h}:${mi}:${s}`;
+}
+
+// readRowsFromFile() reads with raw:false, so date/time cells (event_date,
+// reported_to_fibre_noc, informed_date, etr, cleared_date) arrive as Excel's
+// *formatted display string*, not a JS Date — the exact text therefore
+// depends on how each cell was formatted in the source workbook, and none of
+// those 5 columns were ever normalized before this fix (only report_date
+// was). Handing MySQL an unparseable string for a DATE/DATETIME column makes
+// it silently store the corrupt placeholder '0000-00-00' instead of erroring
+// or leaving it NULL — confirmed against production: 77.5% of etr values and
+// 24.4% of reported_to_fibre_noc values were '0000-00-00'. This parses the
+// formats actually in use (ISO, and DD/MM/YYYY — the common India-locale
+// format matching this app's IST-based date handling elsewhere) and returns
+// null for anything it can't confidently parse, so a genuinely blank/
+// unreadable cell stays NULL instead of becoming a fake zero-date.
+function parseExcelDateTime(value) {
+  if (value === null || value === undefined || value === "") return null;
+
+  if (value instanceof Date) {
+    return Number.isNaN(value.valueOf()) ? null : formatSqlDateTime(value);
+  }
+
+  if (typeof value === "number") {
+    const parsed = XLSX.SSF.parse_date_code(value);
+    if (!parsed?.y || !parsed?.m || !parsed?.d) return null;
+    return formatSqlDateTime(
+      new Date(parsed.y, parsed.m - 1, parsed.d, parsed.H || 0, parsed.M || 0, parsed.S || 0)
+    );
+  }
+
+  const text = String(value).trim();
+  if (!text) return null;
+
+  // YYYY-MM-DD[ HH:MM[:SS]] — already the format MySQL wants.
+  let match = text.match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2})(?::(\d{2}))?)?$/);
+  if (match) {
+    const [, y, mo, d, h = "00", mi = "00", s = "00"] = match;
+    return `${y}-${mo}-${d} ${h}:${mi}:${s}`;
+  }
+
+  // DD/MM/YYYY or DD-MM-YYYY, optional time — the common India-locale format.
+  match = text.match(
+    /^(\d{1,2})[/-](\d{1,2})[/-](\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)?)?$/i
+  );
+  if (match) {
+    const [, d, mo, y, h = "0", mi = "0", s = "0", ampm] = match;
+    const day = Number(d);
+    const month = Number(mo);
+    // JS's Date constructor silently overflows out-of-range day/month into
+    // the next month/year (e.g. day 32 -> the 1st/2nd of the next month)
+    // instead of failing, which would otherwise turn a typo'd date into a
+    // wrong-but-valid-looking one. Reject anything outside the calendar
+    // before it ever reaches new Date().
+    if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+    let hour = Number(h);
+    if (ampm) {
+      if (/pm/i.test(ampm) && hour < 12) hour += 12;
+      if (/am/i.test(ampm) && hour === 12) hour = 0;
+    }
+    const date = new Date(Number(y), month - 1, day, hour, Number(mi), Number(s));
+    // Still catches day-31-in-a-30-day-month etc: if the constructed date's
+    // day doesn't match what was typed, it overflowed into the next month.
+    if (date.getDate() !== day || date.getMonth() !== month - 1) return null;
+    if (Number.isNaN(date.valueOf())) return null;
+    return formatSqlDateTime(date);
+  }
+
+  // Last resort: things like "13-Jun-2026 14:30" that JS's own parser handles.
+  const fallback = new Date(text);
+  return Number.isNaN(fallback.valueOf()) ? null : formatSqlDateTime(fallback);
 }
 
 function getValue(row, possibleKeys = []) {
@@ -827,16 +925,20 @@ getValue(row, ["construction_type"]),
 getValue(row, ["impact"]),
 getValue(row, ["affected_service"]),
 getValue(row, ["reason"]),
-getValue(row, ["event_date"]),
-getValue(row, ["reported_to_fibre_noc"]),
-getValue(row, ["informed_date"]),
-getValue(row, ["etr"]),
-getValue(row, ["cleared_date"]),
+parseExcelDateTime(getValue(row, ["event_date"])),
+parseExcelDateTime(getValue(row, ["reported_to_fibre_noc"])),
+parseExcelDateTime(getValue(row, ["informed_date"])),
+parseExcelDateTime(getValue(row, ["etr"])),
+parseExcelDateTime(getValue(row, ["cleared_date"])),
 getValue(row, ["status"]),
 getValue(row, ["resolution"]),
 getValue(row, ["fault_description"]),
 getValue(row, ["mttr"]),
-getValue(row, ["mttn"]),
+// Every existing row has an empty mttn — the column exists (mttr, right
+// next to it, is populated fine) but the exact key the uploaded files use
+// doesn't match plain "mttn". Widened to common variants; if it's still
+// blank after this, we need the exact header text from a real source file.
+getValue(row, ["mttn", "mttn_mins", "mttnmins", "mean_time_to_notify"]),
 getValue(row, ["delay_reason"]),
 getValue(row, ["inter_intra_bin"]),
 getValue(row, ["zone"]),
@@ -851,7 +953,8 @@ getValue(row, ["reason_high_mttr"]),
 getValue(row, ["day"]),
 getValue(row, ["month"]),
 getValue(row, ["week_name"]),
-getValue(row, ["ttr_percentage"]),
+// Same situation as mttn above — widened to common variants.
+getValue(row, ["ttr_percentage", "ttr", "ttrpercentage", "ttr_percent", "percentage_ttr"]),
 
   resolvedReportDate
 ]

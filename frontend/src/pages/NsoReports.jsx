@@ -12,8 +12,37 @@ import {
   Upload,
   X,
 } from "lucide-react";
-import { buildApiUrl } from "../lib/api";
+import { buildApiUrl, authFetch } from "../lib/api";
 import PremiumDatePicker from "../components/PremiumDatePicker";
+
+// Saves an already-fetched file response as a download. Shared by every
+// download/export path below so they all behave identically.
+const saveBlob = (data, contentType, fileName) => {
+  const blob = new Blob([data], contentType ? { type: contentType } : undefined);
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
+};
+
+// Reads the server's JSON error message out of a failed response, whether
+// it's a normal JSON error body or one wrapped in a downloaded-file-shaped
+// response (Content-Type json but requested via blob-adjacent code paths).
+async function readNsoErrorMessage(response, fallback) {
+  try {
+    const payload = await response.clone().json();
+    if (typeof payload?.message === "string" && payload.message.trim()) {
+      return payload.message;
+    }
+  } catch {
+    // not JSON — fall through to the generic message
+  }
+  return fallback;
+}
 
 function NsoReports() {
   const [rows, setRows] = useState([]);
@@ -364,46 +393,33 @@ const handleDownload = async (row) => {
 
   try {
 
-    const response = await fetch(
+    // Was plain fetch() with no auth header — every request the app
+    // actually needs a login for goes through axios (which attaches the
+    // token via a global interceptor) or authFetch(). Plain fetch() here
+    // meant this always got rejected with 401 "Authentication required",
+    // which the code below correctly detected and reported as a generic
+    // "Download failed" — the button never worked, for anyone.
+    const response = await authFetch(
       buildApiUrl(`/api/nso/download/${row.id}`)
     );
 
-  if (!response.ok) {
-  const err = await response.text();
-  console.log(err);
-  throw new Error(err);
-}
-
+    if (!response.ok) {
+      throw new Error(await readNsoErrorMessage(response, "Download failed."));
+    }
 
     const blob = await response.blob();
 
-    const url =
-      window.URL.createObjectURL(blob);
+    const sanitizedName = row.original_name
+      ? `${row.original_name.replace(/\.[^/.]+$/, "")}.xlsx`
+      : `nso_report_${row.id}.xlsx`;
 
-    const link =
-      document.createElement("a");
-
-    link.href = url;
-
-  const sanitizedName = row.original_name
-  ? `${row.original_name.replace(/\.[^/.]+$/, "")}.xlsx`
-  : `nso_report_${row.id}.xlsx`;
-
-    link.download = sanitizedName;
-
-    document.body.appendChild(link);
-
-    link.click();
-
-    link.remove();
-
-    window.URL.revokeObjectURL(url);
+    saveBlob(blob, response.headers.get("content-type"), sanitizedName);
 
   } catch (error) {
 
     console.log(error);
 
-    alert("Download failed");
+    alert(error.message || "Download failed");
 
   }
 
@@ -413,7 +429,11 @@ const handleDownload = async (row) => {
     if (!selectedIds.length) return;
 
     try {
-      const response = await fetch(buildApiUrl("/api/nso/bulk-download"), {
+      // Same missing-auth bug as handleDownload, plus this never checked
+      // response.ok before saving — a failed request's JSON error body was
+      // being saved to disk as "nso-reports.zip" with no indication anything
+      // was wrong.
+      const response = await authFetch(buildApiUrl("/api/nso/bulk-download"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -421,27 +441,34 @@ const handleDownload = async (row) => {
         body: JSON.stringify({ ids: selectedIds }),
       });
 
+      if (!response.ok) {
+        throw new Error(await readNsoErrorMessage(response, "Bulk download failed."));
+      }
+
       const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = "nso-reports.zip";
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(url);
-    } catch (_error) {
-      window.alert("Bulk download failed");
+      saveBlob(blob, response.headers.get("content-type"), "nso-reports.zip");
+    } catch (error) {
+      window.alert(error.message || "Bulk download failed");
     }
   };
 
-  const handleExport = () => {
-    const link = document.createElement("a");
-    link.href = buildApiUrl("/api/nso/export");
-    link.download = `nso-reports-${Date.now()}.csv`;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
+  const handleExport = async () => {
+    try {
+      // Was a plain <a href> click — a browser navigation like that can
+      // never carry the Authorization header this app's login uses, so
+      // every export was silently downloading the server's 401 error body
+      // renamed to a .csv file instead of real data.
+      const response = await authFetch(buildApiUrl("/api/nso/export"));
+
+      if (!response.ok) {
+        throw new Error(await readNsoErrorMessage(response, "Export failed."));
+      }
+
+      const blob = await response.blob();
+      saveBlob(blob, response.headers.get("content-type"), `nso-reports-${Date.now()}.csv`);
+    } catch (error) {
+      window.alert(error.message || "Export failed");
+    }
   };
 
   {/* main return */}
@@ -727,7 +754,14 @@ const handleDownload = async (row) => {
                         <div className="truncate" title={row.original_name || row.file_name}>
                           {row.original_name || row.file_name || "-"}
                         </div>
-                       
+                        {row.file_missing ? (
+                          <div
+                            className="mt-0.5 text-xs font-medium text-amber-600 dark:text-amber-400"
+                            title="The originally uploaded file is no longer on the server. Download still works — it rebuilds the file from the saved report data, not from the original upload."
+                          >
+                            Original file no longer stored
+                          </div>
+                        ) : null}
                       </td>
 
                       <td className="px-5 py-4 text-text-secondary">
@@ -738,7 +772,6 @@ const handleDownload = async (row) => {
                           <button
                             onClick={() => handleDownload(row)}
                             className="inline-flex items-center gap-1 text-sm font-medium text-cyan-700 dark:text-cyan-400 hover:text-cyan-900"
-                           
                             title="Download"
                           >
                             <Download size={15} />
@@ -872,13 +905,18 @@ const handleDownload = async (row) => {
     }))
   }
   isDateDisabled={(d) => {
-    const yesterday = new Date();
-    yesterday.setHours(0, 0, 0, 0);
+    // Was comparing against "yesterday" (>= yesterday disabled), which
+    // disabled yesterday itself — the exact date the form defaults to
+    // (`today` above is actually computed as yesterday). Opening the modal
+    // pre-filled a date the picker wouldn't let you click. Compare against
+    // today instead: today/future disabled, yesterday and earlier allowed.
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
 
     const selected = new Date(d);
     selected.setHours(0, 0, 0, 0);
 
-    return selected >= yesterday;
+    return selected >= today;
   }}
   className="w-full"
 />
