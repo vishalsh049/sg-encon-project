@@ -236,7 +236,6 @@ registerRoute("./routes/dashboardRoutes", "/api/dashboard");
 registerRoute("./routes/siteRoutes", "/api/sites");
 registerRoute("./routes/manpowerRoutes", "/api/manpower");
 registerRoute("./routes/physicalRoutes", "/api/physical");
-registerRoute("./routes/hrDashboard", "/api/physical");
 registerRoute("./routes/hrDashboardExport", "/api/hr-dashboard");
 registerRoute("./routes/scrumDashboard", "/api/scrum-dashboard");
 registerRoute("./routes/uptimeRoutes", "/api/site-uptime");
