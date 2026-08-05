@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import {
   ChartColumnBig,
@@ -44,6 +44,8 @@ async function readNsoErrorMessage(response, fallback) {
   return fallback;
 }
 
+const EMPTY_TOAST = { message: "", type: "success" };
+
 function NsoReports() {
   const [rows, setRows] = useState([]);
   const [summary, setSummary] = useState({
@@ -63,6 +65,25 @@ function NsoReports() {
   const [selectedIds, setSelectedIds] = useState([]);
  const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+
+  // Page-level toast for download/export progress — none of the three
+  // download paths (single, bulk, CSV export) gave any feedback while a
+  // file was being generated, so a slow request looked identical to a
+  // broken button. Same self-contained pattern already used in
+  // TowerReports.jsx (state + timer + a fixed-position banner rendered at
+  // the page root).
+  const [toast, setToast] = useState(EMPTY_TOAST);
+  const toastTimer = useRef(null);
+
+  const showToast = useCallback((toastMessage, type = "success", durationMs = 3200) => {
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    setToast({ message: toastMessage, type });
+    toastTimer.current = setTimeout(() => setToast(EMPTY_TOAST), durationMs);
+  }, []);
+
+  useEffect(() => () => {
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+  }, []);
   const [circleCounts, setCircleCounts] = useState([]);
 
 const today = useMemo(() => {
@@ -391,6 +412,8 @@ setSummary(
 
 const handleDownload = async (row) => {
 
+  showToast("Your file is being prepared. Please wait...", "success", 8000);
+
   try {
 
     // Was plain fetch() with no auth header — every request the app
@@ -415,11 +438,13 @@ const handleDownload = async (row) => {
 
     saveBlob(blob, response.headers.get("content-type"), sanitizedName);
 
+    showToast(`"${sanitizedName}" downloaded successfully.`, "success");
+
   } catch (error) {
 
     console.log(error);
 
-    alert(error.message || "Download failed");
+    showToast(error.message || "Download failed", "error", 5000);
 
   }
 
@@ -427,6 +452,12 @@ const handleDownload = async (row) => {
 
   const handleBulkDownload = async () => {
     if (!selectedIds.length) return;
+
+    showToast(
+      `Preparing ${selectedIds.length} file${selectedIds.length === 1 ? "" : "s"} for download. Please wait...`,
+      "success",
+      8000
+    );
 
     try {
       // Same missing-auth bug as handleDownload, plus this never checked
@@ -447,12 +478,15 @@ const handleDownload = async (row) => {
 
       const blob = await response.blob();
       saveBlob(blob, response.headers.get("content-type"), "nso-reports.zip");
+      showToast("Bulk download complete.", "success");
     } catch (error) {
-      window.alert(error.message || "Bulk download failed");
+      showToast(error.message || "Bulk download failed", "error", 5000);
     }
   };
 
   const handleExport = async () => {
+    showToast("File download is in progress. Please wait...", "success", 8000);
+
     try {
       // Was a plain <a href> click — a browser navigation like that can
       // never carry the Authorization header this app's login uses, so
@@ -466,8 +500,9 @@ const handleDownload = async (row) => {
 
       const blob = await response.blob();
       saveBlob(blob, response.headers.get("content-type"), `nso-reports-${Date.now()}.csv`);
+      showToast("CSV export downloaded.", "success");
     } catch (error) {
-      window.alert(error.message || "Export failed");
+      showToast(error.message || "Export failed", "error", 5000);
     }
   };
 
@@ -475,6 +510,27 @@ const handleDownload = async (row) => {
 
   return (
    <div className="w-full pb-24">
+    {toast.message ? (
+      <div className="pointer-events-none fixed inset-x-3 top-4 z-[100] flex justify-center sm:inset-x-auto sm:right-5 sm:top-5 sm:justify-end">
+        <div
+          role={toast.type === "error" ? "alert" : "status"}
+          aria-live={toast.type === "error" ? "assertive" : "polite"}
+          className={`pointer-events-auto flex max-w-[min(92vw,460px)] items-start gap-3 whitespace-pre-line rounded-2xl px-4 py-3 text-sm font-medium text-white shadow-[0_20px_60px_rgba(15,23,42,0.28)] ${
+            toast.type === "error" ? "bg-red-600" : "bg-emerald-600"
+          }`}
+        >
+          <span className="min-w-0 flex-1">{toast.message}</span>
+          <button
+            type="button"
+            onClick={() => setToast(EMPTY_TOAST)}
+            aria-label="Dismiss notification"
+            className="-mr-1 flex-shrink-0 rounded-full p-0.5 opacity-80 transition hover:opacity-100"
+          >
+            <X size={15} />
+          </button>
+        </div>
+      </div>
+    ) : null}
     <div className="mx-auto w-full space-y-2">
      <section className="relative overflow-hidden rounded-[18px] border border-border-color px-4 py-3
       bg-[radial-gradient(circle_at_top_left,_rgba(14,165,233,0.2),_transparent_30%),linear-gradient(135deg,#f8fafc_0%,#eef6ff_45%,#fff8ed_100%)]">

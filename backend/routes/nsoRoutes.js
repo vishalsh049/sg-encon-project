@@ -250,6 +250,20 @@ function parseExcelDateTime(value) {
   return Number.isNaN(fallback.valueOf()) ? null : formatSqlDateTime(fallback);
 }
 
+// getValue() returns "" for a missing/blank cell. mttr is the one numeric
+// (DECIMAL) column fed from getValue() — this database isn't running in
+// strict SQL mode (confirmed), so handing it an empty string silently stores
+// 0.00 instead of NULL, indistinguishable from a genuine zero MTTR. Same bug
+// class as the ETR date corruption above, just for a number instead of a
+// date. All 3,707 existing rows happen to have a real MTTR value already, so
+// this hasn't corrupted anything yet — but the next upload with a blank
+// MTTR cell would.
+function toDecimalOrNull(value) {
+  if (value === null || value === undefined || value === "") return null;
+  const num = Number(String(value).trim());
+  return Number.isNaN(num) ? null : num;
+}
+
 function getValue(row, possibleKeys = []) {
 
   const normalizedRow = {};
@@ -699,6 +713,23 @@ router.get("/download/:id", async (req, res) => {
 });
 
 router.post("/bulk-download", async (req, res) => {
+  // Selecting many reports runs one query per file, sequentially, with no
+  // protection against the database's default statement timeout (180s) —
+  // reportRoutes.js's export already had to work around this same limit for
+  // its much bigger tables. Checking out one dedicated connection and
+  // raising the timeout on it for the whole loop, then putting it back the
+  // way it was found, matches that existing pattern instead of inventing a
+  // new one.
+  const connection = await new Promise((resolve, reject) => {
+    db.getConnection((err, conn) => (err ? reject(err) : resolve(conn)));
+  });
+  const runOnConnection = (sql, params = []) =>
+    new Promise((resolve, reject) => {
+      connection.query(sql, params, (err, rows) => (err ? reject(err) : resolve(rows)));
+    });
+
+  let timeoutVariable = null;
+
   try {
     const ids = Array.isArray(req.body?.ids) ? req.body.ids : [];
     if (!ids.length) {
@@ -708,6 +739,16 @@ router.post("/bulk-download", async (req, res) => {
     await ensureNsoTable();
     const files = await getRowsByIds(ids, req.authUser);
 
+    for (const variable of ["max_statement_time", "max_execution_time"]) {
+      try {
+        await runOnConnection(`SET SESSION ${variable} = 0`);
+        timeoutVariable = variable;
+        break;
+      } catch {
+        // Unknown variable on this server (MariaDB vs MySQL naming) — try the other one.
+      }
+    }
+
     res.setHeader("Content-Type", "application/zip");
     res.setHeader("Content-Disposition", 'attachment; filename="nso-reports.zip"');
 
@@ -715,7 +756,7 @@ router.post("/bulk-download", async (req, res) => {
     archive.pipe(res);
 
     for (const file of files) {
-      const rows = await query(
+      const rows = await runOnConnection(
         `SELECT
            uid,
            year,
@@ -776,7 +817,20 @@ router.post("/bulk-download", async (req, res) => {
     await archive.finalize();
   } catch (error) {
     console.error("NSO bulk download error:", error);
-    res.status(500).json({ message: "Failed to download selected files" });
+    if (!res.headersSent) {
+      res.status(500).json({ message: "Failed to download selected files" });
+    } else {
+      res.destroy(error);
+    }
+  } finally {
+    if (timeoutVariable) {
+      try {
+        await runOnConnection(`SET SESSION ${timeoutVariable} = DEFAULT`);
+      } catch (resetError) {
+        console.error("NSO bulk download: failed to reset session timeout:", resetError.message);
+      }
+    }
+    connection.release();
   }
 });
 
@@ -811,6 +865,29 @@ router.post("/upload", (req, res) => {
         uploadedBy: req.body.uploadedBy,
       });
       const resolvedReportDate = defaults.reportDate || req.body.date || null;
+
+      // There was no duplicate-upload check at all — re-uploading the same
+      // file (or any file for a date already uploaded) silently inserted
+      // every row a second time, with no warning. Tower Reports already
+      // handles this with a full Replace/Skip dialog; this is the same
+      // protection in its simplest safe form — block it and tell the user
+      // to delete the existing report first, rather than building a new UI
+      // flow for something that should be rare.
+      if (resolvedReportDate) {
+        const existingForDate = await query(
+          `SELECT id, original_name FROM nso_report_files WHERE report_date = ? LIMIT 1`,
+          [resolvedReportDate]
+        );
+        if (existingForDate.length) {
+          return res.status(409).json({
+            message:
+              `A report for ${resolvedReportDate} has already been uploaded ` +
+              `("${existingForDate[0].original_name}"). Delete it first if you want to replace it — ` +
+              `uploading again would duplicate every row.`,
+          });
+        }
+      }
+
       assertRowsAllowedCircle(req.authUser, workbookRows, (row) => getValue(row, ["circle"]));
 
 const fileResult = await query(
@@ -933,7 +1010,7 @@ parseExcelDateTime(getValue(row, ["cleared_date"])),
 getValue(row, ["status"]),
 getValue(row, ["resolution"]),
 getValue(row, ["fault_description"]),
-getValue(row, ["mttr"]),
+toDecimalOrNull(getValue(row, ["mttr"])),
 // Every existing row has an empty mttn — the column exists (mttr, right
 // next to it, is populated fine) but the exact key the uploaded files use
 // doesn't match plain "mttn". Widened to common variants; if it's still
