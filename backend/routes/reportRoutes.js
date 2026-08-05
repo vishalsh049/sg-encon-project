@@ -1019,19 +1019,17 @@ if (
       cleanRow["device type"] ||
       null,
 
-      cleanRow["total_cnum_count"] ||
-      cleanRow["total cnum count"] ||
-      null,
+      // These three were plain `||` chains, which treat a real 0 as falsy and
+      // fall through to null — every genuine 0 uploaded for ESC was silently
+      // stored as NULL. toExactNumber() preserves 0 exactly; only a truly
+      // blank/missing cell becomes null.
+      toExactNumber(cleanRow["total_cnum_count"] ?? cleanRow["total cnum count"]),
 
-      cleanRow["total_outage"] ||
-      cleanRow["total outage"] ||
-      null,
+      toExactNumber(cleanRow["total_outage"] ?? cleanRow["total outage"]),
 
       availability,
 
-      cleanRow["cells_up"] ||
-      cleanRow["cells up"] ||
-      null,
+      toExactNumber(cleanRow["cells_up"] ?? cleanRow["cells up"]),
 
       date
     ]);
