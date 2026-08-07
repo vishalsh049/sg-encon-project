@@ -24,6 +24,7 @@ const {
   isAllCircle,
 } = require("../middleware/circleAccess");
 const { getCachedValue, setCachedValue } = require("../services/physicalDomainService");
+const { resolveRoleKey } = require("../services/manpowerConfigService");
 
 router.use(authMiddleware);
 
@@ -95,47 +96,17 @@ const ROLE_KEY_LABELS = {
 
 const ALL_ROLE_KEYS = [...SIGNOFF_ROLE_KEYS, "technicianb", "riggerb"];
 
-// Same free-text-job-role -> canonical bucket mapping as
-// physicalRoutes.js ("/active-job-role-cmp-count") — copied verbatim rather
-// than imported so this file has no runtime coupling to that route.
-function normalizedRoleExpr(columnExpr) {
-  return `LOWER(REPLACE(REPLACE(REPLACE(REPLACE(TRIM(${columnExpr}), ' ', ''), '-', ''), '_', ''), '.', ''))`;
-}
-
-const ROLE_KEY_CASE_SQL = `
-  CASE
-    WHEN normalized_role IN (
-      'stateenergymanager','statefibersme','stateispsme','statematerialmanager',
-      'stateoperationhead','stateplanningmanager','stateutilitysme'
-    ) THEN 'state_leadership_team'
-    WHEN normalized_role = 'nocexecutive' THEN 'noc_executive'
-    WHEN normalized_role LIKE 'analyst%' THEN 'analyst'
-    WHEN normalized_role = 'cmplead' THEN 'cmp_lead'
-    WHEN normalized_role = 'technician' THEN 'technician'
-    WHEN normalized_role = 'rigger' THEN 'rigger'
-    WHEN normalized_role = 'utilitysupervisor' THEN 'utility_supervisor'
-    WHEN normalized_role = 'utilityengineer' THEN 'utility_engineer'
-    WHEN normalized_role = 'ispengineer' THEN 'isp_engineer'
-    WHEN normalized_role IN (
-      'whinchargecumsecurity','warehouseincharge','warehouseinchargecumsecurity'
-    ) THEN 'wh_incharge_cum_security'
-    WHEN normalized_role = 'splicer' THEN 'splicer'
-    WHEN normalized_role = 'assistantsplicer' THEN 'assistant_splicer'
-    WHEN normalized_role IN ('fiberhelper', 'fibrehelper', 'frthelper') THEN 'fiber_helper'
-    WHEN normalized_role = 'patroller' THEN 'patroller'
-    WHEN normalized_role IN ('fibersupervisor', 'fibresupervisor') THEN 'fiber_supervisor'
-    WHEN normalized_role IN ('fiberengineer', 'fibreengineer') THEN 'fibre_engineer'
-    WHEN normalized_role = 'fttxsplicer' THEN 'fttx_splicer'
-    WHEN normalized_role = 'fttxassistantsplicer' THEN 'fttx_assistant_splicer'
-    WHEN normalized_role = 'fttxsupervisor' THEN 'fttx_supervisor'
-    WHEN normalized_role = 'fttxhelper' THEN 'fttx_helper'
-    WHEN normalized_role = 'fttxengineer' THEN 'fttx_engineer'
-    WHEN normalized_role = 'fttxtechnician' THEN 'fttx_technician'
-    WHEN normalized_role = 'technicianb' THEN 'technicianb'
-    WHEN normalized_role = 'riggerb' THEN 'riggerb'
-    ELSE NULL
-  END
-`;
+// Free-text job_role/designation -> canonical role_key classification comes
+// from resolveRoleKey() (live, admin-editable manpower_sub_profiles config —
+// see backend/services/manpowerConfigService.js), resolved row-by-row in JS
+// after fetching raw designation text, the same way physicalRoutes.js's
+// "/active-job-role-cmp-count" already does. This file used to carry its own
+// hardcoded copy of that mapping (including a stray `LIKE 'analyst%'`
+// wildcard no other role had) so it would have "no runtime coupling" to the
+// rest of the app — that duplication was the actual bug: it silently drifted
+// out of sync with Manpower Settings and could never respect an admin's
+// exact-designation mapping. Importing resolveRoleKey() keeps this page's
+// numbers permanently consistent with the main HR Dashboard's.
 
 // Per-side (physical / new_joining) circle+cmp scope: user's own circle
 // (unless they're an All-Circle user), plus the optional ?circle=&cmp=
@@ -242,80 +213,103 @@ function buildAvailableSourceSql(req) {
 
   const sql = `
     SELECT
-      source,
-      circle,
-      cmp,
-      raw_designation,
-      ${ROLE_KEY_CASE_SQL} AS role_key,
-      joined_on,
-      nth_salary,
-      aadhaar_no
-    FROM (
-      SELECT
-        'physical' AS source,
-        p.circle AS circle,
-        p.cmp AS cmp,
-        p.job_role AS raw_designation,
-        ${normalizedRoleExpr("p.job_role")} AS normalized_role,
-        p.date_of_joining AS joined_on,
-        COALESCE(p.nth_salary, 0) AS nth_salary,
-        p.aadhaar_no AS aadhaar_no
-      FROM physical p
-      WHERE COALESCE(p.is_deleted, 0) = 0
-        AND LOWER(TRIM(COALESCE(p.employment_status, ''))) = 'active'
-        AND p.job_role IS NOT NULL AND p.job_role != ''
-        ${physicalScope.sql}
+      'physical' AS source,
+      p.circle AS circle,
+      p.cmp AS cmp,
+      p.job_role AS raw_designation,
+      p.date_of_joining AS joined_on,
+      COALESCE(p.nth_salary, 0) AS nth_salary,
+      p.aadhaar_no AS aadhaar_no
+    FROM physical p
+    WHERE COALESCE(p.is_deleted, 0) = 0
+      AND LOWER(TRIM(COALESCE(p.employment_status, ''))) = 'active'
+      AND p.job_role IS NOT NULL AND p.job_role != ''
+      ${physicalScope.sql}
 
-      UNION ALL
+    UNION ALL
 
-      SELECT
-        'new_joining' AS source,
-        nj.circle AS circle,
-        nj.cmp AS cmp,
-        nj.designation AS raw_designation,
-        ${normalizedRoleExpr("nj.designation")} AS normalized_role,
-        nj.uploaded_at AS joined_on,
-        COALESCE(nj.nth_salary, 0) AS nth_salary,
-        nj.aadhaar_no AS aadhaar_no
-      FROM new_joining nj
-      WHERE LOWER(TRIM(COALESCE(nj.joining_status, ''))) = 'joined'
-        AND nj.designation IS NOT NULL AND nj.designation != ''
-        AND NOT EXISTS (
-          SELECT 1 FROM physical dedupe
-          WHERE TRIM(COALESCE(nj.aadhaar_no, '')) != ''
-            AND TRIM(COALESCE(dedupe.aadhaar_no, '')) = TRIM(nj.aadhaar_no)
-            AND COALESCE(dedupe.is_deleted, 0) = 0
-            AND LOWER(TRIM(COALESCE(dedupe.employment_status, ''))) = 'active'
-        )
-        ${njScope.sql}
-    ) AS src
+    SELECT
+      'new_joining' AS source,
+      nj.circle AS circle,
+      nj.cmp AS cmp,
+      nj.designation AS raw_designation,
+      nj.uploaded_at AS joined_on,
+      COALESCE(nj.nth_salary, 0) AS nth_salary,
+      nj.aadhaar_no AS aadhaar_no
+    FROM new_joining nj
+    WHERE LOWER(TRIM(COALESCE(nj.joining_status, ''))) = 'joined'
+      AND nj.designation IS NOT NULL AND nj.designation != ''
+      AND NOT EXISTS (
+        SELECT 1 FROM physical dedupe
+        WHERE TRIM(COALESCE(nj.aadhaar_no, '')) != ''
+          AND TRIM(COALESCE(dedupe.aadhaar_no, '')) = TRIM(nj.aadhaar_no)
+          AND COALESCE(dedupe.is_deleted, 0) = 0
+          AND LOWER(TRIM(COALESCE(dedupe.employment_status, ''))) = 'active'
+      )
+      ${njScope.sql}
   `;
 
   return { sql, params: [...physicalScope.params, ...njScope.params] };
 }
 
+// Resolves each raw row's role_key in JS via resolveRoleKey() (see file
+// header) and re-aggregates, since multiple raw designation strings can
+// share one role_key (e.g. "Analyst - Material" and "Analyst - Planning"
+// both roll up into "analyst"). `rows` must already be grouped by whatever
+// dimensions the caller wants preserved (e.g. circle/cmp) plus
+// raw_designation, with the fields to sum passed as `sumFields`.
+async function resolveAndRegroup(rows, dimensionKeys, sumFields) {
+  const grouped = new Map();
+  for (const row of rows) {
+    const resolved = await resolveRoleKey(row.raw_designation, "physical");
+    if (!resolved) continue;
+
+    const key = [...dimensionKeys.map((k) => row[k]), resolved.roleKey].join("::");
+    const existing = grouped.get(key);
+    if (existing) {
+      sumFields.forEach((f) => {
+        existing[f] += Number(row[f] || 0);
+      });
+    } else {
+      const entry = { role_key: resolved.roleKey };
+      dimensionKeys.forEach((k) => {
+        entry[k] = row[k];
+      });
+      sumFields.forEach((f) => {
+        entry[f] = Number(row[f] || 0);
+      });
+      grouped.set(key, entry);
+    }
+  }
+  return Array.from(grouped.values());
+}
+
 async function fetchAvailableRows(req) {
   const source = buildAvailableSourceSql(req);
   const requestedDesignation = String(req.query.designation || "").trim();
-  const designationFilter = requestedDesignation ? " AND av.role_key = ?" : "";
-  const params = [...source.params];
-  if (requestedDesignation) params.push(requestedDesignation);
 
-  return query(
+  const rawRows = await query(
     `
     SELECT
       av.circle AS circle,
       av.cmp AS cmp,
-      av.role_key AS role_key,
+      av.raw_designation AS raw_designation,
       COUNT(*) AS available,
       SUM(av.nth_salary) AS salary_sum,
       SUM(CASE WHEN av.nth_salary > 0 THEN 1 ELSE 0 END) AS salaried_count
     FROM (${source.sql}) av
-    WHERE av.role_key IS NOT NULL${designationFilter}
-    GROUP BY av.circle, av.cmp, av.role_key
+    GROUP BY av.circle, av.cmp, av.raw_designation
     `,
-    params
+    source.params
   );
+
+  const resolved = await resolveAndRegroup(rawRows, ["circle", "cmp"], [
+    "available",
+    "salary_sum",
+    "salaried_count",
+  ]);
+
+  return requestedDesignation ? resolved.filter((row) => row.role_key === requestedDesignation) : resolved;
 }
 
 // Merges requirement + available tuples (both keyed by circle/cmp/role_key)
@@ -887,32 +881,33 @@ router.get("/joining-trend", async (req, res) => {
 
     const source = buildAvailableSourceSql(req);
     const requestedDesignation = String(req.query.designation || "").trim();
-    const designationFilter = requestedDesignation ? " AND av.role_key = ?" : "";
     const params = [...source.params, sinceDate];
-    if (requestedDesignation) params.push(requestedDesignation);
 
-    const rows = await query(
+    const rawRows = await query(
       `
       SELECT
         DATE(av.joined_on) AS joined_date,
         av.circle AS circle,
         av.cmp AS cmp,
-        av.role_key AS role_key,
+        av.raw_designation AS raw_designation,
         COUNT(*) AS total
       FROM (${source.sql}) av
-      WHERE av.role_key IS NOT NULL
-        AND av.joined_on IS NOT NULL
+      WHERE av.joined_on IS NOT NULL
         AND av.joined_on >= ?
-        ${designationFilter}
-      GROUP BY joined_date, av.circle, av.cmp, av.role_key
-      ORDER BY joined_date ASC
+      GROUP BY joined_date, av.circle, av.cmp, av.raw_designation
       `,
       params
     );
 
+    const resolved = await resolveAndRegroup(rawRows, ["joined_date", "circle", "cmp"], ["total"]);
+    const filtered = requestedDesignation
+      ? resolved.filter((row) => row.role_key === requestedDesignation)
+      : resolved;
+    filtered.sort((a, b) => (a.joined_date > b.joined_date ? 1 : a.joined_date < b.joined_date ? -1 : 0));
+
     const payload = {
       success: true,
-      data: rows.map((row) => ({
+      data: filtered.map((row) => ({
         date: row.joined_date,
         circle: row.circle,
         cmp: row.cmp,
@@ -944,44 +939,39 @@ router.get("/resignation-trend", async (req, res) => {
     const physicalScope = buildSideScope(req, "p");
     const requestedDesignation = String(req.query.designation || "").trim();
 
-    const rows = await query(
+    const rawRows = await query(
       `
       SELECT
         DATE(p.resigned_date) AS resigned_date,
         p.circle AS circle,
         p.cmp AS cmp,
-        ${ROLE_KEY_CASE_SQL} AS role_key,
+        p.job_role AS raw_designation,
         COUNT(*) AS total
-      FROM (
-        SELECT p.circle, p.cmp, p.resigned_date,
-          ${normalizedRoleExpr("p.job_role")} AS normalized_role
-        FROM physical p
-        WHERE COALESCE(p.is_deleted, 0) = 0
-          AND p.resigned_date IS NOT NULL
-          AND p.resigned_date >= ?
-          ${physicalScope.sql}
-      ) AS p
-      GROUP BY resigned_date, circle, cmp, role_key
+      FROM physical p
+      WHERE COALESCE(p.is_deleted, 0) = 0
+        AND p.resigned_date IS NOT NULL
+        AND p.resigned_date >= ?
+        ${physicalScope.sql}
+      GROUP BY resigned_date, circle, cmp, raw_designation
       `,
       [sinceDate, ...physicalScope.params]
     );
 
+    const resolved = await resolveAndRegroup(rawRows, ["resigned_date", "circle", "cmp"], ["total"]);
     const filtered = requestedDesignation
-      ? rows.filter((row) => row.role_key === requestedDesignation)
-      : rows;
+      ? resolved.filter((row) => row.role_key === requestedDesignation)
+      : resolved;
 
     const payload = {
       success: true,
-      data: filtered
-        .filter((row) => row.role_key)
-        .map((row) => ({
-          date: row.resigned_date,
-          circle: row.circle,
-          cmp: row.cmp,
-          roleKey: row.role_key,
-          roleLabel: ROLE_KEY_LABELS[row.role_key] || row.role_key,
-          total: Number(row.total || 0),
-        })),
+      data: filtered.map((row) => ({
+        date: row.resigned_date,
+        circle: row.circle,
+        cmp: row.cmp,
+        roleKey: row.role_key,
+        roleLabel: ROLE_KEY_LABELS[row.role_key] || row.role_key,
+        total: Number(row.total || 0),
+      })),
     };
 
     setCachedValue("hrAnalyticsV2ResignationTrend", cacheKey, payload, 60 * 1000);

@@ -793,6 +793,12 @@ router.get("/kpi-data", requirePagePermission("revenue", "view"), async (req, re
       params.push(requestedCircle);
     }
 
+    const requestedBillingType = String(req.query.billing_type || "").trim();
+    if (requestedBillingType) {
+      filters.push("r.domain = ?");
+      params.push(requestedBillingType);
+    }
+
     if (filters.length) {
       query += ` AND ${filters.join(" AND ")}`;
     }

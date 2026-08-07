@@ -8,7 +8,6 @@
   Trash2,
   RotateCcw,
   Clock,
-  BarChart3,
   ArrowLeft,
   X,
   User,
@@ -1986,25 +1985,6 @@ const inactiveCount = dashboardSummary.inactiveEmployees || 0;
   >
     <Upload size={16} />
     Upload Report
-  </button>
-
-  <button
-    onClick={() => window.location.href = "/physical/dashboard"}
-    className="
-      group
-      flex items-center gap-2
-      rounded-lg
-      border border-border-color
-      bg-surface
-      px-4
-      py-2
-      text-[13px]
-      font-semibold
-      text-text-secondary
-    "
-  >
-    <BarChart3 size={16} />
-    Dashboard
   </button>
 
 </div>

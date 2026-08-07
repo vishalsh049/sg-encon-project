@@ -274,14 +274,14 @@ export default function UptimeTrendCard({ circle = "", cmp = "" }) {
         tick={{ fontSize: isCompactWidth ? 10 : 11, fill: theme.tickDim }}
         axisLine={false}
         tickLine={false}
-        width={40}
+        width={isCompactWidth ? 38 : 46}
         tickFormatter={tickFormatter}
       />
       <ReferenceLine y={TARGET_UPTIME} stroke="#10b981" strokeDasharray="4 4" strokeWidth={1.5} />
     </>
   );
 
-  const chartMargin = { top: rotateBarLabels && chartType === "bar" ? 34 : 16, right: 16, left: -8, bottom: 0 };
+  const chartMargin = { top: rotateBarLabels && chartType === "bar" ? 34 : 16, right: 16, left: 4, bottom: 0 };
 
   const renderChart = () => {
     if (chartType === "bar") {

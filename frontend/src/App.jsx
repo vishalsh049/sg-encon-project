@@ -58,12 +58,6 @@ function App() {
       <Routes>
         <Route path="/" element={<Login />} />
         <Route path="/login" element={<Login />} />
-        <Route path="/physical/dashboard" element={
-          <ProtectedRoute page={"Physical"}>
-            <PhysicalDashboard />
-          </ProtectedRoute>
-        } />
-
         <Route path="/dashboard" element={<DashboardLayout />}>
   <Route index element={
     <ProtectedRoute page={"Dashboard"}>

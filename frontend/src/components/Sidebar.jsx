@@ -133,11 +133,20 @@ function Sidebar({ closeSidebar, collapsed, onExpandRequest }) {
 },
 
 {
-  key: "physical",
-  label: "Physical",
-  path: "/dashboard/manpower/physical",
-  icon: BriefcaseBusiness,
+  key: "physical-dashboard",
+  label: "Physical Dashboard",
+  path: "/dashboard/manpower/physical/dashboard",
+  icon: LayoutDashboard,
   accessPage: "Physical",
+},
+
+
+{
+  key: "scrum-dashboard",
+  label: "SCRUM Dashboard",
+  path: "/dashboard/manpower/scrum-dashboard",
+  icon: BriefcaseBusiness,
+  accessPage: "Scrum Dashboard",
 },
 
 {
@@ -149,11 +158,11 @@ function Sidebar({ closeSidebar, collapsed, onExpandRequest }) {
 },
 
 {
-  key: "scrum-dashboard",
-  label: "SCRUM Dashboard",
-  path: "/dashboard/manpower/scrum-dashboard",
+  key: "physical",
+  label: "Physical",
+  path: "/dashboard/manpower/physical",
   icon: BriefcaseBusiness,
-  accessPage: "Scrum Dashboard",
+  accessPage: "Physical",
 },
 
 {
@@ -163,8 +172,6 @@ function Sidebar({ closeSidebar, collapsed, onExpandRequest }) {
   icon: BriefcaseBusiness,
   accessPage: "Scrum",
 },
-
-
 
 {
   key: "signoff",

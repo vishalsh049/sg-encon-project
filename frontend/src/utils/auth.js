@@ -1,5 +1,9 @@
 export const getUser = () => {
-  return JSON.parse(localStorage.getItem("user")) || {};
+  try {
+    return JSON.parse(localStorage.getItem("sessionUser")) || {};
+  } catch {
+    return {};
+  }
 };
 
 export const hasPermission = (name) => {
@@ -9,5 +13,5 @@ export const hasPermission = (name) => {
 
 export const getUserCircle = () => {
   const user = getUser();
-  return user?.circle || "ALL";
+  return user?.circle || "";
 };

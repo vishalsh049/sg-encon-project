@@ -47,7 +47,7 @@ export default function DomainPerformance({ summary, domainCompletion }) {
                 </span>
               </div>
 
-              <div className="grid grid-cols-2 gap-2 mb-3">
+              <div className="grid grid-cols-2 gap-2">
                 <div className="rounded-xl bg-surface-muted/60 p-2.5">
                   <div className="text-[9px] font-semibold uppercase tracking-wide text-text-muted">Revenue</div>
                   <div className="text-sm font-bold text-emerald-700 dark:text-emerald-400">{formatCr(revenue)}</div>
@@ -55,22 +55,6 @@ export default function DomainPerformance({ summary, domainCompletion }) {
                 <div className="rounded-xl bg-surface-muted/60 p-2.5">
                   <div className="text-[9px] font-semibold uppercase tracking-wide text-text-muted">PM Loss</div>
                   <div className="text-sm font-bold text-indigo-700 dark:text-indigo-400">{formatCr(loss)}</div>
-                </div>
-              </div>
-
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <div className="text-[10px] font-semibold uppercase tracking-wide text-text-muted">Completion</div>
-                  <div className={`text-xs font-bold ${status.text}`}>{completion.percent}%</div>
-                </div>
-                <div className={`h-1.5 rounded-full overflow-hidden ${status.bg}`}>
-                  <div
-                    className={`h-full rounded-full ${status.bar} transition-all duration-700`}
-                    style={{ width: `${completion.percent}%` }}
-                  />
-                </div>
-                <div className="mt-1 text-[10px] text-text-muted">
-                  {completion.done} done · {completion.pending} pending
                 </div>
               </div>
             </div>

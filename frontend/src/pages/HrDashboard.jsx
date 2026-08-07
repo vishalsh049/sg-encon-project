@@ -295,7 +295,6 @@ function HrDashboard() {
   // with the dashboard's current filters.
   const [exportModalFilters, setExportModalFilters] = useState(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [lastRefreshedAt, setLastRefreshedAt] = useState(null);
   const refreshAbortRef = useRef(null);
   const refreshPromiseRef = useRef(null);
   const snapshotHashRef = useRef({
@@ -421,13 +420,26 @@ function HrDashboard() {
     silent = false,
     forceRestart = false,
   } = {}) => {
+    // A leftover promise whose controller is already aborted (e.g. React
+    // StrictMode's dev-only mount -> cleanup -> mount, which aborts the
+    // first mount's in-flight fetch before the second mount runs) must never
+    // be treated as "a refresh is still in progress" — otherwise the second
+    // mount just joins that dead promise and no fetch ever actually happens,
+    // leaving the dashboard at its zeroed default until something forces a
+    // restart.
+    if (refreshAbortRef.current?.signal.aborted) {
+      refreshPromiseRef.current = null;
+    }
+
     if (refreshPromiseRef.current && forceRestart) {
       refreshAbortRef.current?.abort();
+      refreshPromiseRef.current = null;
     }
 
     if (refreshPromiseRef.current && !forceRestart) {
       if (reason === "manual") {
         refreshAbortRef.current?.abort();
+        refreshPromiseRef.current = null;
       } else {
         return refreshPromiseRef.current;
       }
@@ -474,8 +486,6 @@ function HrDashboard() {
             ? scrumActiveResult.data || []
             : [],
         });
-
-        setLastRefreshedAt(new Date());
       } catch (error) {
         if (error?.name === "AbortError") {
           return;
@@ -814,20 +824,6 @@ function HrDashboard() {
     { label: "Scrum Active", value: scrumCount.active || 0 },
   ];
 
-  const lastRefreshedLabel = useMemo(() => {
-    if (!lastRefreshedAt) return "Last Refreshed: --";
-
-    return `Last Refreshed: ${lastRefreshedAt.toLocaleString("en-GB", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-      hour12: false,
-    })}`;
-  }, [lastRefreshedAt]);
-
   const circleContextValue = useMemo(
     () => ({ isAllCircleUser, userCircleLabel, allowedCircleLabels }),
     [isAllCircleUser, userCircleLabel, allowedCircleLabels]
@@ -944,7 +940,6 @@ function HrDashboard() {
           exporting={exportingPhysical}
           exportLabel="Export Physical RAG"
           isRefreshing={isRefreshing}
-          lastRefreshedLabel={lastRefreshedLabel}
           subtitle="Requirement vs Available Manpower"
           description="Real-time view of physical workforce requirements, availability, and deployment gaps."
           gradient="from-sky-500 via-cyan-500 to-teal-400"
@@ -970,7 +965,6 @@ function HrDashboard() {
           exporting={exportingScrum}
           exportLabel="Export Scrum RAG"
           isRefreshing={isRefreshing}
-          lastRefreshedLabel={lastRefreshedLabel}
           subtitle="Overview Scrum Manpower"
           description="Real-time view of scrum workforce requirements, availability, and deployment gaps."
           gradient="from-violet-600 via-fuchsia-500 to-pink-500"
@@ -1105,7 +1099,6 @@ function TablePanel({
   exporting,
   exportLabel,
   isRefreshing,
-  lastRefreshedLabel,
 })
  {
   
@@ -1152,21 +1145,16 @@ function TablePanel({
         {exporting ? "Exporting..." : exportLabel}
     </button>
 
-    <div className="flex flex-col items-end">
-      <button
-        type="button"
-        onClick={onRefresh}
-        disabled={isRefreshing}
-        title="Refresh Dashboard Data"
-        className="inline-flex items-center gap-2 rounded-lg border border-white/20 bg-surface/20 px-4 py-2 text-sm font-semibold text-white backdrop-blur-sm transition hover:bg-surface/30 disabled:cursor-not-allowed disabled:opacity-70"
-      >
-        <RefreshCw className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} />
-        Refresh
-      </button>
-      <span className="mt-1 text-[11px] font-medium text-white/85">
-        {lastRefreshedLabel}
-      </span>
-    </div>
+    <button
+      type="button"
+      onClick={onRefresh}
+      disabled={isRefreshing}
+      title="Refresh RAG Data"
+      className="inline-flex items-center gap-2 rounded-lg border border-white/20 bg-surface/20 px-4 py-2 text-sm font-semibold text-white backdrop-blur-sm transition hover:bg-surface/30 disabled:cursor-not-allowed disabled:opacity-70"
+    >
+      <RefreshCw className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} />
+      Refresh RAG
+    </button>
 </div>
         </div>
       </div>

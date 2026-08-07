@@ -227,8 +227,10 @@ function buildIndexes(mainProfiles, subProfiles, circles, cmps) {
 
   // exactMap: normalized designation label -> array of candidate matches
   // (more than one when the same label is scoped differently, e.g. "Analyst").
+  // Every sub-profile is matched exactly against its configured designation
+  // label — no prefix/wildcard matching, so a designation only ever rolls up
+  // into a Main Profile when it is explicitly listed in Manpower Settings.
   const exactMap = new Map();
-  const prefixList = [];
 
   subProfiles
     .filter((row) => row.is_active && row.main_profile_id !== null)
@@ -241,11 +243,6 @@ function buildIndexes(mainProfiles, subProfiles, circles, cmps) {
         label: mainProfile.label,
         sourceScope: row.source_scope,
       };
-
-      if (row.match_type === "prefix") {
-        prefixList.push({ ...entry, normalized: normalizeRoleText(row.designation_label) });
-        return;
-      }
 
       const normalized = normalizeRoleText(row.designation_label);
       const bucket = exactMap.get(normalized) || [];
@@ -278,7 +275,7 @@ function buildIndexes(mainProfiles, subProfiles, circles, cmps) {
       });
     });
 
-  return { exactMap, prefixList, circleAliasLookup, cmpByCircleAndName };
+  return { exactMap, circleAliasLookup, cmpByCircleAndName };
 }
 
 function parseJsonArray(value) {
@@ -296,6 +293,10 @@ function parseJsonArray(value) {
 // role_key, or null if it doesn't match anything (mirrors the old
 // `CASE WHEN ... ELSE NULL END` behavior). sourceScope should be 'physical'
 // or 'scrum' to match a row's source_scope ('both' rows always match).
+// Exact match only, by design — a designation counts toward a role only when
+// it is explicitly listed for it in Manpower Settings, never via a
+// startsWith()/LIKE-prefix guess that could silently sweep in variants no one
+// reviewed (e.g. "Analyst" must never implicitly absorb "Analyst - X").
 async function resolveRoleKey(rawText, sourceScope) {
   const normalized = normalizeRoleText(rawText);
   if (!normalized) return null;
@@ -308,21 +309,17 @@ async function resolveRoleKey(rawText, sourceScope) {
   );
   if (exactMatch) return { roleKey: exactMatch.roleKey, label: exactMatch.label };
 
-  const prefixMatch = indexes.prefixList.find(
-    (candidate) =>
-      (candidate.sourceScope === "both" || candidate.sourceScope === sourceScope) &&
-      normalized.startsWith(candidate.normalized)
-  );
-  if (prefixMatch) return { roleKey: prefixMatch.roleKey, label: prefixMatch.label };
-
   return null;
 }
 
 // Inverse of resolveRoleKey(): given a target role_key, returns every
-// normalized designation text (exact + prefix) that resolves to it for the
-// given sourceScope. Lets SQL-level row filtering (drilldown) stay in sync
-// with the same live manpower_sub_profiles config the aggregate counts use,
-// instead of a separately hand-maintained SQL CASE-WHEN.
+// normalized designation text that resolves to it for the given sourceScope.
+// Lets SQL-level row filtering (drilldown) stay in sync with the same live
+// manpower_sub_profiles config the aggregate counts use, instead of a
+// separately hand-maintained SQL CASE-WHEN. Exact match only (see
+// resolveRoleKey above) — the returned `prefix` array is always empty and
+// kept only so callers built around the old {exact, prefix} shape don't need
+// to change.
 async function getRoleKeyMatchers(roleKey, sourceScope) {
   const { indexes } = await loadRawConfig();
 
@@ -336,15 +333,7 @@ async function getRoleKeyMatchers(roleKey, sourceScope) {
     if (isMatch) exact.push(normalized);
   });
 
-  const prefix = indexes.prefixList
-    .filter(
-      (candidate) =>
-        candidate.roleKey === roleKey &&
-        (candidate.sourceScope === "both" || candidate.sourceScope === sourceScope)
-    )
-    .map((candidate) => candidate.normalized);
-
-  return { exact, prefix };
+  return { exact, prefix: [] };
 }
 
 async function resolveCircle(raw) {

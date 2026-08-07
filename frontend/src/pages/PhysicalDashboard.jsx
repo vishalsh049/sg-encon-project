@@ -1,7 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import {
-  ArrowLeft,
   ArrowUpDown,
   BarChart3,
   Briefcase,
@@ -28,19 +26,6 @@ function formatNumber(value) {
 
 function formatPercent(value) {
   return `${Number(value || 0).toFixed(2)}%`;
-}
-
-function formatTimestamp(value) {
-  if (!value) return "Not available";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "Not available";
-  return date.toLocaleString("en-IN", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
 }
 
 function SectionCard({ title, subtitle, children, className = "" }) {
@@ -162,12 +147,10 @@ function TableShell({ title, subtitle, searchValue, onSearchChange, columns, row
 }
 
 export default function PhysicalDashboard() {
-  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [data, setData] = useState(null);
   const [filterOptions, setFilterOptions] = useState({ circles: [], cmps: [], jobRoles: [], employmentStatuses: [], pprjStatuses: [] });
-  const [lastUpdated, setLastUpdated] = useState("");
   const [filters, setFilters] = useState({
     circle: "",
     cmp: "",
@@ -237,7 +220,6 @@ export default function PhysicalDashboard() {
         throw new Error(result.message || "Failed to load analytics");
       }
       setData(result.data || null);
-      setLastUpdated(new Date().toISOString());
     } catch (err) {
       setError(err.message || "Unable to load analytics");
     } finally {
@@ -599,7 +581,7 @@ export default function PhysicalDashboard() {
   ];
 
   return (
-    <div className="min-h-screen bg-surface-muted p-4 lg:p-4">
+    <div className="min-h-screen">
       <div className="mx-auto max-w-8xl space-y-4">
         <div className=" top-0 z-20 rounded-3xl border border-border-color bg-surface/95 p-4 shadow-sm backdrop-blur">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -609,12 +591,8 @@ export default function PhysicalDashboard() {
                 Physical Analytics Dashboard
               </div>
               <h1 className="mt-1 text-lg font-semibold text-text-primary">Employee document tracking</h1>
-              <p className="mt-1 text-sm text-text-muted">Permission-aware insights for circles, CMPs, roles, documents, and employment status.</p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <div className="rounded-xl border border-border-color bg-surface-muted px-3 py-2 text-sm text-text-muted">
-                Last updated: {lastUpdated ? formatTimestamp(lastUpdated) : "Loading..."}
-              </div>
               <button type="button" onClick={refreshDashboard} className="flex items-center gap-2 rounded-xl bg-indigo-600 px-3 py-2 text-sm font-semibold text-white">
                 <RefreshCcw size={16} />
                 Refresh
@@ -622,10 +600,6 @@ export default function PhysicalDashboard() {
               <button type="button" onClick={exportAllTables} className="flex items-center gap-2 rounded-xl border border-border-color px-3 py-2 text-sm font-semibold text-text-secondary">
                 <Download size={16} />
                 Export Excel
-              </button>
-              <button type="button" onClick={() => navigate("/dashboard/manpower/physical")} className="flex items-center gap-2 rounded-xl border border-border-color px-3 py-2 text-sm font-medium text-text-secondary">
-                <ArrowLeft size={16} />
-                Back to Physical
               </button>
             </div>
           </div>

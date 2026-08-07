@@ -318,92 +318,123 @@ router.post("/bulk", requirePagePermission("Signoff", "edit"), async (req, res) 
       }
     }
 
-    const values = rows.map(row => [
-
-      row.circle,
-      row.cmp,
-      Number(row.state_leadership_team) || 0,
-      Number(row.noc_executive) || 0,
-      Number(row.analyst) || 0,
-      Number(row.cmp_lead) || 0,
-      Number(row.technician) || 0,
-      Number(row.rigger) || 0,
-      Number(row.utility_supervisor) || 0,
-      Number(row.utility_engineer) || 0,
-      Number(row.isp_engineer) || 0,
-      Number(row.wh_incharge_cum_security) || 0,
-      Number(row.splicer) || 0,
-      Number(row.assistant_splicer) || 0,
-      Number(row.fiber_helper) || 0,
-      Number(row.patroller) || 0,
-      Number(row.fiber_supervisor) || 0,
-      Number(row.fibre_engineer) || 0,
-      Number(row.fttx_splicer) || 0,
-      Number(row.fttx_assistant_splicer) || 0,
-      Number(row.fttx_supervisor) || 0,
-      Number(row.fttx_helper) || 0,
-      Number(row.fttx_engineer) || 0,
-      Number(row.fttx_technician) || 0
-
-    ]);
-
-    await query(
-      `
-      INSERT INTO signoff
-      (
-      circle,
-      cmp,
-      state_leadership_team,
-      noc_executive,
-      analyst,
-      cmp_lead,
-      technician,
-      rigger,
-      utility_supervisor,
-      utility_engineer,
-      isp_engineer,
-      wh_incharge_cum_security,
-      splicer,
-      assistant_splicer,
-      fiber_helper,
-      patroller,
-      fiber_supervisor,
-      fibre_engineer,
-      fttx_splicer,
-      fttx_assistant_splicer,
-      fttx_supervisor,
-      fttx_helper,
-      fttx_engineer,
-      fttx_technician
-      )
-      VALUES ?
-      ON DUPLICATE KEY UPDATE
-
-      state_leadership_team=VALUES(state_leadership_team),
-      noc_executive=VALUES(noc_executive),
-      analyst=VALUES(analyst),
-      cmp_lead=VALUES(cmp_lead),
-      technician=VALUES(technician),
-      rigger=VALUES(rigger),
-      utility_supervisor=VALUES(utility_supervisor),
-      utility_engineer=VALUES(utility_engineer),
-      isp_engineer=VALUES(isp_engineer),
-      wh_incharge_cum_security=VALUES(wh_incharge_cum_security),
-      splicer=VALUES(splicer),
-      assistant_splicer=VALUES(assistant_splicer),
-      fiber_helper=VALUES(fiber_helper),
-      patroller=VALUES(patroller),
-      fiber_supervisor=VALUES(fiber_supervisor),
-      fibre_engineer=VALUES(fibre_engineer),
-      fttx_splicer=VALUES(fttx_splicer),
-      fttx_assistant_splicer=VALUES(fttx_assistant_splicer),
-      fttx_supervisor=VALUES(fttx_supervisor),
-      fttx_helper=VALUES(fttx_helper),
-      fttx_engineer=VALUES(fttx_engineer),
-      fttx_technician=VALUES(fttx_technician)
-      `,
-      [values]
+    // No UNIQUE KEY exists on (circle, cmp), so an INSERT ... ON DUPLICATE KEY
+    // UPDATE would silently never trigger the UPDATE branch and just insert a
+    // duplicate row every time the same circle/cmp is uploaded again. Look up
+    // existing rows first and split into explicit updates vs inserts instead.
+    const existingRows = await query(
+      `SELECT id, circle, cmp FROM signoff`
     );
+    const existingIdByKey = new Map(
+      existingRows.map((row) => [`${row.circle}||${row.cmp}`, row.id])
+    );
+
+    const toInsert = [];
+    const toUpdate = [];
+
+    rows.forEach((row) => {
+      const values = [
+        Number(row.state_leadership_team) || 0,
+        Number(row.noc_executive) || 0,
+        Number(row.analyst) || 0,
+        Number(row.cmp_lead) || 0,
+        Number(row.technician) || 0,
+        Number(row.rigger) || 0,
+        Number(row.utility_supervisor) || 0,
+        Number(row.utility_engineer) || 0,
+        Number(row.isp_engineer) || 0,
+        Number(row.wh_incharge_cum_security) || 0,
+        Number(row.splicer) || 0,
+        Number(row.assistant_splicer) || 0,
+        Number(row.fiber_helper) || 0,
+        Number(row.patroller) || 0,
+        Number(row.fiber_supervisor) || 0,
+        Number(row.fibre_engineer) || 0,
+        Number(row.fttx_splicer) || 0,
+        Number(row.fttx_assistant_splicer) || 0,
+        Number(row.fttx_supervisor) || 0,
+        Number(row.fttx_helper) || 0,
+        Number(row.fttx_engineer) || 0,
+        Number(row.fttx_technician) || 0,
+      ];
+
+      const existingId = existingIdByKey.get(`${row.circle}||${row.cmp}`);
+
+      if (existingId) {
+        toUpdate.push({ id: existingId, values });
+      } else {
+        toInsert.push([row.circle, row.cmp, ...values]);
+      }
+    });
+
+    if (toInsert.length) {
+      await query(
+        `
+        INSERT INTO signoff
+        (
+        circle,
+        cmp,
+        state_leadership_team,
+        noc_executive,
+        analyst,
+        cmp_lead,
+        technician,
+        rigger,
+        utility_supervisor,
+        utility_engineer,
+        isp_engineer,
+        wh_incharge_cum_security,
+        splicer,
+        assistant_splicer,
+        fiber_helper,
+        patroller,
+        fiber_supervisor,
+        fibre_engineer,
+        fttx_splicer,
+        fttx_assistant_splicer,
+        fttx_supervisor,
+        fttx_helper,
+        fttx_engineer,
+        fttx_technician
+        )
+        VALUES ?
+        `,
+        [toInsert]
+      );
+    }
+
+    for (const { id, values } of toUpdate) {
+      await query(
+        `
+        UPDATE signoff
+        SET
+        state_leadership_team=?,
+        noc_executive=?,
+        analyst=?,
+        cmp_lead=?,
+        technician=?,
+        rigger=?,
+        utility_supervisor=?,
+        utility_engineer=?,
+        isp_engineer=?,
+        wh_incharge_cum_security=?,
+        splicer=?,
+        assistant_splicer=?,
+        fiber_helper=?,
+        patroller=?,
+        fiber_supervisor=?,
+        fibre_engineer=?,
+        fttx_splicer=?,
+        fttx_assistant_splicer=?,
+        fttx_supervisor=?,
+        fttx_helper=?,
+        fttx_engineer=?,
+        fttx_technician=?
+        WHERE id=?
+        `,
+        [...values, id]
+      );
+    }
 
     res.json({
       success: true
@@ -728,6 +759,43 @@ router.post("/request", requirePagePermission("Signoff", "edit"), async (req, re
 });
 
 
+/* MY OWN REQUESTS (any user, view-only) */
+
+router.get(
+  "/my-requests",
+  async (req, res) => {
+
+    try {
+
+      const requestedBy = req.authUser.username || req.authUser.email;
+
+      const rows = await query(
+        `
+        SELECT *
+        FROM signoff_requests
+        WHERE requested_by = ?
+        ORDER BY id DESC
+        `,
+        [requestedBy]
+      );
+
+      res.json({
+        rows
+      });
+
+    } catch (error) {
+
+      console.error(error);
+
+      res.status(500).json({
+        rows: []
+      });
+
+    }
+
+  }
+);
+
 router.get(
   "/pending-requests",
   async (req, res) => {
@@ -788,101 +856,127 @@ router.put(
 
       const request = rows[0];
 
-      await query(
-        `
-        INSERT INTO signoff
-        (
-          circle,
-          cmp,
-          state_leadership_team,
-          noc_executive,
-          analyst,
-          cmp_lead,
-          technician,
-          rigger,
-          utility_supervisor,
-          utility_engineer,
-          isp_engineer,
-          wh_incharge_cum_security,
-          splicer,
-          assistant_splicer,
-          fiber_helper,
-          patroller,
-          fiber_supervisor,
-          fibre_engineer,
-          fttx_splicer,
-          fttx_assistant_splicer,
-          fttx_supervisor,
-          fttx_helper,
-          fttx_engineer,
-          fttx_technician
-        )
-        VALUES
-        (
-          ?,?,?,?,?,?,?,?,?,?,
-          ?,?,?,?,?,?,?,?,?,?,
-          ?,?,?,?
-        )
-        ON DUPLICATE KEY UPDATE
+      const rowValues = [
+        request.state_leadership_team,
+        request.noc_executive,
+        request.analyst,
+        request.cmp_lead,
+        request.technician,
+        request.rigger,
+        request.utility_supervisor,
+        request.utility_engineer,
+        request.isp_engineer,
+        request.wh_incharge_cum_security,
+        request.splicer,
+        request.assistant_splicer,
+        request.fiber_helper,
+        request.patroller,
+        request.fiber_supervisor,
+        request.fibre_engineer,
+        request.fttx_splicer,
+        request.fttx_assistant_splicer,
+        request.fttx_supervisor,
+        request.fttx_helper,
+        request.fttx_engineer,
+        request.fttx_technician,
+      ];
 
-        state_leadership_team=VALUES(state_leadership_team),
-        noc_executive=VALUES(noc_executive),
-        analyst=VALUES(analyst),
-        cmp_lead=VALUES(cmp_lead),
-        technician=VALUES(technician),
-        rigger=VALUES(rigger),
-        utility_supervisor=VALUES(utility_supervisor),
-        utility_engineer=VALUES(utility_engineer),
-        isp_engineer=VALUES(isp_engineer),
-        wh_incharge_cum_security=VALUES(wh_incharge_cum_security),
-        splicer=VALUES(splicer),
-        assistant_splicer=VALUES(assistant_splicer),
-        fiber_helper=VALUES(fiber_helper),
-        patroller=VALUES(patroller),
-        fiber_supervisor=VALUES(fiber_supervisor),
-        fibre_engineer=VALUES(fibre_engineer),
-        fttx_splicer=VALUES(fttx_splicer),
-        fttx_assistant_splicer=VALUES(fttx_assistant_splicer),
-        fttx_supervisor=VALUES(fttx_supervisor),
-        fttx_helper=VALUES(fttx_helper),
-        fttx_engineer=VALUES(fttx_engineer),
-        fttx_technician=VALUES(fttx_technician)
-        `,
-        [
-          request.circle,
-          request.cmp,
-          request.state_leadership_team,
-          request.noc_executive,
-          request.analyst,
-          request.cmp_lead,
-          request.technician,
-          request.rigger,
-          request.utility_supervisor,
-          request.utility_engineer,
-          request.isp_engineer,
-          request.wh_incharge_cum_security,
-          request.splicer,
-          request.assistant_splicer,
-          request.fiber_helper,
-          request.patroller,
-          request.fiber_supervisor,
-          request.fibre_engineer,
-          request.fttx_splicer,
-          request.fttx_assistant_splicer,
-          request.fttx_supervisor,
-          request.fttx_helper,
-          request.fttx_engineer,
-          request.fttx_technician
-        ]
-      );
+      // Prefer the specific row this request targets (UPDATE requests carry
+      // signoff_id); otherwise fall back to matching by circle+cmp, since
+      // there's no unique key to rely on for an upsert.
+      let targetId = request.signoff_id;
+      if (!targetId) {
+        const [existing] = await query(
+          `SELECT id FROM signoff WHERE circle=? AND cmp=? LIMIT 1`,
+          [request.circle, request.cmp]
+        );
+        targetId = existing?.id || null;
+      }
+
+      if (targetId) {
+        await query(
+          `
+          UPDATE signoff
+          SET
+          circle=?,
+          cmp=?,
+          state_leadership_team=?,
+          noc_executive=?,
+          analyst=?,
+          cmp_lead=?,
+          technician=?,
+          rigger=?,
+          utility_supervisor=?,
+          utility_engineer=?,
+          isp_engineer=?,
+          wh_incharge_cum_security=?,
+          splicer=?,
+          assistant_splicer=?,
+          fiber_helper=?,
+          patroller=?,
+          fiber_supervisor=?,
+          fibre_engineer=?,
+          fttx_splicer=?,
+          fttx_assistant_splicer=?,
+          fttx_supervisor=?,
+          fttx_helper=?,
+          fttx_engineer=?,
+          fttx_technician=?
+          WHERE id=?
+          `,
+          [request.circle, request.cmp, ...rowValues, targetId]
+        );
+      } else {
+        await query(
+          `
+          INSERT INTO signoff
+          (
+            circle,
+            cmp,
+            state_leadership_team,
+            noc_executive,
+            analyst,
+            cmp_lead,
+            technician,
+            rigger,
+            utility_supervisor,
+            utility_engineer,
+            isp_engineer,
+            wh_incharge_cum_security,
+            splicer,
+            assistant_splicer,
+            fiber_helper,
+            patroller,
+            fiber_supervisor,
+            fibre_engineer,
+            fttx_splicer,
+            fttx_assistant_splicer,
+            fttx_supervisor,
+            fttx_helper,
+            fttx_engineer,
+            fttx_technician
+          )
+          VALUES
+          (
+            ?,?,?,?,?,?,?,?,?,?,
+            ?,?,?,?,?,?,?,?,?,?,
+            ?,?,?,?
+          )
+          `,
+          [request.circle, request.cmp, ...rowValues]
+        );
+      }
+
+      const approverName = req.authUser.username || req.authUser.email;
+      const remarks = typeof req.body?.remarks === "string" ? req.body.remarks.trim() || null : null;
 
       await query(
         `
         UPDATE signoff_requests
-        SET status='APPROVED'
+        SET status='APPROVED', approved_by=?, remarks=?, approved_at=NOW()
         WHERE id=?
         `,
-        [req.params.id]
+        [approverName, remarks, req.params.id]
       );
 
       res.json({
@@ -912,13 +1006,16 @@ router.put(
         return forbid(res);
       }
 
+      const approverName = req.authUser.username || req.authUser.email;
+      const remarks = typeof req.body?.remarks === "string" ? req.body.remarks.trim() || null : null;
+
       await query(
         `
         UPDATE signoff_requests
-        SET status = 'REJECTED'
+        SET status = 'REJECTED', approved_by=?, remarks=?, approved_at=NOW()
         WHERE id = ?
         `,
-        [req.params.id]
+        [approverName, remarks, req.params.id]
       );
 
       res.json({
@@ -950,7 +1047,7 @@ router.get(
       const rows = await query(`
        SELECT COUNT(*) AS count
 FROM signoff_requests
-WHERE status IN ('PENDING','REJECTED')
+WHERE status = 'PENDING'
       `);
 
       console.log(

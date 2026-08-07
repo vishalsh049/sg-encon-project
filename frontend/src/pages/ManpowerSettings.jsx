@@ -520,9 +520,8 @@ function SubProfileTable({ subProfiles, mainProfileId, refresh, requestConfirm, 
             />
           </Field>
           <Field label="Match Type">
-            <select className={input} value={draft.matchType} onChange={(e) => setDraft({ ...draft, matchType: e.target.value })}>
-              <option value="exact">Exact</option>
-              <option value="prefix">Prefix (e.g. "Analyst" matches "Analyst - X")</option>
+            <select className={input} value={draft.matchType} onChange={(e) => setDraft({ ...draft, matchType: e.target.value })} disabled>
+              <option value="exact">Exact (every designation must be listed explicitly)</option>
             </select>
           </Field>
           <Field label="Applies To">
@@ -549,9 +548,8 @@ function SubProfileTable({ subProfiles, mainProfileId, refresh, requestConfirm, 
           />
           <div className="flex flex-wrap items-end gap-2">
             <Field label="Match Type">
-              <select className={input} value={bulkMatchType} onChange={(e) => setBulkMatchType(e.target.value)}>
+              <select className={input} value={bulkMatchType} onChange={(e) => setBulkMatchType(e.target.value)} disabled>
                 <option value="exact">Exact</option>
-                <option value="prefix">Prefix</option>
               </select>
             </Field>
             <Field label="Applies To">

@@ -67,11 +67,7 @@ router.get("/usage-summary", async (req, res) => {
     const sumMatches = (rows, subProfile) => {
       const normalizedLabel = normalizeRoleText(subProfile.designation_label);
       return rows.reduce((sum, row) => {
-        const normalizedRaw = normalizeRoleText(row.raw_value);
-        const matches =
-          subProfile.match_type === "prefix"
-            ? normalizedRaw.startsWith(normalizedLabel)
-            : normalizedRaw === normalizedLabel;
+        const matches = normalizeRoleText(row.raw_value) === normalizedLabel;
         return matches ? sum + Number(row.cnt) : sum;
       }, 0);
     };

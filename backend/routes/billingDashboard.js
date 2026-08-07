@@ -67,7 +67,7 @@ SUM(CASE WHEN LOWER(r.domain) = 'tower' THEN r.pm_loss ELSE 0 END) AS tower_loss
 
     // ✅ Billing Type Filter
     if (billing_type) {
-      query += " AND r.co_type = ?";
+      query += " AND r.domain = ?";
       params.push(billing_type);
     }
 
@@ -135,7 +135,7 @@ router.get("/circle-ranking", async (req, res) => {
           FROM revenue_upload
         )
 
-        ${billing_type ? "AND r.co_type = ?" : ""}
+        ${billing_type ? "AND r.domain = ?" : ""}
         ${
           isAllCircle(req.authUser)
             ? ""

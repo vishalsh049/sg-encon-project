@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState, useCallback } from "react";
 import axios from "axios";
 import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
+import { LayoutDashboard, Loader2 } from "lucide-react";
 import { buildApiUrl } from "../lib/api";
 
 import DashboardHeader from "../components/billingDashboard/DashboardHeader";
@@ -384,7 +385,25 @@ export default function BillingDashboard() {
   };
 
   if (!summary) {
-    return <div className="p-6 text-sm text-text-muted">Loading billing dashboard...</div>;
+    return (
+      <div className="flex min-h-[70vh] items-center justify-center">
+        <div className={`${CARD_SHELL} flex flex-col items-center gap-4 px-10 py-12 text-center`}>
+          <div className="relative flex h-16 w-16 items-center justify-center">
+            <div className="absolute inset-0 animate-pulse rounded-2xl bg-gradient-to-br from-indigo-500 via-violet-500 to-purple-500 opacity-20 blur-xl" />
+            <div className="relative flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 via-violet-500 to-purple-500 shadow-lg shadow-indigo-500/20">
+              <LayoutDashboard size={24} className="text-white" />
+            </div>
+          </div>
+          <div>
+            <p className="flex items-center justify-center gap-2 text-sm font-semibold text-text-primary">
+              <Loader2 size={14} className="animate-spin text-indigo-500" />
+              Loading Billing Dashboard
+            </p>
+            <p className="mt-1 text-xs text-text-muted">Fetching the latest revenue, PM loss and billing status…</p>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
