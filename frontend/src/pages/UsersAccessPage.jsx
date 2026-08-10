@@ -67,6 +67,7 @@ const pageAccessList = [
  "HR Dashboard",
  "HR Analytics V2",
  "Physical",
+ "Attendance",
  "Scrum",
  "Scrum Dashboard",
  "New Joining",
@@ -89,6 +90,7 @@ const pageAccessList = [
     title: "Fiber Reports",
     pages: [
       "nso-reports",
+      "nso-fiber-dashboard",
       "fiber-reports",
     ],
   },

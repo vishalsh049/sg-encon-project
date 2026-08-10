@@ -15,6 +15,7 @@ import NsoDashboard from "./pages/NsoDashboard";
 import FiberInventory from "./pages/FiberInventory";
 import Physical from "./pages/Physical";
 import PhysicalDashboard from "./pages/PhysicalDashboard";
+import AttendanceManagement from "./pages/AttendanceManagement";
 import Scrum from "./pages/Scrum";
 import ScrumDashboard from "./pages/ScrumDashboard";
 import BillingStatus from "./pages/BillingStatus";
@@ -124,6 +125,12 @@ function App() {
   <Route path="manpower/physical/dashboard" element={
     <ProtectedRoute page={"Physical"}>
       <PhysicalDashboard />
+    </ProtectedRoute>
+  } />
+
+  <Route path="manpower/attendance" element={
+    <ProtectedRoute page={"Attendance"}>
+      <AttendanceManagement />
     </ProtectedRoute>
   } />
 

@@ -4,6 +4,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import {
   BarChart3,
   BriefcaseBusiness,
+  CalendarCheck,
   FileText,
   GraduationCap,
   LayoutDashboard,
@@ -166,6 +167,14 @@ function Sidebar({ closeSidebar, collapsed, onExpandRequest }) {
 },
 
 {
+  key: "attendance",
+  label: "Attendance Management",
+  path: "/dashboard/manpower/attendance",
+  icon: CalendarCheck,
+  accessPage: "Attendance",
+},
+
+{
   key: "scrum",
   label: "SCRUM",
   path: "/dashboard/manpower/scrum",
@@ -263,10 +272,10 @@ function Sidebar({ closeSidebar, collapsed, onExpandRequest }) {
   },
   {
     key: "nso-fiber-dashboard",
-    label: "NSO Fiber Performance",
+    label: "NSO Fiber Dashboard",
     path: "/dashboard/reports/fiber/nso-dashboard",
     icon: Database,
-    accessPage: "NSO Fiber Performance",
+    accessPage: "NSO Fiber Dashboard",
     section: "REPORTS",
   },
   {
@@ -281,7 +290,7 @@ function Sidebar({ closeSidebar, collapsed, onExpandRequest }) {
     label: "Fiber Inventory",
     path: "/dashboard/reports/fiber/inventory",
     icon: Database,
-    accessPage: "Fiber Reports",
+    accessPage: "Fiber Inventory",
   },
 
   // SETTINGS
