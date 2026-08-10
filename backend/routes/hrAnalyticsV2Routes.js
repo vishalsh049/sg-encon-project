@@ -96,6 +96,14 @@ const ROLE_KEY_LABELS = {
 
 const ALL_ROLE_KEYS = [...SIGNOFF_ROLE_KEYS, "technicianb", "riggerb"];
 
+// Canonical "has this employee resigned" predicate — true if either the
+// employment_status field says so or a resigned_date has been recorded, so a
+// gap in one field doesn't hide a departure the other field already shows.
+// Mirrors the same predicate in physicalRoutes.js's /dashboard/analytics so
+// both pages agree on the same headcount.
+const RESIGNED_PREDICATE_SQL =
+  "(LOWER(TRIM(COALESCE(p.employment_status, ''))) = 'resigned' OR p.resigned_date IS NOT NULL)";
+
 // Free-text job_role/designation -> canonical role_key classification comes
 // from resolveRoleKey() (live, admin-editable manpower_sub_profiles config —
 // see backend/services/manpowerConfigService.js), resolved row-by-row in JS
@@ -417,7 +425,7 @@ router.get("/overview", async (req, res) => {
         COUNT(*) AS total_employees,
         SUM(CASE WHEN LOWER(TRIM(COALESCE(p.employment_status, ''))) = 'active' THEN 1 ELSE 0 END) AS active_employees,
         SUM(CASE WHEN LOWER(TRIM(COALESCE(p.employment_status, ''))) = 'inactive' THEN 1 ELSE 0 END) AS inactive_employees,
-        SUM(CASE WHEN p.resigned_date IS NOT NULL THEN 1 ELSE 0 END) AS resigned_employees,
+        SUM(CASE WHEN ${RESIGNED_PREDICATE_SQL} THEN 1 ELSE 0 END) AS resigned_employees,
         SUM(CASE WHEN p.date_of_joining BETWEEN ? AND ? THEN 1 ELSE 0 END) AS new_joining_this_month,
         SUM(CASE WHEN p.resigned_date BETWEEN ? AND ? THEN 1 ELSE 0 END) AS resigned_this_month
       FROM physical p
@@ -600,7 +608,7 @@ router.get("/circles", async (req, res) => {
           p.circle AS circle,
           SUM(CASE WHEN LOWER(TRIM(COALESCE(p.employment_status, ''))) = 'active' THEN 1 ELSE 0 END) AS active_employees,
           SUM(CASE WHEN LOWER(TRIM(COALESCE(p.employment_status, ''))) = 'inactive' THEN 1 ELSE 0 END) AS inactive_employees,
-          SUM(CASE WHEN p.resigned_date IS NOT NULL THEN 1 ELSE 0 END) AS resigned_employees,
+          SUM(CASE WHEN ${RESIGNED_PREDICATE_SQL} THEN 1 ELSE 0 END) AS resigned_employees,
           SUM(CASE WHEN p.date_of_joining BETWEEN ? AND ? THEN 1 ELSE 0 END) AS new_joining_this_month
         FROM physical p
         WHERE COALESCE(p.is_deleted, 0) = 0 ${physicalScope.sql}
@@ -703,7 +711,7 @@ router.get("/cmps", async (req, res) => {
           p.cmp AS cmp,
           SUM(CASE WHEN LOWER(TRIM(COALESCE(p.employment_status, ''))) = 'active' THEN 1 ELSE 0 END) AS active_employees,
           SUM(CASE WHEN LOWER(TRIM(COALESCE(p.employment_status, ''))) = 'inactive' THEN 1 ELSE 0 END) AS inactive_employees,
-          SUM(CASE WHEN p.resigned_date IS NOT NULL THEN 1 ELSE 0 END) AS resigned_employees,
+          SUM(CASE WHEN ${RESIGNED_PREDICATE_SQL} THEN 1 ELSE 0 END) AS resigned_employees,
           SUM(CASE WHEN p.date_of_joining BETWEEN ? AND ? THEN 1 ELSE 0 END) AS new_joining_this_month
         FROM physical p
         WHERE COALESCE(p.is_deleted, 0) = 0 ${physicalScope.sql}

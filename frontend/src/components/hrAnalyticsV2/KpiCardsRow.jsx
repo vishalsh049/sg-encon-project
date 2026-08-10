@@ -79,7 +79,7 @@ export default function KpiCardsRow({ overview, loading, showOfferedSalary = tru
       accentKey: "penalty",
       value: kpis.resignedEmployees ?? 0,
       description: `${kpis.resignedThisMonth ?? 0} resigned this month`,
-      tooltip: "Physical employees with a Resigned Date set.",
+      tooltip: "Physical employees whose Employment Status is 'Resigned' or who have a Resigned Date set.",
     },
    
 

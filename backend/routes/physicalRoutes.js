@@ -413,7 +413,11 @@
 
     function toNullableInt(value) {
       if (value === null || value === undefined || value === "") return null;
-      const parsed = Number.parseInt(String(value).replace(/,/g, "").trim(), 10);
+      // Strips currency symbols/labels (₹, Rs, INR, "/-", etc.) as well as
+      // commas and spaces so amounts like "₹ 25,000/-" still parse.
+      const cleaned = String(value).replace(/[^0-9.-]/g, "").trim();
+      if (!cleaned) return null;
+      const parsed = Number.parseInt(cleaned, 10);
       return Number.isFinite(parsed) ? parsed : null;
     }
 
@@ -421,6 +425,33 @@
       if (value === null || value === undefined) return null;
       const text = String(value).trim();
       return text ? text : null;
+    }
+
+    // Case/whitespace-insensitive fallback lookup: tries each candidate
+    // header name exactly first (fast path matching every other field in
+    // this file), then falls back to a normalized match so headers like
+    // "NTH SALARY" or " Nth Salary " (differing case/spacing from the
+    // template) still resolve instead of silently coming back empty.
+    function getField(row, ...names) {
+      for (const name of names) {
+        const value = row[name];
+        if (value !== undefined && value !== null && value !== "") {
+          return value;
+        }
+      }
+      const normalizedTargets = names.map((n) =>
+        n.trim().replace(/\s+/g, " ").toLowerCase()
+      );
+      for (const key of Object.keys(row)) {
+        const normalizedKey = key.trim().replace(/\s+/g, " ").toLowerCase();
+        if (normalizedTargets.includes(normalizedKey)) {
+          const value = row[key];
+          if (value !== undefined && value !== null && value !== "") {
+            return value;
+          }
+        }
+      }
+      return undefined;
     }
 
     function mapPhysicalRow(row, reportId) {
@@ -567,9 +598,7 @@ toText(
 
         // nth_salary
     toNullableInt(
-      row["NTH Salary"] ||
-      row["Nth Salary"] ||
-      row["Salary"]
+      getField(row, "NTH Salary", "Nth Salary", "Salary")
     ),
 
         // remarks
@@ -797,7 +826,7 @@ toText(
             COUNT(*) AS total_employees,
             SUM(CASE WHEN LOWER(TRIM(COALESCE(employment_status, ''))) = 'active' THEN 1 ELSE 0 END) AS active_employees,
             SUM(CASE WHEN LOWER(TRIM(COALESCE(employment_status, ''))) = 'inactive' THEN 1 ELSE 0 END) AS inactive_employees,
-            SUM(CASE WHEN LOWER(TRIM(COALESCE(employment_status, ''))) = 'resigned' THEN 1 ELSE 0 END) AS resigned_employees,
+            SUM(CASE WHEN LOWER(TRIM(COALESCE(employment_status, ''))) = 'resigned' OR resigned_date IS NOT NULL THEN 1 ELSE 0 END) AS resigned_employees,
             SUM(CASE WHEN date_of_joining IS NOT NULL AND date_of_joining >= DATE_FORMAT(CURDATE(), '%Y-%m-01') AND date_of_joining <= LAST_DAY(CURDATE()) THEN 1 ELSE 0 END) AS new_joinings,
             COUNT(DISTINCT CASE WHEN TRIM(COALESCE(circle, '')) != '' THEN circle END) AS circle_count,
             COUNT(DISTINCT CASE WHEN TRIM(COALESCE(cmp, '')) != '' THEN cmp END) AS cmp_count,
@@ -1817,7 +1846,7 @@ for(const row of rows){
             toText(row["ESIC IP No "]||row["ESIC IP No"]),
             toText(row["PF No"]||row["PF NO"]||row["PF Number"]),
             toText(row["GTLI"]),
-            toNullableInt(row["NTH Salary"]||row["Nth Salary"]||row["Salary"]),
+            toNullableInt(getField(row, "NTH Salary", "Nth Salary", "Salary")),
             toText(row["Remarks"]),
             toText(row["CMP"]),
           ],
