@@ -4,10 +4,10 @@ import { calcYAxis, getChartTheme, getEntityColor, getLabelStride } from "../../
 import { ChartTooltip } from "./Tooltip";
 import { createValueLabel } from "./ValueLabel";
 
-// Grouped bars are unreadable/slow past ~7 dates with 4-6 entities each —
-// cap the rendered window and surface a note instead of forcing the caller
-// to know about this limitation.
-const BAR_CAP = 7;
+// Grouped bars get cramped with many entities per date, but users regularly
+// pick "Last 30 Days" and expect the Bar view to actually show it — only cap
+// for genuinely oversized custom ranges (multi-month), not routine ones.
+const BAR_CAP = 60;
 
 export default function BarChartView({ chartData, entities, hiddenEntities, variant = "compact", dark = false, verticalLabels = false }) {
   const isCompact = variant === "compact";

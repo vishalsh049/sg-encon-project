@@ -269,8 +269,15 @@ const POPUP_CHART_VIEWS = [
 function UptimeAnalyticsPopup({ kpiName, kpiColor, chartType, onClose, initialCircle, initialCmp }) {
   const style = colorStyles[kpiColor] || colorStyles.blue;
 
-  const mainChartType = POPUP_CHART_VIEWS.some(v => v.key === chartType) ? chartType : "line";
+  // Seeded from the dashboard's current chart type, but switchable in here —
+  // drilling into one KPI shouldn't lock the user to whatever view the main
+  // page happened to be on when they opened it.
+  const [mainChartType, setMainChartType] = useState(
+    POPUP_CHART_VIEWS.some(v => v.key === chartType) ? chartType : "line"
+  );
+  const [chartMenuOpen, setChartMenuOpen] = useState(false);
   const relatedChartViews = POPUP_CHART_VIEWS.filter(v => v.key !== mainChartType);
+  const mainChartLabel = POPUP_CHART_VIEWS.find(v => v.key === mainChartType)?.label || "Line Trend";
 
   const today = new Date().toISOString().split("T")[0];
   const _now = new Date();
@@ -305,6 +312,10 @@ function UptimeAnalyticsPopup({ kpiName, kpiColor, chartType, onClose, initialCi
   // the API again. Cleared by the explicit Refresh button, and discarded
   // entirely when the popup unmounts, so data can never go stale silently.
   const cacheRef = useRef(new Map());
+  // Mirrors bypassCacheRef on the main dashboard: set right before a manual
+  // refresh so that one fetch also skips the server-side cache, not just
+  // this popup's own local one.
+  const bypassServerCacheRef = useRef(false);
 
   useEffect(() => {
     document.body.style.overflow = "hidden";
@@ -345,6 +356,10 @@ function UptimeAnalyticsPopup({ kpiName, kpiColor, chartType, onClose, initialCi
           quarter:       filters.quarter,
           quarterYear:   filters.quarterYear,
         });
+        if (bypassServerCacheRef.current) {
+          params.set("noCache", "1");
+          bypassServerCacheRef.current = false;
+        }
 
         const cacheKey = params.toString();
         const cached = cacheRef.current.get(cacheKey);
@@ -428,6 +443,7 @@ function UptimeAnalyticsPopup({ kpiName, kpiColor, chartType, onClose, initialCi
 
   const handleRefresh = useCallback(() => {
     cacheRef.current.clear();
+    bypassServerCacheRef.current = true;
     setRefreshTick(t => t + 1);
   }, []);
 
@@ -700,6 +716,23 @@ function UptimeAnalyticsPopup({ kpiName, kpiColor, chartType, onClose, initialCi
               </div>
 
               <div className="flex flex-wrap items-center gap-1.5">
+                <Dropdown
+                  open={chartMenuOpen}
+                  onToggle={setChartMenuOpen}
+                  label={mainChartLabel}
+                  icon={BarChart2}
+                  title="Change how this chart is visualised"
+                >
+                  {POPUP_CHART_VIEWS.map(opt => (
+                    <DropdownItem
+                      key={opt.key}
+                      active={mainChartType === opt.key}
+                      onClick={() => { setMainChartType(opt.key); setChartMenuOpen(false); }}
+                    >
+                      {opt.label}
+                    </DropdownItem>
+                  ))}
+                </Dropdown>
                 <button
                   onClick={handleExportPng}
                   disabled={loading || !hasData || mainChartType === "table"}
@@ -870,7 +903,14 @@ function KpiDashboard() {
   const toggleMenu = useCallback((name) => (open) => setOpenMenu(open ? name : null), []);
 
   const [refreshTick, setRefreshTick] = useState(0);
-  const refreshTower = useCallback(() => setRefreshTick(t => t + 1), []);
+  // Set right before a manual refresh and consumed by the very next fetch, so
+  // only that one request bypasses the server cache — not every later fetch
+  // that happens to share the same refreshTick-driven effect run.
+  const bypassCacheRef = useRef(false);
+  const refreshTower = useCallback(() => {
+    bypassCacheRef.current = true;
+    setRefreshTick(t => t + 1);
+  }, []);
 
   // In native fullscreen this element is lifted out of the app shell, so it
   // supplies its own background and padding (see className below).
@@ -920,6 +960,10 @@ function KpiDashboard() {
         if (dateRange === "custom") {
           params.set("from", customFrom);
           params.set("to",   customTo);
+        }
+        if (bypassCacheRef.current) {
+          params.set("noCache", "1");
+          bypassCacheRef.current = false;
         }
 
         const res = await authFetch(buildApiUrl(`/api/tower-uptime?${params}`), { signal: controller.signal });

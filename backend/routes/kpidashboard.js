@@ -5,6 +5,7 @@ const { db } = require("../config/db");
 const { isAllCircle } = require("../middleware/circleAccess");
 const { buildCircleCmpFilter, buildRangeSql } = require("../utils/uptimeDateRange");
 const { getKpiTableSchemas } = require("../utils/kpiSchemaCache");
+const { getCachedValue, setCachedValue } = require("../services/physicalDomainService");
 
 const query = (sql, params = []) =>
   new Promise((resolve, reject) => {
@@ -15,6 +16,22 @@ const query = (sql, params = []) =>
   });
 
 const KPI_TABLES = ["ag1", "enb", "esc", "gnb", "osc", "hpodsc"];
+
+// /tower-uptime and /tower-uptime/analytics each aggregate up to a few
+// million rows across 6 tables on every request — with no response cache,
+// every page load and every filter click re-ran all of that live. A short
+// shared-across-users cache absorbs repeat/identical requests (the common
+// case) while an explicit Refresh click still bypasses it via `noCache=1`.
+const KPI_CACHE_TTL_MS = 60 * 1000;
+
+function kpiCacheScopeKey(req, queryKeys) {
+  const query = {};
+  queryKeys.forEach((key) => { query[key] = req.query[key] || ""; });
+  return {
+    circle: isAllCircle(req.authUser) ? "ALL" : String(req.authUser?.circle || "").trim().toLowerCase(),
+    query,
+  };
+}
 
 const normalizeUptimeValue = (value) => {
   const numericValue = Number(value);
@@ -261,6 +278,12 @@ async function buildTowerCard(site, columnNames, req) {
 
 router.get("/tower-uptime", async (req, res) => {
   try {
+    const cacheKey = kpiCacheScopeKey(req, ["circle", "cmp", "range", "from", "to"]);
+    if (req.query.noCache !== "1") {
+      const cached = getCachedValue("kpiTowerUptime", cacheKey);
+      if (cached) return res.json(cached);
+    }
+
     const schemas = await getKpiTableSchemas(KPI_TABLES);
 
     // All 6 KPI tables are independent — query them concurrently instead of
@@ -269,7 +292,9 @@ router.get("/tower-uptime", async (req, res) => {
       SITE_TABLES.map((site) => buildTowerCard(site, schemas.get(site.table), req))
     );
 
-    res.json(cards.filter(Boolean));
+    const payload = cards.filter(Boolean);
+    setCachedValue("kpiTowerUptime", cacheKey, payload, KPI_CACHE_TTL_MS);
+    res.json(payload);
   } catch (error) {
     console.log("Tower uptime error:", error.sqlMessage || error.message);
     res.status(500).json({
@@ -286,6 +311,16 @@ router.get("/tower-uptime/analytics", async (req, res) => {
 
     if (!kpi) {
       return res.status(400).json({ message: "kpi param required" });
+    }
+
+    const analyticsCacheKey = kpiCacheScopeKey(req, [
+      "kpi", "circle", "cmp", "period", "month", "year",
+      "fromMonth", "fromMonthYear", "toMonth", "toMonthYear",
+      "fromDate", "toDate", "quarter", "quarterYear",
+    ]);
+    if (req.query.noCache !== "1") {
+      const cachedAnalytics = getCachedValue("kpiTowerUptimeAnalytics", analyticsCacheKey);
+      if (cachedAnalytics) return res.json(cachedAnalytics);
     }
 
     // Resolved from the same SITE_TABLES config the cards use, so the popup
@@ -542,7 +577,7 @@ router.get("/tower-uptime/analytics", async (req, res) => {
       else if (last < first - 0.05) trend = "down";
     }
 
-    res.json({
+    const analyticsPayload = {
       chartData: normalizedRows,
       summary: {
         avg:     normalizeUptimeValue(summaryRow.avg_uptime     || 0),
@@ -554,7 +589,9 @@ router.get("/tower-uptime/analytics", async (req, res) => {
       circles,
       cmps,
       groupBy: groupByCmp ? "cmp" : "circle",
-    });
+    };
+    setCachedValue("kpiTowerUptimeAnalytics", analyticsCacheKey, analyticsPayload, KPI_CACHE_TTL_MS);
+    res.json(analyticsPayload);
 
   } catch (error) {
     console.error("Analytics error:", error.sqlMessage || error.message);
