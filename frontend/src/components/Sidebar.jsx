@@ -275,7 +275,7 @@ function Sidebar({ closeSidebar, collapsed, onExpandRequest }) {
     label: "NSO Fiber Dashboard",
     path: "/dashboard/reports/fiber/nso-dashboard",
     icon: Database,
-    accessPage: "NSO Fiber Dashboard",
+    accessPage: "NSO Fiber Performance",
     section: "REPORTS",
   },
   {
@@ -290,7 +290,7 @@ function Sidebar({ closeSidebar, collapsed, onExpandRequest }) {
     label: "Fiber Inventory",
     path: "/dashboard/reports/fiber/inventory",
     icon: Database,
-    accessPage: "Fiber Inventory",
+    accessPage: "Fiber reports",
   },
 
   // SETTINGS
