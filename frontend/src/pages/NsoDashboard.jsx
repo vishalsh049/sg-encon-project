@@ -359,7 +359,7 @@ function NsoDashboard() {
       <div className="rounded-2xl border border-border-color bg-surface p-5 shadow-sm">
         <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
           <div>
-            <h1 className="text-2xl font-semibold text-text-primary">Fiber Performance Trend Dashboard</h1>
+            <h1 className="text-xl font-semibold text-text-primary">NSO Fiber Performance Trend Dashboard</h1>
             <p className="mt-1 text-sm text-text-muted">Data automatically calculated from uploaded NSO file.</p>
           </div>
           <div className="flex flex-wrap items-center gap-2.5">
@@ -564,7 +564,7 @@ function NsoDashboard() {
                           <Fragment key={week.week}>
                             <td className="border-l border-border-color px-2 py-2.5 text-right">{formatNumber(week.cuts)}</td>
                             <td className="px-2 py-2.5 text-right">{week.ftkm === null ? "N/A" : formatNumber(week.ftkm)}</td>
-                            <td className="px-2 py-2.5 text-right">-</td>
+                            <td className="px-2 py-2.5 text-right">{week.mttr === null ? "N/A" : formatNumber(week.mttr)}</td>
                           </Fragment>
                         ))}
                         <td className="border-l border-border-color px-3 py-2.5 text-right">{formatNumber(circleRow.totalCuts)}</td>

@@ -593,6 +593,26 @@ async function getCmpScopeDetails(req) {
   );
   const circleTotalMap = new Map(circleTotals.map((row) => [row.circle, row]));
 
+  // Circle-level weekly MTTR needs its own query grouped by (circle, week)
+  // only — averaging the per-scope weekly averages would bias toward
+  // low-cut scopes, same reason the circle TOTAL above is a fresh query
+  // rather than an average of scopeTotals.
+  const circleWeeklyMttrRows = await query(
+    `SELECT
+       COALESCE(NULLIF(TRIM(circle), ''), 'Unknown') AS circle,
+       year, week,
+       ROUND(AVG(mttr),2) AS mttr
+     FROM nso_reports
+     WHERE 1=1 ${filters}
+     GROUP BY circle, year, week`,
+    params
+  );
+  const circleWeeklyMttrMap = new Map(); // circle -> weekLabel -> mttr
+  circleWeeklyMttrRows.forEach((row) => {
+    if (!circleWeeklyMttrMap.has(row.circle)) circleWeeklyMttrMap.set(row.circle, new Map());
+    circleWeeklyMttrMap.get(row.circle).set(formatWeekLabel(row.year, row.week), round2(row.mttr));
+  });
+
   const circles = Array.from(byCircleScope.entries()).map(([circle, scopeMap]) => {
     const scopes = Array.from(scopeMap.entries()).map(([cmp, weekMap]) => {
       const baseFtkm = getBaseFtkm(circle, cmp);
@@ -626,10 +646,12 @@ async function getCmpScopeDetails(req) {
         const label = formatWeekLabel(row.year, row.week);
         weeklyCircleCuts.set(label, (weeklyCircleCuts.get(label) || 0) + safeNumber(row.cuts));
       });
+    const circleWeekMttrMap = circleWeeklyMttrMap.get(circle) || new Map();
     const weeklyTotals = weekLabels.map((label) => {
       const cuts = weeklyCircleCuts.get(label) || 0;
       const ftkm = computeFtkm(cuts, circleBaseFtkm);
-      return { week: label, cuts, ftkm: ftkm === null ? null : round2(ftkm) };
+      const mttr = circleWeekMttrMap.has(label) ? circleWeekMttrMap.get(label) : null;
+      return { week: label, cuts, ftkm: ftkm === null ? null : round2(ftkm), mttr };
     });
 
     return {
