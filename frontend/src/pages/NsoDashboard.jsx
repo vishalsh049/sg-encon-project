@@ -1,21 +1,23 @@
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import {
-  ArrowDownRight,
-  ArrowUpRight,
+  ChevronDown,
+  ChevronRight,
   Download,
-  Layers,
   RefreshCcw,
-  ShieldCheck,
-  Sparkles,
-  Zap,
-  FileText,
-  Settings,
+  Activity,
+  Route,
+  Timer,
+  Building2,
+  Layers,
 } from "lucide-react";
 import {
   BarChart,
   Bar,
   LineChart,
   Line,
+  PieChart,
+  Pie,
+  Cell,
   XAxis,
   YAxis,
   Tooltip,
@@ -23,178 +25,308 @@ import {
   CartesianGrid,
 } from "recharts";
 import { authFetch, buildApiUrl } from "../lib/api";
+import { getEntityColor, getChartTheme } from "../utils/chartMath";
 
-const sections = [
-  { id: "overview", label: "Dashboard" },
-  { id: "circle-ranking", label: "Circle Performance" },
-  { id: "cmp-summary", label: "CMP Performance" },
-  { id: "cuts-trend", label: "Weekly Trend" },
-  { id: "mttr-trend", label: "Monthly Trend" },
-  { id: "weekly-details", label: "Yearly Trend" },
-  { id: "reports", label: "Reports" },
-  { id: "upload", label: "Data Upload" },
-  { id: "settings", label: "Settings" },
-];
-
-const statusStyles = {
-  Good: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
-  Warning: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
-  Critical: "bg-rose-500/10 text-rose-600 dark:text-rose-400",
-};
-
-const heatmapColor = (value) => {
-  if (value >= 6) return "bg-rose-500/15 text-rose-700 dark:text-rose-400";
-  if (value >= 3) return "bg-amber-400/15 text-amber-700 dark:text-amber-400";
-  if (value > 0) return "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400";
-  return "bg-slate-700/10 text-text-muted";
-};
+// ─── Formatting ────────────────────────────────────────────────────────────
 
 const formatNumber = (value) => {
   if (value === null || value === undefined || Number.isNaN(Number(value))) {
-    return "-";
+    return "N/A";
   }
-  return Number(value).toLocaleString("en-IN", {
-    maximumFractionDigits: 2,
+  return Number(value).toLocaleString("en-IN", { maximumFractionDigits: 2 });
+};
+
+const formatTimestamp = (value) => {
+  if (!value) return "-";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.valueOf())) return String(value);
+  return parsed.toLocaleString("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
   });
 };
 
-const formatChange = (value) => {
-  if (value === null || value === undefined) return "0%";
-  const sign = value > 0 ? "+" : "";
-  return `${sign}${Number(value).toFixed(2)}%`;
-};
+// ─── Small shared dropdown (matches KpiDashboard.jsx's pattern) ──────────
 
-function NsoDashboard() {
-  const [filters, setFilters] = useState({
-    circle: "",
-    cmp: "",
-    year: "",
-    month: "",
-    week: "",
-  });
-  const [options, setOptions] = useState({
-    circles: [],
-    cmps: [],
-    years: [],
-    months: [],
-    weeks: [],
-  });
-  const [summary, setSummary] = useState(null);
-  const [circleRanking, setCircleRanking] = useState([]);
-  const [cutsTrend, setCutsTrend] = useState([]);
-  const [mttrTrend, setMttrTrend] = useState([]);
-  const [cmpSummary, setCmpSummary] = useState([]);
-  const [heatmap, setHeatmap] = useState({ weeks: [], rows: [] });
-  const [weeklyDetails, setWeeklyDetails] = useState({ weeks: [], rows: [] });
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [activeSection, setActiveSection] = useState("overview");
-  const [expandedCmps, setExpandedCmps] = useState([]);
-  const [currentPage, setCurrentPage] = useState(1);
-
-  const pageSize = 8;
-
-  const apiQuery = useMemo(() => {
-    const searchParams = new URLSearchParams();
-    Object.entries(filters).forEach(([key, value]) => {
-      if (value) searchParams.set(key, value);
-    });
-    return searchParams.toString();
-  }, [filters]);
-
-  const cmpPageCount = Math.max(1, Math.ceil(cmpSummary.length / pageSize));
-  const pagedCmpSummary = cmpSummary.slice(
-    (currentPage - 1) * pageSize,
-    currentPage * pageSize
-  );
-
-  const sectionHash = useMemo(
-    () => ({
-      overview: "overview",
-      "circle-ranking": "circle-ranking",
-      "cmp-summary": "cmp-summary",
-      "cuts-trend": "cuts-trend",
-      "mttr-trend": "mttr-trend",
-      "weekly-details": "weekly-details",
-      reports: "reports",
-      upload: "upload",
-      settings: "settings",
-    }),
-    []
-  );
+function Dropdown({ open, onToggle, label, icon: Icon, children }) {
+  const ref = useRef(null);
 
   useEffect(() => {
-    const loadFilters = async () => {
+    if (!open) return undefined;
+    const onDown = (e) => {
+      if (ref.current && !ref.current.contains(e.target)) onToggle(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [open, onToggle]);
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        type="button"
+        onClick={() => onToggle(!open)}
+        className="flex h-10 items-center gap-2 rounded-xl border border-border-color bg-surface px-3.5 text-sm font-medium text-text-secondary shadow-sm transition hover:bg-surface-muted"
+      >
+        {Icon ? <Icon className="h-4 w-4 flex-shrink-0 text-text-muted" /> : null}
+        <span>{label}</span>
+        <ChevronDown className="h-3.5 w-3.5 flex-shrink-0 text-text-muted" />
+      </button>
+      {open ? (
+        <div className="absolute right-0 top-11 z-50 min-w-[220px] rounded-2xl border border-border-color bg-surface p-2 shadow-[0_10px_40px_rgba(15,23,42,0.18)]">
+          {children}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+// ─── KPI card ──────────────────────────────────────────────────────────────
+
+// False positive on the next line: IconComponent is rendered below
+// (<IconComponent .../>); confirmed via a clean `vite build` and by
+// comparing against the identical, lint-clean pattern in
+// billingDashboard/KpiCard.jsx. A tooling quirk specific to this file, not a
+// real bug.
+// eslint-disable-next-line no-unused-vars
+function KpiCard({ icon: IconComponent, tone, label, value, subtitle }) {
+  const toneStyles = {
+    blue: "bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400",
+    emerald: "bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
+    violet: "bg-violet-50 dark:bg-violet-500/10 text-violet-600 dark:text-violet-400",
+    orange: "bg-orange-50 dark:bg-orange-500/10 text-orange-600 dark:text-orange-400",
+    cyan: "bg-cyan-50 dark:bg-cyan-500/10 text-cyan-600 dark:text-cyan-400",
+  };
+  return (
+    <div className="rounded-2xl border border-border-color bg-surface p-4 shadow-sm">
+      <div className="flex items-center gap-3">
+        <div className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl ${toneStyles[tone] || toneStyles.blue}`}>
+          <IconComponent className="h-4.5 w-4.5" />
+        </div>
+        <div className="min-w-0">
+          <p className="truncate text-xs font-semibold uppercase tracking-[0.14em] text-text-muted">{label}</p>
+          <p className="mt-0.5 text-xl font-semibold text-text-primary">{value}</p>
+        </div>
+      </div>
+      {subtitle ? <p className="mt-2 text-xs text-text-muted">{subtitle}</p> : null}
+    </div>
+  );
+}
+
+// ─── Donut chart ───────────────────────────────────────────────────────────
+
+function DistributionDonut({ title, subtitle, data, valueKey, dark }) {
+  const theme = getChartTheme(dark);
+  const total = data.reduce((sum, row) => sum + (row[valueKey] || 0), 0);
+  return (
+    <div className="rounded-2xl border border-border-color bg-surface p-5 shadow-sm">
+      <h3 className="text-sm font-semibold text-text-primary">{title}</h3>
+      <p className="mt-0.5 text-xs text-text-muted">{subtitle}</p>
+      {data.length ? (
+        <div className="mt-3 flex items-center gap-4">
+          <div className="relative h-40 w-40 flex-shrink-0">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={data}
+                  dataKey={valueKey}
+                  nameKey="circle"
+                  innerRadius={48}
+                  outerRadius={72}
+                  paddingAngle={2}
+                  isAnimationActive={false}
+                >
+                  {data.map((row, index) => (
+                    <Cell key={row.circle} fill={getEntityColor(row.circle, index)} />
+                  ))}
+                </Pie>
+                <Tooltip
+                  formatter={(value) => formatNumber(value)}
+                  contentStyle={{ background: theme.tooltipBg, border: "none", borderRadius: 12 }}
+                />
+              </PieChart>
+            </ResponsiveContainer>
+            <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+              <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-text-muted">Total</span>
+              <span className="text-base font-semibold text-text-primary">{formatNumber(total)}</span>
+            </div>
+          </div>
+          <div className="min-w-0 flex-1 space-y-1.5">
+            {data.map((row, index) => (
+              <div key={row.circle} className="flex items-center justify-between gap-2 text-xs">
+                <span className="flex min-w-0 items-center gap-1.5 text-text-secondary">
+                  <span className="h-2 w-2 flex-shrink-0 rounded-full" style={{ background: getEntityColor(row.circle, index) }} />
+                  <span className="truncate">{row.circle}</span>
+                </span>
+                <span className="flex-shrink-0 font-medium text-text-primary">
+                  {row.percentage}% ({formatNumber(row[valueKey])})
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <div className="mt-3 flex h-40 items-center justify-center text-xs text-text-muted">No data available.</div>
+      )}
+    </div>
+  );
+}
+
+// ─── Main component ────────────────────────────────────────────────────────
+
+const EMPTY_DETAILS = { weeks: [], circles: [], grandTotalCuts: 0, grandAvgMttr: 0, grandTotalFtkm: null };
+
+function NsoDashboard() {
+  const [filters, setFilters] = useState({ circle: "", cmp: "", year: "", month: "" });
+  const [weekRange, setWeekRange] = useState({ fromYear: "", fromRaw: "", toYear: "", toRaw: "" });
+  const [options, setOptions] = useState({ circles: [], cmps: [], years: [], months: [], weeks: [] });
+
+  const [summary, setSummary] = useState(null);
+  const [cutsTrend, setCutsTrend] = useState([]);
+  const [ftkmTrend, setFtkmTrend] = useState([]);
+  const [mttrTrend, setMttrTrend] = useState([]);
+  const [cutsByCircle, setCutsByCircle] = useState([]);
+  const [ftkmByCircle, setFtkmByCircle] = useState([]);
+  const [topMttr, setTopMttr] = useState([]);
+  const [details, setDetails] = useState(EMPTY_DETAILS);
+  const [latestFile, setLatestFile] = useState(null);
+
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [refreshTick, setRefreshTick] = useState(0);
+  const [expandedCircles, setExpandedCircles] = useState(() => new Set());
+  const [weekMenuOpen, setWeekMenuOpen] = useState(false);
+
+  const apiQuery = useMemo(() => {
+    const params = new URLSearchParams();
+    Object.entries(filters).forEach(([key, value]) => {
+      if (value) params.set(key, value);
+    });
+    if (weekRange.fromRaw) {
+      params.set("weekFromYear", weekRange.fromYear);
+      params.set("weekFromRaw", weekRange.fromRaw);
+    }
+    if (weekRange.toRaw) {
+      params.set("weekToYear", weekRange.toYear);
+      params.set("weekToRaw", weekRange.toRaw);
+    }
+    return params.toString();
+  }, [filters, weekRange]);
+
+  // Filter options (and the default week range, once) load independently of
+  // the week-range selection itself, so changing the range doesn't refetch
+  // its own option list out from under the user.
+  useEffect(() => {
+    const controller = new AbortController();
+    (async () => {
       try {
-        const res = await authFetch(buildApiUrl(`/api/nso/dashboard/filters?${apiQuery}`));
+        const params = new URLSearchParams();
+        Object.entries(filters).forEach(([key, value]) => {
+          if (value) params.set(key, value);
+        });
+        const res = await authFetch(buildApiUrl(`/api/nso/dashboard/filters?${params}`), { signal: controller.signal });
         if (!res.ok) throw new Error("Unable to load filter options");
         const data = await res.json();
         setOptions(data);
+        // Default the Week Range to the trailing 4 available weeks, once,
+        // the first time real weeks are known — never a hardcoded week.
+        setWeekRange((prev) => {
+          if (prev.fromRaw || prev.toRaw) return prev;
+          if (!data.weeks?.length) return prev;
+          const last = data.weeks[data.weeks.length - 1];
+          const first = data.weeks[Math.max(0, data.weeks.length - 4)];
+          return { fromYear: first.year, fromRaw: first.week, toYear: last.year, toRaw: last.week };
+        });
       } catch (err) {
-        console.error(err);
-        setError("Unable to load filter options");
+        if (err.name !== "AbortError") console.error(err);
       }
-    };
-
-    loadFilters();
-  }, [apiQuery]);
+    })();
+    return () => controller.abort();
+  }, [filters]);
 
   useEffect(() => {
-    const loadData = async () => {
+    const controller = new AbortController();
+    (async () => {
+      try {
+        const res = await authFetch(buildApiUrl("/api/nso/"), { signal: controller.signal });
+        if (!res.ok) return;
+        const data = await res.json();
+        setLatestFile(data.rows?.[0] || null);
+      } catch (err) {
+        if (err.name !== "AbortError") console.error(err);
+      }
+    })();
+    return () => controller.abort();
+  }, [refreshTick]);
+
+  useEffect(() => {
+    if (!weekRange.fromRaw && !weekRange.toRaw && !options.weeks?.length) {
+      // Waiting on the default range to resolve from filter options first.
+      return undefined;
+    }
+    const controller = new AbortController();
+    (async () => {
       setLoading(true);
       setError(null);
       try {
-        const [summaryRes, circleRes, cutsRes, mttrRes, cmpRes, heatmapRes, weeklyRes] =
-          await Promise.all([
-            authFetch(buildApiUrl(`/api/nso/dashboard/summary?${apiQuery}`)),
-            authFetch(buildApiUrl(`/api/nso/dashboard/circle-ranking?${apiQuery}`)),
-            authFetch(buildApiUrl(`/api/nso/dashboard/cuts-trend?${apiQuery}`)),
-            authFetch(buildApiUrl(`/api/nso/dashboard/mttr-trend?${apiQuery}`)),
-            authFetch(buildApiUrl(`/api/nso/dashboard/cmp-summary?${apiQuery}`)),
-            authFetch(buildApiUrl(`/api/nso/dashboard/heatmap?${apiQuery}`)),
-            authFetch(buildApiUrl(`/api/nso/dashboard/cmp-weekly?${apiQuery}`)),
-          ]);
-
-        if (!summaryRes.ok) throw new Error("Summary fetch failed");
-        if (!circleRes.ok) throw new Error("Circle ranking fetch failed");
-
-        const summaryData = await summaryRes.json();
-        const circleData = await circleRes.json();
-        const cutsData = await cutsRes.json();
-        const mttrData = await mttrRes.json();
-        const cmpData = await cmpRes.json();
-        const heatmapData = await heatmapRes.json();
-        const weeklyData = await weeklyRes.json();
+        const endpoints = [
+          "summary",
+          "cuts-trend",
+          "ftkm-trend",
+          "mttr-trend",
+          "cuts-by-circle",
+          "ftkm-by-circle",
+          "top-mttr",
+          "cmp-scope-details",
+        ];
+        const responses = await Promise.all(
+          endpoints.map((path) =>
+            authFetch(buildApiUrl(`/api/nso/dashboard/${path}?${apiQuery}`), { signal: controller.signal })
+          )
+        );
+        responses.forEach((res, index) => {
+          if (!res.ok) throw new Error(`${endpoints[index]} request failed`);
+        });
+        const [summaryData, cutsData, ftkmData, mttrData, cutsCircleData, ftkmCircleData, topMttrData, detailsData] =
+          await Promise.all(responses.map((res) => res.json()));
 
         setSummary(summaryData);
-        setCircleRanking(circleData);
         setCutsTrend(cutsData);
+        setFtkmTrend(ftkmData);
         setMttrTrend(mttrData);
-        setCmpSummary(cmpData);
-        setHeatmap(heatmapData);
-        setWeeklyDetails(weeklyData);
-        setCurrentPage(1);
+        setCutsByCircle(cutsCircleData);
+        setFtkmByCircle(ftkmCircleData);
+        setTopMttr(topMttrData);
+        setDetails(detailsData);
       } catch (err) {
+        if (err.name === "AbortError") return;
         console.error(err);
-        setError("Unable to load dashboard data. Please try again.");
+        setError("Unable to load latest NSO data.");
       } finally {
         setLoading(false);
       }
-    };
+    })();
+    return () => controller.abort();
+  }, [apiQuery, refreshTick, options.weeks, weekRange.fromRaw, weekRange.toRaw]);
 
-    loadData();
-  }, [apiQuery]);
+  const updateFilter = (key, value) => setFilters((prev) => ({ ...prev, [key]: value }));
+  const refresh = () => setRefreshTick((t) => t + 1);
 
-  const updateFilter = (key, value) => {
-    setFilters((prev) => ({ ...prev, [key]: value }));
+  const toggleCircle = (circle) => {
+    setExpandedCircles((prev) => {
+      const next = new Set(prev);
+      if (next.has(circle)) next.delete(circle);
+      else next.add(circle);
+      return next;
+    });
   };
 
-  const doDownload = async () => {
+  const doExport = async () => {
     try {
       const res = await authFetch(buildApiUrl(`/api/nso/dashboard/export?${apiQuery}`));
-      if (!res.ok) {
-        throw new Error("Report download failed");
-      }
+      if (!res.ok) throw new Error("Export failed");
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
@@ -206,651 +338,323 @@ function NsoDashboard() {
       URL.revokeObjectURL(url);
     } catch (err) {
       console.error(err);
-      setError("Unable to download report");
+      setError("Unable to export the report.");
     }
   };
 
-  const toggleExpandCmp = (cmp) => {
-    setExpandedCmps((current) =>
-      current.includes(cmp)
-        ? current.filter((item) => item !== cmp)
-        : [...current, cmp]
-    );
-  };
+  const weekRangeLabel = useMemo(() => {
+    if (!weekRange.fromRaw || !weekRange.toRaw) return "Select weeks";
+    const fromOpt = options.weeks.find((w) => w.week === weekRange.fromRaw && String(w.year) === String(weekRange.fromYear));
+    const toOpt = options.weeks.find((w) => w.week === weekRange.toRaw && String(w.year) === String(weekRange.toYear));
+    return `${fromOpt?.label || weekRange.fromRaw} - ${toOpt?.label || weekRange.toRaw}`;
+  }, [weekRange, options.weeks]);
 
-  const onSectionClick = (sectionId) => {
-    setActiveSection(sectionId);
-    const element = document.getElementById(sectionId);
-    if (element) {
-      element.scrollIntoView({ behavior: "smooth", block: "start" });
-    }
-  };
-
-  const cardData = useMemo(() => {
-    if (!summary) return [];
-    return [
-      {
-        title: "Total Cuts",
-        value: summary.totalCuts,
-        previous: summary.previousCuts,
-        change: summary.cutsChangePct,
-      },
-      {
-        title: "Total FTKM",
-        value: summary.totalFTKM,
-        previous: summary.previousFTKM,
-        change: summary.ftkmChangePct,
-      },
-      {
-        title: "Average MTTR",
-        value: summary.avgMTTR,
-        previous: summary.previousMTTR,
-        change: summary.mttrChangePct,
-      },
-      {
-        title: "Active CMP",
-        value: summary.activeCMP,
-        previous: null,
-        change: null,
-      },
-    ];
-  }, [summary]);
+  const dark = document.documentElement.classList.contains("dark");
+  const theme = getChartTheme(dark);
+  const hasData = !loading && summary && summary.totalCuts > 0;
 
   return (
-    <div className="space-y-6">
-      <div className="grid gap-6 xl:grid-cols-[260px_1fr]">
-        <aside className="sticky top-4 rounded-[32px] border border-slate-800/40 bg-overlay/95 p-6 shadow-xl shadow-slate-900/5 text-slate-100">
-          <div className="mb-6 flex items-center gap-3">
-            <div className="flex h-12 w-12 items-center justify-center rounded-3xl bg-sky-500/15 text-sky-300">
-              <Sparkles className="h-6 w-6" />
-            </div>
-            <div>
-              <p className="text-sm uppercase tracking-[0.28em] text-text-muted">
-                NSO Fiber Dashboard
-              </p>
-              <h2 className="text-xl font-semibold text-white">
-                Fiber Performance
-              </h2>
-            </div>
+    <div className="space-y-5">
+      {/* Header */}
+      <div className="rounded-2xl border border-border-color bg-surface p-5 shadow-sm">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+          <div>
+            <h1 className="text-2xl font-semibold text-text-primary">Fiber Performance Trend Dashboard</h1>
+            <p className="mt-1 text-sm text-text-muted">Data automatically calculated from uploaded NSO file.</p>
           </div>
-
-          <div className="space-y-2">
-            {sections.map((section) => (
-              <button
-                key={section.id}
-                type="button"
-                onClick={() => onSectionClick(section.id)}
-                className={`flex w-full items-center gap-3 rounded-3xl border px-4 py-3 text-left text-sm transition ${
-                  activeSection === section.id
-                    ? "border-sky-500 bg-sky-500/10 text-sky-100"
-                    : "border-slate-800/80 bg-overlay/90 text-slate-300 hover:border-slate-700 hover:bg-slate-900"
-                }`}
-              >
-                <span className="inline-flex h-9 w-9 items-center justify-center rounded-2xl bg-overlay/80 text-slate-300">
-                  <FileText className="h-4 w-4" />
-                </span>
-                <span>{section.label}</span>
-              </button>
-            ))}
-          </div>
-        </aside>
-
-        <div className="space-y-6">
-          <div className="rounded-[32px] border border-border-color bg-surface p-5 shadow-sm">
-            <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-              <div>
-                <p className="text-xs uppercase tracking-[0.3em] text-text-muted">
-                  NSO Fiber Performance Dashboard
-                </p>
-                <h1 className="mt-2 text-3xl font-semibold text-text-primary">
-                  Circle-wise and CMP-wise Analysis
-                </h1>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-3">
-                <button
-                  type="button"
-                  onClick={doDownload}
-                  className="inline-flex items-center gap-2 rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-slate-900/10 transition hover:bg-slate-800 dark:bg-slate-700 dark:hover:bg-slate-600"
-                >
-                  <Download className="h-4 w-4" />
-                  Download Report
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setFilters({ circle: "", cmp: "", year: "", month: "", week: "" })}
-                  className="inline-flex items-center gap-2 rounded-2xl border border-border-color bg-surface px-4 py-3 text-sm font-semibold text-text-secondary transition hover:bg-surface-muted"
-                >
-                  <RefreshCcw className="h-4 w-4" />
-                  Reset
-                </button>
-              </div>
-            </div>
-
-            <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-              <div className="xl:col-span-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                <label className="space-y-2">
-                  <span className="text-xs font-semibold uppercase tracking-[0.24em] text-text-muted">
-                    Circle
-                  </span>
-                  <select
-                    className="app-input w-full bg-slate-950/5 text-text-primary"
-                    value={filters.circle}
-                    onChange={(e) => updateFilter("circle", e.target.value)}
-                  >
-                    <option value="">All Circles</option>
-                    {options.circles.map((circle) => (
-                      <option key={circle} value={circle}>
-                        {circle}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-
-                <label className="space-y-2">
-                  <span className="text-xs font-semibold uppercase tracking-[0.24em] text-text-muted">
-                    CMP
-                  </span>
-                  <select
-                    className="app-input w-full bg-slate-950/5 text-text-primary"
-                    value={filters.cmp}
-                    onChange={(e) => updateFilter("cmp", e.target.value)}
-                  >
-                    <option value="">All CMPs</option>
-                    {options.cmps.map((cmp) => (
-                      <option key={cmp} value={cmp}>
-                        {cmp}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-
-                <label className="space-y-2">
-                  <span className="text-xs font-semibold uppercase tracking-[0.24em] text-text-muted">
-                    Year
-                  </span>
-                  <select
-                    className="app-input w-full bg-slate-950/5 text-text-primary"
-                    value={filters.year}
-                    onChange={(e) => updateFilter("year", e.target.value)}
-                  >
-                    <option value="">All Years</option>
-                    {options.years.map((year) => (
-                      <option key={year} value={year}>
-                        {year}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-
-                <label className="space-y-2">
-                  <span className="text-xs font-semibold uppercase tracking-[0.24em] text-text-muted">
-                    Month
-                  </span>
-                  <select
-                    className="app-input w-full bg-slate-950/5 text-text-primary"
-                    value={filters.month}
-                    onChange={(e) => updateFilter("month", e.target.value)}
-                  >
-                    <option value="">All Months</option>
-                    {options.months.map((month) => (
-                      <option key={month} value={month}>
-                        {month}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-
-                <label className="space-y-2">
-                  <span className="text-xs font-semibold uppercase tracking-[0.24em] text-text-muted">
-                    Week
-                  </span>
-                  <select
-                    className="app-input w-full bg-slate-950/5 text-text-primary"
-                    value={filters.week}
-                    onChange={(e) => updateFilter("week", e.target.value)}
-                  >
-                    <option value="">All Weeks</option>
-                    {options.weeks.map((week) => (
-                      <option key={week} value={week.replace("WK-", "") || week}>
-                        {week}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </div>
-            </div>
-          </div>
-
-          {error ? (
-            <div className="rounded-3xl border border-rose-200 dark:border-rose-500/20 bg-rose-50 dark:bg-rose-500/10 p-5 text-rose-700 dark:text-rose-400">
-              {error}
-            </div>
-          ) : null}
-
-          <section id="overview" className="space-y-4">
-            <div className="grid gap-4 lg:grid-cols-4">
-              {loading ? (
-                Array.from({ length: 4 }).map((_, index) => (
-                  <div
-                    key={index}
-                    className="h-32 rounded-[28px] bg-surface-muted shimmer"
-                  />
-                ))
+          <div className="flex flex-wrap items-center gap-2.5">
+            <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3.5 py-2 text-xs font-medium text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-400">
+              {latestFile ? (
+                <>File Uploaded: <span className="font-semibold">{latestFile.original_name || latestFile.file_name}</span></>
               ) : (
-                cardData.map((card) => (
-                  <div
-                    key={card.title}
-                    className="rounded-[28px] border border-border-color bg-overlay/95 p-5 shadow-lg shadow-slate-900/5"
-                  >
-                    <div className="flex items-center justify-between gap-4">
-                      <div>
-                        <p className="text-sm font-semibold uppercase tracking-[0.24em] text-text-muted">
-                          {card.title}
-                        </p>
-                        <p className="mt-3 text-3xl font-semibold text-white">
-                          {formatNumber(card.value)}
-                        </p>
-                      </div>
-                      <div className="inline-flex h-12 w-12 items-center justify-center rounded-3xl bg-slate-800 text-slate-200">
-                        <Zap className="h-5 w-5" />
-                      </div>
-                    </div>
-                    {card.previous !== null ? (
-                      <p className="mt-4 text-sm text-text-muted">
-                        Prev week: <span className="font-semibold text-white">{formatNumber(card.previous)}</span>
-                        <span className="ml-3 text-emerald-400">{formatChange(card.change)}</span>
-                      </p>
-                    ) : null}
-                  </div>
-                ))
+                "No file uploaded yet"
               )}
             </div>
-          </section>
-
-          <div id="circle-ranking" className="space-y-4 rounded-[32px] border border-border-color bg-surface p-5 shadow-sm">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <h2 className="text-xl font-semibold text-text-primary">Circle Performance Ranking</h2>
-                <p className="text-sm text-text-muted">
-                  Rank circles by cuts, FTKM, and MTTR.
-                </p>
+            <Dropdown open={weekMenuOpen} onToggle={setWeekMenuOpen} label={weekRangeLabel} icon={ChevronRight}>
+              <div className="space-y-2 p-1">
+                <div>
+                  <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted">From</p>
+                  <select
+                    className="app-input w-full text-xs"
+                    value={weekRange.fromRaw ? `${weekRange.fromYear}::${weekRange.fromRaw}` : ""}
+                    onChange={(e) => {
+                      const [year, raw] = e.target.value.split("::");
+                      setWeekRange((prev) => ({ ...prev, fromYear: year, fromRaw: raw }));
+                    }}
+                  >
+                    {options.weeks.map((w) => (
+                      <option key={`from-${w.year}-${w.week}`} value={`${w.year}::${w.week}`}>{w.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted">To</p>
+                  <select
+                    className="app-input w-full text-xs"
+                    value={weekRange.toRaw ? `${weekRange.toYear}::${weekRange.toRaw}` : ""}
+                    onChange={(e) => {
+                      const [year, raw] = e.target.value.split("::");
+                      setWeekRange((prev) => ({ ...prev, toYear: year, toRaw: raw }));
+                    }}
+                  >
+                    {options.weeks.map((w) => (
+                      <option key={`to-${w.year}-${w.week}`} value={`${w.year}::${w.week}`}>{w.label}</option>
+                    ))}
+                  </select>
+                </div>
               </div>
-              <span className="rounded-full bg-surface-muted px-3 py-2 text-xs font-semibold uppercase tracking-[0.24em] text-text-muted">
-                Sorted by cuts
-              </span>
-            </div>
-
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[680px] text-left text-sm text-text-secondary">
-                <thead className="bg-surface-muted text-text-muted">
-                  <tr>
-                    <th className="px-4 py-3">Circle</th>
-                    <th className="px-4 py-3">Cuts</th>
-                    <th className="px-4 py-3">FTKM</th>
-                    <th className="px-4 py-3">MTTR</th>
-                    <th className="px-4 py-3">Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {loading ? (
-                    Array.from({ length: 4 }).map((_, index) => (
-                      <tr key={index} className="animate-pulse bg-surface-muted">
-                        <td className="h-12 px-4" colSpan={5} />
-                      </tr>
-                    ))
-                  ) : circleRanking.length ? (
-                    circleRanking.map((row) => (
-                      <tr key={row.circle} className="border-b border-border-color">
-                        <td className="px-4 py-4 font-medium text-text-primary">{row.circle}</td>
-                        <td className="px-4 py-4">{formatNumber(row.cuts)}</td>
-                        <td className="px-4 py-4">{formatNumber(row.ftkm)}</td>
-                        <td className="px-4 py-4">{formatNumber(row.mttr)}</td>
-                        <td className="px-4 py-4">
-                          <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${statusStyles[row.status] || "bg-surface-muted text-text-secondary"}`}>
-                            {row.status}
-                          </span>
-                        </td>
-                      </tr>
-                    ))
-                  ) : (
-                    <tr>
-                      <td className="px-4 py-6 text-center text-sm text-text-muted" colSpan={5}>
-                        No circle ranking data available.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
+            </Dropdown>
+            <button
+              type="button"
+              onClick={refresh}
+              title="Refresh"
+              className="flex h-10 w-10 items-center justify-center rounded-xl border border-border-color bg-surface text-text-secondary shadow-sm transition hover:bg-surface-muted"
+            >
+              <RefreshCcw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+            </button>
+            <button
+              type="button"
+              onClick={doExport}
+              disabled={!hasData}
+              className="flex h-10 items-center gap-2 rounded-xl border border-border-color bg-surface px-3.5 text-sm font-medium text-text-secondary shadow-sm transition hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Download className="h-4 w-4" /> Export
+            </button>
           </div>
+        </div>
 
-          <div className="grid gap-4 xl:grid-cols-2">
-            <section id="cuts-trend" className="rounded-[32px] border border-border-color bg-surface p-5 shadow-sm">
-              <div className="mb-4 flex items-center justify-between gap-4">
-                <div>
-                  <h3 className="text-lg font-semibold text-text-primary">Cuts Trend</h3>
-                  <p className="text-sm text-text-muted">Weekly cuts trend for selected filters.</p>
-                </div>
-                <span className="rounded-full bg-surface-muted px-3 py-2 text-xs font-semibold uppercase tracking-[0.24em] text-text-muted">
-                  {cutsTrend.length} weeks
-                </span>
-              </div>
-              <div className="h-72">
-                {loading ? (
-                  <div className="flex h-full items-center justify-center text-text-muted">
-                    Loading chart...
-                  </div>
-                ) : (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={cutsTrend} margin={{ top: 10, right: 12, left: 0, bottom: 6 }}>
-                      <CartesianGrid stroke="#e2e8f0" strokeDasharray="4 4" vertical={false} />
-                      <XAxis dataKey="week" tick={{ fill: "#64748b", fontSize: 12 }} axisLine={false} tickLine={false} />
-                      <YAxis tick={{ fill: "#64748b", fontSize: 12 }} axisLine={false} tickLine={false} />
-                      <Tooltip wrapperStyle={{ borderRadius: 16, boxShadow: "0 10px 30px rgba(15,23,42,0.12)" }} />
-                      <Bar dataKey="cuts" fill="#2563eb" radius={[12, 12, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                )}
-              </div>
-            </section>
+        {/* Filters */}
+        <div className="mt-4 grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+          <select className="app-input" value={filters.circle} onChange={(e) => updateFilter("circle", e.target.value)}>
+            <option value="">All CMPs</option>
+            {options.circles.map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
+          <select className="app-input" value={filters.cmp} onChange={(e) => updateFilter("cmp", e.target.value)}>
+            <option value="">All Scopes</option>
+            {options.cmps.map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
+          <select className="app-input" value={filters.year} onChange={(e) => updateFilter("year", e.target.value)}>
+            <option value="">All Years</option>
+            {options.years.map((y) => <option key={y} value={y}>{y}</option>)}
+          </select>
+          <select className="app-input" value={filters.month} onChange={(e) => updateFilter("month", e.target.value)}>
+            <option value="">All Months</option>
+            {options.months.map((m) => <option key={m} value={m}>{m}</option>)}
+          </select>
+        </div>
+      </div>
 
-            <section id="mttr-trend" className="rounded-[32px] border border-border-color bg-surface p-5 shadow-sm">
-              <div className="mb-4 flex items-center justify-between gap-4">
-                <div>
-                  <h3 className="text-lg font-semibold text-text-primary">MTTR Trend</h3>
-                  <p className="text-sm text-text-muted">Weekly average MTTR trend.</p>
-                </div>
-                <span className="rounded-full bg-surface-muted px-3 py-2 text-xs font-semibold uppercase tracking-[0.24em] text-text-muted">
-                  {mttrTrend.length} weeks
-                </span>
-              </div>
-              <div className="h-72">
-                {loading ? (
-                  <div className="flex h-full items-center justify-center text-text-muted">
-                    Loading chart...
-                  </div>
-                ) : (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={mttrTrend} margin={{ top: 10, right: 12, left: 0, bottom: 6 }}>
-                      <CartesianGrid stroke="#e2e8f0" strokeDasharray="4 4" vertical={false} />
-                      <XAxis dataKey="week" tick={{ fill: "#64748b", fontSize: 12 }} axisLine={false} tickLine={false} />
-                      <YAxis tick={{ fill: "#64748b", fontSize: 12 }} axisLine={false} tickLine={false} />
-                      <Tooltip wrapperStyle={{ borderRadius: 16, boxShadow: "0 10px 30px rgba(15,23,42,0.12)" }} />
-                      <Line type="monotone" dataKey="mttr" stroke="#f97316" strokeWidth={3} dot={{ r: 5 }} activeDot={{ r: 6 }} />
-                    </LineChart>
-                  </ResponsiveContainer>
-                )}
-              </div>
-            </section>
+      {error ? (
+        <div className="flex items-center justify-between rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 dark:border-rose-500/20 dark:bg-rose-500/10 dark:text-rose-400">
+          {error}
+          <button type="button" onClick={refresh} className="rounded-lg border border-rose-300 px-3 py-1.5 text-xs font-semibold">Retry</button>
+        </div>
+      ) : null}
+
+      {/* KPI cards */}
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+        {loading ? (
+          Array.from({ length: 5 }).map((_, i) => <div key={i} className="h-24 rounded-2xl bg-surface-muted shimmer" />)
+        ) : (
+          <>
+            <KpiCard icon={Activity} tone="blue" label="Total Cuts" value={formatNumber(summary?.totalCuts)} subtitle="Selected week range" />
+            <KpiCard icon={Route} tone="emerald" label="Total FTKM" value={formatNumber(summary?.totalFTKM)} subtitle="Selected week range" />
+            <KpiCard icon={Timer} tone="violet" label="Avg MTTR (All Weeks)" value={formatNumber(summary?.avgMTTR)} subtitle="Selected week range" />
+            <KpiCard icon={Building2} tone="orange" label="Active CMPs" value={formatNumber(summary?.activeCircles)} subtitle="Total operational CMPs" />
+            <KpiCard icon={Layers} tone="cyan" label="Total Scopes" value={formatNumber(summary?.totalScopes)} subtitle="Across all CMPs" />
+          </>
+        )}
+      </div>
+
+      {!loading && !hasData && !error ? (
+        <div className="rounded-2xl border border-dashed border-border-strong bg-surface-muted p-10 text-center text-sm text-text-muted">
+          No data available for the selected filters.
+        </div>
+      ) : null}
+
+      {/* Trend charts */}
+      <div className="grid gap-4 xl:grid-cols-3">
+        <TrendCard title="Cuts Trend (Weekly)" loading={loading} data={cutsTrend} dataKey="cuts" color="#2563eb" type="bar" theme={theme} />
+        <TrendCard title="FTKM Trend (Weekly)" loading={loading} data={ftkmTrend} dataKey="ftkm" color="#16a34a" type="area" theme={theme} />
+        <TrendCard title="MTTR Trend (Weekly)" loading={loading} data={mttrTrend} dataKey="mttr" color="#7c3aed" type="line" theme={theme} />
+      </div>
+
+      {/* Donuts + Top 5 MTTR */}
+      <div className="grid gap-4 xl:grid-cols-3">
+        <DistributionDonut title="Cuts Distribution by CMP" subtitle="Selected week range" data={cutsByCircle} valueKey="cuts" dark={dark} />
+        <DistributionDonut title="FTKM Distribution by CMP" subtitle="Selected week range" data={ftkmByCircle} valueKey="ftkm" dark={dark} />
+        <div className="rounded-2xl border border-border-color bg-surface p-5 shadow-sm">
+          <h3 className="text-sm font-semibold text-text-primary">Top 5 CMPs by Avg MTTR</h3>
+          <p className="mt-0.5 text-xs text-text-muted">Selected week range</p>
+          <div className="mt-3 h-52">
+            {topMttr.length ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={topMttr} layout="vertical" margin={{ top: 4, right: 24, left: 0, bottom: 4 }}>
+                  <CartesianGrid stroke={theme.grid} strokeDasharray="4 4" horizontal={false} />
+                  <XAxis type="number" tick={{ fill: theme.tick, fontSize: 11 }} axisLine={false} tickLine={false} />
+                  <YAxis type="category" dataKey="circle" tick={{ fill: theme.tick, fontSize: 11 }} axisLine={false} tickLine={false} width={80} />
+                  <Tooltip contentStyle={{ background: theme.tooltipBg, border: "none", borderRadius: 12 }} formatter={(v) => formatNumber(v)} />
+                  <Bar dataKey="mttr" radius={[0, 8, 8, 0]} isAnimationActive={false}>
+                    {topMttr.map((row, index) => <Cell key={row.circle} fill={getEntityColor(row.circle, index)} />)}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex h-full items-center justify-center text-xs text-text-muted">No data available.</div>
+            )}
           </div>
+        </div>
+      </div>
 
-          <section id="cmp-summary" className="space-y-4 rounded-[32px] border border-border-color bg-surface p-5 shadow-sm">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <h3 className="text-xl font-semibold text-text-primary">CMP Performance Summary</h3>
-                <p className="text-sm text-text-muted">
-                  Current week and previous week CMP performance comparison.
-                </p>
-              </div>
-              <div className="flex items-center gap-2 text-sm text-text-muted">
-                <span className="inline-flex items-center gap-2 rounded-full bg-surface-muted px-3 py-2">
-                  <Layers className="h-4 w-4" />
-                  {cmpSummary.length} CMPs
-                </span>
-              </div>
-            </div>
+      {/* Detail table */}
+      <div className="rounded-2xl border border-border-color bg-surface p-5 shadow-sm">
+        <h3 className="text-base font-semibold text-text-primary">Fiber Performance Details by CMP &amp; Scope</h3>
+        <p className="mt-0.5 text-xs text-text-muted">Click a CMP to expand its scopes.</p>
 
-            <div className="overflow-x-auto">
-              <table className="min-w-[960px] w-full text-left text-sm text-text-secondary">
-                <thead className="bg-surface-muted text-text-muted">
-                  <tr>
-                    <th className="px-4 py-3">CMP</th>
-                    <th className="px-4 py-3">Scope KM</th>
-                    <th className="px-4 py-3">Cuts</th>
-                    <th className="px-4 py-3">FTKM</th>
-                    <th className="px-4 py-3">MTTR</th>
-                    <th className="px-4 py-3">Prev Cuts</th>
-                    <th className="px-4 py-3">Prev FTKM</th>
-                    <th className="px-4 py-3">Prev MTTR</th>
-                    <th className="px-4 py-3">Change %</th>
-                    <th className="px-4 py-3">Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {loading ? (
-                    Array.from({ length: 6 }).map((_, index) => (
-                      <tr key={index} className="animate-pulse bg-surface-muted">
-                        <td className="h-12 px-4" colSpan={10} />
-                      </tr>
-                    ))
-                  ) : pagedCmpSummary.length ? (
-                    pagedCmpSummary.map((row) => (
-                      <tr key={row.cmp} className="border-b border-border-color hover:bg-surface-muted">
-                        <td className="px-4 py-4 font-medium text-text-primary">{row.cmp}</td>
-                        <td className="px-4 py-4">{row.scope}</td>
-                        <td className="px-4 py-4">{formatNumber(row.currentCuts)}</td>
-                        <td className="px-4 py-4">{formatNumber(row.currentFTKM)}</td>
-                        <td className="px-4 py-4">{formatNumber(row.currentMTTR)}</td>
-                        <td className="px-4 py-4">{formatNumber(row.previousCuts)}</td>
-                        <td className="px-4 py-4">{formatNumber(row.previousFTKM)}</td>
-                        <td className="px-4 py-4">{formatNumber(row.previousMTTR)}</td>
-                        <td className="px-4 py-4">{formatChange(row.cutsChangePct)}</td>
-                        <td className="px-4 py-4">
-                          <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${statusStyles[row.status] || "bg-surface-muted text-text-secondary"}`}>
-                            {row.status}
-                          </span>
-                        </td>
-                      </tr>
-                    ))
-                  ) : (
-                    <tr>
-                      <td className="px-4 py-6 text-center text-sm text-text-muted" colSpan={10}>
-                        No CMP records available for the selected filters.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <p className="text-sm text-text-muted">
-                Showing {pagedCmpSummary.length} of {cmpSummary.length} CMP rows.
-              </p>
-              <div className="inline-flex items-center gap-2 rounded-full bg-surface-muted px-3 py-2 text-sm text-text-secondary">
-                <button
-                  type="button"
-                  disabled={currentPage === 1}
-                  onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
-                  className="rounded-full bg-surface px-3 py-2 text-text-secondary transition hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  Prev
-                </button>
-                <span>
-                  Page {currentPage} of {cmpPageCount}
-                </span>
-                <button
-                  type="button"
-                  disabled={currentPage === cmpPageCount}
-                  onClick={() => setCurrentPage((page) => Math.min(cmpPageCount, page + 1))}
-                  className="rounded-full bg-surface px-3 py-2 text-text-secondary transition hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  Next
-                </button>
-              </div>
-            </div>
-          </section>
-
-          <div className="grid gap-4 xl:grid-cols-2">
-            <section id="reports" className="rounded-[32px] border border-border-color bg-surface p-5 shadow-sm">
-              <div className="mb-4 flex items-center justify-between gap-4">
-                <div>
-                  <h3 className="text-lg font-semibold text-text-primary">Weekly Performance Heatmap</h3>
-                  <p className="text-sm text-text-muted">Heatmap view of CMP cuts intensity for the last few weeks.</p>
-                </div>
-                <div className="text-xs uppercase tracking-[0.24em] text-text-muted">
-                  Good / Warning / Critical
-                </div>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="min-w-[640px] w-full text-left text-sm text-text-secondary">
-                  <thead className="bg-surface-muted text-text-muted">
-                    <tr>
-                      <th className="px-4 py-3">CMP</th>
-                      {heatmap.weeks.map((week) => (
-                        <th key={week} className="px-4 py-3 text-center">
-                          {week}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {loading ? (
-                      Array.from({ length: 4 }).map((_, index) => (
-                        <tr key={index} className="animate-pulse bg-surface-muted">
-                          <td className="h-12 px-4" colSpan={heatmap.weeks.length + 1} />
-                        </tr>
-                      ))
-                    ) : heatmap.rows.length ? (
-                      heatmap.rows.map((row) => (
-                        <tr key={row.cmp} className="border-b border-border-color hover:bg-surface-muted">
-                          <td className="px-4 py-4 font-medium text-text-primary">{row.cmp}</td>
-                          {heatmap.weeks.map((week) => (
-                            <td key={week} className="px-4 py-4 text-center">
-                              <span className={`mx-auto inline-flex h-10 min-w-[2.5rem] items-center justify-center rounded-2xl text-sm font-semibold ${heatmapColor(row.values[week])}`}>
-                                {row.values[week] || 0}
-                              </span>
-                            </td>
-                          ))}
-                        </tr>
-                      ))
-                    ) : (
-                      <tr>
-                        <td className="px-4 py-6 text-center text-sm text-text-muted" colSpan={heatmap.weeks.length + 1}>
-                          No heatmap data available.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-
-              <div className="mt-4 flex flex-wrap items-center gap-3 text-sm text-text-muted">
-                <span className="inline-flex items-center gap-2 rounded-full bg-surface-muted px-3 py-2">
-                  <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" /> Good (0-2)
-                </span>
-                <span className="inline-flex items-center gap-2 rounded-full bg-surface-muted px-3 py-2">
-                  <span className="h-2.5 w-2.5 rounded-full bg-amber-500" /> Warning (3-5)
-                </span>
-                <span className="inline-flex items-center gap-2 rounded-full bg-surface-muted px-3 py-2">
-                  <span className="h-2.5 w-2.5 rounded-full bg-rose-500" /> Critical (6+)
-                </span>
-              </div>
-            </section>
-
-            <section id="weekly-details" className="space-y-4 rounded-[32px] border border-border-color bg-surface p-5 shadow-sm">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <h3 className="text-lg font-semibold text-text-primary">CMP Weekly Details</h3>
-                  <p className="text-sm text-text-muted">
-                    Expand each CMP to inspect weekly cuts, FTKM, and MTTR.
-                  </p>
-                </div>
-                <span className="rounded-full bg-surface-muted px-3 py-2 text-xs font-semibold uppercase tracking-[0.24em] text-text-muted">
-                  {weeklyDetails.weeks.length} weeks
-                </span>
-              </div>
-
+        <div className="mt-4 overflow-x-auto">
+          <table className="w-full min-w-[900px] border-collapse text-left text-sm">
+            <thead className="sticky top-0 z-10 bg-surface-muted text-text-muted">
+              <tr>
+                <th className="px-3 py-2.5 font-semibold">CMP</th>
+                <th className="px-3 py-2.5 font-semibold">Scope</th>
+                <th className="px-3 py-2.5 text-right font-semibold">Base FTKM</th>
+                {details.weeks.map((week) => (
+                  <th key={week} colSpan={3} className="border-l border-border-color px-3 py-2.5 text-center font-semibold">{week}</th>
+                ))}
+                <th className="border-l border-border-color px-3 py-2.5 text-right font-semibold">Total Cuts</th>
+                <th className="px-3 py-2.5 text-right font-semibold">Avg MTTR</th>
+              </tr>
+              <tr className="text-[10px] uppercase tracking-wide text-text-muted">
+                <th className="px-3 py-1" />
+                <th className="px-3 py-1" />
+                <th className="px-3 py-1" />
+                {details.weeks.map((week) => (
+                  <Fragment key={week}>
+                    <th className="border-l border-border-color px-2 py-1 text-right">Cuts</th>
+                    <th className="px-2 py-1 text-right">FTKM</th>
+                    <th className="px-2 py-1 text-right">MTTR</th>
+                  </Fragment>
+                ))}
+                <th className="border-l border-border-color px-3 py-1" />
+                <th className="px-3 py-1" />
+              </tr>
+            </thead>
+            <tbody>
               {loading ? (
-                <div className="space-y-3">
-                  {Array.from({ length: 3 }).map((_, index) => (
-                    <div key={index} className="h-24 rounded-3xl bg-surface-muted" />
-                  ))}
-                </div>
-              ) : weeklyDetails.rows.length ? (
-                weeklyDetails.rows.map((item) => {
-                  const expanded = expandedCmps.includes(item.cmp);
+                Array.from({ length: 4 }).map((_, i) => (
+                  <tr key={i}><td colSpan={5 + details.weeks.length * 3} className="h-10 animate-pulse bg-surface-muted" /></tr>
+                ))
+              ) : details.circles.length ? (
+                details.circles.map((circleRow) => {
+                  const expanded = expandedCircles.has(circleRow.circle);
                   return (
-                    <div
-                      key={item.cmp}
-                      className="overflow-hidden rounded-3xl border border-border-color bg-surface-muted"
-                    >
-                      <button
-                        type="button"
-                        onClick={() => toggleExpandCmp(item.cmp)}
-                        className="w-full px-5 py-4 text-left"
+                    <Fragment key={circleRow.circle}>
+                      <tr
+                        onClick={() => toggleCircle(circleRow.circle)}
+                        className="cursor-pointer border-t border-border-color bg-surface-muted/60 font-semibold text-text-primary hover:bg-surface-muted"
                       >
-                        <div className="flex items-center justify-between gap-3">
-                          <div>
-                            <h4 className="text-base font-semibold text-text-primary">{item.cmp}</h4>
-                            <p className="text-sm text-text-muted">Tap to view weekly cut details.</p>
-                          </div>
-                          <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-surface text-text-secondary shadow-sm">
-                            {expanded ? <ArrowDownRight className="h-4 w-4" /> : <ArrowUpRight className="h-4 w-4" />}
+                        <td className="px-3 py-2.5" colSpan={2}>
+                          <span className="flex items-center gap-1.5">
+                            {expanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+                            CMP: {circleRow.circle}
                           </span>
-                        </div>
-                      </button>
-                      {expanded ? (
-                        <div className="border-t border-border-color bg-surface p-5">
-                          <div className="grid gap-4 sm:grid-cols-3">
-                            {item.details.map((detail) => (
-                              <div key={detail.week} className="rounded-3xl border border-border-color p-4 bg-surface-muted">
-                                <p className="text-xs uppercase tracking-[0.24em] text-text-muted">{detail.week}</p>
-                                <div className="mt-3 space-y-2 text-sm text-text-secondary">
-                                  <div className="flex items-center justify-between">
-                                    <span>Cuts</span>
-                                    <strong>{formatNumber(detail.cuts)}</strong>
-                                  </div>
-                                  <div className="flex items-center justify-between">
-                                    <span>FTKM</span>
-                                    <strong>{formatNumber(detail.ftkm)}</strong>
-                                  </div>
-                                  <div className="flex items-center justify-between">
-                                    <span>MTTR</span>
-                                    <strong>{formatNumber(detail.mttr)}</strong>
-                                  </div>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      ) : null}
-                    </div>
+                        </td>
+                        <td className="px-3 py-2.5 text-right">{circleRow.baseFtkm ? formatNumber(circleRow.baseFtkm) : "N/A"}</td>
+                        {circleRow.weeklyTotals.map((week) => (
+                          <Fragment key={week.week}>
+                            <td className="border-l border-border-color px-2 py-2.5 text-right">{formatNumber(week.cuts)}</td>
+                            <td className="px-2 py-2.5 text-right">{week.ftkm === null ? "N/A" : formatNumber(week.ftkm)}</td>
+                            <td className="px-2 py-2.5 text-right">-</td>
+                          </Fragment>
+                        ))}
+                        <td className="border-l border-border-color px-3 py-2.5 text-right">{formatNumber(circleRow.totalCuts)}</td>
+                        <td className="px-3 py-2.5 text-right">{formatNumber(circleRow.avgMttr)}</td>
+                      </tr>
+                      {expanded
+                        ? circleRow.scopes.map((scopeRow) => (
+                            <tr key={`${circleRow.circle}-${scopeRow.scope}`} className="border-t border-border-color text-text-secondary hover:bg-surface-muted/40">
+                              <td className="px-3 py-2" />
+                              <td className="px-3 py-2">{scopeRow.scope}</td>
+                              <td className="px-3 py-2 text-right">{scopeRow.baseFtkm ? formatNumber(scopeRow.baseFtkm) : "N/A"}</td>
+                              {scopeRow.weeks.map((week) => (
+                                <Fragment key={week.week}>
+                                  <td className="border-l border-border-color px-2 py-2 text-right">{formatNumber(week.cuts)}</td>
+                                  <td className="px-2 py-2 text-right">{week.ftkm === null ? "N/A" : formatNumber(week.ftkm)}</td>
+                                  <td className="px-2 py-2 text-right">{formatNumber(week.mttr)}</td>
+                                </Fragment>
+                              ))}
+                              <td className="border-l border-border-color px-3 py-2 text-right">{formatNumber(scopeRow.totalCuts)}</td>
+                              <td className="px-3 py-2 text-right">{formatNumber(scopeRow.avgMttr)}</td>
+                            </tr>
+                          ))
+                        : null}
+                    </Fragment>
                   );
                 })
               ) : (
-                <div className="rounded-3xl border border-dashed border-border-strong bg-surface-muted p-8 text-center text-sm text-text-muted">
-                  No weekly CMP details found for the selected filters.
-                </div>
+                <tr><td colSpan={5 + details.weeks.length * 3} className="px-3 py-8 text-center text-sm text-text-muted">No data available for the selected filters.</td></tr>
               )}
-            </section>
-          </div>
-
-          <section id="upload" className="rounded-[32px] border border-border-color bg-surface p-5 shadow-sm">
-            <div className="flex items-center gap-4">
-              <ShieldCheck className="h-6 w-6 text-text-secondary" />
-              <div>
-                <h3 className="text-lg font-semibold text-text-primary">Data Upload & Security</h3>
-                <p className="text-sm text-text-muted">
-                  All KPI data is filtered by circle access from your authenticated user session.
-                </p>
-              </div>
-            </div>
-          </section>
-
-          <section id="settings" className="rounded-[32px] border border-border-color bg-surface p-5 shadow-sm">
-            <div className="flex items-center gap-4">
-              <Settings className="h-6 w-6 text-text-secondary" />
-              <div>
-                <h3 className="text-lg font-semibold text-text-primary">Settings</h3>
-                <p className="text-sm text-text-muted">
-                  Use the filters above to tune the dashboard to your circle, CMP, year, month and week.
-                </p>
-              </div>
-            </div>
-          </section>
+            </tbody>
+            {details.circles.length ? (
+              <tfoot>
+                <tr className="border-t-2 border-border-strong bg-surface-muted font-semibold text-text-primary">
+                  <td className="px-3 py-2.5" colSpan={3}>Grand Total</td>
+                  <td colSpan={details.weeks.length * 3} className="border-l border-border-color px-3 py-2.5" />
+                  <td className="border-l border-border-color px-3 py-2.5 text-right">{formatNumber(details.grandTotalCuts)}</td>
+                  <td className="px-3 py-2.5 text-right">{formatNumber(details.grandAvgMttr)}</td>
+                </tr>
+              </tfoot>
+            ) : null}
+          </table>
         </div>
+      </div>
+
+      {/* Footer */}
+      <div className="flex flex-col gap-2 rounded-2xl border border-border-color bg-surface p-4 text-xs text-text-muted sm:flex-row sm:items-center sm:justify-between">
+        <p>
+          <strong>Cuts</strong> = Ticket Count &nbsp;|&nbsp; <strong>MTTR</strong> = Average of MTTR Column &nbsp;|&nbsp; <strong>FTKM</strong> = ((Cuts / 7) × 31) / Base FTKM × 1000
+        </p>
+        <p>Last Updated: {formatTimestamp(latestFile?.uploaded_at)}</p>
+      </div>
+    </div>
+  );
+}
+
+// ─── Trend chart card (Cuts=bar, FTKM=area-as-line, MTTR=line) ───────────
+
+function TrendCard({ title, loading, data, dataKey, color, theme }) {
+  return (
+    <div className="rounded-2xl border border-border-color bg-surface p-5 shadow-sm">
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-semibold text-text-primary">{title}</h3>
+        <span className="rounded-full bg-surface-muted px-2.5 py-1 text-[11px] font-semibold text-text-muted">{data.length} weeks</span>
+      </div>
+      <div className="mt-3 h-56">
+        {loading ? (
+          <div className="flex h-full items-center justify-center text-xs text-text-muted">Loading chart...</div>
+        ) : data.length ? (
+          <ResponsiveContainer width="100%" height="100%">
+            {dataKey === "cuts" ? (
+              <BarChart data={data} margin={{ top: 8, right: 8, left: -8, bottom: 0 }}>
+                <CartesianGrid stroke={theme.grid} strokeDasharray="4 4" vertical={false} />
+                <XAxis dataKey="week" tick={{ fill: theme.tick, fontSize: 10 }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fill: theme.tick, fontSize: 10 }} axisLine={false} tickLine={false} width={36} />
+                <Tooltip contentStyle={{ background: theme.tooltipBg, border: "none", borderRadius: 12 }} formatter={(v) => formatNumber(v)} />
+                <Bar dataKey={dataKey} fill={color} radius={[8, 8, 0, 0]} isAnimationActive={false} />
+              </BarChart>
+            ) : (
+              <LineChart data={data} margin={{ top: 8, right: 8, left: -8, bottom: 0 }}>
+                <CartesianGrid stroke={theme.grid} strokeDasharray="4 4" vertical={false} />
+                <XAxis dataKey="week" tick={{ fill: theme.tick, fontSize: 10 }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fill: theme.tick, fontSize: 10 }} axisLine={false} tickLine={false} width={36} />
+                <Tooltip contentStyle={{ background: theme.tooltipBg, border: "none", borderRadius: 12 }} formatter={(v) => (v === null ? "N/A" : formatNumber(v))} />
+                <Line type="monotone" dataKey={dataKey} stroke={color} strokeWidth={2.5} dot={{ r: 3 }} connectNulls={false} isAnimationActive={false} />
+              </LineChart>
+            )}
+          </ResponsiveContainer>
+        ) : (
+          <div className="flex h-full items-center justify-center text-xs text-text-muted">No data available for the selected filters.</div>
+        )}
       </div>
     </div>
   );

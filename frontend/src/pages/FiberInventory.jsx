@@ -2,9 +2,11 @@ import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Download, FileSpreadsheet, Pencil, Plus, Trash2, Upload, X } from "lucide-react";
 import axios from "axios";
+import toast from "react-hot-toast";
 import Card from "../components/Card";
 import { buildApiUrl } from "../lib/api";
 import PremiumDatePicker from "../components/PremiumDatePicker";
+import ValidationErrorModal from "../components/ValidationErrorModal";
 
 const MotionDiv = motion.div;
 
@@ -63,7 +65,8 @@ function FiberInventory() {
   });
   const [allUploads, setAllUploads] = useState([]);
   const [selectedIds, setSelectedIds] = useState([]);
-  
+  const [circleCmpReport, setCircleCmpReport] = useState(null);
+
   const fetchSummary = async () => {
     setSummaryLoading(true);
     setError("");
@@ -152,13 +155,23 @@ useEffect(() => {
       formData.append("uploadedBy", uploadForm.uploadedBy);
       formData.append("file", uploadForm.file);
 
-      await axios.post(buildApiUrl("/api/fiber/uploads"), formData, {
+      const res = await axios.post(buildApiUrl("/api/fiber/uploads"), formData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
 
       closeUploadModal();
       await fetchSummary();
-      await fetchUploads(); 
+      await fetchUploads();
+
+      const { skippedCircleCmp, circleCmpWarnings, totalRows } = res.data || {};
+      if (skippedCircleCmp > 0) {
+        toast.error(`${skippedCircleCmp} row${skippedCircleCmp > 1 ? "s" : ""} skipped — Circle/CMP not recognized.`);
+        setTimeout(() => {
+          setCircleCmpReport({ errors: circleCmpWarnings, totalRecords: totalRows });
+        }, 150);
+      } else {
+        toast.success("Fiber file uploaded successfully.");
+      }
     } catch (err) {
       setSaveError(err?.response?.data?.message || "Failed to upload fiber file.");
     } finally {
@@ -296,7 +309,7 @@ useEffect(() => {
 
   <button
     onClick={async () => {
-  if (!selectedIds.length) return alert("Select items first");
+  if (!selectedIds.length) return toast.error("Select items first.");
 
   try {
     const response = await axios.post(
@@ -313,9 +326,11 @@ useEffect(() => {
     document.body.appendChild(link);
     link.click();
     link.remove();
+    window.URL.revokeObjectURL(url);
+    toast.success(`Downloaded ${selectedIds.length} file${selectedIds.length > 1 ? "s" : ""} as fiber-files.zip`);
   } catch (err) {
     console.error(err);
-    alert("Download failed");
+    toast.error(err?.response?.data?.message || "Download failed.");
   }
 }}
     className="w-full rounded-lg bg-blue-100 dark:bg-blue-500/15 px-3 py-2 text-xs text-blue-700 dark:text-blue-400 sm:w-auto"
@@ -421,13 +436,39 @@ useEffect(() => {
         </td>
         <td className="border-b border-border-color px-4 py-4 transition duration-150 group-hover:bg-surface-muted/90 sm:px-6">
      <div className="flex flex-wrap gap-2">
-      <a
-        href={item.file_missing ? undefined : buildApiUrl(`/api/fiber/uploads/${item.id}/download`)}
+      <button
+        type="button"
+        disabled={item.file_missing}
+        // A plain <a href> here never carries the app's Authorization
+        // header (that's only attached by axios's request interceptor in
+        // main.jsx), so the API — which requires it — rejected every click
+        // with 401 and the browser just downloaded/showed the error JSON.
+        // Fetching as a blob through axios (same pattern as "Download
+        // Selected" below) sends the token and triggers a real file save.
+        onClick={async () => {
+          try {
+            const response = await axios.get(
+              buildApiUrl(`/api/fiber/uploads/${item.id}/download`),
+              { responseType: "blob" }
+            );
+            const url = window.URL.createObjectURL(new Blob([response.data]));
+            const link = document.createElement("a");
+            link.href = url;
+            link.setAttribute("download", `Fiber_${item.id}.xlsx`);
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.URL.revokeObjectURL(url);
+            toast.success(`Downloaded Fiber_${item.id}.xlsx`);
+          } catch (err) {
+            console.error(err);
+            toast.error(err?.response?.data?.message || "Download failed.");
+          }
+        }}
         className={`p-2 rounded-lg ${item.file_missing ? "bg-surface-muted text-text-muted cursor-not-allowed" : "bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 hover:bg-blue-100 hover:dark:bg-blue-500/15"} transition`}
-        onClick={(event) => item.file_missing && event.preventDefault()}
       >
          <Download size={14} />
-               </a>
+               </button>
                         <button
                           type="button"
                           onClick={() => {
@@ -522,6 +563,30 @@ useEffect(() => {
                   >
                     <X size={18} />
                   </button>
+                </div>
+
+                <div className="mt-4 flex flex-wrap items-center gap-3 rounded-2xl border border-violet-200 bg-violet-50/60 px-4 py-3 dark:border-violet-500/20 dark:bg-violet-500/10">
+                  <FileSpreadsheet size={16} className="flex-shrink-0 text-violet-600 dark:text-violet-400" />
+                  <p className="min-w-0 flex-1 text-xs text-violet-800 dark:text-violet-300">
+                    Not sure which columns are accepted? Fiber (Intercity/Intracity) and
+                    FTTx use different layouts — download the one you need below.
+                  </p>
+                  <a
+                    href="/formats/fiber_format.xlsx"
+                    download="Fiber_Format.xlsx"
+                    className="inline-flex h-9 items-center gap-2 rounded-xl border border-violet-200 bg-surface px-3 text-sm font-medium text-violet-700 transition hover:bg-violet-100 dark:border-violet-500/20 dark:text-violet-400 hover:dark:bg-violet-500/15"
+                  >
+                    <Download size={15} />
+                    Fiber format
+                  </a>
+                  <a
+                    href="/formats/fttx_format.xlsx"
+                    download="FTTx_Format.xlsx"
+                    className="inline-flex h-9 items-center gap-2 rounded-xl border border-violet-200 bg-surface px-3 text-sm font-medium text-violet-700 transition hover:bg-violet-100 dark:border-violet-500/20 dark:text-violet-400 hover:dark:bg-violet-500/15"
+                  >
+                    <Download size={15} />
+                    FTTx format
+                  </a>
                 </div>
 
                 {saveError ? (
@@ -733,6 +798,15 @@ useEffect(() => {
           </>
         ) : null}
       </AnimatePresence>
+
+      <ValidationErrorModal
+        isOpen={circleCmpReport !== null}
+        onClose={() => setCircleCmpReport(null)}
+        errorData={circleCmpReport}
+        title="Some Rows Were Skipped"
+        subtitle="Circle/CMP could not be matched for these rows. The rest of the file uploaded successfully — fix these rows and re-upload only them if needed."
+        tone="warning"
+      />
     </div>
   );
 }

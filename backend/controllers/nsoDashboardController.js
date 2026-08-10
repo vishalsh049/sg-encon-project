@@ -1,103 +1,44 @@
 const {
   ensureNsoReportsSchema,
   getSummary,
-  getCircleRanking,
   getCutsTrend,
   getMttrTrend,
-  getCmpSummary,
-  getHeatmap,
-  getCmpWeekly,
+  getFtkmTrend,
+  getCutsByCircle,
+  getFtkmByCircle,
+  getTopMttrByCircle,
+  getCircleRanking,
+  getCmpScopeDetails,
   getFilters,
   buildExportWorkbook,
 } = require("../services/nsoDashboardService");
 
-async function handleSummary(req, res) {
-  try {
-    await ensureNsoReportsSchema();
-    const summary = await getSummary(req);
-    res.json(summary);
-  } catch (error) {
-    console.error("NSO dashboard summary error:", error);
-    res.status(500).json({ message: "Failed to load dashboard summary" });
-  }
+// Every handler follows the same shape: ensure the schema, run the one
+// service function it needs, and never let a raw error reach the client —
+// log the detail server-side, return a generic message client-side.
+function makeHandler(serviceFn, failureMessage) {
+  return async function handle(req, res) {
+    try {
+      await ensureNsoReportsSchema();
+      const data = await serviceFn(req);
+      res.json(data);
+    } catch (error) {
+      console.error(`NSO dashboard error (${failureMessage}):`, error);
+      res.status(500).json({ message: failureMessage });
+    }
+  };
 }
 
-async function handleCircleRanking(req, res) {
-  try {
-    await ensureNsoReportsSchema();
-    const data = await getCircleRanking(req);
-    res.json(data);
-  } catch (error) {
-    console.error("NSO dashboard circle ranking error:", error);
-    res.status(500).json({ message: "Failed to load circle ranking" });
-  }
-}
-
-async function handleCutsTrend(req, res) {
-  try {
-    await ensureNsoReportsSchema();
-    const data = await getCutsTrend(req);
-    res.json(data);
-  } catch (error) {
-    console.error("NSO dashboard cuts trend error:", error);
-    res.status(500).json({ message: "Failed to load cuts trend" });
-  }
-}
-
-async function handleMttrTrend(req, res) {
-  try {
-    await ensureNsoReportsSchema();
-    const data = await getMttrTrend(req);
-    res.json(data);
-  } catch (error) {
-    console.error("NSO dashboard MTTR trend error:", error);
-    res.status(500).json({ message: "Failed to load MTTR trend" });
-  }
-}
-
-async function handleCmpSummary(req, res) {
-  try {
-    await ensureNsoReportsSchema();
-    const data = await getCmpSummary(req);
-    res.json(data);
-  } catch (error) {
-    console.error("NSO dashboard CMP summary error:", error);
-    res.status(500).json({ message: "Failed to load CMP summary" });
-  }
-}
-
-async function handleHeatmap(req, res) {
-  try {
-    await ensureNsoReportsSchema();
-    const data = await getHeatmap(req);
-    res.json(data);
-  } catch (error) {
-    console.error("NSO dashboard heatmap error:", error);
-    res.status(500).json({ message: "Failed to load heatmap data" });
-  }
-}
-
-async function handleCmpWeekly(req, res) {
-  try {
-    await ensureNsoReportsSchema();
-    const data = await getCmpWeekly(req);
-    res.json(data);
-  } catch (error) {
-    console.error("NSO dashboard CMP weekly error:", error);
-    res.status(500).json({ message: "Failed to load CMP weekly details" });
-  }
-}
-
-async function handleFilters(req, res) {
-  try {
-    await ensureNsoReportsSchema();
-    const data = await getFilters(req);
-    res.json(data);
-  } catch (error) {
-    console.error("NSO dashboard filter options error:", error);
-    res.status(500).json({ message: "Failed to load filter options" });
-  }
-}
+const handleSummary = makeHandler(getSummary, "Failed to load dashboard summary");
+const handleCutsTrend = makeHandler(getCutsTrend, "Failed to load cuts trend");
+const handleMttrTrend = makeHandler(getMttrTrend, "Failed to load MTTR trend");
+const handleFtkmTrend = makeHandler(getFtkmTrend, "Failed to load FTKM trend");
+const handleCutsByCircle = makeHandler(getCutsByCircle, "Failed to load cuts distribution");
+const handleFtkmByCircle = makeHandler(getFtkmByCircle, "Failed to load FTKM distribution");
+const handleTopMttr = makeHandler(getTopMttrByCircle, "Failed to load top MTTR ranking");
+const handleCircleRanking = makeHandler(getCircleRanking, "Failed to load circle ranking");
+const handleCmpScopeDetails = makeHandler(getCmpScopeDetails, "Failed to load CMP & Scope details");
+const handleFilters = makeHandler(getFilters, "Failed to load filter options");
 
 async function handleExport(req, res) {
   try {
@@ -122,12 +63,14 @@ async function handleExport(req, res) {
 
 module.exports = {
   handleSummary,
-  handleCircleRanking,
   handleCutsTrend,
   handleMttrTrend,
-  handleCmpSummary,
-  handleHeatmap,
-  handleCmpWeekly,
+  handleFtkmTrend,
+  handleCutsByCircle,
+  handleFtkmByCircle,
+  handleTopMttr,
+  handleCircleRanking,
+  handleCmpScopeDetails,
   handleFilters,
   handleExport,
 };

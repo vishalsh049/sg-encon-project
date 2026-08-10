@@ -8,6 +8,7 @@ const {
   assertRowsAllowedCircle,
   isAllCircle,
 } = require("../middleware/circleAccess");
+const { resolveCircle, resolveCmp, CIRCLES, CIRCLE_CMP_MAP } = require("../constants/circles");
 
 const query = (sql, params = []) => {
   return new Promise((resolve, reject) => {
@@ -436,7 +437,28 @@ function resolveFiberColumnMap(rows) {
   };
 }
 
+// ensureFiberTables() ran on every single request to almost every fiber
+// route (summary, uploads list, latest-dataset, download, upload, edit,
+// delete) — including 8 information_schema lookups, 3 unconditional
+// ALTER TABLE MODIFY COLUMN statements, and a full-table UPDATE...INNER
+// JOIN backfill that re-aggregates the *entire* fiber_inventory history
+// (GROUP BY upload_id) on every call. New uploads already set upload_scope
+// directly at insert time (see createFiberUpload), so nothing after the
+// very first run of this per server start ever has real work to do. Same
+// "run once, cache the promise" fix already applied to nsoRoutes.js and
+// reportRoutes.js.
+let ensureFiberTablesPromise = null;
 async function ensureFiberTables() {
+  if (!ensureFiberTablesPromise) {
+    ensureFiberTablesPromise = ensureFiberTablesOnce().catch((error) => {
+      ensureFiberTablesPromise = null;
+      throw error;
+    });
+  }
+  return ensureFiberTablesPromise;
+}
+
+async function ensureFiberTablesOnce() {
   await query(`
     CREATE TABLE IF NOT EXISTS fiber_uploads (
       id INT AUTO_INCREMENT PRIMARY KEY,
@@ -471,6 +493,20 @@ async function ensureFiberTables() {
   await ensureColumn("fiber_inventory", "aerial", "DECIMAL(18,4) DEFAULT 0");
   await ensureColumn("fiber_inventory", "raw_row", "LONGTEXT NULL");
   await ensureColumn("fiber_inventory", "source_row_number", "INT NULL");
+  // mp_code, mp, circle_code, and month are present in real uploaded files
+  // (see raw_row) but were parsed and then dropped before ever reaching a
+  // column — this is the fix.
+  await ensureColumn("fiber_inventory", "mp_code", "VARCHAR(100) NULL");
+  await ensureColumn("fiber_inventory", "mp", "VARCHAR(100) NULL");
+  await ensureColumn("fiber_inventory", "circle_code", "VARCHAR(50) NULL");
+  await ensureColumn("fiber_inventory", "month", "VARCHAR(20) NULL");
+  // FTTx files use a different column layout than Fiber (Intercity/Intracity)
+  // files — these five are FTTx-specific and had no column to land in at all.
+  await ensureColumn("fiber_inventory", "rj_mainten", "VARCHAR(100) NULL");
+  await ensureColumn("fiber_inventory", "rj_fsa_id", "VARCHAR(100) NULL");
+  await ensureColumn("fiber_inventory", "aerial_hoto_km", "DECIMAL(18,4) DEFAULT 0");
+  await ensureColumn("fiber_inventory", "mdu_km", "DECIMAL(18,4) DEFAULT 0");
+  await ensureColumn("fiber_inventory", "total_kms_for_billing", "DECIMAL(18,4) DEFAULT 0");
   await ensureColumn("fiber_uploads", "upload_scope", "VARCHAR(50) NULL");
   await ensureColumn(
     "fiber_inventory",
@@ -575,15 +611,39 @@ const spanType =
 
 parsedRows.push({
   circle: cleanRow["circle"] || "",
+  // Real files carry both "Circle" (full name) and "CIRCLE" (short code) as
+  // separate columns. Both normalize to "circle", so buildRowsFromMatrix's
+  // duplicate-header handling disambiguates the second one as "circle_1" —
+  // this assumes Circle (full name) is always the first of the pair and
+  // CIRCLE (code) the second, matching every real file seen so far.
+  circleCode: cleanRow["circle_1"] || "",
   cmp: cleanRow["cmp"] || "",
-  network: cleanRow["n_w"] || "",
+  // Was hardcoded to the literal key "n_w" — went blank on any file whose
+  // network/category header normalized to something else (e.g. "Network",
+  // "Type", "Category"), even though fiber_type (just above) already
+  // resolves the same header dynamically via fiberTypeKey. Reuse it here too.
+  network: (fiberTypeKey ? cleanRow[fiberTypeKey] : "") || "",
   fiber: cleanRow["fiber"] || "",
   status: cleanRow["status"] || "",
   spanLinkId: cleanRow["span_link_id"] || "",
   spName: cleanRow["sp_name"] || "",
   patrollingStatus: cleanRow["patrolling_status"] || "",
   routeStatus: cleanRow["route_status"] || "",
+  // "MP" (short/raw code) and "MP Code" (full formatted code) are two
+  // distinct columns in real files — normalizeKey gives them different keys
+  // ("mp" vs "mp_code") so no disambiguation suffix is needed here.
+  mp: cleanRow["mp"] || "",
   mpCode: cleanRow["mp_code"] || "",
+  month: cleanRow["month"] || "",
+  // FTTx-only columns. "aerial_hoto_km" is a distinct measurement from the
+  // plain "aerial" column above — the aerial-key scoring already excludes
+  // HOTO-labeled headers from being picked as the main aerialKey (see
+  // scoreHeader), so this reads it separately rather than relying on that.
+  rjMainten: cleanRow["rj_mainten"] || "",
+  rjFsaId: cleanRow["rj_fsa_id"] || "",
+  aerialHotoKm: toNumber(cleanRow["aerial_hoto_km"]),
+  mduKm: toNumber(cleanRow["mdu_km"]),
+  totalKmsForBilling: toNumber(cleanRow["total_kms_for_billing"]),
 
   fiberType,
   spanType,
@@ -620,7 +680,61 @@ async function createFiberUpload({ date, uploadedBy, fileName, rows, authUser })
     throw error;
   }
 
-  const parsedRows = parseFiberRows(rows);
+  const allParsedRows = parseFiberRows(rows);
+
+  // Circle/CMP name validation against the same approved master list used by
+  // Physical and New Joining (backend/constants/circles.js). resolveCircle/
+  // resolveCmp accept real-world spelling/formatting variants (case, spacing,
+  // punctuation, known aliases) — "accept any typed form that's actually
+  // recognizable" — but a genuinely unrecognized name doesn't silently pass
+  // through as free text. A row with a bad Circle or CMP/MP is skipped (not
+  // the whole file) and reported back as a warning, mirroring how Physical's
+  // bulk upload already handles this exact situation. CMP is checked against
+  // whichever of `cmp` or `mp` the file actually populated — Fiber and FTTx
+  // files don't both carry the same columns, and a format with neither
+  // (e.g. this FTTx layout) isn't held to a validation it was never meant to
+  // satisfy.
+  const circleCmpWarnings = [];
+  const parsedRows = [];
+  allParsedRows.forEach((row) => {
+    const resolvedCircle = resolveCircle(row.circle);
+    if (!resolvedCircle) {
+      circleCmpWarnings.push({
+        row: row.sourceRowNumber,
+        column: "Circle",
+        currentValue: row.circle,
+        error: `Invalid Circle: ${row.circle || "(blank)"}`,
+        expected: CIRCLES,
+        howToFix: "Use a valid circle name.",
+      });
+      return;
+    }
+
+    const cmpInput = row.cmp || row.mp;
+    let resolvedCmpValue = null;
+    if (cmpInput) {
+      resolvedCmpValue = resolveCmp(resolvedCircle, cmpInput);
+      if (!resolvedCmpValue) {
+        circleCmpWarnings.push({
+          row: row.sourceRowNumber,
+          column: row.cmp ? "CMP" : "MP",
+          currentValue: cmpInput,
+          error: `Invalid CMP "${cmpInput}" for Circle "${resolvedCircle}"`,
+          expected: CIRCLE_CMP_MAP[resolvedCircle],
+          howToFix: `Use a valid CMP for circle "${resolvedCircle}".`,
+        });
+        return;
+      }
+    }
+
+    parsedRows.push({
+      ...row,
+      circle: resolvedCircle,
+      cmp: row.cmp ? resolvedCmpValue : row.cmp,
+      mp: row.mp ? resolvedCmpValue : row.mp,
+    });
+  });
+
   assertRowsAllowedCircle(authUser, parsedRows, (row) => row.circle);
   const uploadScope = inferUploadScope(parsedRows);
 
@@ -651,6 +765,7 @@ try {
    const values = parsedRows.map((item) => [
   uploadId,
   item.circle,
+  item.circleCode,
   item.cmp,
   item.network,
   item.status,
@@ -659,11 +774,19 @@ try {
   item.patrollingStatus,
   item.routeStatus,
   item.fiber,
+  item.mp,
+  item.mpCode,
+  item.month,
   item.fiberType,
   item.spanType,
   item.cmmAppd,
   item.ug,
   item.aerial,
+  item.rjMainten,
+  item.rjFsaId,
+  item.aerialHotoKm,
+  item.mduKm,
+  item.totalKmsForBilling,
   item.rawRow,
   item.sourceRowNumber,
 ]);
@@ -674,6 +797,7 @@ try {
 (
  upload_id,
  circle,
+ circle_code,
  cmp,
  network,
  status,
@@ -682,11 +806,19 @@ try {
  patrolling_status,
  route_status,
  fiber,
+ mp,
+ mp_code,
+ month,
  fiber_type,
  span_type,
  cmm_appd,
  ug,
  aerial,
+ rj_mainten,
+ rj_fsa_id,
+ aerial_hoto_km,
+ mdu_km,
+ total_kms_for_billing,
  raw_row,
  source_row_number
 )
@@ -708,7 +840,13 @@ VALUES ?`,
 });
   conn.release();
 
-  return uploadId;
+  return {
+    uploadId,
+    totalRows: allParsedRows.length,
+    insertedRows: parsedRows.length,
+    skippedCircleCmp: circleCmpWarnings.length,
+    circleCmpWarnings,
+  };
 
 } catch (err) {
   await new Promise((resolve) => {
@@ -786,13 +924,35 @@ async function getFiberRowsByUploadId(uploadId, authUser) {
   const params = [uploadId];
   appendFiberCircleFilter(filters, params, authUser, "circle");
 
+  // Every column actually stored per row — the download previously only
+  // selected 5 of these, so the exported file silently dropped circle, cmp,
+  // span/link id, SP name, status, route status, fiber ownership and mp_code
+  // even though all of it was sitting in the table.
   return await query(
     `SELECT
+      circle,
+      circle_code,
+      cmp,
+      network,
+      status,
+      span_link_id,
+      sp_name,
+      patrolling_status,
+      route_status,
+      fiber,
+      mp,
+      mp_code,
+      month,
       fiber_type,
       span_type,
       cmm_appd,
       ug,
       aerial,
+      rj_mainten,
+      rj_fsa_id,
+      aerial_hoto_km,
+      mdu_km,
+      total_kms_for_billing,
       source_row_number
      FROM fiber_inventory
      WHERE ${filters.join(" AND ")}

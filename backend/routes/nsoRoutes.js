@@ -914,21 +914,11 @@ VALUES (?, ?, ?, ?, ?, ?, ${getCurrentIstSqlDateTime()})`,
 
 const fileId = fileResult.insertId;
 
-for (const row of workbookRows) {
-
-console.log("ROW DATA =>", row);
-
-console.log("MAPPED =>", {
-  uid: getValue(row, ["uid"]),
-  ticket_no: getValue(row, ["ticket_no"]),
-  circle: getValue(row, ["circle"]),
-  vendor_tt: getValue(row, ["vendor_tt"]),
-});
-
-
- await query(
-`
-INSERT INTO nso_reports (
+// One INSERT per row (one DB round-trip per row) made a several-thousand-row
+// file take minutes against the remote DB host. Batched into multi-row
+// INSERTs instead — same data, a fraction of the round-trips. Chunked so a
+// very large file doesn't build one INSERT past MySQL's max_allowed_packet.
+const NSO_INSERT_COLUMNS = `
   file_id,
   uid,
   year,
@@ -973,69 +963,70 @@ INSERT INTO nso_reports (
   ttr_percentage,
   report_date,
   created_at
-)
-VALUES (
-  ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-  ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-  ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-  ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
- ?, ?, ?, NOW()
-)
-`,
-[
-  fileId,
+`;
+const NSO_ROW_PLACEHOLDERS =
+  "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())";
 
- getValue(row, ["uid"]),
+const rowToNsoParams = (row) => [
+  fileId,
+  getValue(row, ["uid"]),
   getValue(row, ["year"]),
   getValue(row, ["week"]),
+  getValue(row, ["ticket_no"]),
+  getValue(row, ["parent_ticket"]),
+  getValue(row, ["circle"]),
+  getValue(row, ["cmp"]),
+  getValue(row, ["cmm_name"]),
+  getValue(row, ["link_name"]),
+  getValue(row, ["span_name"]),
+  getValue(row, ["vendor_tt"]),
+  getValue(row, ["fibre_owner"]),
+  getValue(row, ["construction_type"]),
+  getValue(row, ["impact"]),
+  getValue(row, ["affected_service"]),
+  getValue(row, ["reason"]),
+  parseExcelDateTime(getValue(row, ["event_date"])),
+  parseExcelDateTime(getValue(row, ["reported_to_fibre_noc"])),
+  parseExcelDateTime(getValue(row, ["informed_date"])),
+  parseExcelDateTime(getValue(row, ["etr"])),
+  parseExcelDateTime(getValue(row, ["cleared_date"])),
+  getValue(row, ["status"]),
+  getValue(row, ["resolution"]),
+  getValue(row, ["fault_description"]),
+  toDecimalOrNull(getValue(row, ["mttr"])),
+  // Every existing row has an empty mttn — the column exists (mttr, right
+  // next to it, is populated fine) but the exact key the uploaded files use
+  // doesn't match plain "mttn". Widened to common variants; if it's still
+  // blank after this, we need the exact header text from a real source file.
+  getValue(row, ["mttn", "mttn_mins", "mttnmins", "mean_time_to_notify"]),
+  getValue(row, ["delay_reason"]),
+  getValue(row, ["inter_intra_bin"]),
+  getValue(row, ["zone"]),
+  getValue(row, ["bucket"]),
+  getValue(row, ["transport_ip_bin"]),
+  getValue(row, ["restoration_status"]),
+  getValue(row, ["span_id"]),
+  getValue(row, ["workorder"]),
+  getValue(row, ["sp_name"]),
+  getValue(row, ["rca_cause_code"]),
+  getValue(row, ["reason_high_mttr"]),
+  getValue(row, ["day"]),
+  getValue(row, ["month"]),
+  getValue(row, ["week_name"]),
+  // Same situation as mttn above — widened to common variants.
+  getValue(row, ["ttr_percentage", "ttr", "ttrpercentage", "ttr_percent", "percentage_ttr"]),
+  resolvedReportDate,
+];
 
-getValue(row, ["ticket_no"]),
-getValue(row, ["parent_ticket"]),
-getValue(row, ["circle"]),
-getValue(row, ["cmp"]),
-getValue(row, ["cmm_name"]),
-getValue(row, ["link_name"]),
-getValue(row, ["span_name"]),
-getValue(row, ["vendor_tt"]),
-getValue(row, ["fibre_owner"]),
-getValue(row, ["construction_type"]),
-getValue(row, ["impact"]),
-getValue(row, ["affected_service"]),
-getValue(row, ["reason"]),
-parseExcelDateTime(getValue(row, ["event_date"])),
-parseExcelDateTime(getValue(row, ["reported_to_fibre_noc"])),
-parseExcelDateTime(getValue(row, ["informed_date"])),
-parseExcelDateTime(getValue(row, ["etr"])),
-parseExcelDateTime(getValue(row, ["cleared_date"])),
-getValue(row, ["status"]),
-getValue(row, ["resolution"]),
-getValue(row, ["fault_description"]),
-toDecimalOrNull(getValue(row, ["mttr"])),
-// Every existing row has an empty mttn — the column exists (mttr, right
-// next to it, is populated fine) but the exact key the uploaded files use
-// doesn't match plain "mttn". Widened to common variants; if it's still
-// blank after this, we need the exact header text from a real source file.
-getValue(row, ["mttn", "mttn_mins", "mttnmins", "mean_time_to_notify"]),
-getValue(row, ["delay_reason"]),
-getValue(row, ["inter_intra_bin"]),
-getValue(row, ["zone"]),
-getValue(row, ["bucket"]),
-getValue(row, ["transport_ip_bin"]),
-getValue(row, ["restoration_status"]),
-getValue(row, ["span_id"]),
-getValue(row, ["workorder"]),
-getValue(row, ["sp_name"]),
-getValue(row, ["rca_cause_code"]),
-getValue(row, ["reason_high_mttr"]),
-getValue(row, ["day"]),
-getValue(row, ["month"]),
-getValue(row, ["week_name"]),
-// Same situation as mttn above — widened to common variants.
-getValue(row, ["ttr_percentage", "ttr", "ttrpercentage", "ttr_percent", "percentage_ttr"]),
-
-  resolvedReportDate
-]
-);
+const NSO_INSERT_CHUNK_SIZE = 500;
+for (let i = 0; i < workbookRows.length; i += NSO_INSERT_CHUNK_SIZE) {
+  const chunk = workbookRows.slice(i, i + NSO_INSERT_CHUNK_SIZE);
+  const placeholders = chunk.map(() => NSO_ROW_PLACEHOLDERS).join(", ");
+  const params = chunk.flatMap(rowToNsoParams);
+  await query(
+    `INSERT INTO nso_reports (${NSO_INSERT_COLUMNS}) VALUES ${placeholders}`,
+    params
+  );
 }
 
       res.status(201).json({
@@ -1127,79 +1118,10 @@ router.post("/bulk-delete", async (req, res) => {
   }
 });
 
-router.get("/kpi-dashboard", async (req, res) => {
-  try {
-
-    const rows = await query(`
-     SELECT
-  circle,
-  cmp,
-  year,
-  week,
-
-        COUNT(ticket_no) AS cuts,
-
-        0 AS ftkm,
-
-        ROUND(AVG(CAST(mttr AS DECIMAL(10,2))), 2) AS mttr
-
-      FROM nso_reports
-
-      WHERE 1=1
-      ${isAllCircle(req.authUser)
-        ? ""
-        : "AND LOWER(TRIM(circle)) = LOWER(TRIM(?))"}
-
-     GROUP BY
-      circle,
-      cmp,
-      year,
-      week
-
-      ORDER BY
-        year DESC,
-        week DESC
-
-    `, isAllCircle(req.authUser)
-      ? []
-      : [req.authUser.circle]);
-
-    const groupedData = {};
-
-    rows.forEach((row) => {
-
-      if (!groupedData[row.cmp]) {
-
-        groupedData[row.cmp] = {
-          circle: row.circle,
-          cmp: row.cmp,
-          scope: 0,
-          weeks: {}
-        };
-
-      }
-
-      const weekKey = `${row.week}'${String(row.year).slice(-2)}`;
-
-groupedData[row.cmp].weeks[weekKey] = {
-        cuts: Number(row.cuts || 0),
-        ftkm: Number(row.ftkm || 0),
-        mttr: Number(row.mttr || 0)
-      };
-
-    });
-
-    res.json(Object.values(groupedData));
-
-  } catch (error) {
-
-    console.error("KPI Dashboard Error:", error);
-
-    res.status(500).json({
-      message: "Failed to load KPI dashboard"
-    });
-
-  }
-});
+// The real KPI/trend dashboard lives at /api/nso/dashboard/* (see
+// nsoDashboardRoutes.js -> nsoDashboardService.js). This route used to
+// duplicate that logic with its own (hardcoded-zero) FTKM and a different,
+// incompatible week-label format, but was never called by the frontend —
+// removed rather than leave two conflicting calculation paths in the app.
 
 module.exports = router;

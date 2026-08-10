@@ -110,11 +110,29 @@ const workbook = xlsx.utils.book_new();
 
 const worksheet = xlsx.utils.json_to_sheet(
   rows.map((r) => ({
+    Circle: r.circle,
+    CIRCLE: r.circle_code,
+    CMP: r.cmp,
+    Network: r.network,
+    Status: r.status,
+    Span_Link_ID: r.span_link_id,
+    SP_Name: r.sp_name,
+    Patrolling_Status: r.patrolling_status,
+    Route_Status: r.route_status,
+    Fiber_Owner: r.fiber,
+    MP: r.mp,
+    MP_Code: r.mp_code,
+    Month: r.month,
     Fiber_Type: r.fiber_type,
     Span_Type: r.span_type,
     CMM_APPD: r.cmm_appd,
     UG: r.ug,
     Aerial: r.aerial,
+    RJ_MAINTEN: r.rj_mainten,
+    RJ_FSA_ID: r.rj_fsa_id,
+    Aerial_HOTO_Km: r.aerial_hoto_km,
+    MDU_Km: r.mdu_km,
+    Total_Kms_for_Billing: r.total_kms_for_billing,
   }))
 );
 
@@ -170,7 +188,13 @@ router.post("/uploads", requirePagePermission("fiber-reports", "edit"), (req, re
       }
 
       const rows = readWorksheetRows(file.path);
-      const uploadId = await createFiberUpload({
+      const {
+        uploadId,
+        totalRows,
+        insertedRows,
+        skippedCircleCmp,
+        circleCmpWarnings,
+      } = await createFiberUpload({
         date,
         uploadedBy,
         fileName: file.filename,
@@ -182,6 +206,10 @@ router.post("/uploads", requirePagePermission("fiber-reports", "edit"), (req, re
       res.status(201).json({
         message: "Fiber file uploaded successfully.",
         upload: latestUpload,
+        totalRows,
+        insertedRows,
+        skippedCircleCmp,
+        circleCmpWarnings,
       });
     } catch (error) {
       console.error("Fiber upload error:", error);

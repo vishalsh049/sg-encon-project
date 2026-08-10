@@ -2,8 +2,17 @@ const util = require("util");
 const ExcelJS = require("exceljs");
 const { db } = require("../config/db");
 const { isAllCircle } = require("../middleware/circleAccess");
+const { getBaseFtkm, getCircleBaseFtkmTotal } = require("../constants/baseFtkm");
 
 const query = util.promisify(db.query).bind(db);
+
+// ─── Filters ───────────────────────────────────────────────────────────────
+// NOTE on naming: the dashboard UI calls the top-level grouping "CMP" and the
+// sub-grouping "Scope" — but those map to this table's `circle` and `cmp`
+// columns respectively (verified against real data: circle="Delhi",
+// cmp="Delhi-1 (West)", matching the reference design's "CMP: Delhi" /
+// "Scope: Delhi-1 (West)"). SQL below still filters the real `circle`/`cmp`
+// columns; only the JS response shapes relabel them for the UI.
 
 function parseFilterValue(value) {
   if (value === undefined || value === null) return [];
@@ -84,6 +93,16 @@ function buildFilterClauses(req, params, options = {}) {
     }
   }
 
+  // Week-range filter (from the dashboard's Week Range dropdown) — resolved
+  // by the caller into concrete (year, week) pairs via resolveWeekRange()
+  // below, since "between week 19 and week 22" isn't expressible as a plain
+  // column comparison once the stored `week` value is a formatted string.
+  if (options.weekPairs && options.weekPairs.length) {
+    const pairClauses = options.weekPairs.map(() => "(year = ? AND week = ?)");
+    filters.push(`(${pairClauses.join(" OR ")})`);
+    options.weekPairs.forEach((pair) => params.push(pair.year, pair.week));
+  }
+
   if (filters.length === 0) {
     return "";
   }
@@ -91,23 +110,127 @@ function buildFilterClauses(req, params, options = {}) {
   return `AND ${filters.join(" AND ")}`;
 }
 
-function formatWeekLabel(week) {
-  if (!week) return "Unknown";
-  return String(week).startsWith("WK-") ? String(week) : `WK-${week}`;
+// ─── Week parsing / sorting / formatting ──────────────────────────────────
+// Real stored `week` values look like "WK-22'26" or sometimes just "WK-52"
+// (no embedded year suffix) — already fully formatted by whatever produced
+// them, not a plain number. The previous code did CONCAT('WK-', week),
+// which double-prefixed every already-formatted value, and sorted with
+// `ORDER BY year DESC, week DESC` as a plain string comparison, which is
+// wrong once week numbers or formats vary (e.g. "WK-9" > "WK-52" as text).
+// Fix: extract just the leading digits for both sorting and display, and
+// always trust the separate `year` column (reliable) over any embedded
+// year suffix (not always present).
+
+function parseWeekNumber(week) {
+  const match = String(week || "").match(/(\d+)/);
+  return match ? Number(match[1]) : null;
+}
+
+function weekSortKey(year, week) {
+  const weekNum = parseWeekNumber(week);
+  const yearNum = Number(year) || 0;
+  return yearNum * 1000 + (weekNum === null ? 0 : weekNum);
+}
+
+function formatWeekLabel(year, week) {
+  const weekNum = parseWeekNumber(week);
+  if (weekNum === null) return String(week || "Unknown");
+  const yy = String(year || "").slice(-2);
+  return yy ? `Wk-${String(weekNum).padStart(2, "0")}'${yy}` : `Wk-${String(weekNum).padStart(2, "0")}`;
+}
+
+// Every distinct (year, week) combination matching the request's non-week
+// filters, sorted chronologically (oldest first). Feeds both the Week Range
+// dropdown's option list and resolveWeekRange()'s range-slicing below.
+async function getSortedWeeks(req) {
+  const params = [];
+  const filters = buildFilterClauses(req, params);
+  const rows = await query(
+    `SELECT DISTINCT year, week FROM nso_reports WHERE 1=1 ${filters}`,
+    params
+  );
+  return rows
+    .map((row) => ({
+      year: row.year,
+      week: row.week,
+      label: formatWeekLabel(row.year, row.week),
+      sortKey: weekSortKey(row.year, row.week),
+    }))
+    .sort((a, b) => a.sortKey - b.sortKey);
+}
+
+// Resolves the dashboard's Week Range dropdown (?weekFromYear&weekFromRaw
+// &weekToYear&weekToRaw) into the concrete list of (year, week) pairs it
+// covers. With no range params, defaults to the full available range (i.e.
+// no additional narrowing) rather than an empty/all-time-unbounded guess.
+async function resolveWeekRange(req) {
+  const { weekFromYear, weekFromRaw, weekToYear, weekToRaw } = req.query;
+  if (!weekFromRaw && !weekToRaw) return null;
+
+  const allWeeks = await getSortedWeeks(req);
+  if (!allWeeks.length) return [];
+
+  const fromKey = weekFromRaw
+    ? weekSortKey(weekFromYear, weekFromRaw)
+    : allWeeks[0].sortKey;
+  const toKey = weekToRaw
+    ? weekSortKey(weekToYear, weekToRaw)
+    : allWeeks[allWeeks.length - 1].sortKey;
+
+  const lo = Math.min(fromKey, toKey);
+  const hi = Math.max(fromKey, toKey);
+  return allWeeks.filter((w) => w.sortKey >= lo && w.sortKey <= hi);
+}
+
+async function buildScopedFilters(req) {
+  const weekPairs = await resolveWeekRange(req);
+  const params = [];
+  const filters = buildFilterClauses(req, params, { weekPairs: weekPairs || undefined });
+  return { params, filters, weekPairs };
 }
 
 function safeNumber(value) {
   return Number(value || 0);
 }
 
+function round2(value) {
+  return Number(Number(value || 0).toFixed(2));
+}
+
 function formatChange(current, previous) {
   if (previous === 0) {
     return current === 0 ? 0 : 100;
   }
-  return Number((((current - previous) / previous) * 100).toFixed(2));
+  return round2(((current - previous) / previous) * 100);
 }
 
+// FTKM = ((Cuts / 7) * 31) / BaseFTKM * 1000 — verified against the user's
+// real spreadsheet formula and 3 real (CMP, Scope, Week) data points. This
+// is the ONLY place this formula is implemented; every KPI/chart/table/
+// export below calls this, so they can never disagree. Returns null (not 0)
+// when no Base FTKM is registered for that circle+cmp, so callers can render
+// an honest "N/A" instead of a fabricated number — never silently invent data.
+function computeFtkm(cuts, baseFtkmKm) {
+  if (!baseFtkmKm) return null;
+  return (((safeNumber(cuts) / 7) * 31) / baseFtkmKm) * 1000;
+}
+
+// ─── Schema bootstrap — run once per process, not once per request ───────
+// ensureNsoReportsSchema() previously re-ran its full ALTER TABLE / ADD INDEX
+// loop on every single dashboard request. Same "run once, cache the promise"
+// fix already applied to nsoRoutes.js's ensureNsoTable().
+let ensureNsoReportsSchemaPromise = null;
 async function ensureNsoReportsSchema() {
+  if (!ensureNsoReportsSchemaPromise) {
+    ensureNsoReportsSchemaPromise = ensureNsoReportsSchemaOnce().catch((error) => {
+      ensureNsoReportsSchemaPromise = null;
+      throw error;
+    });
+  }
+  return ensureNsoReportsSchemaPromise;
+}
+
+async function ensureNsoReportsSchemaOnce() {
   await query(`
     CREATE TABLE IF NOT EXISTS nso_reports (
       id INT AUTO_INCREMENT PRIMARY KEY,
@@ -119,8 +242,6 @@ async function ensureNsoReportsSchema() {
       month VARCHAR(50) NULL,
       ticket_no VARCHAR(255) NULL,
       mttr DECIMAL(10,2) NULL,
-      ftkm DECIMAL(10,2) NULL,
-      scope VARCHAR(255) NULL,
       report_date DATE NULL,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
@@ -134,8 +255,6 @@ async function ensureNsoReportsSchema() {
     ["month", "VARCHAR(50) NULL"],
     ["ticket_no", "VARCHAR(255) NULL"],
     ["mttr", "DECIMAL(10,2) NULL"],
-    ["ftkm", "DECIMAL(10,2) NULL"],
-    ["scope", "VARCHAR(255) NULL"],
     ["report_date", "DATE NULL"],
     ["created_at", "TIMESTAMP DEFAULT CURRENT_TIMESTAMP"],
   ];
@@ -157,11 +276,14 @@ async function ensureNsoReportsSchema() {
     ["idx_nso_month", "month"],
     ["idx_nso_week", "week"],
     ["idx_nso_report_date", "report_date"],
+    // Composite index for the dominant GROUP BY pattern used throughout this
+    // file (circle+cmp+year+week) — only single-column indexes existed before.
+    ["idx_nso_circle_cmp_year_week", "circle, cmp, year, week"],
   ];
 
-  for (const [indexName, column] of indexes) {
+  for (const [indexName, columnExpr] of indexes) {
     try {
-      await query(`ALTER TABLE nso_reports ADD INDEX ${indexName} (${column})`);
+      await query(`ALTER TABLE nso_reports ADD INDEX ${indexName} (${columnExpr})`);
     } catch (error) {
       if (error?.code !== "ER_DUP_KEYNAME") {
         throw error;
@@ -170,96 +292,208 @@ async function ensureNsoReportsSchema() {
   }
 }
 
-async function getLatestWeeks(req, maxCount = 2) {
-  const params = [];
-  const filters = buildFilterClauses(req, params);
-  const rows = await query(
-    `SELECT DISTINCT year, week
-     FROM nso_reports
-     WHERE 1=1 ${filters}
-     ORDER BY year DESC, week DESC
-     LIMIT ${maxCount}`,
-    params
-  );
-  return rows;
-}
+// ─── KPI summary ───────────────────────────────────────────────────────────
 
 async function getSummary(req) {
-  const params = [];
-  const filters = buildFilterClauses(req, params);
+  const { params, filters } = await buildScopedFilters(req);
 
-  const [{ totalCuts = 0, totalFTKM = 0, avgMTTR = 0, activeCMP = 0 }] =
+  const [{ totalCuts = 0, avgMTTR = 0, activeCircles = 0, totalScopes = 0 }] =
     await query(
       `SELECT
          COUNT(*) AS totalCuts,
-         ROUND(SUM(ftkm),2) AS totalFTKM,
          ROUND(AVG(mttr),2) AS avgMTTR,
-         COUNT(DISTINCT cmp) AS activeCMP
+         COUNT(DISTINCT circle) AS activeCircles,
+         COUNT(DISTINCT cmp) AS totalScopes
        FROM nso_reports
        WHERE 1=1 ${filters}`,
       params
     );
 
-  const latestWeeks = await getLatestWeeks(req, 2);
-  const latest = latestWeeks[0] || null;
-  const previous = latestWeeks[1] || null;
-
-  const currentStats = latest
-    ? await query(
-        `SELECT
-           COUNT(*) AS cuts,
-           ROUND(SUM(ftkm),2) AS ftkm,
-           ROUND(AVG(mttr),2) AS mttr
-         FROM nso_reports
-         WHERE 1=1 ${filters}
-           AND year = ?
-           AND week = ?`,
-        [...params, latest.year, latest.week]
-      )
-    : [{ cuts: 0, ftkm: 0, mttr: 0 }];
-
-  const previousStats = previous
-    ? await query(
-        `SELECT
-           COUNT(*) AS cuts,
-           ROUND(SUM(ftkm),2) AS ftkm,
-           ROUND(AVG(mttr),2) AS mttr
-         FROM nso_reports
-         WHERE 1=1 ${filters}
-           AND year = ?
-           AND week = ?`,
-        [...params, previous.year, previous.week]
-      )
-    : [{ cuts: 0, ftkm: 0, mttr: 0 }];
-
-  const current = currentStats[0] || { cuts: 0, ftkm: 0, mttr: 0 };
-  const previousRow = previousStats[0] || { cuts: 0, ftkm: 0, mttr: 0 };
+  // Total FTKM = sum of each circle's own correctly-computed FTKM (each
+  // circle's total cuts over its own Base FTKM total) — never a sum of
+  // per-scope FTKM rates, which would double-normalize and be wrong (see
+  // computeFtkm's doc comment).
+  const circleCuts = await query(
+    `SELECT circle, COUNT(*) AS cuts
+     FROM nso_reports
+     WHERE 1=1 ${filters}
+     GROUP BY circle`,
+    params
+  );
+  let totalFTKM = 0;
+  let anyFtkmKnown = false;
+  circleCuts.forEach((row) => {
+    const baseTotal = getCircleBaseFtkmTotal(row.circle);
+    const ftkm = computeFtkm(row.cuts, baseTotal);
+    if (ftkm !== null) {
+      anyFtkmKnown = true;
+      totalFTKM += ftkm;
+    }
+  });
 
   return {
     totalCuts: safeNumber(totalCuts),
-    totalFTKM: safeNumber(totalFTKM),
-    avgMTTR: Number(Number(avgMTTR || 0).toFixed(2)),
-    activeCMP: safeNumber(activeCMP),
-    currentWeek: latest ? formatWeekLabel(latest.week) : null,
-    previousWeek: previous ? formatWeekLabel(previous.week) : null,
-    previousCuts: safeNumber(previousRow.cuts),
-    previousFTKM: safeNumber(previousRow.ftkm),
-    previousMTTR: Number(Number(previousRow.mttr || 0).toFixed(2)),
-    cutsChangePct: formatChange(safeNumber(current.cuts), safeNumber(previousRow.cuts)),
-    ftkmChangePct: formatChange(safeNumber(current.ftkm), safeNumber(previousRow.ftkm)),
-    mttrChangePct: formatChange(Number(current.mttr || 0), Number(previousRow.mttr || 0)),
+    totalFTKM: anyFtkmKnown ? round2(totalFTKM) : null,
+    avgMTTR: round2(avgMTTR),
+    activeCircles: safeNumber(activeCircles),
+    totalScopes: safeNumber(totalScopes),
   };
 }
 
-async function getCircleRanking(req) {
-  const params = [];
-  const filters = buildFilterClauses(req, params);
+// ─── Trend charts (Cuts / FTKM / MTTR, weekly) ────────────────────────────
 
+async function getCutsTrend(req) {
+  const { params, filters, weekPairs } = await buildScopedFilters(req);
+  const rows = await query(
+    `SELECT year, week, COUNT(*) AS cuts
+     FROM nso_reports
+     WHERE 1=1 ${filters}
+     GROUP BY year, week`,
+    params
+  );
+  return sortByWeek(rows, weekPairs).map((row) => ({
+    week: formatWeekLabel(row.year, row.week),
+    cuts: safeNumber(row.cuts),
+  }));
+}
+
+async function getMttrTrend(req) {
+  const { params, filters, weekPairs } = await buildScopedFilters(req);
+  const rows = await query(
+    `SELECT year, week, ROUND(AVG(mttr),2) AS mttr
+     FROM nso_reports
+     WHERE 1=1 ${filters}
+     GROUP BY year, week`,
+    params
+  );
+  return sortByWeek(rows, weekPairs).map((row) => ({
+    week: formatWeekLabel(row.year, row.week),
+    mttr: round2(row.mttr),
+  }));
+}
+
+async function getFtkmTrend(req) {
+  const { params, filters, weekPairs } = await buildScopedFilters(req);
+  // FTKM has no per-row column — need cuts broken down by circle *and* week
+  // so each circle's own Base FTKM total can be applied before summing.
+  const rows = await query(
+    `SELECT year, week, circle, COUNT(*) AS cuts
+     FROM nso_reports
+     WHERE 1=1 ${filters}
+     GROUP BY year, week, circle`,
+    params
+  );
+
+  const byWeek = new Map();
+  rows.forEach((row) => {
+    const key = `${row.year}::${row.week}`;
+    if (!byWeek.has(key)) byWeek.set(key, { year: row.year, week: row.week, ftkm: 0, anyKnown: false });
+    const bucket = byWeek.get(key);
+    const baseTotal = getCircleBaseFtkmTotal(row.circle);
+    const ftkm = computeFtkm(row.cuts, baseTotal);
+    if (ftkm !== null) {
+      bucket.ftkm += ftkm;
+      bucket.anyKnown = true;
+    }
+  });
+
+  const merged = Array.from(byWeek.values());
+  return sortByWeek(merged, weekPairs).map((row) => ({
+    week: formatWeekLabel(row.year, row.week),
+    ftkm: row.anyKnown ? round2(row.ftkm) : null,
+  }));
+}
+
+// Sorts rows chronologically by (year, week). If a week-range was requested,
+// restricts to exactly that range and order (so charts show only — and
+// exactly — the selected weeks); otherwise shows every week present, oldest
+// to newest, matching the previous behavior of a bounded trailing window
+// without hardcoding a week count.
+function sortByWeek(rows, weekPairs) {
+  const withKeys = rows.map((row) => ({
+    ...row,
+    sortKey: weekSortKey(row.year, row.week),
+  }));
+  if (weekPairs && weekPairs.length) {
+    const allowed = new Set(weekPairs.map((w) => w.sortKey));
+    return withKeys
+      .filter((row) => allowed.has(row.sortKey))
+      .sort((a, b) => a.sortKey - b.sortKey);
+  }
+  return withKeys.sort((a, b) => a.sortKey - b.sortKey);
+}
+
+// ─── Circle-wise donuts (Cuts / FTKM distribution) + Top 5 MTTR ──────────
+
+async function getCutsByCircle(req) {
+  const { params, filters } = await buildScopedFilters(req);
+  const rows = await query(
+    `SELECT COALESCE(NULLIF(TRIM(circle), ''), 'Unknown') AS circle, COUNT(*) AS cuts
+     FROM nso_reports
+     WHERE 1=1 ${filters}
+     GROUP BY circle
+     ORDER BY cuts DESC`,
+    params
+  );
+  const total = rows.reduce((sum, row) => sum + safeNumber(row.cuts), 0);
+  return rows.map((row) => ({
+    circle: row.circle,
+    cuts: safeNumber(row.cuts),
+    percentage: total ? round2((safeNumber(row.cuts) / total) * 100) : 0,
+  }));
+}
+
+async function getFtkmByCircle(req) {
+  const { params, filters } = await buildScopedFilters(req);
+  const rows = await query(
+    `SELECT COALESCE(NULLIF(TRIM(circle), ''), 'Unknown') AS circle, COUNT(*) AS cuts
+     FROM nso_reports
+     WHERE 1=1 ${filters}
+     GROUP BY circle
+     ORDER BY cuts DESC`,
+    params
+  );
+  const withFtkm = rows.map((row) => ({
+    circle: row.circle,
+    ftkm: computeFtkm(row.cuts, getCircleBaseFtkmTotal(row.circle)),
+  }));
+  const total = withFtkm.reduce((sum, row) => sum + (row.ftkm || 0), 0);
+  return withFtkm
+    .filter((row) => row.ftkm !== null)
+    .sort((a, b) => b.ftkm - a.ftkm)
+    .map((row) => ({
+      circle: row.circle,
+      ftkm: round2(row.ftkm),
+      percentage: total ? round2((row.ftkm / total) * 100) : 0,
+    }));
+}
+
+async function getTopMttrByCircle(req, limit = 5) {
+  const { params, filters } = await buildScopedFilters(req);
+  const rows = await query(
+    `SELECT COALESCE(NULLIF(TRIM(circle), ''), 'Unknown') AS circle, ROUND(AVG(mttr),2) AS mttr
+     FROM nso_reports
+     WHERE 1=1 ${filters}
+     GROUP BY circle
+     ORDER BY mttr DESC
+     LIMIT ${Number(limit) || 5}`,
+    params
+  );
+  return rows.map((row) => ({
+    circle: row.circle,
+    mttr: round2(row.mttr),
+  }));
+}
+
+// Kept for the export workbook's "Circle Ranking" sheet (pre-existing
+// feature) — not surfaced as its own section in the redesigned UI, which
+// uses the donuts + Top-5-MTTR bar for this same circle-level view instead.
+async function getCircleRanking(req) {
+  const { params, filters } = await buildScopedFilters(req);
   const rows = await query(
     `SELECT
        COALESCE(NULLIF(TRIM(circle), ''), 'Unknown') AS circle,
        COUNT(*) AS cuts,
-       ROUND(SUM(ftkm),2) AS ftkm,
        ROUND(AVG(mttr),2) AS mttr
      FROM nso_reports
      WHERE 1=1 ${filters}
@@ -268,294 +502,223 @@ async function getCircleRanking(req) {
     params
   );
 
-  return rows.map((row) => ({
-    circle: row.circle,
-    cuts: safeNumber(row.cuts),
-    ftkm: safeNumber(row.ftkm),
-    mttr: Number(Number(row.mttr || 0).toFixed(2)),
-    status:
-      row.mttr < 3 ? "Good" : row.mttr <= 5 ? "Warning" : "Critical",
-  }));
-}
-
-async function getCutsTrend(req) {
-  const params = [];
-  const filters = buildFilterClauses(req, params);
-  const rows = await query(
-    `SELECT
-       CONCAT('WK-', week) AS week,
-       COUNT(*) AS cuts
-     FROM nso_reports
-     WHERE 1=1 ${filters}
-     GROUP BY year, week
-     ORDER BY year DESC, week DESC
-     LIMIT 4`,
-    params
-  );
-  return rows
-    .map((row) => ({
-      week: row.week,
+  return rows.map((row) => {
+    const ftkm = computeFtkm(row.cuts, getCircleBaseFtkmTotal(row.circle));
+    return {
+      circle: row.circle,
       cuts: safeNumber(row.cuts),
-    }))
-    .reverse();
+      ftkm: ftkm === null ? null : round2(ftkm),
+      mttr: round2(row.mttr),
+      status: row.mttr < 3 ? "Good" : row.mttr <= 5 ? "Warning" : "Critical",
+    };
+  });
 }
 
-async function getMttrTrend(req) {
-  const params = [];
-  const filters = buildFilterClauses(req, params);
+// ─── Fiber Performance Details by CMP & Scope (the main detail table) ────
+// One row per (circle="CMP", cmp="Scope"), with a nested per-week
+// {cuts, ftkm, mttr} breakdown, a circle-level TOTAL row, and a grand total.
+// MTTR at every rollup level is AVG(mttr) computed directly from the
+// underlying ticket rows for that level — never an average of sub-row
+// averages. FTKM at every rollup level is computeFtkm(that level's own total
+// cuts, that level's own Base FTKM total) — never a sum of sub-row FTKM
+// rates (verified: Delhi's Wk-19 "DL TOTAL" FTKM of 18.85 in the reference
+// image comes from ((56/7)*31)/13153.05*1000, not from summing the 4
+// individual scopes' FTKM values, which would give a different number).
+
+async function getCmpScopeDetails(req) {
+  const { params, filters, weekPairs } = await buildScopedFilters(req);
+
+  const weeks = weekPairs && weekPairs.length
+    ? weekPairs
+    : await getSortedWeeks(req);
+  const weekLabels = weeks.map((w) => formatWeekLabel(w.year, w.week));
+
+  // Per (circle, cmp, year, week): cuts + mttr, computed directly off rows.
+  // `filters` (from buildScopedFilters) already restricts to the selected
+  // week range via its own bound params — every query below reuses the same
+  // `filters`/`params` pair for that reason, with no extra JS-side
+  // week-filtering needed on top.
   const rows = await query(
     `SELECT
-       CONCAT('WK-', week) AS week,
+       COALESCE(NULLIF(TRIM(circle), ''), 'Unknown') AS circle,
+       COALESCE(NULLIF(TRIM(cmp), ''), 'Unknown') AS cmp,
+       year, week,
+       COUNT(*) AS cuts,
        ROUND(AVG(mttr),2) AS mttr
      FROM nso_reports
      WHERE 1=1 ${filters}
-     GROUP BY year, week
-     ORDER BY year DESC, week DESC
-     LIMIT 4`,
+     GROUP BY circle, cmp, year, week`,
     params
   );
-  return rows
-    .map((row) => ({
-      week: row.week,
-      mttr: Number(Number(row.mttr || 0).toFixed(2)),
-    }))
-    .reverse();
-}
 
-async function getCmpSummary(req) {
-  const latestWeeks = await getLatestWeeks(req, 2);
-  const latest = latestWeeks[0] || null;
-  const previous = latestWeeks[1] || null;
+  // circle -> cmp -> week label -> { cuts, mttr }
+  const byCircleScope = new Map();
+  rows.forEach((row) => {
+    if (!byCircleScope.has(row.circle)) byCircleScope.set(row.circle, new Map());
+    const scopeMap = byCircleScope.get(row.circle);
+    if (!scopeMap.has(row.cmp)) scopeMap.set(row.cmp, new Map());
+    scopeMap.get(row.cmp).set(formatWeekLabel(row.year, row.week), {
+      cuts: safeNumber(row.cuts),
+      mttr: round2(row.mttr),
+    });
+  });
 
-  const params = [];
-  const filters = buildFilterClauses(req, params);
-
-  const rows = await query(
+  // Circle+scope level MTTR "total" column also needs to be computed
+  // directly from underlying rows across the selected weeks (not averaged
+  // from the per-week averages) — fetch separately, grouped without `week`.
+  const scopeTotals = await query(
     `SELECT
-       COALESCE(TRIM(cmp), 'Unknown') AS cmp,
-       ANY_VALUE(scope) AS scope,
-       SUM(CASE WHEN year = ? AND week = ? THEN 1 ELSE 0 END) AS currentCuts,
-       ROUND(SUM(CASE WHEN year = ? AND week = ? THEN ftkm ELSE 0 END),2) AS currentFTKM,
-       ROUND(AVG(CASE WHEN year = ? AND week = ? THEN mttr END),2) AS currentMTTR,
-       SUM(CASE WHEN year = ? AND week = ? THEN 1 ELSE 0 END) AS previousCuts,
-       ROUND(SUM(CASE WHEN year = ? AND week = ? THEN ftkm ELSE 0 END),2) AS previousFTKM,
-       ROUND(AVG(CASE WHEN year = ? AND week = ? THEN mttr END),2) AS previousMTTR
+       COALESCE(NULLIF(TRIM(circle), ''), 'Unknown') AS circle,
+       COALESCE(NULLIF(TRIM(cmp), ''), 'Unknown') AS cmp,
+       COUNT(*) AS cuts,
+       ROUND(AVG(mttr),2) AS mttr
      FROM nso_reports
      WHERE 1=1 ${filters}
-     GROUP BY cmp
-     ORDER BY currentCuts DESC, cmp ASC`,
-    [
-      latest?.year || "",
-      latest?.week || "",
-      latest?.year || "",
-      latest?.week || "",
-      latest?.year || "",
-      latest?.week || "",
-      previous?.year || "",
-      previous?.week || "",
-      previous?.year || "",
-      previous?.week || "",
-      previous?.year || "",
-      previous?.week || "",
-      ...params,
-    ]
+     GROUP BY circle, cmp`,
+    params
+  );
+  const scopeTotalMap = new Map(
+    scopeTotals.map((row) => [`${row.circle}::${row.cmp}`, row])
   );
 
-  return rows.map((row) => {
-    const currentCuts = safeNumber(row.currentCuts);
-    const previousCuts = safeNumber(row.previousCuts);
-    const currentFTKM = safeNumber(row.currentFTKM);
-    const previousFTKM = safeNumber(row.previousFTKM);
-    const currentMTTR = Number(Number(row.currentMTTR || 0).toFixed(2));
-    const previousMTTR = Number(Number(row.previousMTTR || 0).toFixed(2));
+  const circleTotals = await query(
+    `SELECT
+       COALESCE(NULLIF(TRIM(circle), ''), 'Unknown') AS circle,
+       COUNT(*) AS cuts,
+       ROUND(AVG(mttr),2) AS mttr
+     FROM nso_reports
+     WHERE 1=1 ${filters}
+     GROUP BY circle`,
+    params
+  );
+  const circleTotalMap = new Map(circleTotals.map((row) => [row.circle, row]));
+
+  const circles = Array.from(byCircleScope.entries()).map(([circle, scopeMap]) => {
+    const scopes = Array.from(scopeMap.entries()).map(([cmp, weekMap]) => {
+      const baseFtkm = getBaseFtkm(circle, cmp);
+      const weeklyValues = weekLabels.map((label) => {
+        const cell = weekMap.get(label) || { cuts: 0, mttr: 0 };
+        const ftkm = computeFtkm(cell.cuts, baseFtkm);
+        return { week: label, cuts: cell.cuts, ftkm: ftkm === null ? null : round2(ftkm), mttr: cell.mttr };
+      });
+      const totalRow = scopeTotalMap.get(`${circle}::${cmp}`) || { cuts: 0, mttr: 0 };
+      const totalFtkm = computeFtkm(totalRow.cuts, baseFtkm);
+      return {
+        scope: cmp,
+        baseFtkm,
+        weeks: weeklyValues,
+        totalCuts: safeNumber(totalRow.cuts),
+        avgMttr: round2(totalRow.mttr),
+        totalFtkm: totalFtkm === null ? null : round2(totalFtkm),
+      };
+    });
+
+    const circleBaseFtkm = getCircleBaseFtkmTotal(circle);
+    const totalRow = circleTotalMap.get(circle) || { cuts: 0, mttr: 0 };
+    const totalFtkm = computeFtkm(totalRow.cuts, circleBaseFtkm);
+
+    // Circle-level per-week totals, same "recompute the rate, don't sum
+    // sub-rates" rule as the grand total.
+    const weeklyCircleCuts = new Map();
+    rows
+      .filter((row) => row.circle === circle)
+      .forEach((row) => {
+        const label = formatWeekLabel(row.year, row.week);
+        weeklyCircleCuts.set(label, (weeklyCircleCuts.get(label) || 0) + safeNumber(row.cuts));
+      });
+    const weeklyTotals = weekLabels.map((label) => {
+      const cuts = weeklyCircleCuts.get(label) || 0;
+      const ftkm = computeFtkm(cuts, circleBaseFtkm);
+      return { week: label, cuts, ftkm: ftkm === null ? null : round2(ftkm) };
+    });
 
     return {
-      cmp: row.cmp,
-      scope: row.scope || "-",
-      currentCuts,
-      currentFTKM,
-      currentMTTR,
-      previousCuts,
-      previousFTKM,
-      previousMTTR,
-      cutsChangePct: formatChange(currentCuts, previousCuts),
-      ftkmChangePct: formatChange(currentFTKM, previousFTKM),
-      mttrChangePct: formatChange(currentMTTR, previousMTTR),
-      trend:
-        currentCuts > previousCuts
-          ? "up"
-          : currentCuts < previousCuts
-          ? "down"
-          : "flat",
-      status:
-        currentMTTR < 3
-          ? "Good"
-          : currentMTTR <= 5
-          ? "Warning"
-          : "Critical",
-    };
-  });
-}
-
-async function getHeatmap(req) {
-  const latestWeeks = await getLatestWeeks(req, 4);
-  const weekLabels = latestWeeks
-    .map((row) => formatWeekLabel(row.week))
-    .reverse();
-
-  const params = [];
-  const filters = buildFilterClauses(req, params);
-  const rows = await query(
-    `SELECT
-       COALESCE(TRIM(cmp), 'Unknown') AS cmp,
-       CONCAT('WK-', week) AS week,
-       COUNT(*) AS cuts
-     FROM nso_reports
-     WHERE 1=1 ${filters}
-     GROUP BY cmp, year, week
-     ORDER BY cmp ASC, year DESC, week DESC`,
-    params
-  );
-
-  const byCmp = {};
-
-  rows.forEach((row) => {
-    byCmp[row.cmp] = byCmp[row.cmp] || { cmp: row.cmp, values: {} };
-    byCmp[row.cmp].values[row.week] = safeNumber(row.cuts);
-  });
-
-  const data = Object.values(byCmp).map((item) => {
-    const values = {};
-    weekLabels.forEach((week) => {
-      values[week] = item.values[week] || 0;
-    });
-    return { cmp: item.cmp, values };
-  });
-
-  return {
-    weeks: weekLabels,
-    rows: data,
-  };
-}
-
-async function getCmpWeekly(req) {
-  const latestWeeks = await getLatestWeeks(req, 4);
-  const weekLabels = latestWeeks
-    .map((row) => formatWeekLabel(row.week))
-    .reverse();
-
-  const params = [];
-  const filters = buildFilterClauses(req, params);
-  const rows = await query(
-    `SELECT
-       COALESCE(TRIM(cmp), 'Unknown') AS cmp,
-       CONCAT('WK-', week) AS week,
-       COUNT(*) AS cuts,
-       ROUND(SUM(ftkm),2) AS ftkm,
-       ROUND(AVG(mttr),2) AS mttr
-     FROM nso_reports
-     WHERE 1=1 ${filters}
-     GROUP BY cmp, year, week
-     ORDER BY cmp ASC, year DESC, week DESC`,
-    params
-  );
-
-  const byCmp = {};
-  rows.forEach((row) => {
-    byCmp[row.cmp] = byCmp[row.cmp] || { cmp: row.cmp, details: {} };
-    byCmp[row.cmp].details[row.week] = {
-      cuts: safeNumber(row.cuts),
-      ftkm: safeNumber(row.ftkm),
-      mttr: Number(Number(row.mttr || 0).toFixed(2)),
+      circle,
+      baseFtkm: circleBaseFtkm,
+      scopes: scopes.sort((a, b) => a.scope.localeCompare(b.scope)),
+      weeklyTotals,
+      totalCuts: safeNumber(totalRow.cuts),
+      avgMttr: round2(totalRow.mttr),
+      totalFtkm: totalFtkm === null ? null : round2(totalFtkm),
     };
   });
 
-  const data = Object.values(byCmp).map((item) => ({
-    cmp: item.cmp,
-    details: weekLabels.map((week) => ({
-      week,
-      ...item.details[week],
-      cuts: item.details[week]?.cuts || 0,
-      ftkm: item.details[week]?.ftkm || 0,
-      mttr: item.details[week]?.mttr || 0,
-    })),
-  }));
+  const grand = await query(
+    `SELECT COUNT(*) AS cuts, ROUND(AVG(mttr),2) AS mttr FROM nso_reports WHERE 1=1 ${filters}`,
+    params
+  );
+  const grandRow = grand[0] || { cuts: 0, mttr: 0 };
+  const grandBaseFtkm = circles.reduce((sum, c) => sum + (c.baseFtkm || 0), 0) || null;
+  const grandFtkm = computeFtkm(grandRow.cuts, grandBaseFtkm);
 
   return {
     weeks: weekLabels,
-    rows: data,
+    circles: circles.sort((a, b) => a.circle.localeCompare(b.circle)),
+    grandTotalCuts: safeNumber(grandRow.cuts),
+    grandAvgMttr: round2(grandRow.mttr),
+    grandTotalFtkm: grandFtkm === null ? null : round2(grandFtkm),
   };
 }
+
+// ─── Filter option lists ──────────────────────────────────────────────────
 
 async function getFilters(req) {
   const params = [];
   const filters = buildFilterClauses(req, params);
 
-  const [circleRows] = await query(
+  const circleRows = await query(
     `SELECT DISTINCT TRIM(circle) AS value
      FROM nso_reports
-     WHERE circle IS NOT NULL
-       AND TRIM(circle) <> ''
-       ${filters}
+     WHERE circle IS NOT NULL AND TRIM(circle) <> '' ${filters}
      ORDER BY value ASC`,
     params
   );
 
-  const [cmpRows] = await query(
+  const cmpRows = await query(
     `SELECT DISTINCT TRIM(cmp) AS value
      FROM nso_reports
-     WHERE cmp IS NOT NULL
-       AND TRIM(cmp) <> ''
-       ${filters}
+     WHERE cmp IS NOT NULL AND TRIM(cmp) <> '' ${filters}
      ORDER BY value ASC`,
     params
   );
 
-  const [yearRows] = await query(
+  const yearRows = await query(
     `SELECT DISTINCT TRIM(year) AS value
      FROM nso_reports
-     WHERE year IS NOT NULL
-       AND TRIM(year) <> ''
-       ${filters}
+     WHERE year IS NOT NULL AND TRIM(year) <> '' ${filters}
      ORDER BY value DESC`,
     params
   );
 
-  const [monthRows] = await query(
+  const monthRows = await query(
     `SELECT DISTINCT TRIM(month) AS value
      FROM nso_reports
-     WHERE month IS NOT NULL
-       AND TRIM(month) <> ''
-       ${filters}
+     WHERE month IS NOT NULL AND TRIM(month) <> '' ${filters}
      ORDER BY value ASC`,
     params
   );
 
-  const [weekRows] = await query(
-    `SELECT DISTINCT TRIM(week) AS value
-     FROM nso_reports
-     WHERE week IS NOT NULL
-       AND TRIM(week) <> ''
-       ${filters}
-     ORDER BY value ASC`,
-    params
-  );
+  const weeks = await getSortedWeeks(req);
 
   return {
     circles: circleRows.map((row) => row.value),
     cmps: cmpRows.map((row) => row.value),
     years: yearRows.map((row) => row.value),
     months: monthRows.map((row) => row.value),
-    weeks: weekRows.map((row) => formatWeekLabel(row.value)),
+    // Full chronologically-sorted week list, each carrying its raw
+    // (year, week) so the frontend's Week Range dropdown can send them back
+    // unambiguously via resolveWeekRange() rather than re-parsing a label.
+    weeks: weeks.map((w) => ({ year: w.year, week: w.week, label: w.label })),
   };
 }
 
+// ─── Export workbook ───────────────────────────────────────────────────────
+
 async function buildExportWorkbook(req) {
-  const [summary, ranking, cmpSummary, weeklyDetails] = await Promise.all([
+  const [summary, ranking, details] = await Promise.all([
     getSummary(req),
     getCircleRanking(req),
-    getCmpSummary(req),
-    getCmpWeekly(req),
+    getCmpScopeDetails(req),
   ]);
 
   const workbook = new ExcelJS.Workbook();
@@ -566,66 +729,68 @@ async function buildExportWorkbook(req) {
   ];
   summarySheet.addRows([
     { metric: "Total Cuts", value: summary.totalCuts },
-    { metric: "Total FTKM", value: summary.totalFTKM },
+    { metric: "Total FTKM", value: summary.totalFTKM ?? "N/A" },
     { metric: "Average MTTR", value: summary.avgMTTR },
-    { metric: "Active CMP", value: summary.activeCMP },
-    { metric: "Current Week", value: summary.currentWeek || "-" },
-    { metric: "Previous Week", value: summary.previousWeek || "-" },
-    { metric: "Cuts % Change", value: `${summary.cutsChangePct}%` },
-    { metric: "FTKM % Change", value: `${summary.ftkmChangePct}%` },
-    { metric: "MTTR % Change", value: `${summary.mttrChangePct}%` },
+    { metric: "Active CMPs", value: summary.activeCircles },
+    { metric: "Total Scopes", value: summary.totalScopes },
   ]);
 
   const rankingSheet = workbook.addWorksheet("Circle Ranking");
   rankingSheet.columns = [
-    { header: "Circle", key: "circle", width: 24 },
+    { header: "CMP (Circle)", key: "circle", width: 24 },
     { header: "Cuts", key: "cuts", width: 12 },
     { header: "FTKM", key: "ftkm", width: 14 },
     { header: "MTTR", key: "mttr", width: 14 },
     { header: "Status", key: "status", width: 14 },
   ];
-  rankingSheet.addRows(ranking);
+  rankingSheet.addRows(ranking.map((row) => ({ ...row, ftkm: row.ftkm ?? "N/A" })));
 
-  const cmpSheet = workbook.addWorksheet("CMP Summary");
-  cmpSheet.columns = [
-    { header: "CMP", key: "cmp", width: 20 },
-    { header: "Scope (KM)", key: "scope", width: 14 },
-    { header: "Cuts (This Week)", key: "currentCuts", width: 18 },
-    { header: "FTKM (This Week)", key: "currentFTKM", width: 18 },
-    { header: "MTTR (This Week)", key: "currentMTTR", width: 16 },
-    { header: "Cuts (Last Week)", key: "previousCuts", width: 18 },
-    { header: "FTKM (Last Week)", key: "previousFTKM", width: 18 },
-    { header: "MTTR (Last Week)", key: "previousMTTR", width: 16 },
-    { header: "Change %", key: "cutsChangePct", width: 14 },
-    { header: "Status", key: "status", width: 14 },
-  ];
-  cmpSheet.addRows(
-    cmpSummary.map((item) => ({
-      ...item,
-      cutsChangePct: `${item.cutsChangePct}%`,
-    }))
-  );
-
-  const detailsSheet = workbook.addWorksheet("CMP Weekly Details");
+  const detailsSheet = workbook.addWorksheet("CMP & Scope Weekly Details");
   const columns = [
-    { header: "CMP", key: "cmp", width: 24 },
+    { header: "CMP", key: "cmp", width: 20 },
+    { header: "Scope", key: "scope", width: 26 },
+    { header: "Base FTKM", key: "baseFtkm", width: 14 },
   ];
-  const weeks = weeklyDetails.weeks || [];
-  weeks.forEach((week) => {
+  details.weeks.forEach((week) => {
     columns.push({ header: `${week} Cuts`, key: `${week}_cuts`, width: 12 });
     columns.push({ header: `${week} FTKM`, key: `${week}_ftkm`, width: 14 });
     columns.push({ header: `${week} MTTR`, key: `${week}_mttr`, width: 14 });
   });
+  columns.push({ header: "Total Cuts", key: "totalCuts", width: 14 });
+  columns.push({ header: "Avg MTTR", key: "avgMttr", width: 14 });
   detailsSheet.columns = columns;
 
-  weeklyDetails.rows.forEach((row) => {
-    const record = { cmp: row.cmp };
-    row.details.forEach((detail) => {
-      record[`${detail.week}_cuts`] = detail.cuts;
-      record[`${detail.week}_ftkm`] = detail.ftkm;
-      record[`${detail.week}_mttr`] = detail.mttr;
+  details.circles.forEach((circleRow) => {
+    circleRow.scopes.forEach((scopeRow) => {
+      const record = {
+        cmp: circleRow.circle,
+        scope: scopeRow.scope,
+        baseFtkm: scopeRow.baseFtkm ?? "N/A",
+        totalCuts: scopeRow.totalCuts,
+        avgMttr: scopeRow.avgMttr,
+      };
+      scopeRow.weeks.forEach((week) => {
+        record[`${week.week}_cuts`] = week.cuts;
+        record[`${week.week}_ftkm`] = week.ftkm ?? "N/A";
+        record[`${week.week}_mttr`] = week.mttr;
+      });
+      detailsSheet.addRow(record);
     });
-    detailsSheet.addRow(record);
+
+    const totalRecord = {
+      cmp: circleRow.circle,
+      scope: `${circleRow.circle} TOTAL`,
+      baseFtkm: circleRow.baseFtkm ?? "N/A",
+      totalCuts: circleRow.totalCuts,
+      avgMttr: circleRow.avgMttr,
+    };
+    circleRow.weeklyTotals.forEach((week) => {
+      totalRecord[`${week.week}_cuts`] = week.cuts;
+      totalRecord[`${week.week}_ftkm`] = week.ftkm ?? "N/A";
+      totalRecord[`${week.week}_mttr`] = "";
+    });
+    const totalRow = detailsSheet.addRow(totalRecord);
+    totalRow.font = { bold: true };
   });
 
   return workbook;
@@ -634,12 +799,18 @@ async function buildExportWorkbook(req) {
 module.exports = {
   ensureNsoReportsSchema,
   getSummary,
-  getCircleRanking,
   getCutsTrend,
   getMttrTrend,
-  getCmpSummary,
-  getHeatmap,
-  getCmpWeekly,
+  getFtkmTrend,
+  getCutsByCircle,
+  getFtkmByCircle,
+  getTopMttrByCircle,
+  getCircleRanking,
+  getCmpScopeDetails,
   getFilters,
   buildExportWorkbook,
+  // exported for tests / reuse
+  formatWeekLabel,
+  weekSortKey,
+  computeFtkm,
 };

@@ -230,7 +230,11 @@ function PremiumDatePicker({
                   ? { bottom: window.innerHeight - coords.top }
                   : { top: coords.top }),
               }}
-              className="app-date-popover z-[9999]"
+              // Must beat every modal that can host this picker — Fiber
+              // Inventory's upload modal sits at z-[10000], which used to
+              // paint over this popover (a fixed z-9999) and made the
+              // calendar look broken/invisible when opened from inside it.
+              className="app-date-popover z-[10050]"
             >
               <div className="app-date-header">
                 <button
