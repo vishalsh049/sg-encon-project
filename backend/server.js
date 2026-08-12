@@ -39,7 +39,7 @@ const cors = require("cors");
 const compression = require("compression");
 const { authMiddleware } = require("./middleware/circleAccess");
 
-require("./config/db");
+const { isConnected } = require("./config/db");
 
 const app = express();
 
@@ -48,6 +48,21 @@ const app = express();
 // this breaks the per-IP rate limiter below (everyone shares one bucket).
 app.set("trust proxy", 1);
 app.disable("x-powered-by");
+
+// Public status page — no auth required, so a browser hitting the bare API
+// domain (or an uptime monitor) gets a plain-English answer instead of a
+// generic 404/401.
+app.get("/", (req, res) => {
+  const dbOk = isConnected();
+  res.status(dbOk ? 200 : 503).type("html").send(`<!doctype html>
+<html>
+  <head><meta charset="utf-8"><title>SG Encon API status</title></head>
+  <body style="font-family: system-ui, sans-serif; text-align: center; padding-top: 4rem;">
+    <h1>${dbOk ? "✅ Backend is running" : "❌ Backend is not running correctly"}</h1>
+    <p>${dbOk ? "Database (MySQL) connection: Connected" : "Database (MySQL) connection: FAILED — check DB_HOST / DB_USER / DB_PASSWORD / DB_PORT"}</p>
+  </body>
+</html>`);
+});
 
 // The proxy terminates TLS and forwards plain HTTP internally, setting
 // X-Forwarded-Proto so we can still enforce HTTPS at the app level.

@@ -5,7 +5,7 @@ const isLocalhost =
 
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL ||
-  (isLocalhost ? "http://localhost:5000" : "https://teal-salamander-678573.hostingersite.com");
+  (isLocalhost ? "http://localhost:5000" : "https://api.sgencon.in");
 
 export function buildApiUrl(path) {
   const normalizedPath = path.startsWith("/") ? path : `/${path}`;

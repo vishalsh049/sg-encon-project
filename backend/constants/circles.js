@@ -3,7 +3,21 @@
 // Excel/report uploads alike. Mirrors the structure of ./designations.js so
 // both master lists stay consistent. The frontend never hardcodes these
 // lists; it fetches them from GET /api/circles (see ../routes/circlesRoutes.js).
-const CIRCLES = ["Punjab", "Haryana", "Delhi", "UP East"];
+const CIRCLES = [
+  "Punjab",
+  "Haryana",
+  "Delhi",
+  "UP East",
+  "RJIO-NHQ",
+  "TVI-HR",
+  "TVI-PO",
+  "PKL Project Team",
+  "R.S Construction-M.P",
+  "Eagle Infra India-Jodhpur",
+  "L&T- Sirohi",
+  "RJIL-Jaipur",
+  "Indus-RJ",
+];
 
 // "Mohali" is a confirmed real-world exception: 17 live Physical Manpower
 // employees are recorded under circle "UP East" with this CMP. Geographically
@@ -55,6 +69,31 @@ const CIRCLE_CMP_MAP = {
     "Varanasi",
     "Mohali",
   ],
+  "RJIO-NHQ": ["NHQ"],
+  "TVI-HR": [
+    "Haryana",
+    "Kaithal",
+    "Jhajjar",
+    "Rohtak",
+    "Rewari",
+    "Hissar",
+    "Jind",
+    "Sirsa",
+    "Fatehabad",
+    "Sonipat",
+    "Panipat",
+    "Noida",
+    "Faridabad",
+    "Palwal",
+    "Circle Office",
+  ],
+  "TVI-PO": ["Ludhiana", "Jalandhar", "Amritsar", "Mohali"],
+  "PKL Project Team": ["PKL"],
+  "R.S Construction-M.P": ["Mandleshwar (M.P)-R.S Construction"],
+  "Eagle Infra India-Jodhpur": ["Jodhpur-Eagle"],
+  "L&T- Sirohi": ["Sirohi-L&T"],
+  "RJIL-Jaipur": ["Jaipur"],
+  "Indus-RJ": ["Kota", "SHQ", "Alwar"],
 };
 
 // Case-insensitive, whitespace-collapsed comparison, same convention as

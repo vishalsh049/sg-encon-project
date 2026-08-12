@@ -3,7 +3,7 @@
 Production values for this deployment:
 
 - Form: `https://docs.google.com/forms/d/1cSNaQiIQXLHWCzkf71aLPaiwkYBsMfPWiqf9mDw4Ht4/edit`
-- `WEBHOOK_URL` = `https://teal-salamander-678573.hostingersite.com/api/training-webhook/google-form`
+- `WEBHOOK_URL` = `https://api.sgencon.in/api/training-webhook/google-form`
 - `WEBHOOK_KEY` = the `TRAINING_WEBHOOK_KEY` value in `backend/.env`
 
 End-to-end flow:
