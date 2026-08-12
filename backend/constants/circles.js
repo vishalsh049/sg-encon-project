@@ -88,7 +88,7 @@ const CIRCLE_CMP_MAP = {
     "Palwal",
     "Circle Office",
   ],
-  "TVI-PO": ["Ludhiana", "Jalandhar", "Amritsar", "Mohali"],
+  "TVI-PO": ["Ludhiana", "Jalandhar", "Amritsar", "Mohali", "Haryana"],
   "PKL Project Team": ["PKL"],
   "R.S Construction-M.P": ["Mandleshwar (M.P)-R.S Construction"],
   "Eagle Infra India-Jodhpur": ["Jodhpur-Eagle"],
