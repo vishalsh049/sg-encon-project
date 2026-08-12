@@ -17,6 +17,7 @@ const CIRCLES = [
   "L&T- Sirohi",
   "RJIL-Jaipur",
   "Indus-RJ",
+  "HMEL",
 ];
 
 // "Mohali" is a confirmed real-world exception: 17 live Physical Manpower
@@ -94,6 +95,7 @@ const CIRCLE_CMP_MAP = {
   "L&T- Sirohi": ["Sirohi-L&T"],
   "RJIL-Jaipur": ["Jaipur"],
   "Indus-RJ": ["Kota", "SHQ", "Alwar"],
+  HMEL: ["PKL"],
 };
 
 // Case-insensitive, whitespace-collapsed comparison, same convention as
