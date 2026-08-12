@@ -8,6 +8,9 @@
   Trash2,
   RotateCcw,
   Clock,
+  UserCheck,
+  UserX,
+  Globe,
   ArrowLeft,
   X,
   User,
@@ -477,6 +480,7 @@ const handleDownloadProfile = () => {
     const [jobRoleAverage, setJobRoleAverage] = useState([]);
     const [circles, setCircles] = useState([]);
     const [circleLastUpdated, setCircleLastUpdated] = useState([]);
+    const [showAllCircles, setShowAllCircles] = useState(false);
     const [employmentStatus, setEmploymentStatus] = useState([]);
     const [dashboardSummary, setDashboardSummary] = useState({
       totalEmployees: 0,
@@ -1928,6 +1932,47 @@ const endRecord =
 const activeCount = dashboardSummary.activeEmployees || 0;
 const inactiveCount = dashboardSummary.inactiveEmployees || 0;
 
+const totalCirclesCount = dashboardSummary.circleBreakdown.length;
+const activePercent =
+  dashboardSummary.totalEmployees > 0
+    ? ((activeCount / dashboardSummary.totalEmployees) * 100).toFixed(2)
+    : "0.00";
+const inactivePercent =
+  dashboardSummary.totalEmployees > 0
+    ? ((inactiveCount / dashboardSummary.totalEmployees) * 100).toFixed(2)
+    : "0.00";
+
+// Merges the two already-fetched real data sources — employee counts per
+// circle (dashboardSummary.circleBreakdown) and per-circle last-upload
+// timestamps (circleLastUpdated) — into one list for the combined overview
+// table below, keyed by circle name.
+const circleOverviewRows = dashboardSummary.circleBreakdown.map((item) => ({
+  circle: item.label,
+  employees: item.total_employees,
+  lastUpdatedAt:
+    circleLastUpdated.find((c) => c.circle === item.label)?.lastUpdatedAt || null,
+}));
+
+const visibleCircleOverviewRows = showAllCircles
+  ? circleOverviewRows
+  : circleOverviewRows.slice(0, 16);
+
+const CIRCLE_OVERVIEW_COLUMN_COUNT = 4;
+const circleOverviewRowsPerColumn = Math.max(
+  1,
+  Math.ceil(visibleCircleOverviewRows.length / CIRCLE_OVERVIEW_COLUMN_COUNT)
+);
+const circleOverviewColumns = Array.from(
+  { length: CIRCLE_OVERVIEW_COLUMN_COUNT },
+  (_, colIndex) => {
+    const start = colIndex * circleOverviewRowsPerColumn;
+    const column = visibleCircleOverviewRows.slice(start, start + circleOverviewRowsPerColumn);
+    // Pad with blank rows so every column renders the same height.
+    while (column.length < circleOverviewRowsPerColumn) column.push(null);
+    return column;
+  }
+);
+
     return (
       <div className="min-h-screen">
         <div className="relative min-h-screen overflow-hidden">
@@ -2091,105 +2136,63 @@ const inactiveCount = dashboardSummary.inactiveEmployees || 0;
 
     {/* Top KPI Row */}
 
- <div className="mx-auto mt-2 grid w-full max-w-7xl grid-cols-2 gap-2 lg:grid-cols-12">
+ <div className="mx-auto mt-2 grid w-full max-w-7xl grid-cols-2 gap-3 lg:grid-cols-4">
 
     {/* Total Employees */}
 
-  <div className="lg:col-span-2 rounded-xl border border-border-color bg-surface px-3 py-2 shadow-sm hover:shadow-lg transition-all">
-
-      <div className="text-[13px] font-semibold text-text-muted">
-        Total Employees
-      </div>
-
-      <div className="text-lg mt-1 font-semibold text-text-primary">
-        {dashboardSummary.totalEmployees}
-      </div>
-
+  <div className="rounded-2xl border border-border-color bg-surface px-4 py-3 shadow-sm hover:shadow-lg transition-all">
+    <div className="flex items-center justify-between">
+      <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-400">
+        <Users size={18} />
+      </span>
     </div>
-  
+    <div className="mt-2 text-[13px] font-medium text-text-muted">Total Employees</div>
+    <div className="text-xl font-bold text-text-primary">{dashboardSummary.totalEmployees}</div>
+    <div className="text-[12px] text-text-muted">Across {totalCirclesCount} Circles</div>
+  </div>
 
-    {/* Employment Status */}
+    {/* Active Employees */}
 
- <div className="lg:col-span-3 rounded-xl border border-border-color bg-surface px-4 py-2 shadow-sm hover:shadow-lg transition-all">
-
-    <div className="mb-1 flex items-center justify-between">
-
-      <h2 className="text-[13px] font-semibold text-text-secondary">
-        Employment Status
-      </h2>
-
+  <div className="rounded-2xl border border-border-color bg-surface px-4 py-3 shadow-sm hover:shadow-lg transition-all">
+    <div className="flex items-center justify-between">
+      <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400">
+        <UserCheck size={18} />
+      </span>
     </div>
-
-  <div className="flex flex-wrap items-center justify-between rounded-lg bg-surface-muted px-4 py-1 gap-3">
-
-  <div className="flex items-center gap-2">
-    <span className="text-sm font-medium text-text-secondary">
-      Active:
-    </span>
-
-  <span className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">
-  {activeCount}
-</span>
+    <div className="mt-2 text-[13px] font-medium text-text-muted">Active Employees</div>
+    <div className="text-xl font-bold text-text-primary">{activeCount}</div>
+    <div className="text-[12px] font-medium text-emerald-600 dark:text-emerald-400">{activePercent}% of total</div>
   </div>
 
-  <div className="h-4 w-px bg-surface-muted" />
+    {/* Inactive Employees */}
 
-  <div className="flex items-center gap-2">
-    <span className="text-sm font-medium text-text-secondary">
-      Inactive:
-    </span>
-
-  <span className="text-sm font-semibold text-red-600 dark:text-red-400">
-  {inactiveCount}
-</span>
-  </div>
-
-</div>
-
-  </div>
-
-
-    {/* Circle Wise Count */}
-
-  <div className="lg:col-span-7 rounded-xl border border-border-color bg-surface px-4 py-2 shadow-sm hover:shadow-lg transition-all">
-      <div className="mb-1 flex items-center justify-between">
-
-        <h2 className="text-[13px] font-semibold text-text-primary">
-          Circle Wise Count
-        </h2>
-
-      </div>
-
-      <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
-
-        {dashboardSummary.circleBreakdown.map((item, index) => (
-
-          <div
-            key={index}
-            className="flex items-center justify-between rounded-lg border border-border-color bg-gradient-to-r from-surface-muted to-white px-2 py-1 hover:shadow-md transition-all"
-          >
-
-            <span className="text-[13px] font-semibold text-text-secondary">
-              {item.label}
-            </span>
-
-            <span className="text-[13px] font-semibold text-emerald-600 dark:text-emerald-400">
-              {item.total_employees}
-            </span>
-
-          </div>
-
-        ))}
-
-      </div>
-
+  <div className="rounded-2xl border border-border-color bg-surface px-4 py-3 shadow-sm hover:shadow-lg transition-all">
+    <div className="flex items-center justify-between">
+      <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-rose-50 text-rose-600 dark:bg-rose-500/10 dark:text-rose-400">
+        <UserX size={18} />
+      </span>
     </div>
+    <div className="mt-2 text-[13px] font-medium text-text-muted">Inactive Employees</div>
+    <div className="text-xl font-bold text-text-primary">{inactiveCount}</div>
+    <div className="text-[12px] font-medium text-rose-600 dark:text-rose-400">{inactivePercent}% of total</div>
+  </div>
 
+    {/* Total Circles */}
 
+  <div className="rounded-2xl border border-border-color bg-surface px-4 py-3 shadow-sm hover:shadow-lg transition-all">
+    <div className="flex items-center justify-between">
+      <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400">
+        <Globe size={18} />
+      </span>
+    </div>
+    <div className="mt-2 text-[13px] font-medium text-text-muted">Total Circles</div>
+    <div className="text-xl font-bold text-text-primary">{totalCirclesCount}</div>
+    <div className="text-[12px] text-text-muted">Organizational Units</div>
+  </div>
 
   </div>
 
-  {/* Circle Wise Last Updated */}
+  {/* Circle Overview (Employee Count & Last Updated) */}
 
   <div className="mx-auto mt-2 w-full max-w-7xl">
 
@@ -2199,32 +2202,64 @@ const inactiveCount = dashboardSummary.inactiveEmployees || 0;
 
         <h2 className="flex items-center gap-2 text-[13px] font-semibold text-text-primary">
           <Clock size={15} className="text-indigo-500 dark:text-indigo-400" />
-          Circle Wise Last Updated
+          Circle Overview (Employee Count &amp; Last Updated)
         </h2>
+
+        <button
+          type="button"
+          onClick={() => setShowAllCircles((prev) => !prev)}
+          className="rounded-lg border border-border-color px-3 py-1 text-[12px] font-semibold text-indigo-600 dark:text-indigo-400 hover:bg-surface-muted transition-all"
+        >
+          {showAllCircles ? "Show Less" : "View All"}
+        </button>
 
       </div>
 
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
 
-        {circleLastUpdated.map((item, index) => (
+        {circleOverviewColumns.map((column, colIndex) => (
 
-          <div
-            key={index}
-            className="flex items-center justify-between gap-2 rounded-xl border border-border-color bg-gradient-to-r from-surface-muted to-white px-3 py-2"
-          >
-
-            <span className="text-[13px] font-semibold text-text-secondary">
-              {item.circle}
-            </span>
-
-            <span
-              className={`text-[12px] font-medium ${
-                item.lastUpdatedAt ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400"
-              }`}
-            >
-              {formatCircleTimestamp(item.lastUpdatedAt)}
-            </span>
-
+          <div key={colIndex} className="overflow-hidden rounded-lg border border-border-color">
+            <table className="w-full text-left text-[12px]">
+              <thead className="bg-surface-muted text-text-muted">
+                <tr>
+                  <th className="px-2 py-1.5 font-semibold">Circle</th>
+                  <th className="px-2 py-1.5 font-semibold">Employees</th>
+                  <th className="px-2 py-1.5 font-semibold">Last Updated</th>
+                </tr>
+              </thead>
+              <tbody>
+                {column.map((row, rowIndex) => (
+                  <tr key={rowIndex} className="border-t border-border-color/60">
+                    {row ? (
+                      <>
+                        <td className="px-2 py-1.5 font-medium text-text-secondary whitespace-nowrap">
+                          {row.circle}
+                        </td>
+                        <td className="px-2 py-1.5 font-semibold text-emerald-600 dark:text-emerald-400">
+                          {row.employees}
+                        </td>
+                        <td
+                          className={`px-2 py-1.5 whitespace-nowrap ${
+                            row.lastUpdatedAt
+                              ? "text-text-secondary"
+                              : "text-amber-600 dark:text-amber-400"
+                          }`}
+                        >
+                          {formatCircleTimestamp(row.lastUpdatedAt)}
+                        </td>
+                      </>
+                    ) : (
+                      <>
+                        <td className="px-2 py-1.5 text-text-muted">-</td>
+                        <td className="px-2 py-1.5 text-text-muted">-</td>
+                        <td className="px-2 py-1.5 text-text-muted">-</td>
+                      </>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
 
         ))}
