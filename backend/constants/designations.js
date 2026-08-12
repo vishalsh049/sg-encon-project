@@ -95,6 +95,47 @@ const DESIGNATIONS = [
   "Analyst MIS",
   "Zonal Fiber SME",
   "Other Roles - Temporary Technician",
+  // Added from the updated master Job Role list (2026-08-12) — these were
+  // already valid in the manpower_sub_profiles dropdown source but missing
+  // here, so Excel uploads/manual saves were wrongly rejecting them as
+  // "Invalid Job Role" even though the dropdown offered them.
+  "National Commercial Manager",
+  "National Operation Manager",
+  "Engineer",
+  "Utility PMO",
+  "National Compliance Manager",
+  "National Fiber Head",
+  "National Commercial Executive",
+  "Project Manager",
+  "Administration",
+  "Account Executive",
+  "State Quality Head",
+  "National HR Manager",
+  "Zonal Utility SME",
+  "Supervisor",
+  "State Head",
+  "Vehicle Coordinator",
+  "Operations Support Manager",
+  "Cluster Incharge",
+  "Energy MIS",
+  "Electrical Supervisor",
+  "Manager Billing",
+  "Electrical Project-Billing",
+  "Engineering Assistant Cum Designer",
+  "Manager- Projects",
+  "CAD Designer",
+  "Site Engineer- Projects",
+  "M/C Supervisor",
+  "Project",
+  "Circle Operation Head",
+  "Helper",
+  "Technical Manager",
+  "State HSEF Head",
+  "SME Executive",
+  "Energy Executive",
+  "TCU Expert",
+  "IME- Infra Manager",
+  "DG Expert",
 ];
 
 // Case-insensitive, whitespace-collapsed comparison so "  fttx   technician ",
@@ -123,6 +164,9 @@ const DESIGNATION_ALIASES = {
   "utility coordinator": "UTILITY CO-ORODINATOR",
   "utility co ordinator": "UTILITY CO-ORODINATOR",
   "quality & planning head": "QUALITY & PLANING HEAD",
+  "cad desinger": "CAD Designer",
+  "o&m head": "O & M HEAD",
+  "manager projects.": "Manager- Projects",
 };
 
 function normalizeForAlias(value) {
