@@ -2141,53 +2141,61 @@ const circleOverviewColumns = Array.from(
     {/* Total Employees */}
 
   <div className="rounded-2xl border border-border-color bg-surface px-4 py-3 shadow-sm hover:shadow-lg transition-all">
-    <div className="flex items-center justify-between">
-      <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-400">
+    <div className="flex items-center justify-between gap-3">
+      <div>
+        <div className="text-[13px] font-medium text-text-muted">Total Employees</div>
+        <div className="text-xl font-bold text-text-primary">{dashboardSummary.totalEmployees}</div>
+        <div className="text-[12px] text-text-muted">Across {totalCirclesCount} Circles</div>
+      </div>
+      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-400">
         <Users size={18} />
       </span>
     </div>
-    <div className="mt-2 text-[13px] font-medium text-text-muted">Total Employees</div>
-    <div className="text-xl font-bold text-text-primary">{dashboardSummary.totalEmployees}</div>
-    <div className="text-[12px] text-text-muted">Across {totalCirclesCount} Circles</div>
   </div>
 
     {/* Active Employees */}
 
   <div className="rounded-2xl border border-border-color bg-surface px-4 py-3 shadow-sm hover:shadow-lg transition-all">
-    <div className="flex items-center justify-between">
-      <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400">
+    <div className="flex items-center justify-between gap-3">
+      <div>
+        <div className="text-[13px] font-medium text-text-muted">Active Employees</div>
+        <div className="text-xl font-bold text-text-primary">{activeCount}</div>
+        <div className="text-[12px] font-medium text-emerald-600 dark:text-emerald-400">{activePercent}% of total</div>
+      </div>
+      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400">
         <UserCheck size={18} />
       </span>
     </div>
-    <div className="mt-2 text-[13px] font-medium text-text-muted">Active Employees</div>
-    <div className="text-xl font-bold text-text-primary">{activeCount}</div>
-    <div className="text-[12px] font-medium text-emerald-600 dark:text-emerald-400">{activePercent}% of total</div>
   </div>
 
     {/* Inactive Employees */}
 
   <div className="rounded-2xl border border-border-color bg-surface px-4 py-3 shadow-sm hover:shadow-lg transition-all">
-    <div className="flex items-center justify-between">
-      <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-rose-50 text-rose-600 dark:bg-rose-500/10 dark:text-rose-400">
+    <div className="flex items-center justify-between gap-3">
+      <div>
+        <div className="text-[13px] font-medium text-text-muted">Inactive Employees</div>
+        <div className="text-xl font-bold text-text-primary">{inactiveCount}</div>
+        <div className="text-[12px] font-medium text-rose-600 dark:text-rose-400">{inactivePercent}% of total</div>
+      </div>
+      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-rose-50 text-rose-600 dark:bg-rose-500/10 dark:text-rose-400">
         <UserX size={18} />
       </span>
     </div>
-    <div className="mt-2 text-[13px] font-medium text-text-muted">Inactive Employees</div>
-    <div className="text-xl font-bold text-text-primary">{inactiveCount}</div>
-    <div className="text-[12px] font-medium text-rose-600 dark:text-rose-400">{inactivePercent}% of total</div>
   </div>
 
     {/* Total Circles */}
 
   <div className="rounded-2xl border border-border-color bg-surface px-4 py-3 shadow-sm hover:shadow-lg transition-all">
-    <div className="flex items-center justify-between">
-      <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400">
+    <div className="flex items-center justify-between gap-3">
+      <div>
+        <div className="text-[13px] font-medium text-text-muted">Total Circles</div>
+        <div className="text-xl font-bold text-text-primary">{totalCirclesCount}</div>
+        <div className="text-[12px] text-text-muted">Organizational Units</div>
+      </div>
+      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400">
         <Globe size={18} />
       </span>
     </div>
-    <div className="mt-2 text-[13px] font-medium text-text-muted">Total Circles</div>
-    <div className="text-xl font-bold text-text-primary">{totalCirclesCount}</div>
-    <div className="text-[12px] text-text-muted">Organizational Units</div>
   </div>
 
   </div>
