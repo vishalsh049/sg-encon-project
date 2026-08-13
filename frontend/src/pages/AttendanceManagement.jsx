@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { saveAs } from "file-saver";
 import toast from "react-hot-toast";
@@ -80,8 +80,19 @@ function AttendanceManagement() {
   } = useAttendanceData({ dateRange, filters, sort });
 
   // Shared scope passed to every card popup / calendar — deliberately
-  // excludes Status/search so each popup can apply its own on top.
-  const scope = { dateRange, circle: filters.circle, cmp: filters.cmp, jobRole: filters.jobRole };
+  // excludes Status/search so each popup can apply its own on top. Memoized
+  // by primitive value so popups' fetch effects (keyed on this object) don't
+  // re-fire on every unrelated parent re-render.
+  const scope = useMemo(
+    () => ({ dateRange, circle: filters.circle, cmp: filters.cmp, jobRole: filters.jobRole }),
+    [dateRange, filters.circle, filters.cmp, filters.jobRole]
+  );
+
+  // Upload History is a separate tab, not shown by default — its data loads
+  // only once the user actually opens that tab, not on initial page load.
+  useEffect(() => {
+    if (activeTab === "uploads") fetchUploads();
+  }, [activeTab, fetchUploads]);
 
   const handleFiltersChange = (partial) => setFilters((f) => ({ ...f, ...partial }));
 

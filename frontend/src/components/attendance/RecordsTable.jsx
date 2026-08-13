@@ -26,6 +26,21 @@ const COLUMNS = [
   { key: "status", label: "Attendance", sortable: true },
 ];
 
+// Skeleton rows shown while the first page of records is loading, instead
+// of a blank/plain-text row — same column count as the real table so layout
+// doesn't shift once data arrives.
+function SkeletonRows({ columnCount, rowCount = 8 }) {
+  return Array.from({ length: rowCount }).map((_, rowIndex) => (
+    <tr key={`skeleton-${rowIndex}`} className="border-t border-border-color/50">
+      {Array.from({ length: columnCount }).map((__, colIndex) => (
+        <td key={colIndex} className="px-4 py-3">
+          <div className="h-3.5 w-full max-w-[7rem] animate-pulse rounded bg-surface-muted" />
+        </td>
+      ))}
+    </tr>
+  ));
+}
+
 function SortIcon({ active, dir }) {
   if (!active) return <ArrowUpDown size={12} className="text-text-muted/60" />;
   return dir === "asc" ? <ArrowUp size={12} /> : <ArrowDown size={12} />;
@@ -138,9 +153,7 @@ export default function RecordsTable({
                 </td>
               </tr>
             ) : recordsLoading ? (
-              <tr>
-                <td colSpan={COLUMNS.length + 2} className="px-4 py-6 text-center text-text-muted">Loading...</td>
-              </tr>
+              <SkeletonRows columnCount={COLUMNS.length + (canDelete ? 2 : 0)} />
             ) : records.length === 0 ? (
               <tr>
                 <td colSpan={COLUMNS.length + 2} className="px-4 py-6 text-center text-text-muted">

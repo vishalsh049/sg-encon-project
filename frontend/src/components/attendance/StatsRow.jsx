@@ -9,7 +9,7 @@ const TONE_CLASSES = {
   gray: "text-text-secondary bg-surface-muted",
 };
 
-function StatCard({ label, value, hint, icon: Icon, tone = "blue", onClick }) {
+function StatCard({ label, value, hint, icon: Icon, tone = "blue", onClick, loading }) {
   return (
     <button
       type="button"
@@ -22,8 +22,17 @@ function StatCard({ label, value, hint, icon: Icon, tone = "blue", onClick }) {
           {Icon && <Icon size={16} />}
         </span>
       </div>
-      <p className="mt-2 text-2xl font-bold text-text-primary">{value}</p>
-      {hint && <p className="mt-1 text-[11px] text-text-muted">{hint}</p>}
+      {loading ? (
+        <>
+          <div className="mt-2.5 h-6 w-16 animate-pulse rounded bg-surface-muted" />
+          <div className="mt-2 h-2.5 w-24 animate-pulse rounded bg-surface-muted" />
+        </>
+      ) : (
+        <>
+          <p className="mt-2 text-2xl font-bold text-text-primary">{value}</p>
+          {hint && <p className="mt-1 text-[11px] text-text-muted">{hint}</p>}
+        </>
+      )}
     </button>
   );
 }
@@ -56,58 +65,65 @@ export default function StatsRow({ summary, summaryLoading, summaryError, onRetr
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-7">
       <StatCard
         label="Total Employees"
-        value={summaryLoading ? "..." : summary?.totalEmployees ?? 0}
+        value={summary?.totalEmployees ?? 0}
         hint="Active in Physical master"
         icon={Users}
         tone="blue"
+        loading={summaryLoading}
         onClick={() => onCardClick?.("employees")}
       />
       <StatCard
         label="Present"
-        value={summaryLoading ? "..." : summary?.present ?? 0}
+        value={summary?.present ?? 0}
         hint="Marked Present in selected period"
         icon={CheckCircle2}
         tone="green"
+        loading={summaryLoading}
         onClick={() => onCardClick?.("present")}
       />
       <StatCard
         label="Absent"
-        value={summaryLoading ? "..." : summary?.absent ?? 0}
+        value={summary?.absent ?? 0}
         hint="Marked Absent in selected period"
         icon={XCircle}
         tone="red"
+        loading={summaryLoading}
         onClick={() => onCardClick?.("absent")}
       />
       <StatCard
         label="Leave"
-        value={summaryLoading ? "..." : summary?.leave ?? 0}
+        value={summary?.leave ?? 0}
         hint="Marked Leave in selected period"
         icon={CalendarClock}
         tone="amber"
+        loading={summaryLoading}
         onClick={() => onCardClick?.("leave")}
       />
       <StatCard
         label="Attendance Rate"
-        value={summaryLoading ? "..." : rate === null ? "-" : `${rate}%`}
+        value={rate === null ? "-" : `${rate}%`}
         hint="Present ÷ all marked days"
         icon={Percent}
         tone="green"
+        loading={summaryLoading}
         onClick={() => onCardClick?.("rate")}
       />
       <StatCard
         label="Total Records"
-        value={summaryLoading ? "..." : summary?.totalRecords ?? 0}
+        value={summary?.totalRecords ?? 0}
         hint="All attendance rows in selected period"
         icon={ListChecks}
         tone="violet"
+        loading={summaryLoading}
         onClick={() => onCardClick?.("records")}
       />
       <StatCard
         label="Days Uploaded"
-        value={summaryLoading ? "..." : `${summary?.daysUploaded ?? 0}/${summary?.totalDaysInRange ?? "-"}`}
+        value={`${summary?.daysUploaded ?? 0}/${summary?.totalDaysInRange ?? "-"}`}
         hint="Distinct dates uploaded in selected period"
         icon={ClipboardList}
         tone="gray"
+        loading={summaryLoading}
         onClick={() => onCardClick?.("calendar")}
       />
     </div>

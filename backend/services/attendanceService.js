@@ -96,6 +96,17 @@ async function ensureAttendanceSchema(query) {
     "idx_attendance_uploads_status",
     "CREATE INDEX idx_attendance_uploads_status ON attendance_uploads (status)"
   );
+  // Speeds up the dashboard-summary and calendar queries, which both filter
+  // attendance_date BETWEEN ? AND ? and then GROUP BY status — a composite
+  // index lets that run as a single index range scan instead of a full scan
+  // of every row in the date range. idx_attendance_date (above) alone can't
+  // cover the GROUP BY.
+  await ensureIndex(
+    query,
+    "attendance",
+    "idx_attendance_date_status",
+    "CREATE INDEX idx_attendance_date_status ON attendance (attendance_date, status)"
+  );
 
   // ensureColumn calls kept even though the CREATE TABLE above already has
   // every column, so future additions follow the same additive pattern used

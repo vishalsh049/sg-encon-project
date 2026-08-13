@@ -34,6 +34,9 @@ export default function useAttendanceData({ dateRange, filters, sort }) {
   const [pagination, setPagination] = useState({ page: 1, pageSize: DEFAULT_PAGE_SIZE, total: 0 });
 
   const [uploads, setUploads] = useState([]);
+  // Starts true (not fetched yet) but harmlessly so — UploadHistoryTable
+  // isn't rendered until its tab opens, at which point fetchUploads runs
+  // (see AttendanceManagement.jsx). Never fetched on initial page mount.
   const [uploadsLoading, setUploadsLoading] = useState(true);
   const [uploadsError, setUploadsError] = useState(null);
 
@@ -113,9 +116,11 @@ export default function useAttendanceData({ dateRange, filters, sort }) {
     }
   }, [filters.circle, filters.cmp, filters.jobRole]);
 
+  // Only summary + page-1 records are needed for the page to open — Upload
+  // History is fetched lazily (see AttendanceManagement.jsx) when its tab is
+  // actually opened, not here, so it never blocks/competes on initial load.
   useEffect(() => { fetchSummary(); }, [fetchSummary]);
   useEffect(() => { fetchRecords(1); }, [fetchRecords]);
-  useEffect(() => { fetchUploads(); }, [fetchUploads]);
 
   const refetchAfterUpload = useCallback(
     () => Promise.all([fetchSummary(), fetchRecords(pagination.page), fetchUploads()]),
