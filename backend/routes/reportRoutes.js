@@ -132,6 +132,57 @@ const VALID_CIRCLES = [
   "Uttar Pradesh (East)",
 ];
 
+// Approved Circle -> CMP mapping for Tower Reports uploads. This is the single
+// source of truth for row validation below — a CMP is only accepted when it
+// appears under the exact Circle it belongs to here, never merely because it
+// exists somewhere in the list (e.g. Haryana + "Delhi SHQ" must be rejected).
+const CIRCLE_CMP_MAP = {
+  Delhi: [
+    "Delhi SHQ",
+    "Delhi-1 (West)",
+    "Delhi-2 (South)",
+    "Delhi-3 (Central-East)",
+    "Delhi-4 (North)",
+    "Faridabad (NCR)",
+    "Ghaziabad (NCR)",
+    "Gurgaon (NCR)",
+    "Noida (NCR)",
+  ],
+  Haryana: [
+    "Haryana SHQ",
+    "Ambala",
+    "Hissar",
+    "Karnal",
+    "Panipat",
+    "Rewari",
+    "Rohtak",
+  ],
+  Punjab: [
+    "Punjab SHQ",
+    "Amritsar",
+    "Bhatinda",
+    "Chandigarh",
+    "Jalandhar",
+    "Ludhiana-1",
+    "Ludhiana-2",
+    "Pathankot",
+    "Patiala",
+    "Sangrur",
+  ],
+  "Uttar Pradesh (East)": [
+    "UP East SHQ",
+    "Allahabad",
+    "Azamgarh",
+    "Faizabad",
+    "Gorakhpur",
+    "Nanded",
+    "Raibareilly",
+    "Varanasi",
+  ],
+};
+
+const normalizeMappingKey = (value) => String(value ?? "").trim().toLowerCase();
+
 const isValidCircle = (circle) => {
   if (!circle) return false;
 
@@ -140,6 +191,23 @@ const isValidCircle = (circle) => {
       c.toLowerCase().trim() ===
       String(circle).toLowerCase().trim()
   );
+};
+
+// Resolves free-form Circle text to its canonical (exactly-cased) name from
+// VALID_CIRCLES, or null if it doesn't match. Used so CIRCLE_CMP_MAP — which
+// is keyed by canonical casing — can be looked up regardless of how the
+// Circle was capitalised in the uploaded file.
+const resolveCanonicalCircle = (circle) =>
+  VALID_CIRCLES.find((c) => normalizeMappingKey(c) === normalizeMappingKey(circle)) || null;
+
+// Strict, exact match (case/whitespace-insensitive only — no fuzzy or
+// cross-circle matching) against the CMP list for that specific circle.
+const isValidCmpForCircle = (canonicalCircle, cmp) => {
+  const allowed = CIRCLE_CMP_MAP[canonicalCircle];
+  if (!allowed) return false;
+
+  const target = normalizeMappingKey(cmp);
+  return allowed.some((c) => normalizeMappingKey(c) === target);
 };
 
 const getRawCircle = (row = {}) => {
@@ -213,7 +281,7 @@ const validateRowCircle = (circle, cmp, rowNumber, errors) => {
       column: "Circle",
       value: circle,
       expected: CIRCLE_EXPECTED,
-      reason: "Circle is blank. Every row must say which circle it belongs to.",
+      reason: "Circle is required. Please enter a valid Circle name.",
       fix: `Type one of the allowed circle names into the Circle column of row ${rowNumber}.`,
     }));
     // Report both blanks so one pass through the file fixes everything.
@@ -222,8 +290,8 @@ const validateRowCircle = (circle, cmp, rowNumber, errors) => {
         row: rowNumber,
         column: "CMP",
         value: cmp,
-        expected: "Any non-empty CMP name",
-        reason: "CMP is blank. Every row must name the CMP that owns the site.",
+        expected: "Any CMP that belongs to the row's Circle",
+        reason: "CMP is required. Please enter a valid CMP name.",
         fix: `Fill in the CMP column of row ${rowNumber}.`,
       }));
     }
@@ -235,14 +303,16 @@ const validateRowCircle = (circle, cmp, rowNumber, errors) => {
       row: rowNumber,
       column: "CMP",
       value: cmp,
-      expected: "Any non-empty CMP name",
-      reason: "CMP is blank. Every row must name the CMP that owns the site.",
+      expected: "Any CMP that belongs to the row's Circle",
+      reason: "CMP is required. Please enter a valid CMP name.",
       fix: `Fill in the CMP column of row ${rowNumber}.`,
     }));
     return false;
   }
 
-  if (!isValidCircle(circleText)) {
+  const canonicalCircle = resolveCanonicalCircle(circleText);
+
+  if (!canonicalCircle) {
     errors.push(rowError({
       row: rowNumber,
       column: "Circle",
@@ -250,6 +320,23 @@ const validateRowCircle = (circle, cmp, rowNumber, errors) => {
       expected: CIRCLE_EXPECTED,
       reason: `"${circleText}" is not a recognised Circle name.`,
       fix: `Replace it with the exact circle name — check for typos, extra spaces or a short form.`,
+    }));
+    return false;
+  }
+
+  // Strict Circle+CMP mapping: a CMP is only valid under the exact Circle it
+  // belongs to, never merely because it exists somewhere in the master list
+  // (e.g. Haryana + "Delhi SHQ" must be rejected even though "Delhi SHQ" is a
+  // valid CMP under Delhi).
+  if (!isValidCmpForCircle(canonicalCircle, cmpText)) {
+    const allowedCmps = CIRCLE_CMP_MAP[canonicalCircle] || [];
+    errors.push(rowError({
+      row: rowNumber,
+      column: "CMP",
+      value: cmpText,
+      expected: allowedCmps.join(" | "),
+      reason: `"${cmpText}" does not belong to Circle "${canonicalCircle}".`,
+      fix: `Use one of the allowed CMPs for ${canonicalCircle}: ${allowedCmps.join(", ")}.`,
     }));
     return false;
   }
