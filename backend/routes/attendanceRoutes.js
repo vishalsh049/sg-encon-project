@@ -21,6 +21,7 @@ const {
   buildAttendanceExportBuffer,
   buildFlatRecordsExportBuffer,
   buildEmployeesExportBuffer,
+  buildMissingAttendanceExportBuffer,
   buildUploadErrorsExportBuffer,
   computeCalendarDays,
   toIsoDate,
@@ -672,39 +673,65 @@ router.get("/dashboard/summary", async (req, res) => {
 });
 
 // -- Missing attendance ---------------------------------------------------------
+// Shared by the dashboard panel and its export — throws on a missing/invalid
+// `date` query param so both routes get the same 400 behaviour for free.
+async function fetchMissingAttendanceRows(req) {
+  await ensureAttendanceTables();
+
+  const dateStr = String(req.query.date || "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+    throw createError("A valid date (YYYY-MM-DD) is required.", 400, "INVALID_DATE");
+  }
+
+  const { conditions, params } = buildEmployeeScopeConditions(req, "p");
+  conditions.push("(p.date_of_joining IS NULL OR p.date_of_joining <= ?)");
+  params.push(dateStr);
+  conditions.push("(p.last_working_date IS NULL OR p.last_working_date >= ?)");
+  params.push(dateStr);
+
+  const rows = await query(
+    `
+      SELECT p.employee_code, p.employee_name, p.job_role, p.cmp, p.circle
+      FROM physical p
+      WHERE ${conditions.join(" AND ")}
+        AND NOT EXISTS (
+          SELECT 1 FROM attendance a
+          WHERE a.attendance_date = ?
+            AND LOWER(TRIM(a.employee_code)) = LOWER(TRIM(p.employee_code))
+        )
+      ORDER BY p.employee_name ASC
+    `,
+    [...params, dateStr]
+  );
+
+  return { rows, dateStr };
+}
+
 router.get("/dashboard/missing", async (req, res) => {
   try {
-    await ensureAttendanceTables();
-
-    const dateStr = String(req.query.date || "").trim();
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
-      throw createError("A valid date (YYYY-MM-DD) is required.", 400, "INVALID_DATE");
-    }
-
-    const { conditions, params } = buildEmployeeScopeConditions(req, "p");
-    conditions.push("(p.date_of_joining IS NULL OR p.date_of_joining <= ?)");
-    params.push(dateStr);
-    conditions.push("(p.last_working_date IS NULL OR p.last_working_date >= ?)");
-    params.push(dateStr);
-
-    const rows = await query(
-      `
-        SELECT p.employee_code, p.employee_name, p.job_role, p.cmp, p.circle
-        FROM physical p
-        WHERE ${conditions.join(" AND ")}
-          AND NOT EXISTS (
-            SELECT 1 FROM attendance a
-            WHERE a.attendance_date = ?
-              AND LOWER(TRIM(a.employee_code)) = LOWER(TRIM(p.employee_code))
-          )
-        ORDER BY p.employee_name ASC
-      `,
-      [...params, dateStr]
-    );
-
+    const { rows } = await fetchMissingAttendanceRows(req);
     return res.json({ success: true, missing: rows, count: rows.length });
   } catch (error) {
     return sendError(res, error, "Failed to load missing attendance.");
+  }
+});
+
+router.get("/dashboard/missing/export", async (req, res) => {
+  try {
+    const { rows, dateStr } = await fetchMissingAttendanceRows(req);
+    const buffer = buildMissingAttendanceExportBuffer(rows, dateStr);
+
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="missing_attendance_${dateStr}.xlsx"`
+    );
+    res.setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    );
+    return res.send(buffer);
+  } catch (error) {
+    return sendError(res, error, "Failed to export missing attendance.");
   }
 });
 

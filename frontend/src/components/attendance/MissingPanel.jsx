@@ -1,4 +1,6 @@
-import { X } from "lucide-react";
+import { useState } from "react";
+import toast from "react-hot-toast";
+import { Download, RefreshCw, X } from "lucide-react";
 
 import PremiumDatePicker from "../PremiumDatePicker";
 import { formatDisplayDate, todayStr } from "../../lib/attendanceFormat";
@@ -6,7 +8,21 @@ import { formatDisplayDate, todayStr } from "../../lib/attendanceFormat";
 // Shown when the user clicks "Check Missing Attendance". Unlike the original
 // version this isn't locked to today — the date picker lets an admin check
 // (and then chase up) any past day, not just the current one.
-export default function MissingPanel({ date, onDateChange, missing, missingLoading, onClose }) {
+export default function MissingPanel({ date, onDateChange, missing, missingLoading, onClose, onExport }) {
+  const [exporting, setExporting] = useState(false);
+
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      await onExport();
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to export missing attendance.");
+    } finally {
+      setExporting(false);
+    }
+  };
+
   return (
     <div className="rounded-2xl border border-amber-200/60 bg-amber-50/60 p-4 dark:border-amber-500/20 dark:bg-amber-500/5">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
@@ -18,9 +34,20 @@ export default function MissingPanel({ date, onDateChange, missing, missingLoadi
             <PremiumDatePicker value={date} onChange={onDateChange} isDateDisabled={(d) => d > new Date()} />
           </div>
         </div>
-        <button type="button" onClick={onClose} className="text-text-muted hover:text-text-primary">
-          <X size={16} />
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={handleExport}
+            disabled={exporting || missingLoading || !missing?.count}
+            className="inline-flex h-9 items-center gap-2 rounded-lg border border-border-color bg-surface px-3 text-sm font-medium text-text-secondary transition hover:text-text-primary disabled:opacity-60"
+          >
+            {exporting ? <RefreshCw size={14} className="animate-spin" /> : <Download size={14} />}
+            Export Excel
+          </button>
+          <button type="button" onClick={onClose} className="text-text-muted hover:text-text-primary">
+            <X size={16} />
+          </button>
+        </div>
       </div>
 
       {missingLoading ? (

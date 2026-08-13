@@ -120,6 +120,19 @@ function AttendanceManagement() {
     clearMissing();
   };
 
+  const handleExportMissing = async () => {
+    try {
+      const res = await axios.get(buildApiUrl("/api/attendance/dashboard/missing/export"), {
+        params: { date: missingDate, circle: filters.circle, cmp: filters.cmp, jobRole: filters.jobRole },
+        responseType: "blob",
+      });
+      saveAs(res.data, `missing_attendance_${missingDate}.xlsx`);
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to export missing attendance.");
+    }
+  };
+
   // Toolbar Export Excel: the day-grid muster roll by default, but switches
   // to the flat filtered row-list (same endpoint every popup uses) whenever
   // a Status filter is active, since a day-grid can't represent "only
@@ -215,6 +228,7 @@ function AttendanceManagement() {
             missing={missing}
             missingLoading={missingLoading}
             onClose={handleCloseMissing}
+            onExport={handleExportMissing}
           />
         )}
 

@@ -744,6 +744,31 @@ function buildEmployeesExportBuffer(rows) {
   return XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
 }
 
+// Missing-attendance roster export for the Missing Attendance panel — one
+// row per employee who has no attendance record for the checked date.
+function buildMissingAttendanceExportBuffer(rows, dateStr) {
+  const header = ["HRMS ID", "Employee Name", "Job Role", "CMP", "Circle"];
+  const sheetRows = [
+    header,
+    ...rows.map((row) => [
+      row.employee_code || "",
+      row.employee_name || "",
+      row.job_role || "",
+      row.cmp || "",
+      row.circle || "",
+    ]),
+  ];
+
+  const workbook = XLSX.utils.book_new();
+  const worksheet = XLSX.utils.aoa_to_sheet(sheetRows);
+  XLSX.utils.book_append_sheet(
+    workbook,
+    worksheet,
+    dateStr ? `Missing ${dateStr}`.slice(0, 31) : "Missing Attendance"
+  );
+  return XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
+}
+
 // Failed-rows-only export for a single upload batch (spec: "Export Errors
 // Excel" from the Upload Errors popup). `batch` supplies the upload-level
 // date/time columns shared by every error row in the sheet.
@@ -824,6 +849,7 @@ module.exports = {
   buildAttendanceExportBuffer,
   buildFlatRecordsExportBuffer,
   buildEmployeesExportBuffer,
+  buildMissingAttendanceExportBuffer,
   buildUploadErrorsExportBuffer,
   computeCalendarDays,
   addDays,
