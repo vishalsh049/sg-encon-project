@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
+import { saveAs } from "file-saver";
 import toast from "react-hot-toast";
-import { Upload, FileSpreadsheet, Download, X, History, RefreshCw } from "lucide-react";
+import { Upload, FileSpreadsheet, Download, X, History, RefreshCw, CheckCircle2, AlertTriangle } from "lucide-react";
 
 import { buildApiUrl } from "../../lib/api";
 import PremiumDatePicker from "../PremiumDatePicker";
@@ -16,6 +17,10 @@ export default function UploadModal({ onClose, onUploaded }) {
   const [preview, setPreview] = useState(null); // { batchId, summary, previewRows, attendanceDate }
   const [duplicateAction, setDuplicateAction] = useState("");
   const [errorModalData, setErrorModalData] = useState(null);
+  // Set once /upload/confirm succeeds — shows the "Step 3 · Done" result
+  // screen instead of immediately closing, since a partial-success upload
+  // (valid rows saved, error rows skipped) needs to surface that outcome.
+  const [result, setResult] = useState(null); // { inserted, updated, skipped, errorRows }
 
   useEffect(() => {
     document.body.style.overflow = "hidden";
@@ -73,11 +78,23 @@ export default function UploadModal({ onClose, onUploaded }) {
 
       toast.success(res.data.message || "Attendance saved successfully.");
       await onUploaded();
-      onClose();
+      setResult(res.data.summary || { inserted: 0, updated: 0, skipped: 0, errorRows: 0 });
     } catch (err) {
       toast.error(err?.response?.data?.message || "Failed to save attendance.");
     } finally {
       setConfirming(false);
+    }
+  };
+
+  const handleExportErrors = async () => {
+    if (!preview?.batchId) return;
+    try {
+      const res = await axios.get(buildApiUrl(`/api/attendance/uploads/${preview.batchId}/errors/export`), {
+        responseType: "blob",
+      });
+      saveAs(res.data, `Attendance_Upload_Errors_${preview.attendanceDate}.xlsx`);
+    } catch (err) {
+      toast.error(err?.response?.data?.message || "Failed to export upload errors.");
     }
   };
 
@@ -96,7 +113,10 @@ export default function UploadModal({ onClose, onUploaded }) {
 
   const previewRows = preview?.previewRows || [];
   const conflictCount = preview?.summary?.conflictRows || 0;
-  const canConfirm = preview && preview.summary.errorRows === 0 && (!conflictCount || !!duplicateAction);
+  // Partial-success by design: rows that fail validation are simply skipped
+  // (never inserted) rather than blocking the rest of the file — only an
+  // unresolved duplicate-action choice blocks Confirm now.
+  const canConfirm = preview && (!conflictCount || !!duplicateAction);
 
   return (
     <>
@@ -159,7 +179,7 @@ export default function UploadModal({ onClose, onUploaded }) {
             </form>
           )}
 
-          {preview && (
+          {preview && !result && (
             <div className="space-y-4">
               <p className="text-xs font-semibold uppercase tracking-wide text-text-muted">
                 Step 2 · Review and confirm
@@ -185,19 +205,20 @@ export default function UploadModal({ onClose, onUploaded }) {
 
               {preview.summary.errorRows > 0 && (
                 <div className="rounded-lg border border-rose-200 bg-rose-50/60 p-3 text-sm text-rose-700 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-400">
-                  This file has validation errors and cannot be saved.{" "}
+                  This file has {preview.summary.errorRows} row(s) with validation errors — those rows will be{" "}
+                  <strong>skipped</strong>, and the remaining valid rows will still be saved.{" "}
                   <button
                     type="button"
                     className="font-semibold underline"
                     onClick={() => setErrorModalData({ errors: preview.errors, totalRecords: preview.summary.totalRows })}
                   >
                     View errors
-                  </button>{" "}
-                  and re-upload a corrected file.
+                  </button>
+                  .
                 </div>
               )}
 
-              {conflictCount > 0 && preview.summary.errorRows === 0 && (
+              {conflictCount > 0 && (
                 <div className="rounded-lg border border-amber-200 bg-amber-50/60 p-3 text-sm dark:border-amber-500/30 dark:bg-amber-500/10">
                   <p className="mb-2 font-medium text-amber-700 dark:text-amber-400">
                     Attendance already exists for {conflictCount} employee(s) on {formatDisplayDate(preview.attendanceDate)}. Choose what to do:
@@ -264,6 +285,72 @@ export default function UploadModal({ onClose, onUploaded }) {
                 >
                   {confirming ? <RefreshCw size={16} className="animate-spin" /> : <History size={16} />}
                   {confirming ? "Saving..." : "Confirm & Save"}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {result && (
+            <div className="space-y-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-text-muted">Step 3 · Done</p>
+
+              <div className={`flex items-center gap-3 rounded-lg border p-3 text-sm ${
+                result.errorRows > 0
+                  ? "border-amber-200 bg-amber-50/60 text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-400"
+                  : "border-emerald-200 bg-emerald-50/60 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-400"
+              }`}>
+                {result.errorRows > 0 ? <AlertTriangle size={18} /> : <CheckCircle2 size={18} />}
+                <span className="font-medium">
+                  {result.errorRows > 0 ? "Attendance Completed with Errors" : "Attendance saved successfully."}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-4 gap-3 text-center text-sm">
+                <div className="rounded-lg bg-emerald-50 dark:bg-emerald-500/10 p-2">
+                  <p className="text-emerald-600 dark:text-emerald-400 text-[11px]">Inserted</p>
+                  <p className="font-bold text-emerald-600 dark:text-emerald-400">{result.inserted}</p>
+                </div>
+                <div className="rounded-lg bg-blue-50 dark:bg-blue-500/10 p-2">
+                  <p className="text-blue-600 dark:text-blue-400 text-[11px]">Updated</p>
+                  <p className="font-bold text-blue-600 dark:text-blue-400">{result.updated}</p>
+                </div>
+                <div className="rounded-lg bg-surface-muted p-2">
+                  <p className="text-text-muted text-[11px]">Skipped</p>
+                  <p className="font-bold text-text-primary">{result.skipped}</p>
+                </div>
+                <div className="rounded-lg bg-rose-50 dark:bg-rose-500/10 p-2">
+                  <p className="text-rose-600 dark:text-rose-400 text-[11px]">Errors</p>
+                  <p className="font-bold text-rose-600 dark:text-rose-400">{result.errorRows}</p>
+                </div>
+              </div>
+
+              {result.errorRows > 0 && (
+                <div className="flex flex-wrap gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setErrorModalData({ errors: preview.errors, totalRecords: preview.summary.totalRows })}
+                    className="inline-flex items-center gap-2 rounded-xl border border-border-color px-4 py-2 text-sm font-medium text-text-secondary transition hover:text-text-primary"
+                  >
+                    View Errors
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleExportErrors}
+                    className="inline-flex items-center gap-2 rounded-xl border border-border-color px-4 py-2 text-sm font-medium text-text-secondary transition hover:text-text-primary"
+                  >
+                    <Download size={14} />
+                    Export Errors Excel
+                  </button>
+                </div>
+              )}
+
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="rounded-xl bg-gradient-to-r from-blue-600 to-cyan-500 px-4 py-2 text-sm font-semibold text-white"
+                >
+                  Close
                 </button>
               </div>
             </div>

@@ -102,6 +102,10 @@ async function ensureAttendanceSchema(query) {
   // by every other module in this codebase.
   await ensureColumn("attendance", "physical_id", "INT DEFAULT NULL");
   await ensureColumn("attendance", "upload_batch_id", "INT DEFAULT NULL");
+  // Permanent record of a batch's row-level errors, kept even after confirm
+  // (unlike preview_payload_json, which is cleared) so "View Errors" works
+  // from Upload History without requiring the file to be re-uploaded.
+  await ensureColumn("attendance_uploads", "errors_json", "LONGTEXT DEFAULT NULL");
 }
 
 // ---------------------------------------------------------------------------
@@ -153,6 +157,92 @@ function todayIstDateString() {
   // Same +05:30 convention the DB connection pool uses (see config/db.js).
   const now = new Date(Date.now() + 5.5 * 60 * 60 * 1000);
   return now.toISOString().slice(0, 10);
+}
+
+function istNow() {
+  return new Date(Date.now() + 5.5 * 60 * 60 * 1000);
+}
+
+function toIsoDate(date) {
+  return date.toISOString().slice(0, 10);
+}
+
+function addDays(isoDateStr, days) {
+  const date = new Date(`${isoDateStr}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return toIsoDate(date);
+}
+
+// ---------------------------------------------------------------------------
+// Date-range resolution shared by /records, /dashboard/summary and
+// /report/export, so the three endpoints can never disagree about what
+// "Today" / "This Week" / "This Month" / a custom range actually spans.
+// Computed in IST (Node), same convention as todayIstDateString(), rather
+// than depending on the DB server's session timezone.
+// ---------------------------------------------------------------------------
+
+function resolveAttendanceDateRange({ range, from, to }) {
+  const today = istNow();
+  const todayStr = toIsoDate(today);
+  const normalizedRange = String(range || "").trim().toLowerCase() || "this_month";
+
+  if (normalizedRange === "today") {
+    return { dateFrom: todayStr, dateTo: todayStr, range: "today" };
+  }
+
+  if (normalizedRange === "yesterday") {
+    const yesterday = addDays(todayStr, -1);
+    return { dateFrom: yesterday, dateTo: yesterday, range: "yesterday" };
+  }
+
+  if (normalizedRange === "this_week") {
+    // ISO week, Monday start. getUTCDay(): 0=Sun..6=Sat.
+    const jsDay = today.getUTCDay();
+    const isoDayOffset = jsDay === 0 ? 6 : jsDay - 1;
+    const monday = addDays(todayStr, -isoDayOffset);
+    const sunday = addDays(monday, 6);
+    return { dateFrom: monday, dateTo: sunday, range: "this_week" };
+  }
+
+  if (normalizedRange === "custom") {
+    const fromStr = String(from || "").trim();
+    const toStr = String(to || "").trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(fromStr) || !/^\d{4}-\d{2}-\d{2}$/.test(toStr)) {
+      throw createError("A valid custom date range (from/to) is required.", 400, "INVALID_DATE_RANGE");
+    }
+    if (fromStr > toStr) {
+      throw createError("The custom range's start date must be on or before its end date.", 400, "INVALID_DATE_RANGE");
+    }
+    return { dateFrom: fromStr, dateTo: toStr, range: "custom" };
+  }
+
+  if (normalizedRange === "previous_month") {
+    // Roll back to month 0 (Date.UTC underflows the year correctly), same
+    // last-day-of-month math as the this_month branch below.
+    const year = today.getUTCFullYear();
+    const month = today.getUTCMonth() + 1;
+    const prevMonthDate = new Date(Date.UTC(year, month - 2, 1));
+    const prevYear = prevMonthDate.getUTCFullYear();
+    const prevMonth = prevMonthDate.getUTCMonth() + 1;
+    const lastDay = new Date(Date.UTC(prevYear, prevMonth, 0)).getUTCDate();
+    const mm = String(prevMonth).padStart(2, "0");
+    return {
+      dateFrom: `${prevYear}-${mm}-01`,
+      dateTo: `${prevYear}-${mm}-${String(lastDay).padStart(2, "0")}`,
+      range: "previous_month",
+    };
+  }
+
+  // this_month / fallback — preserves the page's original default behavior.
+  const year = today.getUTCFullYear();
+  const month = today.getUTCMonth() + 1;
+  const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  const mm = String(month).padStart(2, "0");
+  return {
+    dateFrom: `${year}-${mm}-01`,
+    dateTo: `${year}-${mm}-${String(lastDay).padStart(2, "0")}`,
+    range: "this_month",
+  };
 }
 
 function makeValidationError({ row, employee, employeeCode, column, currentValue, error, expected, howToFix }) {
@@ -480,31 +570,22 @@ async function updateAttendanceRowsBulk(conn, rows, batchId, actorUserId) {
 }
 
 // ---------------------------------------------------------------------------
-// Monthly export (spec §24/§25): vertical `attendance` data pivoted into
+// Attendance export (spec §24/§25): vertical `attendance` data pivoted into
 // dynamic per-day columns at export time only — the table itself never has
-// per-day columns.
+// per-day columns. Day columns span the resolved date range (a single day
+// for "Today", a full month for "This Month", etc.) rather than always a
+// calendar month.
 // ---------------------------------------------------------------------------
-
-function daysInMonth(year, month1to12) {
-  return new Date(year, month1to12, 0).getDate();
-}
 
 function formatDdMmYyyy(dateStr) {
   const [y, m, d] = dateStr.split("-");
   return `${d}-${m}-${y}`;
 }
 
-async function buildMonthlyExportBuffer({ query, month, filters, authUser }) {
-  const [yearStr, monthStr] = String(month || "").split("-");
-  const year = Number(yearStr);
-  const monthNum = Number(monthStr);
-  if (!year || !monthNum || monthNum < 1 || monthNum > 12) {
-    throw createError("A valid month (YYYY-MM) is required.", 400, "INVALID_MONTH");
+async function buildAttendanceExportBuffer({ query, dateFrom, dateTo, filters, authUser }) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateFrom || "") || !/^\d{4}-\d{2}-\d{2}$/.test(dateTo || "") || dateFrom > dateTo) {
+    throw createError("A valid date range is required.", 400, "INVALID_DATE_RANGE");
   }
-
-  const totalDays = daysInMonth(year, monthNum);
-  const monthStart = `${yearStr}-${monthStr}-01`;
-  const monthEnd = `${yearStr}-${monthStr}-${String(totalDays).padStart(2, "0")}`;
 
   const conditions = ["COALESCE(is_deleted, 0) = 0"];
   const params = [];
@@ -526,30 +607,32 @@ async function buildMonthlyExportBuffer({ query, month, filters, authUser }) {
     conditions.push("LOWER(TRIM(job_role)) = LOWER(TRIM(?))");
     params.push(filters.jobRole);
   }
-  if (filters.status) {
-    conditions.push("LOWER(TRIM(employment_status)) = LOWER(TRIM(?))");
-    params.push(filters.status);
-  }
+  // Note: attendance status (P/A/L) is intentionally not a filter here — it
+  // doesn't gate which employee rows appear in a day-grid muster roll, only
+  // which value shows up inside a given day's cell.
 
-  const employees = await query(
-    `
-      SELECT id, employee_code, employee_name, job_role, cmp, circle,
-             date_of_joining, employment_status, last_working_date, aadhaar_no
-      FROM physical
-      WHERE ${conditions.join(" AND ")}
-      ORDER BY employee_name ASC
-    `,
-    params
-  );
-
-  const attendanceRows = await query(
-    `
-      SELECT employee_code, attendance_date, status
-      FROM attendance
-      WHERE attendance_date BETWEEN ? AND ?
-    `,
-    [monthStart, monthEnd]
-  );
+  // The employee list and the date range's attendance rows don't depend on
+  // each other — fetch both at once instead of one after the other.
+  const [employees, attendanceRows] = await Promise.all([
+    query(
+      `
+        SELECT id, employee_code, employee_name, job_role, cmp, circle,
+               date_of_joining, employment_status, last_working_date, aadhaar_no
+        FROM physical
+        WHERE ${conditions.join(" AND ")}
+        ORDER BY employee_name ASC
+      `,
+      params
+    ),
+    query(
+      `
+        SELECT employee_code, attendance_date, status
+        FROM attendance
+        WHERE attendance_date BETWEEN ? AND ?
+      `,
+      [dateFrom, dateTo]
+    ),
+  ]);
 
   const attendanceByEmployee = new Map();
   attendanceRows.forEach((record) => {
@@ -558,10 +641,10 @@ async function buildMonthlyExportBuffer({ query, month, filters, authUser }) {
     attendanceByEmployee.get(key).set(String(record.attendance_date).slice(0, 10), record.status);
   });
 
-  const dateColumns = Array.from({ length: totalDays }, (_, i) => {
-    const day = String(i + 1).padStart(2, "0");
-    return `${yearStr}-${monthStr}-${day}`;
-  });
+  const dateColumns = [];
+  for (let cursor = dateFrom; cursor <= dateTo; cursor = addDays(cursor, 1)) {
+    dateColumns.push(cursor);
+  }
 
   const header = [
     "S.N.", "Aadhar No", "HRMS ID", "Employee Name", "Job Role", "CMP", "Circle",
@@ -604,11 +687,135 @@ async function buildMonthlyExportBuffer({ query, month, filters, authUser }) {
   return XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
 }
 
+// Flat row-per-record export used by every card popup (Present/Absent/Leave/
+// Total Records) and by the toolbar "Export Excel" whenever a Status filter
+// is active — unlike buildAttendanceExportBuffer's day-grid, this always
+// matches the Records table 1:1, including the Status filter.
+function buildFlatRecordsExportBuffer(rows) {
+  const header = ["Date", "HRMS ID", "Employee Name", "Job Role", "CMP", "Circle", "Attendance Status"];
+  const sheetRows = [
+    header,
+    ...rows.map((row) => [
+      formatDdMmYyyy(String(row.attendance_date).slice(0, 10)),
+      row.employee_code || "",
+      row.employee_name || "",
+      row.job_role || "",
+      row.cmp || "",
+      row.circle || "",
+      row.status || "",
+    ]),
+  ];
+
+  const workbook = XLSX.utils.book_new();
+  const worksheet = XLSX.utils.aoa_to_sheet(sheetRows);
+  XLSX.utils.book_append_sheet(workbook, worksheet, "Attendance Records");
+  return XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
+}
+
+// Flat employee-roster export for the Total Employees popup.
+function buildEmployeesExportBuffer(rows) {
+  const header = ["HRMS ID", "Employee Name", "Job Role", "CMP", "Circle", "Employment Status"];
+  const sheetRows = [
+    header,
+    ...rows.map((row) => [
+      row.employee_code || "",
+      row.employee_name || "",
+      row.job_role || "",
+      row.cmp || "",
+      row.circle || "",
+      row.employment_status || "",
+    ]),
+  ];
+
+  const workbook = XLSX.utils.book_new();
+  const worksheet = XLSX.utils.aoa_to_sheet(sheetRows);
+  XLSX.utils.book_append_sheet(workbook, worksheet, "Employees");
+  return XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
+}
+
+// Failed-rows-only export for a single upload batch (spec: "Export Errors
+// Excel" from the Upload Errors popup). `batch` supplies the upload-level
+// date/time columns shared by every error row in the sheet.
+function buildUploadErrorsExportBuffer(errors, batch) {
+  const uploadDate = batch?.created_at ? new Date(batch.created_at) : null;
+  const uploadDateStr = uploadDate ? toIsoDate(uploadDate) : "";
+  const uploadTimeStr = uploadDate
+    ? uploadDate.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })
+    : "";
+
+  const header = [
+    "Row Number", "HRMS ID", "Employee Name", "Circle", "CMP",
+    "Attendance Date", "Attendance Value", "Error Type", "Error Reason",
+    "Upload Date", "Upload Time",
+  ];
+  const sheetRows = [
+    header,
+    ...errors.map((err) => [
+      err.row ?? "",
+      err.hrmsId || err.employeeCode || "",
+      err.employeeName || err.employee || "",
+      err.circle || "",
+      err.cmp || "",
+      err.attendanceDate ? formatDdMmYyyy(err.attendanceDate) : "",
+      err.attendanceValue || err.attendanceCode || "",
+      err.column || "",
+      err.error || err.errorType || "",
+      uploadDateStr ? formatDdMmYyyy(uploadDateStr) : "",
+      uploadTimeStr,
+    ]),
+  ];
+
+  const workbook = XLSX.utils.book_new();
+  const worksheet = XLSX.utils.aoa_to_sheet(sheetRows);
+  XLSX.utils.book_append_sheet(workbook, worksheet, "Upload Errors");
+  return XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
+}
+
+// ---------------------------------------------------------------------------
+// Days-Uploaded calendar (spec §16-20). `employees` only needs
+// date_of_joining/last_working_date; `attendanceByDate` maps
+// "YYYY-MM-DD" -> { P, A, L } under the same scope. Computed entirely in
+// Node (not per-day SQL) — see project note on MariaDB rejecting LIMIT
+// inside IN(...) subqueries; this sidesteps that class of query entirely.
+// ---------------------------------------------------------------------------
+
+function computeCalendarDays({ dateFrom, dateTo, employees, attendanceByDate, todayStr }) {
+  const days = [];
+  for (let cursor = dateFrom; cursor <= dateTo; cursor = addDays(cursor, 1)) {
+    const counts = attendanceByDate.get(cursor) || { P: 0, A: 0, L: 0 };
+    const total = counts.P + counts.A + counts.L;
+
+    let expected = 0;
+    for (const employee of employees) {
+      const doj = employee.date_of_joining ? String(employee.date_of_joining).slice(0, 10) : null;
+      const lwd = employee.last_working_date ? String(employee.last_working_date).slice(0, 10) : null;
+      if ((!doj || doj <= cursor) && (!lwd || lwd >= cursor)) expected += 1;
+    }
+
+    let status;
+    if (cursor > todayStr) status = "future";
+    else if (total > 0) status = "uploaded";
+    else if (expected > 0) status = "missing";
+    else status = "no_data";
+
+    days.push({ date: cursor, status, total, present: counts.P, absent: counts.A, leave: counts.L, expected });
+  }
+  return days;
+}
+
 module.exports = {
   ensureAttendanceSchema,
   todayIstDateString,
+  resolveAttendanceDateRange,
   validateAttendanceUpload,
   insertAttendanceRows,
   updateAttendanceRowsBulk,
-  buildMonthlyExportBuffer,
+  buildAttendanceExportBuffer,
+  buildFlatRecordsExportBuffer,
+  buildEmployeesExportBuffer,
+  buildUploadErrorsExportBuffer,
+  computeCalendarDays,
+  addDays,
+  toIsoDate,
+  istNow,
 };

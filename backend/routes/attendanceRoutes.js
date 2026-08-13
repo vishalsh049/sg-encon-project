@@ -5,6 +5,7 @@ const XLSX = require("xlsx");
 const { db } = require("../config/db");
 const { createError, sendError } = require("../utils/apiErrors");
 const { authMiddleware, isAllCircle } = require("../middleware/circleAccess");
+const { requirePagePermission } = require("../middleware/pagePermission");
 const {
   createConnectionExecutor,
   getActorContext,
@@ -13,10 +14,17 @@ const {
 const {
   ensureAttendanceSchema,
   todayIstDateString,
+  resolveAttendanceDateRange,
   validateAttendanceUpload,
   insertAttendanceRows,
   updateAttendanceRowsBulk,
-  buildMonthlyExportBuffer,
+  buildAttendanceExportBuffer,
+  buildFlatRecordsExportBuffer,
+  buildEmployeesExportBuffer,
+  buildUploadErrorsExportBuffer,
+  computeCalendarDays,
+  toIsoDate,
+  istNow,
 } = require("../services/attendanceService");
 const { ATTENDANCE_CODES } = require("../constants/attendanceCodes");
 
@@ -129,8 +137,8 @@ router.post("/upload/validate", upload.single("file"), async (req, res) => {
         INSERT INTO attendance_uploads (
           attendance_date, original_name, uploaded_by_id, uploaded_by_name,
           status, total_rows, valid_rows, error_rows, conflict_rows,
-          preview_payload_json, summary_json
-        ) VALUES (?, ?, ?, ?, 'pending_preview', ?, ?, ?, ?, ?, ?)
+          preview_payload_json, summary_json, errors_json
+        ) VALUES (?, ?, ?, ?, 'pending_preview', ?, ?, ?, ?, ?, ?, ?)
       `,
       [
         attendanceDateStr,
@@ -143,6 +151,10 @@ router.post("/upload/validate", upload.single("file"), async (req, res) => {
         summary.conflictRows,
         JSON.stringify(previewRows),
         JSON.stringify(summary),
+        // Stored now (not recomputed at confirm) so it survives even if this
+        // batch is never confirmed, and "View Errors" always reflects exactly
+        // what validation found for this specific upload attempt.
+        errors.length ? JSON.stringify(errors) : null,
       ]
     );
 
@@ -186,9 +198,12 @@ router.post("/upload/confirm", async (req, res) => {
     }
 
     const previewRows = JSON.parse(batch.preview_payload_json || "[]");
-    if (previewRows.some((row) => row.status === "error")) {
-      throw createError("This upload still has validation errors and cannot be saved.", 400, "HAS_ERRORS");
-    }
+    // Partial-success by design: rows that failed validation are simply
+    // never inserted (see rowsToInsert below, filtered to status==='valid')
+    // — they don't block the rest of the batch from saving. Their details
+    // were already persisted to errors_json at /upload/validate time, so
+    // they stay reviewable/exportable from Upload History afterward.
+    const errorRowCount = previewRows.filter((row) => row.status === "error").length;
 
     const conflictRows = previewRows.filter((row) => row.status === "conflict");
     if (conflictRows.length && !duplicateAction) {
@@ -223,12 +238,15 @@ router.post("/upload/confirm", async (req, res) => {
     await insertAttendanceRows(conn, rowsToInsert, batchId, actor.actorUserId);
     await updateAttendanceRowsBulk(conn, rowsToUpdate, batchId, actor.actorUserId);
 
+    const finalStatus = errorRowCount > 0 ? "completed_with_errors" : "completed";
+
     const executor = createConnectionExecutor(conn);
     await insertNotification(executor, {
       moduleName: "attendance",
       eventType: "ATTENDANCE_UPLOAD_CONFIRMED",
-      title: "Attendance uploaded",
-      message: `${rowsToInsert.length + rowsToUpdate.length} attendance record(s) saved for ${attendanceDateStr}.`,
+      title: errorRowCount > 0 ? "Attendance uploaded with errors" : "Attendance uploaded",
+      message: `${rowsToInsert.length + rowsToUpdate.length} attendance record(s) saved for ${attendanceDateStr}` +
+        (errorRowCount > 0 ? `, ${errorRowCount} row(s) skipped due to errors.` : "."),
       circle: isAllCircle(req.authUser) ? null : req.authUser.circle,
       actorUserId: actor.actorUserId,
       referenceId: batchId,
@@ -238,7 +256,7 @@ router.post("/upload/confirm", async (req, res) => {
     await conn.promise().query(
       `
         UPDATE attendance_uploads
-        SET status = 'confirmed',
+        SET status = ?,
             duplicate_action = ?,
             inserted_rows = ?,
             updated_rows = ?,
@@ -247,18 +265,21 @@ router.post("/upload/confirm", async (req, res) => {
             confirmed_at = NOW()
         WHERE id = ?
       `,
-      [duplicateAction, rowsToInsert.length, rowsToUpdate.length, skippedCount, batchId]
+      [finalStatus, duplicateAction, rowsToInsert.length, rowsToUpdate.length, skippedCount, batchId]
     );
 
     await conn.promise().commit();
 
     return res.json({
       success: true,
-      message: "Attendance saved successfully.",
+      message: errorRowCount > 0
+        ? `Attendance saved with ${errorRowCount} error row(s) skipped.`
+        : "Attendance saved successfully.",
       summary: {
         inserted: rowsToInsert.length,
         updated: rowsToUpdate.length,
         skipped: skippedCount,
+        errorRows: errorRowCount,
       },
     });
   } catch (error) {
@@ -318,6 +339,111 @@ router.get("/uploads", async (req, res) => {
   }
 });
 
+// -- Upload errors: view / export (spec §24-26) -----------------------------
+router.get("/uploads/:id/errors", async (req, res) => {
+  try {
+    await ensureAttendanceTables();
+    const batchId = Number(req.params.id);
+    if (!batchId) {
+      throw createError("A valid upload id is required.", 400, "INVALID_BATCH_ID");
+    }
+
+    const rows = await query(
+      `SELECT id, attendance_date, original_name, uploaded_by_name, total_rows, errors_json
+       FROM attendance_uploads WHERE id = ? LIMIT 1`,
+      [batchId]
+    );
+    const batch = rows[0];
+    if (!batch) {
+      throw createError("Upload batch not found.", 404, "BATCH_NOT_FOUND");
+    }
+
+    const errors = batch.errors_json ? JSON.parse(batch.errors_json) : [];
+    return res.json({
+      success: true,
+      errors,
+      totalRecords: batch.total_rows,
+      attendanceDate: String(batch.attendance_date).slice(0, 10),
+      originalName: batch.original_name,
+      uploadedByName: batch.uploaded_by_name,
+    });
+  } catch (error) {
+    return sendError(res, error, "Failed to load upload errors.");
+  }
+});
+
+router.get("/uploads/:id/errors/export", async (req, res) => {
+  try {
+    await ensureAttendanceTables();
+    const batchId = Number(req.params.id);
+    if (!batchId) {
+      throw createError("A valid upload id is required.", 400, "INVALID_BATCH_ID");
+    }
+
+    const rows = await query(
+      `SELECT id, attendance_date, original_name, created_at, errors_json
+       FROM attendance_uploads WHERE id = ? LIMIT 1`,
+      [batchId]
+    );
+    const batch = rows[0];
+    if (!batch) {
+      throw createError("Upload batch not found.", 404, "BATCH_NOT_FOUND");
+    }
+
+    const errors = batch.errors_json ? JSON.parse(batch.errors_json) : [];
+    const buffer = buildUploadErrorsExportBuffer(
+      errors.map((e) => ({ ...e, attendanceDate: String(batch.attendance_date).slice(0, 10) })),
+      batch
+    );
+
+    const dateLabel = String(batch.attendance_date).slice(0, 10);
+    res.setHeader("Content-Disposition", `attachment; filename="Attendance_Upload_Errors_${dateLabel}.xlsx"`);
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    return res.send(buffer);
+  } catch (error) {
+    return sendError(res, error, "Failed to export upload errors.");
+  }
+});
+
+// Allowlist so `sortBy` can only ever resolve to one of these known columns
+// (never interpolate user input straight into ORDER BY).
+const RECORD_SORT_COLUMNS = {
+  date: "a.attendance_date",
+  name: "p.employee_name",
+  status: "a.status",
+  circle: "p.circle",
+  cmp: "p.cmp",
+};
+
+// Shared by /records, /records/export and the delete endpoints so they can
+// never disagree about which rows a given circle/CMP/job-role/status/search/
+// date-range combination resolves to.
+function buildRecordsScopeConditions(req) {
+  const { dateFrom, dateTo } = resolveAttendanceDateRange({
+    range: req.query.range,
+    from: req.query.from,
+    to: req.query.to,
+  });
+
+  const { conditions, params } = buildEmployeeScopeConditions(req, "p");
+  conditions.push("a.attendance_date BETWEEN ? AND ?");
+  params.push(dateFrom, dateTo);
+
+  const status = String(req.query.status || "").trim();
+  if (status) {
+    conditions.push("a.status = ?");
+    params.push(status);
+  }
+
+  const search = String(req.query.search || "").trim();
+  if (search) {
+    conditions.push("(p.employee_name LIKE ? OR p.employee_code LIKE ?)");
+    params.push(`%${search}%`, `%${search}%`);
+  }
+
+  return { conditions, params, dateFrom, dateTo };
+}
+
 // -- Records ------------------------------------------------------------------
 router.get("/records", async (req, res) => {
   try {
@@ -327,30 +453,7 @@ router.get("/records", async (req, res) => {
     const pageSize = Math.min(200, Math.max(1, Number(req.query.pageSize) || 50));
     const offset = (page - 1) * pageSize;
 
-    const { conditions, params } = buildEmployeeScopeConditions(req, "p");
-
-    const dateFrom = String(req.query.dateFrom || "").trim();
-    if (dateFrom) {
-      conditions.push("a.attendance_date >= ?");
-      params.push(dateFrom);
-    }
-    const dateTo = String(req.query.dateTo || "").trim();
-    if (dateTo) {
-      conditions.push("a.attendance_date <= ?");
-      params.push(dateTo);
-    }
-
-    const status = String(req.query.status || "").trim();
-    if (status) {
-      conditions.push("a.status = ?");
-      params.push(status);
-    }
-
-    const search = String(req.query.search || "").trim();
-    if (search) {
-      conditions.push("(p.employee_name LIKE ? OR p.employee_code LIKE ?)");
-      params.push(`%${search}%`, `%${search}%`);
-    }
+    const { conditions, params } = buildRecordsScopeConditions(req);
 
     const whereSql = `WHERE ${conditions.join(" AND ")}`;
     const joinSql = `
@@ -359,18 +462,28 @@ router.get("/records", async (req, res) => {
       ${whereSql}
     `;
 
-    const countRows = await query(`SELECT COUNT(*) AS total ${joinSql}`, params);
+    const sortColumn = RECORD_SORT_COLUMNS[String(req.query.sortBy || "").trim()] || RECORD_SORT_COLUMNS.date;
+    const sortDir = String(req.query.sortDir || "").trim().toLowerCase() === "asc" ? "ASC" : "DESC";
+    // Secondary sort keeps ordering stable/predictable regardless of the primary column.
+    const orderSql = sortColumn === RECORD_SORT_COLUMNS.date
+      ? `a.attendance_date ${sortDir}, p.employee_name ASC`
+      : `${sortColumn} ${sortDir}, a.attendance_date DESC`;
 
-    const rows = await query(
-      `
-        SELECT a.id, a.employee_code, a.attendance_date, a.status,
-               p.employee_name, p.job_role, p.cmp, p.circle
-        ${joinSql}
-        ORDER BY a.attendance_date DESC, p.employee_name ASC
-        LIMIT ? OFFSET ?
-      `,
-      [...params, pageSize, offset]
-    );
+    // Count and page both hit the pool independently — run them concurrently
+    // instead of back-to-back so the page only pays for one round trip, not two.
+    const [countRows, rows] = await Promise.all([
+      query(`SELECT COUNT(*) AS total ${joinSql}`, params),
+      query(
+        `
+          SELECT a.id, a.employee_code, a.attendance_date, a.status,
+                 p.employee_name, p.job_role, p.cmp, p.circle
+          ${joinSql}
+          ORDER BY ${orderSql}
+          LIMIT ? OFFSET ?
+        `,
+        [...params, pageSize, offset]
+      ),
+    ]);
 
     return res.json({
       success: true,
@@ -382,53 +495,163 @@ router.get("/records", async (req, res) => {
   }
 });
 
+// -- Records: flat filtered export (spec §27-29) -----------------------------
+// Used by every card popup's Export Excel, and by the toolbar Export Excel
+// whenever a Status filter is active — always matches /records exactly
+// (same buildRecordsScopeConditions), unlike the day-grid /report/export.
+router.get("/records/export", async (req, res) => {
+  try {
+    await ensureAttendanceTables();
+
+    const { conditions, params } = buildRecordsScopeConditions(req);
+    const rows = await query(
+      `
+        SELECT a.id, a.employee_code, a.attendance_date, a.status,
+               p.employee_name, p.job_role, p.cmp, p.circle
+        FROM attendance a
+        JOIN physical p ON LOWER(TRIM(p.employee_code)) = LOWER(TRIM(a.employee_code))
+        WHERE ${conditions.join(" AND ")}
+        ORDER BY a.attendance_date DESC, p.employee_name ASC
+      `,
+      params
+    );
+
+    const buffer = buildFlatRecordsExportBuffer(rows);
+    res.setHeader("Content-Disposition", `attachment; filename="attendance_records_${Date.now()}.xlsx"`);
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    return res.send(buffer);
+  } catch (error) {
+    return sendError(res, error, "Failed to export attendance records.");
+  }
+});
+
+// -- Records: delete (spec §30-31) --------------------------------------------
+router.delete("/records/:id", requirePagePermission("attendance", "delete"), async (req, res) => {
+  try {
+    await ensureAttendanceTables();
+    const id = Number(req.params.id);
+    if (!id) {
+      throw createError("A valid record id is required.", 400, "INVALID_ID");
+    }
+
+    const conditions = ["a.id = ?"];
+    const params = [id];
+    if (!isAllCircle(req.authUser)) {
+      conditions.push("LOWER(TRIM(p.circle)) = LOWER(TRIM(?))");
+      params.push(req.authUser.circle);
+    }
+
+    const result = await query(
+      `
+        DELETE a FROM attendance a
+        JOIN physical p ON LOWER(TRIM(p.employee_code)) = LOWER(TRIM(a.employee_code))
+        WHERE ${conditions.join(" AND ")}
+      `,
+      params
+    );
+
+    if (!result.affectedRows) {
+      throw createError("Record not found or you cannot access it.", 404, "RECORD_NOT_FOUND");
+    }
+
+    return res.json({ success: true, message: "Attendance record deleted." });
+  } catch (error) {
+    return sendError(res, error, "Failed to delete the attendance record.");
+  }
+});
+
+router.post("/records/bulk-delete", requirePagePermission("attendance", "delete"), async (req, res) => {
+  try {
+    await ensureAttendanceTables();
+
+    const ids = Array.isArray(req.body?.ids) ? req.body.ids : [];
+    const numericIds = [...new Set(ids.map((id) => Number(id)))].filter(
+      (id) => Number.isInteger(id) && id > 0
+    );
+    if (!numericIds.length) {
+      throw createError("Please select at least one record to delete.", 400, "NO_IDS");
+    }
+
+    const conditions = [`a.id IN (${numericIds.map(() => "?").join(",")})`];
+    const params = [...numericIds];
+    if (!isAllCircle(req.authUser)) {
+      conditions.push("LOWER(TRIM(p.circle)) = LOWER(TRIM(?))");
+      params.push(req.authUser.circle);
+    }
+
+    const result = await query(
+      `
+        DELETE a FROM attendance a
+        JOIN physical p ON LOWER(TRIM(p.employee_code)) = LOWER(TRIM(a.employee_code))
+        WHERE ${conditions.join(" AND ")}
+      `,
+      params
+    );
+
+    if (!result.affectedRows) {
+      throw createError("None of the selected records could be deleted.", 404, "NO_RECORDS_DELETED");
+    }
+
+    return res.json({
+      success: true,
+      message: `${result.affectedRows} attendance record(s) deleted.`,
+      deleted: result.affectedRows,
+    });
+  } catch (error) {
+    return sendError(res, error, "Failed to delete the selected attendance records.");
+  }
+});
+
 // -- Dashboard summary ---------------------------------------------------------
 router.get("/dashboard/summary", async (req, res) => {
   try {
     await ensureAttendanceTables();
 
-    const month = String(req.query.month || "").trim();
-    if (!/^\d{4}-\d{2}$/.test(month)) {
-      throw createError("A valid month (YYYY-MM) is required.", 400, "INVALID_MONTH");
-    }
-
-    const [yearStr, monthStr] = month.split("-");
-    const totalDaysInMonth = new Date(Number(yearStr), Number(monthStr), 0).getDate();
-    const monthStart = `${month}-01`;
-    const monthEnd = `${month}-${String(totalDaysInMonth).padStart(2, "0")}`;
+    const { dateFrom, dateTo } = resolveAttendanceDateRange({
+      range: req.query.range,
+      from: req.query.from,
+      to: req.query.to,
+    });
+    const totalDaysInRange = Math.round(
+      (new Date(`${dateTo}T00:00:00Z`) - new Date(`${dateFrom}T00:00:00Z`)) / 86400000
+    ) + 1;
 
     const { conditions, params } = buildEmployeeScopeConditions(req, "p");
     const whereSql = conditions.join(" AND ");
 
-    const totalEmployeesRows = await query(
-      `SELECT COUNT(*) AS total FROM physical p WHERE ${whereSql}`,
-      params
-    );
-
-    const statusRows = await query(
-      `
-        SELECT a.status, COUNT(*) AS total
-        FROM attendance a
-        JOIN physical p ON LOWER(TRIM(p.employee_code)) = LOWER(TRIM(a.employee_code))
-        WHERE a.attendance_date BETWEEN ? AND ? AND ${whereSql}
-        GROUP BY a.status
-      `,
-      [monthStart, monthEnd, ...params]
-    );
-
-    const uploadedDaysRows = await query(
-      `
-        SELECT COUNT(DISTINCT a.attendance_date) AS days
-        FROM attendance a
-        JOIN physical p ON LOWER(TRIM(p.employee_code)) = LOWER(TRIM(a.employee_code))
-        WHERE a.attendance_date BETWEEN ? AND ? AND ${whereSql}
-      `,
-      [monthStart, monthEnd, ...params]
-    );
+    // None of these three depend on each other's result — run them
+    // concurrently against the pool instead of one round trip at a time.
+    const [totalEmployeesRows, statusRows, uploadedDaysRows] = await Promise.all([
+      query(
+        `SELECT COUNT(*) AS total FROM physical p WHERE ${whereSql}`,
+        params
+      ),
+      query(
+        `
+          SELECT a.status, COUNT(*) AS total
+          FROM attendance a
+          JOIN physical p ON LOWER(TRIM(p.employee_code)) = LOWER(TRIM(a.employee_code))
+          WHERE a.attendance_date BETWEEN ? AND ? AND ${whereSql}
+          GROUP BY a.status
+        `,
+        [dateFrom, dateTo, ...params]
+      ),
+      query(
+        `
+          SELECT COUNT(DISTINCT a.attendance_date) AS days
+          FROM attendance a
+          JOIN physical p ON LOWER(TRIM(p.employee_code)) = LOWER(TRIM(a.employee_code))
+          WHERE a.attendance_date BETWEEN ? AND ? AND ${whereSql}
+        `,
+        [dateFrom, dateTo, ...params]
+      ),
+    ]);
 
     const counts = { P: 0, A: 0, L: 0 };
+    let totalRecords = 0;
     statusRows.forEach((row) => {
       counts[row.status] = Number(row.total);
+      totalRecords += Number(row.total);
     });
 
     return res.json({
@@ -437,8 +660,11 @@ router.get("/dashboard/summary", async (req, res) => {
       present: counts.P,
       absent: counts.A,
       leave: counts.L,
+      totalRecords,
       daysUploaded: Number(uploadedDaysRows[0]?.days || 0),
-      totalDaysInMonth,
+      totalDaysInRange,
+      dateFrom,
+      dateTo,
     });
   } catch (error) {
     return sendError(res, error, "Failed to load the attendance dashboard summary.");
@@ -482,26 +708,32 @@ router.get("/dashboard/missing", async (req, res) => {
   }
 });
 
-// -- Monthly report export ---------------------------------------------------------
+// -- Attendance report export ---------------------------------------------------------
 router.get("/report/export", async (req, res) => {
   try {
     await ensureAttendanceTables();
 
-    const buffer = await buildMonthlyExportBuffer({
+    const { dateFrom, dateTo } = resolveAttendanceDateRange({
+      range: req.query.range,
+      from: req.query.from,
+      to: req.query.to,
+    });
+
+    const buffer = await buildAttendanceExportBuffer({
       query,
-      month: req.query.month,
+      dateFrom,
+      dateTo,
       filters: {
         circle: String(req.query.circle || "").trim() || null,
         cmp: String(req.query.cmp || "").trim() || null,
         jobRole: String(req.query.jobRole || "").trim() || null,
-        status: String(req.query.status || "").trim() || null,
       },
       authUser: req.authUser,
     });
 
     res.setHeader(
       "Content-Disposition",
-      `attachment; filename="attendance_${req.query.month || "report"}.xlsx"`
+      `attachment; filename="attendance_${dateFrom}_to_${dateTo}.xlsx"`
     );
     res.setHeader(
       "Content-Type",
@@ -510,6 +742,205 @@ router.get("/report/export", async (req, res) => {
     return res.send(buffer);
   } catch (error) {
     return sendError(res, error, "Failed to export the attendance report.");
+  }
+});
+
+// Allowlist mirroring RECORD_SORT_COLUMNS, for the Total Employees popup.
+const EMPLOYEE_SORT_COLUMNS = {
+  name: "p.employee_name",
+  hrmsId: "p.employee_code",
+  jobRole: "p.job_role",
+  cmp: "p.cmp",
+  circle: "p.circle",
+};
+
+function buildEmployeesQueryParts(req) {
+  const { conditions, params } = buildEmployeeScopeConditions(req, "p");
+  const search = String(req.query.search || "").trim();
+  if (search) {
+    conditions.push("(p.employee_name LIKE ? OR p.employee_code LIKE ?)");
+    params.push(`%${search}%`, `%${search}%`);
+  }
+  return { conditions, params };
+}
+
+// -- Total Employees popup (spec §10) -----------------------------------------
+router.get("/employees", async (req, res) => {
+  try {
+    await ensureAttendanceTables();
+
+    const page = Math.max(1, Number(req.query.page) || 1);
+    const pageSize = Math.min(200, Math.max(1, Number(req.query.pageSize) || 50));
+    const offset = (page - 1) * pageSize;
+
+    const { conditions, params } = buildEmployeesQueryParts(req);
+    const whereSql = conditions.join(" AND ");
+
+    const sortColumn = EMPLOYEE_SORT_COLUMNS[String(req.query.sortBy || "").trim()] || EMPLOYEE_SORT_COLUMNS.name;
+    const sortDir = String(req.query.sortDir || "").trim().toLowerCase() === "desc" ? "DESC" : "ASC";
+
+    const [countRows, rows] = await Promise.all([
+      query(`SELECT COUNT(*) AS total FROM physical p WHERE ${whereSql}`, params),
+      query(
+        `
+          SELECT p.id, p.employee_code, p.employee_name, p.job_role, p.cmp, p.circle, p.employment_status
+          FROM physical p
+          WHERE ${whereSql}
+          ORDER BY ${sortColumn} ${sortDir}, p.employee_name ASC
+          LIMIT ? OFFSET ?
+        `,
+        [...params, pageSize, offset]
+      ),
+    ]);
+
+    return res.json({
+      success: true,
+      employees: rows,
+      pagination: { page, pageSize, total: Number(countRows[0]?.total || 0) },
+    });
+  } catch (error) {
+    return sendError(res, error, "Failed to load employees.");
+  }
+});
+
+router.get("/employees/export", async (req, res) => {
+  try {
+    await ensureAttendanceTables();
+    const { conditions, params } = buildEmployeesQueryParts(req);
+
+    const rows = await query(
+      `
+        SELECT p.employee_code, p.employee_name, p.job_role, p.cmp, p.circle, p.employment_status
+        FROM physical p
+        WHERE ${conditions.join(" AND ")}
+        ORDER BY p.employee_name ASC
+      `,
+      params
+    );
+
+    const buffer = buildEmployeesExportBuffer(rows);
+    res.setHeader("Content-Disposition", `attachment; filename="attendance_employees_${Date.now()}.xlsx"`);
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    return res.send(buffer);
+  } catch (error) {
+    return sendError(res, error, "Failed to export employees.");
+  }
+});
+
+// -- Days-Uploaded calendar (spec §16-20) -------------------------------------
+router.get("/calendar", async (req, res) => {
+  try {
+    await ensureAttendanceTables();
+
+    const monthStr = String(req.query.month || "").trim();
+    if (!/^\d{4}-\d{2}$/.test(monthStr)) {
+      throw createError("A valid month (YYYY-MM) is required.", 400, "INVALID_MONTH");
+    }
+    const [year, month] = monthStr.split("-").map(Number);
+    const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
+    const dateFrom = `${monthStr}-01`;
+    const dateTo = `${monthStr}-${String(lastDay).padStart(2, "0")}`;
+
+    const { conditions, params } = buildEmployeeScopeConditions(req, "p");
+    const whereSql = conditions.join(" AND ");
+
+    const [employees, attendanceRows] = await Promise.all([
+      query(
+        `SELECT date_of_joining, last_working_date FROM physical p WHERE ${whereSql}`,
+        params
+      ),
+      query(
+        `
+          SELECT a.attendance_date, a.status, COUNT(*) AS total
+          FROM attendance a
+          JOIN physical p ON LOWER(TRIM(p.employee_code)) = LOWER(TRIM(a.employee_code))
+          WHERE a.attendance_date BETWEEN ? AND ? AND ${whereSql}
+          GROUP BY a.attendance_date, a.status
+        `,
+        [dateFrom, dateTo, ...params]
+      ),
+    ]);
+
+    const attendanceByDate = new Map();
+    attendanceRows.forEach((row) => {
+      const dateKey = String(row.attendance_date).slice(0, 10);
+      if (!attendanceByDate.has(dateKey)) attendanceByDate.set(dateKey, { P: 0, A: 0, L: 0 });
+      attendanceByDate.get(dateKey)[row.status] = Number(row.total);
+    });
+
+    const days = computeCalendarDays({
+      dateFrom,
+      dateTo,
+      employees,
+      attendanceByDate,
+      todayStr: toIsoDate(istNow()),
+    });
+
+    return res.json({ success: true, month: monthStr, days });
+  } catch (error) {
+    return sendError(res, error, "Failed to load the attendance calendar.");
+  }
+});
+
+router.get("/calendar/day", async (req, res) => {
+  try {
+    await ensureAttendanceTables();
+
+    const dateStr = String(req.query.date || "").trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+      throw createError("A valid date (YYYY-MM-DD) is required.", 400, "INVALID_DATE");
+    }
+
+    const { conditions, params } = buildEmployeeScopeConditions(req, "p");
+    const whereSql = conditions.join(" AND ");
+
+    const [statusRows, uploadRows] = await Promise.all([
+      query(
+        `
+          SELECT a.status, COUNT(*) AS total
+          FROM attendance a
+          JOIN physical p ON LOWER(TRIM(p.employee_code)) = LOWER(TRIM(a.employee_code))
+          WHERE a.attendance_date = ? AND ${whereSql}
+          GROUP BY a.status
+        `,
+        [dateStr, ...params]
+      ),
+      query(
+        `
+          SELECT au.id, au.original_name, au.uploaded_by_name, au.status,
+                 au.total_rows, au.valid_rows, au.error_rows, au.inserted_rows,
+                 au.updated_rows, au.skipped_rows, au.created_at, au.confirmed_at
+          FROM attendance_uploads au
+          WHERE au.attendance_date = ?
+            AND EXISTS (
+              SELECT 1 FROM attendance a
+              JOIN physical p ON LOWER(TRIM(p.employee_code)) = LOWER(TRIM(a.employee_code))
+              WHERE a.upload_batch_id = au.id AND ${whereSql}
+            )
+          ORDER BY au.id DESC
+        `,
+        [dateStr, ...params]
+      ),
+    ]);
+
+    const counts = { P: 0, A: 0, L: 0 };
+    let total = 0;
+    statusRows.forEach((row) => {
+      counts[row.status] = Number(row.total);
+      total += Number(row.total);
+    });
+
+    return res.json({
+      success: true,
+      date: dateStr,
+      total,
+      present: counts.P,
+      absent: counts.A,
+      leave: counts.L,
+      uploads: uploadRows,
+    });
+  } catch (error) {
+    return sendError(res, error, "Failed to load the attendance for this date.");
   }
 });
 

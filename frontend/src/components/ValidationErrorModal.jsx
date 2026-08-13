@@ -247,6 +247,11 @@ export default function ValidationErrorModal({
   title = "File Upload Validation Failed",
   subtitle = "We found validation errors in your uploaded Excel file. Please correct the highlighted records and upload again.",
   tone = "error",
+  // Optional: when provided, an additional "Export Errors Excel" button
+  // calls this (e.g. a real backend .xlsx of just these failed records)
+  // alongside the modal's own built-in CSV "Download Error Report".
+  onExport,
+  exportLabel = "Export Errors Excel",
 }) {
   const [searchTerm, setSearchTerm] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
@@ -489,6 +494,16 @@ export default function ValidationErrorModal({
 
           {/* Actions */}
           <div className="flex items-center gap-3 flex-shrink-0">
+            {onExport && (
+              <button
+                onClick={onExport}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white rounded-lg transition-all shadow-sm"
+                style={{ background: "linear-gradient(135deg,#059669,#047857)" }}
+              >
+                <Download className="w-4 h-4" />
+                {exportLabel}
+              </button>
+            )}
             <button
               onClick={downloadErrorReport}
               className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white rounded-lg transition-all shadow-sm"

@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import Select from "react-select";
-import { Download, AlertTriangle, Search } from "lucide-react";
+import { Download, AlertTriangle, Search, X, RotateCcw } from "lucide-react";
 
 import { ATTENDANCE_STATUS_OPTIONS, ATTENDANCE_STATUS_META } from "../../lib/attendanceStatus";
+import { dateRangeLabel, isDefaultDateRange } from "../../lib/attendanceDateRange";
+import DateRangeFilter from "./DateRangeFilter";
 
 const selectStyles = {
   control: (provided, state) => ({
@@ -39,11 +41,28 @@ function StatusLegend() {
   );
 }
 
+function FilterChip({ label, onRemove }) {
+  return (
+    <span className="inline-flex items-center gap-1.5 rounded-full border border-border-color bg-surface-muted px-2.5 py-1 text-[11px] font-medium text-text-secondary">
+      {label}
+      <button
+        type="button"
+        onClick={onRemove}
+        className="text-text-muted transition hover:text-text-primary"
+        aria-label={`Remove filter: ${label}`}
+      >
+        <X size={11} />
+      </button>
+    </span>
+  );
+}
+
 export default function FiltersBar({
-  month,
-  onMonthChange,
+  dateRange,
+  onDateRangeChange,
   filters,
   onFiltersChange,
+  onClearAll,
   circleOptions,
   cmpOptions,
   jobRoleOptions,
@@ -64,15 +83,53 @@ export default function FiltersBar({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchInput]);
 
+  const statusMeta = filters.status ? ATTENDANCE_STATUS_OPTIONS.find((o) => o.value === filters.status) : null;
+
+  const chips = [
+    dateRange && !isDefaultDateRange(dateRange) && {
+      key: "dateRange",
+      label: `Date: ${dateRangeLabel(dateRange)}`,
+      onRemove: () => onDateRangeChange({ range: "this_month", from: "", to: "" }),
+    },
+    filters.circle && {
+      key: "circle",
+      label: `Circle: ${circleOptions.find((o) => o.value === filters.circle)?.label || filters.circle}`,
+      onRemove: () => onFiltersChange({ circle: "", cmp: "" }),
+    },
+    filters.cmp && {
+      key: "cmp",
+      label: `CMP: ${cmpOptions.find((o) => o.value === filters.cmp)?.label || filters.cmp}`,
+      onRemove: () => onFiltersChange({ cmp: "" }),
+    },
+    filters.jobRole && {
+      key: "jobRole",
+      label: `Job Role: ${jobRoleOptions.find((o) => o.value === filters.jobRole)?.label || filters.jobRole}`,
+      onRemove: () => onFiltersChange({ jobRole: "" }),
+    },
+    filters.status && {
+      key: "status",
+      label: `Status: ${statusMeta?.label || filters.status}`,
+      onRemove: () => onFiltersChange({ status: "" }),
+    },
+    filters.search && {
+      key: "search",
+      label: `Search: "${filters.search}"`,
+      onRemove: () => {
+        setSearchInput("");
+        onFiltersChange({ search: "" });
+      },
+    },
+  ].filter(Boolean);
+
+  const handleClearAll = () => {
+    setSearchInput("");
+    onClearAll();
+  };
+
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center gap-3">
-        <input
-          type="month"
-          value={month}
-          onChange={(e) => onMonthChange(e.target.value)}
-          className="h-9 rounded-lg border border-border-color bg-surface px-3 text-sm text-text-primary"
-        />
+        <DateRangeFilter value={dateRange} onChange={onDateRangeChange} />
         <div className="w-44">
           <Select
             styles={selectStyles}
@@ -139,7 +196,27 @@ export default function FiltersBar({
           <AlertTriangle size={14} />
           Check Missing Attendance
         </button>
+        {chips.length > 0 && (
+          <button
+            type="button"
+            onClick={handleClearAll}
+            className="inline-flex h-9 items-center gap-2 rounded-lg border border-border-color bg-surface px-3 text-sm font-medium text-rose-600 transition hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-500/10"
+          >
+            <RotateCcw size={14} />
+            Clear All
+          </button>
+        )}
       </div>
+
+      {chips.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-[11px] font-semibold uppercase tracking-wide text-text-muted">Active Filters:</span>
+          {chips.map((chip) => (
+            <FilterChip key={chip.key} label={chip.label} onRemove={chip.onRemove} />
+          ))}
+        </div>
+      )}
+
       <StatusLegend />
     </div>
   );
