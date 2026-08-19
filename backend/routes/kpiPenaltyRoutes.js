@@ -870,7 +870,20 @@ router.get("/summary", requirePagePermission("kpis-penalty", "view"), async (req
       params
     );
 
-    res.json({ success: true, data: rows[0] });
+    const [byMonthRows] = await pool.query(
+      `SELECT DATE_FORMAT(r.month_date, '%Y-%m-%d') AS monthDate,
+              COUNT(*) AS count,
+              COALESCE(SUM(r.penalty_amount), 0) AS penaltyAmount,
+              COALESCE(SUM(r.reward_amount), 0) AS rewardAmount
+       FROM kpi_penalty_records r
+       JOIN kpi_penalty_uploads u ON u.id = r.file_id
+       WHERE ${filters.join(" AND ")}
+       GROUP BY r.month_date
+       ORDER BY r.month_date ASC`,
+      params
+    );
+
+    res.json({ success: true, data: { ...rows[0], byMonth: byMonthRows } });
   } catch (error) {
     console.error("KPI Penalty summary fetch failed:", error);
     res.status(500).json({ success: false, message: "Failed to load KPI Penalty summary." });

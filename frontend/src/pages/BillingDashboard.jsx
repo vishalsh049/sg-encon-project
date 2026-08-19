@@ -8,7 +8,7 @@ import { buildApiUrl } from "../lib/api";
 import DashboardHeader from "../components/billingDashboard/DashboardHeader";
 import RevenueAnalyticsCard from "../components/billingDashboard/RevenueAnalyticsCard";
 import PmLossAnalyticsCard from "../components/billingDashboard/PmLossAnalyticsCard";
-import PenaltyPlaceholder from "../components/billingDashboard/PenaltyPlaceholder";
+import PenaltyAnalyticsCard from "../components/billingDashboard/PenaltyAnalyticsCard";
 import DomainPerformance from "../components/billingDashboard/DomainPerformance";
 import CircleLeaderboard from "../components/billingDashboard/CircleLeaderboard";
 import QuickInsights from "../components/billingDashboard/QuickInsights";
@@ -32,6 +32,9 @@ export default function BillingDashboard() {
     avgRate: 0,
   });
   const [revenueLoading, setRevenueLoading] = useState(false);
+  const [kpiPenalty, setKpiPenalty] = useState(null);
+  const [generalPenalty, setGeneralPenalty] = useState(null);
+  const [penaltyLoading, setPenaltyLoading] = useState(false);
   const [timeFilter, setTimeFilter] = useState("3");
   const [circleFilter, setCircleFilter] = useState("");
   const [billingFilter, setBillingFilter] = useState("");
@@ -101,6 +104,40 @@ export default function BillingDashboard() {
     }
   }, [circleFilter, timeFilter, billingFilter]);
 
+  // Unlike /api/revenue/kpi-data (always MAX(billing_month), ignoring the
+  // months filter), the KPI/General Penalty summary endpoints filter by
+  // dateFrom/dateTo against month_date, so this actually honors timeFilter.
+  const fetchPenalties = useCallback(async () => {
+    try {
+      setPenaltyLoading(true);
+      const authHeaders = { Authorization: `Bearer ${localStorage.getItem("token")}` };
+
+      const pad = (n) => String(n).padStart(2, "0");
+      const toDateStr = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+      const monthsBack = Number(timeFilter) || 3;
+      const today = new Date();
+      const from = new Date(today.getFullYear(), today.getMonth() - (monthsBack - 1), 1);
+
+      const params = {
+        circle: circleFilter || undefined,
+        dateFrom: toDateStr(from),
+        dateTo: toDateStr(today),
+      };
+
+      const [kpiRes, generalRes] = await Promise.all([
+        axios.get(buildApiUrl("/api/kpi-penalty/summary"), { headers: authHeaders, params }),
+        axios.get(buildApiUrl("/api/general-penalty/summary"), { headers: authHeaders, params }),
+      ]);
+
+      setKpiPenalty(kpiRes.data?.data || null);
+      setGeneralPenalty(generalRes.data?.data || null);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setPenaltyLoading(false);
+    }
+  }, [circleFilter, timeFilter]);
+
   const fetchLatestBillingMonth = useCallback(async () => {
     try {
       const authHeaders = { Authorization: `Bearer ${localStorage.getItem("token")}` };
@@ -120,10 +157,10 @@ export default function BillingDashboard() {
 
   const refreshAll = useCallback(async () => {
     setRefreshing(true);
-    await Promise.all([fetchData(), fetchRevenueKpi(), fetchLatestBillingMonth()]);
+    await Promise.all([fetchData(), fetchRevenueKpi(), fetchLatestBillingMonth(), fetchPenalties()]);
     setLastUpdated(new Date());
     setRefreshing(false);
-  }, [fetchData, fetchRevenueKpi, fetchLatestBillingMonth]);
+  }, [fetchData, fetchRevenueKpi, fetchLatestBillingMonth, fetchPenalties]);
 
   useEffect(() => {
     refreshAll();
@@ -209,8 +246,48 @@ export default function BillingDashboard() {
     value: month === currentMonth ? Number((Number(summary?.pm_loss || 0) / 10000000).toFixed(2)) : null,
   }));
 
-  // No penalty API yet — every month is "no data".
-  const penaltyTrendSeries = filteredMonths.map((month) => ({ month, hasData: false, value: null }));
+  // Penalty summary endpoints filter by dateFrom/dateTo, so byMonth already
+  // only covers the selected window — map each real month_date to the
+  // matching rolling-window label the same way resolveDataMonth does above.
+  const mapMonthDateToLabel = (monthDateStr) => {
+    if (!monthDateStr) return null;
+    const [yearStr, monthStr] = monthDateStr.split("-");
+    const year = Number(yearStr);
+    const monthIdx = Number(monthStr) - 1;
+    if (!Number.isInteger(year) || monthIdx < 0 || monthIdx > 11) return null;
+
+    const today = new Date();
+    const todayYear = today.getFullYear();
+    const todayMonthIdx = today.getMonth();
+
+    if (timeFilter === "12") {
+      return year === todayYear ? months[monthIdx] : null;
+    }
+    const offset = (todayYear * 12 + todayMonthIdx) - (year * 12 + monthIdx);
+    return offset >= 0 && offset < filteredMonths.length ? filteredMonths[offset] : null;
+  };
+
+  const penaltyByMonthLabel = {};
+  (kpiPenalty?.byMonth || []).forEach((row) => {
+    const label = mapMonthDateToLabel(row.monthDate);
+    if (!label) return;
+    penaltyByMonthLabel[label] = (penaltyByMonthLabel[label] || 0) + Number(row.penaltyAmount || 0);
+  });
+  (generalPenalty?.byMonth || []).forEach((row) => {
+    const label = mapMonthDateToLabel(row.monthDate);
+    if (!label) return;
+    penaltyByMonthLabel[label] = (penaltyByMonthLabel[label] || 0) + Number(row.penaltyAccepted || 0);
+  });
+
+  // Lakh scale (not crore, like Revenue/PM Loss) — penalty amounts run in the
+  // thousands-to-lakhs range, so crore-scale rounding flattened every bar to 0.00.
+  const penaltyTrendSeries = filteredMonths.map((month) => ({
+    month,
+    hasData: Object.prototype.hasOwnProperty.call(penaltyByMonthLabel, month),
+    value: Object.prototype.hasOwnProperty.call(penaltyByMonthLabel, month)
+      ? Number((penaltyByMonthLabel[month] / 100000).toFixed(2))
+      : null,
+  }));
 
   // ✅ MONTH-WISE DONE / PENDING CALCULATION (unchanged formula)
   const monthStats = {};
@@ -239,9 +316,11 @@ export default function BillingDashboard() {
       return { month, done: stats.done, pending: stats.pending, percent };
     });
 
+  const totalPenalties = Number(kpiPenalty?.totalPenaltyAmount || 0) + Number(generalPenalty?.totalPenaltyAccepted || 0);
+
   const revenueInsight = useMemo(() => {
     const revenue = Number(revenueKpi.totalRevenue || 0);
-    const penalties = Number(summary?.penalties || 0);
+    const penalties = totalPenalties;
     const net = revenue - penalties;
     const timeLabel = timeFilter === "3" ? "last 3 months" : timeFilter === "6" ? "last 6 months" : "last year";
     const billingLabel = billingFilter ? `${billingFilter} billing ` : "";
@@ -257,7 +336,20 @@ export default function BillingDashboard() {
       return `${circleLabel}${billingLabel}revenue is ₹${revenue.toLocaleString()} for ${timeLabel}, generating net profit of ₹${net.toLocaleString()}.`;
     }
     return `${circleLabel}${billingLabel}revenue is ₹${revenue.toLocaleString()} for ${timeLabel}, with a net loss of ₹${Math.abs(net).toLocaleString()} after penalties.`;
-  }, [revenueKpi.totalRevenue, summary?.penalties, circleFilter, timeFilter, billingFilter]);
+  }, [revenueKpi.totalRevenue, totalPenalties, circleFilter, timeFilter, billingFilter]);
+
+  const penaltyInsight = useMemo(() => {
+    const kpiTotal = Number(kpiPenalty?.totalPenaltyAmount || 0);
+    const generalAccepted = Number(generalPenalty?.totalPenaltyAccepted || 0);
+    const generalGiven = Number(generalPenalty?.totalPenaltyGiven || 0);
+    const timeLabel = timeFilter === "3" ? "last 3 months" : timeFilter === "6" ? "last 6 months" : "last year";
+    const circleLabel = circleFilter ? `${circleFilter} circle, ` : "";
+
+    if (!kpiTotal && !generalGiven) {
+      return `No KPI or General Penalty records for ${circleLabel}${timeLabel}.`;
+    }
+    return `${circleLabel}₹${kpiTotal.toLocaleString()} KPI + ₹${generalAccepted.toLocaleString()} General (accepted of ₹${generalGiven.toLocaleString()} given) over ${timeLabel}.`;
+  }, [kpiPenalty, generalPenalty, circleFilter, timeFilter]);
 
   // Average completion
   const avgCompletion =
@@ -438,7 +530,13 @@ export default function BillingDashboard() {
               latestBillingMonthLabel={latestBillingMonthLabel}
             />
             <PmLossAnalyticsCard summary={summary} trendSeries={pmLossTrendSeries} latestBillingMonthLabel={latestBillingMonthLabel} />
-            <PenaltyPlaceholder trendSeries={penaltyTrendSeries} />
+            <PenaltyAnalyticsCard
+              kpiPenalty={kpiPenalty}
+              generalPenalty={generalPenalty}
+              insight={penaltyInsight}
+              loading={penaltyLoading}
+              trendSeries={penaltyTrendSeries}
+            />
           </div>
         </div>
 

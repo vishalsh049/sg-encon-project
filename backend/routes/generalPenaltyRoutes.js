@@ -907,7 +907,33 @@ router.get("/summary", requirePagePermission("general-penalties", "view"), async
       params
     );
 
-    res.json({ success: true, data: rows[0] });
+    const [byDomainRows] = await pool.query(
+      `SELECT COALESCE(NULLIF(TRIM(r.domain), ''), 'Unspecified') AS domain,
+              COUNT(*) AS count,
+              COALESCE(SUM(r.penalty_given), 0) AS penaltyGiven,
+              COALESCE(SUM(r.penalty_accepted), 0) AS penaltyAccepted
+       FROM general_penalty_records r
+       JOIN general_penalty_uploads u ON u.id = r.file_id
+       WHERE ${filters.join(" AND ")}
+       GROUP BY domain
+       ORDER BY penaltyAccepted DESC`,
+      params
+    );
+
+    const [byMonthRows] = await pool.query(
+      `SELECT DATE_FORMAT(r.month_date, '%Y-%m-%d') AS monthDate,
+              COUNT(*) AS count,
+              COALESCE(SUM(r.penalty_given), 0) AS penaltyGiven,
+              COALESCE(SUM(r.penalty_accepted), 0) AS penaltyAccepted
+       FROM general_penalty_records r
+       JOIN general_penalty_uploads u ON u.id = r.file_id
+       WHERE ${filters.join(" AND ")}
+       GROUP BY r.month_date
+       ORDER BY r.month_date ASC`,
+      params
+    );
+
+    res.json({ success: true, data: { ...rows[0], byDomain: byDomainRows, byMonth: byMonthRows } });
   } catch (error) {
     console.error("General Penalty summary fetch failed:", error);
     res.status(500).json({ success: false, message: "Failed to load General Penalty summary." });
