@@ -195,8 +195,7 @@ function AttendanceManagement() {
               Attendance Management
             </h1>
             <p className="max-w-3xl text-sm text-text-muted md:text-[15px]">
-              Upload daily attendance against employees already in the Physical master. Employees not found there
-              must be added in Physical first.
+              Upload daily attendance against employees already in the Physical master.
             </p>
           </div>
 
