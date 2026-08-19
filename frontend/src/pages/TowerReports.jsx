@@ -1807,6 +1807,8 @@ setTimeout(() => {
       {/* ── Upload / edit modal ──────────────────────────────────────────── */}
       {modalOpen ? (
         <div
+          ref={modalRef}
+          onKeyDown={handleFocusTrap}
           className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto px-3 py-6 sm:px-4"
           role="dialog"
           aria-modal="true"

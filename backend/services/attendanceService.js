@@ -256,6 +256,24 @@ function resolveAttendanceDateRange({ range, from, to }) {
   };
 }
 
+// Fixed one-off holidays (in addition to every Sunday), excluded from the
+// "Days Uploaded" card's expected-day count — not from the calendar popup,
+// which still shows every calendar day for visual context. Add more dates
+// here as needed; format is "YYYY-MM-DD".
+const HOLIDAYS = new Set(["2026-08-15", "2026-08-28"]);
+
+// Counts calendar days in [dateFrom, dateTo] that are neither a Sunday nor a
+// listed holiday — the denominator for "Days Uploaded", so a month with 4
+// Sundays and 1 holiday shows against 26 expected days, not 31.
+function countWorkingDays(dateFrom, dateTo) {
+  let count = 0;
+  for (let cursor = dateFrom; cursor <= dateTo; cursor = addDays(cursor, 1)) {
+    const isSunday = new Date(`${cursor}T00:00:00Z`).getUTCDay() === 0;
+    if (!isSunday && !HOLIDAYS.has(cursor)) count += 1;
+  }
+  return count;
+}
+
 function makeValidationError({ row, employee, employeeCode, column, currentValue, error, expected, howToFix }) {
   return {
     row,
@@ -745,53 +763,6 @@ function buildEmployeesExportBuffer(rows) {
   return XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
 }
 
-// Kept in sync with the frontend's STATUS_LABELS map in
-// UploadHistoryTable.jsx — exports should read the same humanized status
-// the table shows, not the raw DB value.
-const UPLOAD_STATUS_LABELS = {
-  pending_preview: "Pending Preview",
-  cancelled: "Cancelled",
-  completed: "Completed",
-  completed_with_errors: "Completed with Errors",
-  confirmed: "Completed",
-};
-
-// Flat upload-history export — mirrors the Upload History tab's table
-// exactly (same columns, same row set), with no LIMIT so it's a genuine
-// full-history export rather than just "what's currently on screen".
-function buildUploadHistoryExportBuffer(rows) {
-  const header = [
-    "Uploaded At", "Attendance Date", "File", "Uploaded By", "Status",
-    "Total", "Inserted", "Updated", "Skipped", "Errors",
-  ];
-  const sheetRows = [
-    header,
-    ...rows.map((row) => {
-      const uploadedAt = row.created_at ? new Date(row.created_at) : null;
-      const uploadedAtStr = uploadedAt
-        ? `${formatDdMmYyyy(toIsoDate(uploadedAt))} ${uploadedAt.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}`
-        : "";
-      return [
-        uploadedAtStr,
-        row.attendance_date ? formatDdMmYyyy(String(row.attendance_date).slice(0, 10)) : "",
-        row.original_name || "",
-        row.uploaded_by_name || "",
-        UPLOAD_STATUS_LABELS[row.status] || row.status || "",
-        row.total_rows ?? 0,
-        row.inserted_rows ?? 0,
-        row.updated_rows ?? 0,
-        row.skipped_rows ?? 0,
-        row.error_rows ?? 0,
-      ];
-    }),
-  ];
-
-  const workbook = XLSX.utils.book_new();
-  const worksheet = XLSX.utils.aoa_to_sheet(sheetRows);
-  XLSX.utils.book_append_sheet(workbook, worksheet, "Upload History");
-  return XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
-}
-
 // Missing-attendance roster export for the Missing Attendance panel — one
 // row per employee who has no attendance record for the checked date.
 function buildMissingAttendanceExportBuffer(rows, dateStr) {
@@ -891,13 +862,13 @@ module.exports = {
   ensureAttendanceSchema,
   todayIstDateString,
   resolveAttendanceDateRange,
+  countWorkingDays,
   validateAttendanceUpload,
   insertAttendanceRows,
   updateAttendanceRowsBulk,
   buildAttendanceExportBuffer,
   buildFlatRecordsExportBuffer,
   buildEmployeesExportBuffer,
-  buildUploadHistoryExportBuffer,
   buildMissingAttendanceExportBuffer,
   buildUploadErrorsExportBuffer,
   computeCalendarDays,

@@ -15,13 +15,13 @@ const {
   ensureAttendanceSchema,
   todayIstDateString,
   resolveAttendanceDateRange,
+  countWorkingDays,
   validateAttendanceUpload,
   insertAttendanceRows,
   updateAttendanceRowsBulk,
   buildAttendanceExportBuffer,
   buildFlatRecordsExportBuffer,
   buildEmployeesExportBuffer,
-  buildUploadHistoryExportBuffer,
   buildMissingAttendanceExportBuffer,
   buildUploadErrorsExportBuffer,
   computeCalendarDays,
@@ -323,48 +323,6 @@ router.post("/upload/cancel", async (req, res) => {
   }
 });
 
-// -- Upload / audit history --------------------------------------------------
-router.get("/uploads", async (req, res) => {
-  try {
-    await ensureAttendanceTables();
-    const rows = await query(`
-      SELECT id, attendance_date, original_name, uploaded_by_name, status, duplicate_action,
-             total_rows, valid_rows, error_rows, conflict_rows, inserted_rows, updated_rows, skipped_rows,
-             created_at, confirmed_at
-      FROM attendance_uploads
-      ORDER BY id DESC
-      LIMIT 200
-    `);
-    return res.json({ success: true, uploads: rows });
-  } catch (error) {
-    return sendError(res, error, "Failed to load upload history.");
-  }
-});
-
-router.get("/uploads/export", async (req, res) => {
-  try {
-    await ensureAttendanceTables();
-    const rows = await query(`
-      SELECT id, attendance_date, original_name, uploaded_by_name, status, duplicate_action,
-             total_rows, valid_rows, error_rows, conflict_rows, inserted_rows, updated_rows, skipped_rows,
-             created_at, confirmed_at
-      FROM attendance_uploads
-      ORDER BY id DESC
-    `);
-
-    const buffer = buildUploadHistoryExportBuffer(rows);
-
-    res.setHeader("Content-Disposition", 'attachment; filename="attendance_upload_history.xlsx"');
-    res.setHeader(
-      "Content-Type",
-      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    );
-    return res.send(buffer);
-  } catch (error) {
-    return sendError(res, error, "Failed to export upload history.");
-  }
-});
-
 // -- Upload errors: view / export (spec §24-26) -----------------------------
 router.get("/uploads/:id/errors", async (req, res) => {
   try {
@@ -638,9 +596,7 @@ router.get("/dashboard/summary", async (req, res) => {
       from: req.query.from,
       to: req.query.to,
     });
-    const totalDaysInRange = Math.round(
-      (new Date(`${dateTo}T00:00:00Z`) - new Date(`${dateFrom}T00:00:00Z`)) / 86400000
-    ) + 1;
+    const totalDaysInRange = countWorkingDays(dateFrom, dateTo);
 
     const { conditions, params } = buildEmployeeScopeConditions(req, "p");
     const whereSql = conditions.join(" AND ");
@@ -699,43 +655,66 @@ router.get("/dashboard/summary", async (req, res) => {
 
 // -- Missing attendance ---------------------------------------------------------
 // Shared by the dashboard panel and its export — throws on a missing/invalid
-// `date` query param so both routes get the same 400 behaviour for free.
+// dateFrom/dateTo so both routes get the same 400 behaviour for free.
+//
+// "Missing" means the employee has at least one day within the range (that
+// they were actually employed for) with no attendance row — not "missing
+// every day in the range". An employee's own applicable window is clipped to
+// their [date_of_joining, last_working_date] so someone who joined mid-range
+// isn't flagged for days before they existed.
 async function fetchMissingAttendanceRows(req) {
   await ensureAttendanceTables();
 
-  const dateStr = String(req.query.date || "").trim();
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
-    throw createError("A valid date (YYYY-MM-DD) is required.", 400, "INVALID_DATE");
+  const dateFromStr = String(req.query.dateFrom || req.query.date || "").trim();
+  const dateToStr = String(req.query.dateTo || req.query.date || "").trim();
+  if (
+    !/^\d{4}-\d{2}-\d{2}$/.test(dateFromStr) ||
+    !/^\d{4}-\d{2}-\d{2}$/.test(dateToStr) ||
+    dateFromStr > dateToStr
+  ) {
+    throw createError("A valid date range (dateFrom/dateTo) is required.", 400, "INVALID_DATE");
   }
 
   const { conditions, params } = buildEmployeeScopeConditions(req, "p");
   conditions.push("(p.date_of_joining IS NULL OR p.date_of_joining <= ?)");
-  params.push(dateStr);
+  params.push(dateToStr);
   conditions.push("(p.last_working_date IS NULL OR p.last_working_date >= ?)");
-  params.push(dateStr);
+  params.push(dateFromStr);
 
   const rows = await query(
     `
       SELECT p.employee_code, p.employee_name, p.job_role, p.cmp, p.circle
       FROM physical p
+      LEFT JOIN attendance a
+        ON a.employee_code = p.employee_code
+        AND a.attendance_date BETWEEN ? AND ?
       WHERE ${conditions.join(" AND ")}
-        AND NOT EXISTS (
-          SELECT 1 FROM attendance a
-          WHERE a.attendance_date = ?
-            AND a.employee_code = p.employee_code
-        )
+      GROUP BY p.id, p.employee_code, p.employee_name, p.job_role, p.cmp, p.circle,
+               p.date_of_joining, p.last_working_date
+      HAVING COUNT(DISTINCT a.attendance_date) < (
+        DATEDIFF(
+          LEAST(?, COALESCE(p.last_working_date, ?)),
+          GREATEST(?, COALESCE(p.date_of_joining, ?))
+        ) + 1
+      )
       ORDER BY p.employee_name ASC
     `,
-    [...params, dateStr]
+    [dateFromStr, dateToStr, ...params, dateToStr, dateToStr, dateFromStr, dateFromStr]
   );
 
-  return { rows, dateStr };
+  return { rows, dateFromStr, dateToStr };
 }
 
 router.get("/dashboard/missing", async (req, res) => {
   try {
-    const { rows } = await fetchMissingAttendanceRows(req);
-    return res.json({ success: true, missing: rows, count: rows.length });
+    const { rows, dateFromStr, dateToStr } = await fetchMissingAttendanceRows(req);
+    return res.json({
+      success: true,
+      missing: rows,
+      count: rows.length,
+      dateFrom: dateFromStr,
+      dateTo: dateToStr,
+    });
   } catch (error) {
     return sendError(res, error, "Failed to load missing attendance.");
   }
@@ -743,12 +722,13 @@ router.get("/dashboard/missing", async (req, res) => {
 
 router.get("/dashboard/missing/export", async (req, res) => {
   try {
-    const { rows, dateStr } = await fetchMissingAttendanceRows(req);
-    const buffer = buildMissingAttendanceExportBuffer(rows, dateStr);
+    const { rows, dateFromStr, dateToStr } = await fetchMissingAttendanceRows(req);
+    const rangeLabel = dateFromStr === dateToStr ? dateFromStr : `${dateFromStr}_to_${dateToStr}`;
+    const buffer = buildMissingAttendanceExportBuffer(rows, rangeLabel);
 
     res.setHeader(
       "Content-Disposition",
-      `attachment; filename="missing_attendance_${dateStr}.xlsx"`
+      `attachment; filename="missing_attendance_${rangeLabel}.xlsx"`
     );
     res.setHeader(
       "Content-Type",

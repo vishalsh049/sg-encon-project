@@ -16,7 +16,6 @@ import StatsRow from "../components/attendance/StatsRow";
 import FiltersBar from "../components/attendance/FiltersBar";
 import MissingPanel from "../components/attendance/MissingPanel";
 import RecordsTable from "../components/attendance/RecordsTable";
-import UploadHistoryTable from "../components/attendance/UploadHistoryTable";
 import UploadModal from "../components/attendance/UploadModal";
 import EmployeesModal from "../components/attendance/EmployeesModal";
 import RecordsDrilldownModal from "../components/attendance/RecordsDrilldownModal";
@@ -33,13 +32,13 @@ function AttendanceManagement() {
   const { circleOptions, getCmpOptions } = useCircleOptions();
   const { options: jobRoleOptions } = useDesignationOptions();
 
-  const [activeTab, setActiveTab] = useState("records");
   const [dateRange, setDateRange] = useState(DEFAULT_DATE_RANGE);
   const [filters, setFilters] = useState(DEFAULT_FILTERS);
   const [sort, setSort] = useState(DEFAULT_SORT);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [showMissingPanel, setShowMissingPanel] = useState(false);
-  const [missingDate, setMissingDate] = useState(todayStr());
+  const [missingDateFrom, setMissingDateFrom] = useState(todayStr());
+  const [missingDateTo, setMissingDateTo] = useState(todayStr());
   // Which StatsRow card popup (if any) is open: "employees" | "present" |
   // "absent" | "leave" | "rate" | "records" | "calendar" | null.
   const [activeCard, setActiveCard] = useState(null);
@@ -66,10 +65,6 @@ function AttendanceManagement() {
     recordsError,
     pagination,
     fetchRecords,
-    uploads,
-    uploadsLoading,
-    uploadsError,
-    fetchUploads,
     missing,
     missingLoading,
     fetchMissing,
@@ -88,19 +83,13 @@ function AttendanceManagement() {
     [dateRange, filters.circle, filters.cmp, filters.jobRole]
   );
 
-  // Upload History is a separate tab, not shown by default — its data loads
-  // only once the user actually opens that tab, not on initial page load.
-  useEffect(() => {
-    if (activeTab === "uploads") fetchUploads();
-  }, [activeTab, fetchUploads]);
-
   // The Missing Attendance panel previously kept showing results for
   // whatever Circle/CMP/Job Role was selected the moment it was opened —
   // changing those filters while the panel stayed open silently left it
-  // stale. Re-check the same date under the new scope whenever it changes.
+  // stale. Re-check the same range under the new scope whenever it changes.
   useEffect(() => {
     if (!showMissingPanel) return;
-    fetchMissing(missingDate);
+    fetchMissing(missingDateFrom, missingDateTo);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters.circle, filters.cmp, filters.jobRole]);
 
@@ -117,12 +106,17 @@ function AttendanceManagement() {
 
   const handleCheckMissing = () => {
     setShowMissingPanel(true);
-    fetchMissing(missingDate);
+    fetchMissing(missingDateFrom, missingDateTo);
   };
 
-  const handleMissingDateChange = (date) => {
-    setMissingDate(date);
-    fetchMissing(date);
+  const handleMissingDateFromChange = (date) => {
+    setMissingDateFrom(date);
+    fetchMissing(date, missingDateTo);
+  };
+
+  const handleMissingDateToChange = (date) => {
+    setMissingDateTo(date);
+    fetchMissing(missingDateFrom, date);
   };
 
   const handleCloseMissing = () => {
@@ -133,10 +127,17 @@ function AttendanceManagement() {
   const handleExportMissing = async () => {
     try {
       const res = await axios.get(buildApiUrl("/api/attendance/dashboard/missing/export"), {
-        params: { date: missingDate, circle: filters.circle, cmp: filters.cmp, jobRole: filters.jobRole },
+        params: {
+          dateFrom: missingDateFrom,
+          dateTo: missingDateTo,
+          circle: filters.circle,
+          cmp: filters.cmp,
+          jobRole: filters.jobRole,
+        },
         responseType: "blob",
       });
-      saveAs(res.data, `missing_attendance_${missingDate}.xlsx`);
+      const rangeSuffix = missingDateFrom === missingDateTo ? missingDateFrom : `${missingDateFrom}_to_${missingDateTo}`;
+      saveAs(res.data, `missing_attendance_${rangeSuffix}.xlsx`);
     } catch (err) {
       console.error(err);
       toast.error("Failed to export missing attendance.");
@@ -178,11 +179,10 @@ function AttendanceManagement() {
     }
   };
 
-  // Calendar / Upload History "View Attendance Records": jump the Records
-  // tab to that single date and close whatever popup triggered it.
+  // Calendar "View Attendance Records": jump Attendance Records to that
+  // single date and close whatever popup triggered it.
   const handleViewRecordsForDate = (dateStr) => {
     setDateRange({ range: "custom", from: dateStr, to: dateStr });
-    setActiveTab("records");
     setActiveCard(null);
   };
 
@@ -233,8 +233,10 @@ function AttendanceManagement() {
 
         {showMissingPanel && (
           <MissingPanel
-            date={missingDate}
-            onDateChange={handleMissingDateChange}
+            dateFrom={missingDateFrom}
+            dateTo={missingDateTo}
+            onDateFromChange={handleMissingDateFromChange}
+            onDateToChange={handleMissingDateToChange}
             missing={missing}
             missingLoading={missingLoading}
             onClose={handleCloseMissing}
@@ -243,51 +245,21 @@ function AttendanceManagement() {
           />
         )}
 
-        <div className="flex gap-2 border-b border-border-color/60">
-          {[
-            { key: "records", label: "Attendance Records" },
-            { key: "uploads", label: "Upload History" },
-          ].map((tab) => (
-            <button
-              key={tab.key}
-              type="button"
-              onClick={() => setActiveTab(tab.key)}
-              className={`px-4 py-2 text-sm font-medium transition ${
-                activeTab === tab.key
-                  ? "border-b-2 border-blue-600 text-blue-600 dark:text-blue-400"
-                  : "text-text-muted hover:text-text-primary"
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
+        <h2 className="text-sm font-semibold text-text-primary">Attendance Records</h2>
 
-        {activeTab === "records" && (
-          <RecordsTable
-            records={records}
-            recordsLoading={recordsLoading}
-            recordsError={recordsError}
-            onRetry={() => fetchRecords(pagination.page)}
-            pagination={pagination}
-            onPageChange={fetchRecords}
-            sort={sort}
-            onSortChange={handleSortChange}
-            canDelete={canDelete}
-            deleteRecord={deleteRecord}
-            bulkDeleteRecords={bulkDeleteRecords}
-          />
-        )}
-
-        {activeTab === "uploads" && (
-          <UploadHistoryTable
-            uploads={uploads}
-            uploadsLoading={uploadsLoading}
-            uploadsError={uploadsError}
-            onRetry={fetchUploads}
-            scope={scope}
-          />
-        )}
+        <RecordsTable
+          records={records}
+          recordsLoading={recordsLoading}
+          recordsError={recordsError}
+          onRetry={() => fetchRecords(pagination.page)}
+          pagination={pagination}
+          onPageChange={fetchRecords}
+          sort={sort}
+          onSortChange={handleSortChange}
+          canDelete={canDelete}
+          deleteRecord={deleteRecord}
+          bulkDeleteRecords={bulkDeleteRecords}
+        />
       </div>
 
       {showUploadModal && (

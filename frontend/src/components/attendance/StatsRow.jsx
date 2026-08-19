@@ -120,7 +120,7 @@ export default function StatsRow({ summary, summaryLoading, summaryError, onRetr
       <StatCard
         label="Days Uploaded"
         value={`${summary?.daysUploaded ?? 0}/${summary?.totalDaysInRange ?? "-"}`}
-        hint="Distinct dates uploaded — click to view calendar"
+        hint="Out of working days (Sundays & holidays excluded)"
         icon={ClipboardList}
         tone="gray"
         loading={summaryLoading}

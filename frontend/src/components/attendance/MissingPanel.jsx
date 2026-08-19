@@ -5,13 +5,22 @@ import { Download, RefreshCw, X } from "lucide-react";
 import PremiumDatePicker from "../PremiumDatePicker";
 import { formatDisplayDate, todayStr } from "../../lib/attendanceFormat";
 
-// Shown when the user clicks "Check Missing Attendance". Unlike the original
-// version this isn't locked to today — the date picker lets an admin check
-// (and then chase up) any past day, not just the current one.
-export default function MissingPanel({ date, onDateChange, missing, missingLoading, onClose, onExport, scope }) {
+// Shown when the user clicks "Check Missing Attendance". A From/To range
+// (not a single day) — an employee shows up if they're missing attendance on
+// at least one day anywhere in that range (see the backend's
+// fetchMissingAttendanceRows for the exact semantics).
+export default function MissingPanel({
+  dateFrom, dateTo, onDateFromChange, onDateToChange,
+  missing, missingLoading, onClose, onExport, scope,
+}) {
   const [exporting, setExporting] = useState(false);
 
   const scopeChips = [scope?.circle, scope?.cmp, scope?.jobRole].filter(Boolean);
+  const rangeLabel = dateFrom === dateTo
+    ? formatDisplayDate(dateFrom || todayStr())
+    : `${formatDisplayDate(dateFrom || todayStr())} to ${formatDisplayDate(dateTo || todayStr())}`;
+
+  const parseDate = (value) => (value ? new Date(`${value}T00:00:00`) : null);
 
   const handleExport = async () => {
     setExporting(true);
@@ -27,13 +36,25 @@ export default function MissingPanel({ date, onDateChange, missing, missingLoadi
 
   return (
     <div className="rounded-2xl border border-amber-200/60 bg-amber-50/60 p-4 dark:border-amber-500/20 dark:bg-amber-500/5">
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-2">
           <p className="text-sm font-semibold text-amber-700 dark:text-amber-400">
-            Missing attendance for
+            Missing attendance from
           </p>
-          <div className="w-40">
-            <PremiumDatePicker value={date} onChange={onDateChange} isDateDisabled={(d) => d > new Date()} />
+          <div className="w-48">
+            <PremiumDatePicker
+              value={dateFrom}
+              onChange={onDateFromChange}
+              isDateDisabled={(d) => d > new Date() || (parseDate(dateTo) && d > parseDate(dateTo))}
+            />
+          </div>
+          <p className="text-sm font-semibold text-amber-700 dark:text-amber-400">to</p>
+          <div className="w-48">
+            <PremiumDatePicker
+              value={dateTo}
+              onChange={onDateToChange}
+              isDateDisabled={(d) => d > new Date() || (parseDate(dateFrom) && d < parseDate(dateFrom))}
+            />
           </div>
         </div>
         <div className="flex items-center gap-3">
@@ -69,13 +90,13 @@ export default function MissingPanel({ date, onDateChange, missing, missingLoadi
       {missingLoading ? (
         <p className="text-sm text-text-muted">Loading...</p>
       ) : !missing ? (
-        <p className="text-sm text-text-muted">Pick a date to check.</p>
+        <p className="text-sm text-text-muted">Pick a date range to check.</p>
       ) : missing.count === 0 ? (
-        <p className="text-sm text-text-muted">All employees have attendance recorded for {formatDisplayDate(date || todayStr())}.</p>
+        <p className="text-sm text-text-muted">All employees have attendance recorded for {rangeLabel}.</p>
       ) : (
         <>
           <p className="mb-2 text-sm text-amber-700 dark:text-amber-400">
-            {missing.count} employee(s) missing attendance for {formatDisplayDate(date || todayStr())}.
+            {missing.count} employee(s) missing attendance for at least one day between {rangeLabel}.
           </p>
           <div className="max-h-56 overflow-y-auto rounded-lg border border-border-color/60">
             <table className="w-full text-left text-xs">

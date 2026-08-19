@@ -33,13 +33,6 @@ export default function useAttendanceData({ dateRange, filters, sort }) {
   const [recordsError, setRecordsError] = useState(null);
   const [pagination, setPagination] = useState({ page: 1, pageSize: DEFAULT_PAGE_SIZE, total: 0 });
 
-  const [uploads, setUploads] = useState([]);
-  // Starts true (not fetched yet) but harmlessly so — UploadHistoryTable
-  // isn't rendered until its tab opens, at which point fetchUploads runs
-  // (see AttendanceManagement.jsx). Never fetched on initial page mount.
-  const [uploadsLoading, setUploadsLoading] = useState(true);
-  const [uploadsError, setUploadsError] = useState(null);
-
   const [missing, setMissing] = useState(null);
   const [missingLoading, setMissingLoading] = useState(false);
 
@@ -48,7 +41,6 @@ export default function useAttendanceData({ dateRange, filters, sort }) {
   // now-stale response land after a fresher one and clobber the screen.
   const summaryAbortRef = useRef(null);
   const recordsAbortRef = useRef(null);
-  const uploadsAbortRef = useRef(null);
   const missingAbortRef = useRef(null);
 
   const fetchSummary = useCallback(async () => {
@@ -106,32 +98,24 @@ export default function useAttendanceData({ dateRange, filters, sort }) {
     }
   }, [dateRange, filters.circle, filters.cmp, filters.jobRole, filters.status, filters.search, sort.sortBy, sort.sortDir]);
 
-  const fetchUploads = useCallback(async () => {
-    uploadsAbortRef.current?.abort();
-    const controller = new AbortController();
-    uploadsAbortRef.current = controller;
-    setUploadsLoading(true);
-    try {
-      const res = await axios.get(buildApiUrl("/api/attendance/uploads"), { signal: controller.signal });
-      setUploads(res.data.uploads || []);
-      setUploadsError(null);
-    } catch (err) {
-      if (axios.isCancel(err)) return;
-      console.error(err);
-      setUploadsError(errorMessage(err, "Failed to load upload history."));
-    } finally {
-      if (uploadsAbortRef.current === controller) setUploadsLoading(false);
-    }
-  }, []);
-
-  const fetchMissing = useCallback(async (dateStr) => {
+  // A range, not a single date — "missing" means missing on at least one
+  // day somewhere in [dateFromStr, dateToStr] (see fetchMissingAttendanceRows
+  // on the backend for the exact semantics, including how an employee's own
+  // joining/leaving date clips which days actually apply to them).
+  const fetchMissing = useCallback(async (dateFromStr, dateToStr) => {
     missingAbortRef.current?.abort();
     const controller = new AbortController();
     missingAbortRef.current = controller;
     setMissingLoading(true);
     try {
       const res = await axios.get(buildApiUrl("/api/attendance/dashboard/missing"), {
-        params: { date: dateStr, circle: filters.circle, cmp: filters.cmp, jobRole: filters.jobRole },
+        params: {
+          dateFrom: dateFromStr,
+          dateTo: dateToStr,
+          circle: filters.circle,
+          cmp: filters.cmp,
+          jobRole: filters.jobRole,
+        },
         signal: controller.signal,
       });
       setMissing(res.data);
@@ -143,20 +127,18 @@ export default function useAttendanceData({ dateRange, filters, sort }) {
     }
   }, [filters.circle, filters.cmp, filters.jobRole]);
 
-  // Only summary + page-1 records are needed for the page to open — Upload
-  // History is fetched lazily (see AttendanceManagement.jsx) when its tab is
-  // actually opened, not here, so it never blocks/competes on initial load.
+  // Only summary + page-1 records are needed for the page to open.
   useEffect(() => { fetchSummary(); }, [fetchSummary]);
   useEffect(() => { fetchRecords(1); }, [fetchRecords]);
 
   const refetchAfterUpload = useCallback(
-    () => Promise.all([fetchSummary(), fetchRecords(pagination.page), fetchUploads()]),
-    [fetchSummary, fetchRecords, fetchUploads, pagination.page]
+    () => Promise.all([fetchSummary(), fetchRecords(pagination.page)]),
+    [fetchSummary, fetchRecords, pagination.page]
   );
 
-  // Single/bulk delete both re-run summary + the current records page +
-  // uploads afterward (same refetchAfterUpload shape) so cards, table and
-  // Upload History never show stale post-delete counts.
+  // Single/bulk delete both re-run summary + the current records page
+  // afterward (same refetchAfterUpload shape) so cards and table never show
+  // stale post-delete counts.
   const deleteRecord = useCallback(async (id) => {
     await axios.delete(buildApiUrl(`/api/attendance/records/${id}`));
     await refetchAfterUpload();
@@ -178,10 +160,6 @@ export default function useAttendanceData({ dateRange, filters, sort }) {
     recordsError,
     pagination,
     fetchRecords,
-    uploads,
-    uploadsLoading,
-    uploadsError,
-    fetchUploads,
     missing,
     missingLoading,
     fetchMissing,
