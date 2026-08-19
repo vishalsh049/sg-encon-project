@@ -877,6 +877,40 @@ router.get("/summary", requirePagePermission("kpis-penalty", "view"), async (req
   }
 });
 
+router.get("/export", requirePagePermission("kpis-penalty", "download"), async (req, res) => {
+  try {
+    await ensureTables();
+
+    const { filters, params } = buildRecordFilters(req);
+
+    const [rows] = await pool.query(
+      `SELECT r.month_label AS Month, r.circle AS Circle, r.cmp AS CMP, r.kpi_category AS "KPIs Penalty",
+              r.total_cm_billing AS "Total CM Billing", r.score_required AS "Score Required",
+              r.score_achieved AS "Score Achieved", r.percent_penalty AS "% Penalty",
+              r.penalty_amount AS "Penalty Amount", r.percent_reward AS "% Reward",
+              r.reward_amount AS "Reward Amount"
+       FROM kpi_penalty_records r
+       JOIN kpi_penalty_uploads u ON u.id = r.file_id
+       WHERE ${filters.join(" AND ")}
+       ORDER BY r.month_date DESC, r.circle ASC, r.cmp ASC, r.id ASC
+       LIMIT 20000`,
+      params
+    );
+
+    const worksheet = xlsx.utils.json_to_sheet(rows);
+    const workbook = xlsx.utils.book_new();
+    xlsx.utils.book_append_sheet(workbook, worksheet, "KPI Penalty");
+    const buffer = xlsx.write(workbook, { type: "buffer", bookType: "xlsx" });
+
+    res.setHeader("Content-Disposition", `attachment; filename="kpi_penalty_export.xlsx"`);
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    res.send(buffer);
+  } catch (error) {
+    console.error("KPI Penalty export failed:", error);
+    res.status(500).json({ success: false, message: "Failed to export data." });
+  }
+});
+
 router.get("/download/:uploadId", requirePagePermission("kpis-penalty", "download"), async (req, res) => {
   try {
     await ensureTables();

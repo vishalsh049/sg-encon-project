@@ -82,6 +82,7 @@ function KpiPenalty() {
   const [viewModal, setViewModal] = useState(null); // { id, fileName, rows, loading }
   const [deleteTarget, setDeleteTarget] = useState(null); // { id, fileName }
   const [deleting, setDeleting] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   // --- tabs --------------------------------------------------------------
   const [activeTab, setActiveTab] = useState("data"); // "data" | "files"
@@ -302,25 +303,47 @@ function KpiPenalty() {
     }
   };
 
+  const downloadBlob = async (url, fallbackName) => {
+    const response = await authFetch(url);
+    if (!response.ok) {
+      const payload = await response.json().catch(() => ({}));
+      toast.error(payload.message || "Failed to download file.");
+      return;
+    }
+    const blob = await response.blob();
+    const objectUrl = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = objectUrl;
+    link.download = fallbackName;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(objectUrl);
+  };
+
   const handleDownload = async (row) => {
     try {
-      const response = await authFetch(buildApiUrl(`/api/kpi-penalty/download/${row.id}`));
-      if (!response.ok) {
-        const payload = await response.json().catch(() => ({}));
-        toast.error(payload.message || "Failed to download file.");
-        return;
-      }
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = row.file_name || `kpi_penalty_${row.id}.xlsx`;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      URL.revokeObjectURL(url);
+      await downloadBlob(
+        buildApiUrl(`/api/kpi-penalty/download/${row.id}`),
+        row.file_name || `kpi_penalty_${row.id}.xlsx`
+      );
     } catch {
       toast.error("Failed to download file.");
+    }
+  };
+
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const qs = buildQuery(filters);
+      await downloadBlob(
+        buildApiUrl(`/api/kpi-penalty/export?${qs}`),
+        `kpi_penalty_export_${todayIso()}.xlsx`
+      );
+    } catch {
+      toast.error("Failed to export data.");
+    } finally {
+      setExporting(false);
     }
   };
 
@@ -632,9 +655,22 @@ function KpiPenalty() {
       <>
       {/* KPI Penalty Data */}
       <div className={`${CARD_SHELL} mt-2 overflow-hidden`}>
-        <div className="flex items-center justify-between border-b border-border-color/70 px-4 py-3">
+        <div className="flex items-center justify-between gap-3 border-b border-border-color/70 px-4 py-3">
           <h2 className="text-sm font-semibold text-text-primary">KPI Penalty Data</h2>
-          <span className="text-xs text-text-muted">{totalRecords} record{totalRecords === 1 ? "" : "s"}</span>
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-text-muted">{totalRecords} record{totalRecords === 1 ? "" : "s"}</span>
+            {permission.download ? (
+              <button
+                type="button"
+                onClick={handleExport}
+                disabled={exporting}
+                className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border-color px-3 text-xs font-semibold text-text-secondary transition hover:bg-surface-muted disabled:opacity-50"
+              >
+                <Download size={13} />
+                {exporting ? "Exporting..." : "Export Excel"}
+              </button>
+            ) : null}
+          </div>
         </div>
         <div className="overflow-x-auto">
           <table className="min-w-full text-left text-sm">
