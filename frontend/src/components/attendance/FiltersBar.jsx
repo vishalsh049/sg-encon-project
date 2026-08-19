@@ -186,7 +186,7 @@ export default function FiltersBar({
           className="inline-flex h-9 items-center gap-2 rounded-lg border border-border-color bg-surface px-3 text-sm font-medium text-text-secondary transition hover:text-text-primary"
         >
           <Download size={14} />
-          Export Excel
+          {filters.status ? "Export Records" : "Export Muster Roll"}
         </button>
         <button
           type="button"

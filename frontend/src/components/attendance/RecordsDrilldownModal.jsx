@@ -204,7 +204,7 @@ export default function RecordsDrilldownModal({
               className="ml-auto inline-flex h-9 items-center gap-2 rounded-lg border border-border-color bg-surface px-3 text-sm font-medium text-text-secondary transition hover:text-text-primary disabled:opacity-60"
             >
               {exporting ? <RefreshCw size={14} className="animate-spin" /> : <Download size={14} />}
-              Export Excel
+              {`Export ${title}`}
             </button>
           </div>
 

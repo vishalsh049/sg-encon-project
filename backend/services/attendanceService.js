@@ -598,7 +598,7 @@ async function buildAttendanceExportBuffer({ query, dateFrom, dateTo, filters, a
     throw createError("A valid date range is required.", 400, "INVALID_DATE_RANGE");
   }
 
-  const conditions = ["COALESCE(is_deleted, 0) = 0"];
+  const conditions = ["is_deleted = 0"];
   const params = [];
 
   if (!isAllCircle(authUser)) {
@@ -637,11 +637,12 @@ async function buildAttendanceExportBuffer({ query, dateFrom, dateTo, filters, a
     ),
     query(
       `
-        SELECT employee_code, attendance_date, status
-        FROM attendance
-        WHERE attendance_date BETWEEN ? AND ?
+        SELECT a.employee_code, a.attendance_date, a.status
+        FROM attendance a
+        JOIN physical ON physical.employee_code = a.employee_code
+        WHERE a.attendance_date BETWEEN ? AND ? AND (${conditions.join(" AND ")})
       `,
-      [dateFrom, dateTo]
+      [dateFrom, dateTo, ...params]
     ),
   ]);
 
@@ -741,6 +742,53 @@ function buildEmployeesExportBuffer(rows) {
   const workbook = XLSX.utils.book_new();
   const worksheet = XLSX.utils.aoa_to_sheet(sheetRows);
   XLSX.utils.book_append_sheet(workbook, worksheet, "Employees");
+  return XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
+}
+
+// Kept in sync with the frontend's STATUS_LABELS map in
+// UploadHistoryTable.jsx — exports should read the same humanized status
+// the table shows, not the raw DB value.
+const UPLOAD_STATUS_LABELS = {
+  pending_preview: "Pending Preview",
+  cancelled: "Cancelled",
+  completed: "Completed",
+  completed_with_errors: "Completed with Errors",
+  confirmed: "Completed",
+};
+
+// Flat upload-history export — mirrors the Upload History tab's table
+// exactly (same columns, same row set), with no LIMIT so it's a genuine
+// full-history export rather than just "what's currently on screen".
+function buildUploadHistoryExportBuffer(rows) {
+  const header = [
+    "Uploaded At", "Attendance Date", "File", "Uploaded By", "Status",
+    "Total", "Inserted", "Updated", "Skipped", "Errors",
+  ];
+  const sheetRows = [
+    header,
+    ...rows.map((row) => {
+      const uploadedAt = row.created_at ? new Date(row.created_at) : null;
+      const uploadedAtStr = uploadedAt
+        ? `${formatDdMmYyyy(toIsoDate(uploadedAt))} ${uploadedAt.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}`
+        : "";
+      return [
+        uploadedAtStr,
+        row.attendance_date ? formatDdMmYyyy(String(row.attendance_date).slice(0, 10)) : "",
+        row.original_name || "",
+        row.uploaded_by_name || "",
+        UPLOAD_STATUS_LABELS[row.status] || row.status || "",
+        row.total_rows ?? 0,
+        row.inserted_rows ?? 0,
+        row.updated_rows ?? 0,
+        row.skipped_rows ?? 0,
+        row.error_rows ?? 0,
+      ];
+    }),
+  ];
+
+  const workbook = XLSX.utils.book_new();
+  const worksheet = XLSX.utils.aoa_to_sheet(sheetRows);
+  XLSX.utils.book_append_sheet(workbook, worksheet, "Upload History");
   return XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
 }
 
@@ -849,6 +897,7 @@ module.exports = {
   buildAttendanceExportBuffer,
   buildFlatRecordsExportBuffer,
   buildEmployeesExportBuffer,
+  buildUploadHistoryExportBuffer,
   buildMissingAttendanceExportBuffer,
   buildUploadErrorsExportBuffer,
   computeCalendarDays,

@@ -2,7 +2,7 @@ import { useState } from "react";
 import axios from "axios";
 import { saveAs } from "file-saver";
 import toast from "react-hot-toast";
-import { RefreshCw, AlertTriangle, Eye } from "lucide-react";
+import { RefreshCw, AlertTriangle, Eye, Download } from "lucide-react";
 
 import { buildApiUrl } from "../../lib/api";
 import { formatDisplayDate, formatDateTime } from "../../lib/attendanceFormat";
@@ -34,6 +34,21 @@ function StatusPill({ status }) {
 export default function UploadHistoryTable({ uploads, uploadsLoading, uploadsError, onRetry, scope }) {
   const [errorModalData, setErrorModalData] = useState(null);
   const [errorModalMeta, setErrorModalMeta] = useState(null);
+  const [exporting, setExporting] = useState(false);
+
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const res = await axios.get(buildApiUrl("/api/attendance/uploads/export"), {
+        responseType: "blob",
+      });
+      saveAs(res.data, "attendance_upload_history.xlsx");
+    } catch (err) {
+      toast.error(err?.response?.data?.message || "Failed to export upload history.");
+    } finally {
+      setExporting(false);
+    }
+  };
   const [detailDate, setDetailDate] = useState(null);
 
   const openErrors = async (item) => {
@@ -60,6 +75,18 @@ export default function UploadHistoryTable({ uploads, uploadsLoading, uploadsErr
 
   return (
     <>
+      <div className="mb-3 flex justify-end">
+        <button
+          type="button"
+          onClick={handleExport}
+          disabled={exporting || uploadsLoading || uploads.length === 0}
+          className="inline-flex h-9 items-center gap-2 rounded-lg border border-border-color bg-surface px-3 text-sm font-medium text-text-secondary transition hover:text-text-primary disabled:opacity-60"
+        >
+          {exporting ? <RefreshCw size={14} className="animate-spin" /> : <Download size={14} />}
+          Export Upload History
+        </button>
+      </div>
+
       <div className="overflow-x-auto rounded-2xl border border-border-color/70 bg-surface/70">
         <table className="w-full text-left text-sm">
           <thead className="bg-surface-muted text-xs uppercase text-text-muted">

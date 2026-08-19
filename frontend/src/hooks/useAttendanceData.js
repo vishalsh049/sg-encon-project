@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import axios from "axios";
 import toast from "react-hot-toast";
 
@@ -43,24 +43,40 @@ export default function useAttendanceData({ dateRange, filters, sort }) {
   const [missing, setMissing] = useState(null);
   const [missingLoading, setMissingLoading] = useState(false);
 
+  // One AbortController ref per fetch kind, so a fast filter change cancels
+  // whatever request it just made obsolete instead of letting a slower,
+  // now-stale response land after a fresher one and clobber the screen.
+  const summaryAbortRef = useRef(null);
+  const recordsAbortRef = useRef(null);
+  const uploadsAbortRef = useRef(null);
+  const missingAbortRef = useRef(null);
+
   const fetchSummary = useCallback(async () => {
+    summaryAbortRef.current?.abort();
+    const controller = new AbortController();
+    summaryAbortRef.current = controller;
     setSummaryLoading(true);
     try {
       const res = await axios.get(buildApiUrl("/api/attendance/dashboard/summary"), {
         params: { ...rangeParams(dateRange), circle: filters.circle, cmp: filters.cmp, jobRole: filters.jobRole },
+        signal: controller.signal,
       });
       setSummary(res.data);
       setSummaryError(null);
     } catch (err) {
+      if (axios.isCancel(err)) return;
       console.error(err);
       setSummary(null);
       setSummaryError(errorMessage(err, "Failed to load the attendance summary."));
     } finally {
-      setSummaryLoading(false);
+      if (summaryAbortRef.current === controller) setSummaryLoading(false);
     }
   }, [dateRange, filters.circle, filters.cmp, filters.jobRole]);
 
   const fetchRecords = useCallback(async (page = 1) => {
+    recordsAbortRef.current?.abort();
+    const controller = new AbortController();
+    recordsAbortRef.current = controller;
     setRecordsLoading(true);
     try {
       const res = await axios.get(buildApiUrl("/api/attendance/records"), {
@@ -76,43 +92,54 @@ export default function useAttendanceData({ dateRange, filters, sort }) {
           sortDir: sort.sortDir,
           ...rangeParams(dateRange),
         },
+        signal: controller.signal,
       });
       setRecords(res.data.records || []);
       setPagination(res.data.pagination || { page: 1, pageSize: DEFAULT_PAGE_SIZE, total: 0 });
       setRecordsError(null);
     } catch (err) {
+      if (axios.isCancel(err)) return;
       console.error(err);
       setRecordsError(errorMessage(err, "Failed to load attendance records."));
     } finally {
-      setRecordsLoading(false);
+      if (recordsAbortRef.current === controller) setRecordsLoading(false);
     }
   }, [dateRange, filters.circle, filters.cmp, filters.jobRole, filters.status, filters.search, sort.sortBy, sort.sortDir]);
 
   const fetchUploads = useCallback(async () => {
+    uploadsAbortRef.current?.abort();
+    const controller = new AbortController();
+    uploadsAbortRef.current = controller;
     setUploadsLoading(true);
     try {
-      const res = await axios.get(buildApiUrl("/api/attendance/uploads"));
+      const res = await axios.get(buildApiUrl("/api/attendance/uploads"), { signal: controller.signal });
       setUploads(res.data.uploads || []);
       setUploadsError(null);
     } catch (err) {
+      if (axios.isCancel(err)) return;
       console.error(err);
       setUploadsError(errorMessage(err, "Failed to load upload history."));
     } finally {
-      setUploadsLoading(false);
+      if (uploadsAbortRef.current === controller) setUploadsLoading(false);
     }
   }, []);
 
   const fetchMissing = useCallback(async (dateStr) => {
+    missingAbortRef.current?.abort();
+    const controller = new AbortController();
+    missingAbortRef.current = controller;
     setMissingLoading(true);
     try {
       const res = await axios.get(buildApiUrl("/api/attendance/dashboard/missing"), {
         params: { date: dateStr, circle: filters.circle, cmp: filters.cmp, jobRole: filters.jobRole },
+        signal: controller.signal,
       });
       setMissing(res.data);
     } catch (err) {
+      if (axios.isCancel(err)) return;
       toast.error(errorMessage(err, "Failed to load missing attendance."));
     } finally {
-      setMissingLoading(false);
+      if (missingAbortRef.current === controller) setMissingLoading(false);
     }
   }, [filters.circle, filters.cmp, filters.jobRole]);
 

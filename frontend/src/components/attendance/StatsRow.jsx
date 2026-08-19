@@ -66,7 +66,7 @@ export default function StatsRow({ summary, summaryLoading, summaryError, onRetr
       <StatCard
         label="Total Employees"
         value={summary?.totalEmployees ?? 0}
-        hint="Active in Physical master"
+        hint="Active in Physical master (current headcount, not date-filtered)"
         icon={Users}
         tone="blue"
         loading={summaryLoading}
@@ -120,7 +120,7 @@ export default function StatsRow({ summary, summaryLoading, summaryError, onRetr
       <StatCard
         label="Days Uploaded"
         value={`${summary?.daysUploaded ?? 0}/${summary?.totalDaysInRange ?? "-"}`}
-        hint="Distinct dates uploaded in selected period"
+        hint="Distinct dates uploaded — click to view calendar"
         icon={ClipboardList}
         tone="gray"
         loading={summaryLoading}

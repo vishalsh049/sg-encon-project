@@ -2088,7 +2088,7 @@ circleCmpWarnings: circleCmpWarnings
               resolvedCmp,
               data.pprj_status || "",
               data.pprj_code || "",
-              data.employee_code || "",
+              String(data.employee_code || "").trim(),
               data.employee_name || "",
               data.father_name || "",
               data.function_name || "",
@@ -2811,11 +2811,12 @@ circleCmpWarnings: circleCmpWarnings
 
       const {
         employee_name,
-        employee_code,
+        employee_code: rawEmployeeCode,
         circle,
         cluster,
         mobile_number
       } = req.body;
+      const employee_code = String(rawEmployeeCode || "").trim();
 
       try {
         const [existing] = await query(
@@ -3495,7 +3496,7 @@ circleCmpWarnings: circleCmpWarnings
               resolvedCmp,
               data.pprj_status || "",
               data.pprj_code || "",
-              data.employee_code || "",
+              String(data.employee_code || "").trim(),
               data.employee_name || "",
               data.father_name || "",
               data.function_name || "",

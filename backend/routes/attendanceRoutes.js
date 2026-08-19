@@ -21,6 +21,7 @@ const {
   buildAttendanceExportBuffer,
   buildFlatRecordsExportBuffer,
   buildEmployeesExportBuffer,
+  buildUploadHistoryExportBuffer,
   buildMissingAttendanceExportBuffer,
   buildUploadErrorsExportBuffer,
   computeCalendarDays,
@@ -63,7 +64,7 @@ ensureAttendanceTables().catch((error) =>
 );
 
 function buildEmployeeScopeConditions(req, alias) {
-  const conditions = [`COALESCE(${alias}.is_deleted, 0) = 0`];
+  const conditions = [`${alias}.is_deleted = 0`];
   const params = [];
 
   if (!isAllCircle(req.authUser)) {
@@ -340,6 +341,30 @@ router.get("/uploads", async (req, res) => {
   }
 });
 
+router.get("/uploads/export", async (req, res) => {
+  try {
+    await ensureAttendanceTables();
+    const rows = await query(`
+      SELECT id, attendance_date, original_name, uploaded_by_name, status, duplicate_action,
+             total_rows, valid_rows, error_rows, conflict_rows, inserted_rows, updated_rows, skipped_rows,
+             created_at, confirmed_at
+      FROM attendance_uploads
+      ORDER BY id DESC
+    `);
+
+    const buffer = buildUploadHistoryExportBuffer(rows);
+
+    res.setHeader("Content-Disposition", 'attachment; filename="attendance_upload_history.xlsx"');
+    res.setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    );
+    return res.send(buffer);
+  } catch (error) {
+    return sendError(res, error, "Failed to export upload history.");
+  }
+});
+
 // -- Upload errors: view / export (spec §24-26) -----------------------------
 router.get("/uploads/:id/errors", async (req, res) => {
   try {
@@ -459,7 +484,7 @@ router.get("/records", async (req, res) => {
     const whereSql = `WHERE ${conditions.join(" AND ")}`;
     const joinSql = `
       FROM attendance a
-      JOIN physical p ON LOWER(TRIM(p.employee_code)) = LOWER(TRIM(a.employee_code))
+      JOIN physical p ON p.employee_code = a.employee_code
       ${whereSql}
     `;
 
@@ -510,7 +535,7 @@ router.get("/records/export", async (req, res) => {
         SELECT a.id, a.employee_code, a.attendance_date, a.status,
                p.employee_name, p.job_role, p.cmp, p.circle
         FROM attendance a
-        JOIN physical p ON LOWER(TRIM(p.employee_code)) = LOWER(TRIM(a.employee_code))
+        JOIN physical p ON p.employee_code = a.employee_code
         WHERE ${conditions.join(" AND ")}
         ORDER BY a.attendance_date DESC, p.employee_name ASC
       `,
@@ -545,7 +570,7 @@ router.delete("/records/:id", requirePagePermission("attendance", "delete"), asy
     const result = await query(
       `
         DELETE a FROM attendance a
-        JOIN physical p ON LOWER(TRIM(p.employee_code)) = LOWER(TRIM(a.employee_code))
+        JOIN physical p ON p.employee_code = a.employee_code
         WHERE ${conditions.join(" AND ")}
       `,
       params
@@ -583,7 +608,7 @@ router.post("/records/bulk-delete", requirePagePermission("attendance", "delete"
     const result = await query(
       `
         DELETE a FROM attendance a
-        JOIN physical p ON LOWER(TRIM(p.employee_code)) = LOWER(TRIM(a.employee_code))
+        JOIN physical p ON p.employee_code = a.employee_code
         WHERE ${conditions.join(" AND ")}
       `,
       params
@@ -631,7 +656,7 @@ router.get("/dashboard/summary", async (req, res) => {
         `
           SELECT a.status, COUNT(*) AS total
           FROM attendance a
-          JOIN physical p ON LOWER(TRIM(p.employee_code)) = LOWER(TRIM(a.employee_code))
+          JOIN physical p ON p.employee_code = a.employee_code
           WHERE a.attendance_date BETWEEN ? AND ? AND ${whereSql}
           GROUP BY a.status
         `,
@@ -641,7 +666,7 @@ router.get("/dashboard/summary", async (req, res) => {
         `
           SELECT COUNT(DISTINCT a.attendance_date) AS days
           FROM attendance a
-          JOIN physical p ON LOWER(TRIM(p.employee_code)) = LOWER(TRIM(a.employee_code))
+          JOIN physical p ON p.employee_code = a.employee_code
           WHERE a.attendance_date BETWEEN ? AND ? AND ${whereSql}
         `,
         [dateFrom, dateTo, ...params]
@@ -697,7 +722,7 @@ async function fetchMissingAttendanceRows(req) {
         AND NOT EXISTS (
           SELECT 1 FROM attendance a
           WHERE a.attendance_date = ?
-            AND LOWER(TRIM(a.employee_code)) = LOWER(TRIM(p.employee_code))
+            AND a.employee_code = p.employee_code
         )
       ORDER BY p.employee_name ASC
     `,
@@ -880,7 +905,7 @@ router.get("/calendar", async (req, res) => {
         `
           SELECT a.attendance_date, a.status, COUNT(*) AS total
           FROM attendance a
-          JOIN physical p ON LOWER(TRIM(p.employee_code)) = LOWER(TRIM(a.employee_code))
+          JOIN physical p ON p.employee_code = a.employee_code
           WHERE a.attendance_date BETWEEN ? AND ? AND ${whereSql}
           GROUP BY a.attendance_date, a.status
         `,
@@ -926,7 +951,7 @@ router.get("/calendar/day", async (req, res) => {
         `
           SELECT a.status, COUNT(*) AS total
           FROM attendance a
-          JOIN physical p ON LOWER(TRIM(p.employee_code)) = LOWER(TRIM(a.employee_code))
+          JOIN physical p ON p.employee_code = a.employee_code
           WHERE a.attendance_date = ? AND ${whereSql}
           GROUP BY a.status
         `,
@@ -941,7 +966,7 @@ router.get("/calendar/day", async (req, res) => {
           WHERE au.attendance_date = ?
             AND EXISTS (
               SELECT 1 FROM attendance a
-              JOIN physical p ON LOWER(TRIM(p.employee_code)) = LOWER(TRIM(a.employee_code))
+              JOIN physical p ON p.employee_code = a.employee_code
               WHERE a.upload_batch_id = au.id AND ${whereSql}
             )
           ORDER BY au.id DESC

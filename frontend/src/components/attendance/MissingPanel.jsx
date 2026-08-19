@@ -8,8 +8,10 @@ import { formatDisplayDate, todayStr } from "../../lib/attendanceFormat";
 // Shown when the user clicks "Check Missing Attendance". Unlike the original
 // version this isn't locked to today — the date picker lets an admin check
 // (and then chase up) any past day, not just the current one.
-export default function MissingPanel({ date, onDateChange, missing, missingLoading, onClose, onExport }) {
+export default function MissingPanel({ date, onDateChange, missing, missingLoading, onClose, onExport, scope }) {
   const [exporting, setExporting] = useState(false);
+
+  const scopeChips = [scope?.circle, scope?.cmp, scope?.jobRole].filter(Boolean);
 
   const handleExport = async () => {
     setExporting(true);
@@ -42,13 +44,27 @@ export default function MissingPanel({ date, onDateChange, missing, missingLoadi
             className="inline-flex h-9 items-center gap-2 rounded-lg border border-border-color bg-surface px-3 text-sm font-medium text-text-secondary transition hover:text-text-primary disabled:opacity-60"
           >
             {exporting ? <RefreshCw size={14} className="animate-spin" /> : <Download size={14} />}
-            Export Excel
+            Export Missing List
           </button>
           <button type="button" onClick={onClose} className="text-text-muted hover:text-text-primary">
             <X size={16} />
           </button>
         </div>
       </div>
+
+      {scopeChips.length > 0 && (
+        <div className="mb-2 flex flex-wrap items-center gap-1.5 text-[11px] text-amber-700/80 dark:text-amber-400/80">
+          <span>Scoped to:</span>
+          {scopeChips.map((chip) => (
+            <span
+              key={chip}
+              className="rounded-full border border-amber-300/60 bg-amber-100/60 px-2 py-0.5 dark:border-amber-500/30 dark:bg-amber-500/10"
+            >
+              {chip}
+            </span>
+          ))}
+        </div>
+      )}
 
       {missingLoading ? (
         <p className="text-sm text-text-muted">Loading...</p>

@@ -94,6 +94,16 @@ function AttendanceManagement() {
     if (activeTab === "uploads") fetchUploads();
   }, [activeTab, fetchUploads]);
 
+  // The Missing Attendance panel previously kept showing results for
+  // whatever Circle/CMP/Job Role was selected the moment it was opened —
+  // changing those filters while the panel stayed open silently left it
+  // stale. Re-check the same date under the new scope whenever it changes.
+  useEffect(() => {
+    if (!showMissingPanel) return;
+    fetchMissing(missingDate);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filters.circle, filters.cmp, filters.jobRole]);
+
   const handleFiltersChange = (partial) => setFilters((f) => ({ ...f, ...partial }));
 
   const handleSortChange = (sortBy) => {
@@ -229,6 +239,7 @@ function AttendanceManagement() {
             missingLoading={missingLoading}
             onClose={handleCloseMissing}
             onExport={handleExportMissing}
+            scope={{ circle: filters.circle, cmp: filters.cmp, jobRole: filters.jobRole }}
           />
         )}
 
