@@ -36,6 +36,8 @@ import TrainingVerification from "./pages/Training/Verification";
 import TrainingReports from "./pages/Training/Reports";
 import TrainingSettings from "./pages/Training/Settings";
 import Profile from "./pages/Profile";
+import KpiPenalty from "./pages/KpiPenalty";
+import GeneralPenalty from "./pages/GeneralPenalty";
 
 function App() {
   return (
@@ -105,13 +107,13 @@ function App() {
 
   <Route path="billing/penalties/kpis" element={
     <ProtectedRoute page={"KPIs Penalty"}>
-      <PlaceholderPage />
+      <KpiPenalty />
     </ProtectedRoute>
   } />
 
   <Route path="billing/penalties/general" element={
     <ProtectedRoute page={"General Penalties"}>
-      <PlaceholderPage />
+      <GeneralPenalty />
     </ProtectedRoute>
   } />
 

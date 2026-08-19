@@ -267,6 +267,8 @@ registerRoute("./routes/kpidashboard", "/api");
 registerRoute("./routes/meRoute", "/api");
 registerRoute("./routes/billingStatus", "/api");
 registerRoute("./routes/billingDashboard", "/api/billing");
+registerRoute("./routes/kpiPenaltyRoutes", "/api/kpi-penalty");
+registerRoute("./routes/generalPenaltyRoutes", "/api/general-penalty");
 registerRoute("./routes/newJoiningRoutes", "/api/new-joining");
 registerRoute("./routes/designationsRoutes", "/api/designations");
 registerRoute("./routes/circlesRoutes", "/api/circles");
