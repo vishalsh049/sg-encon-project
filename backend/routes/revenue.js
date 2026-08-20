@@ -103,6 +103,20 @@ function buildRevenueDataFilters(req) {
     params.push(billingMonth);
   }
 
+  // billing_month is a "YYYY-MM" string, which sorts correctly with plain
+  // string comparison - no need to cast to a real date for a range filter.
+  const billingMonthFrom = String(req.query.billingMonthFrom || "").trim();
+  if (billingMonthFrom) {
+    filters.push("ru.billing_month >= ?");
+    params.push(billingMonthFrom);
+  }
+
+  const billingMonthTo = String(req.query.billingMonthTo || "").trim();
+  if (billingMonthTo) {
+    filters.push("ru.billing_month <= ?");
+    params.push(billingMonthTo);
+  }
+
   // An all-circle user narrowing to one circle from the dropdown; a
   // circle-restricted user is already scoped by applyRevenueCircleFilter above.
   const circle = String(req.query.circle || "").trim();
@@ -117,6 +131,12 @@ function buildRevenueDataFilters(req) {
     params.push(domain);
   }
 
+  const uploadedBy = String(req.query.uploadedBy || "").trim();
+  if (uploadedBy) {
+    filters.push("ru.uploaded_by = ?");
+    params.push(uploadedBy);
+  }
+
   const search = String(req.query.search || "").trim();
   if (search) {
     filters.push(
@@ -127,6 +147,26 @@ function buildRevenueDataFilters(req) {
   }
 
   return { filters, params };
+}
+
+// Whitelisted sort columns for /data - never interpolate a client-supplied
+// column name directly into SQL.
+const SORTABLE_COLUMNS = {
+  billing_month: "ru.billing_month",
+  circle: "r.circle",
+  location: "r.location",
+  co_type: "r.co_type",
+  domain: "r.domain",
+  cm_amount: "r.cm_amount",
+  pm_amount: "r.pm_amount",
+  total: "(r.cm_amount + r.pm_amount)",
+};
+
+function buildRevenueSortClause(req) {
+  const sortBy = SORTABLE_COLUMNS[String(req.query.sortBy || "").trim()];
+  if (!sortBy) return "ORDER BY r.id DESC";
+  const sortDir = String(req.query.sortDir || "").trim().toLowerCase() === "asc" ? "ASC" : "DESC";
+  return `ORDER BY ${sortBy} ${sortDir}, r.id DESC`;
 }
 
 const cleanNumber = (value) => {
@@ -564,7 +604,7 @@ router.get("/data", requirePagePermission("revenue", "view"), async (req, res) =
        FROM revenue r
        INNER JOIN revenue_upload ru ON ru.file_id = r.file_id
        ${whereSql}
-       ORDER BY r.id DESC
+       ${buildRevenueSortClause(req)}
        LIMIT ? OFFSET ?`,
       [...params, pageSize, offset]
     );
@@ -575,6 +615,35 @@ router.get("/data", requirePagePermission("revenue", "view"), async (req, res) =
       page,
       pageSize,
     });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Aggregated totals for the currently-filtered Revenue Data view - powers
+// the Revenue Dashboard's summary KPI cards so they react to the same
+// filters as the table, unlike /kpi-data which is always pinned to the
+// latest billing month for Billing Dashboard's use case (do not touch that
+// endpoint - BillingDashboard.jsx depends on its exact current behavior).
+router.get("/data/summary", requirePagePermission("revenue", "view"), async (req, res) => {
+  try {
+    const { filters, params } = buildRevenueDataFilters(req);
+    const whereSql = filters.length ? `WHERE ${filters.join(" AND ")}` : "";
+
+    const [rows] = await db.promise().query(
+      `SELECT
+         COALESCE(SUM(r.cm_amount + r.pm_amount), 0) AS totalRevenue,
+         COALESCE(SUM(CASE WHEN r.domain = 'FTTx' THEN (r.cm_amount + r.pm_amount) ELSE 0 END), 0) AS totalFTTx,
+         COALESCE(SUM(CASE WHEN r.domain = 'Fiber' THEN (r.cm_amount + r.pm_amount) ELSE 0 END), 0) AS totalFiber,
+         COALESCE(SUM(CASE WHEN r.domain = 'Tower' THEN (r.cm_amount + r.pm_amount) ELSE 0 END), 0) AS totalTower
+       FROM revenue r
+       INNER JOIN revenue_upload ru ON ru.file_id = r.file_id
+       ${whereSql}`,
+      params
+    );
+
+    res.json(rows[0]);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: err.message });
