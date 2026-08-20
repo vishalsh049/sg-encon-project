@@ -1,13 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { BarChart3, ChevronDown, RefreshCw, Sparkles } from "lucide-react";
 import toast from "react-hot-toast";
-
 import { authFetch, buildApiUrl } from "../lib/api";
 import { getStoredSession } from "../lib/session";
 import { cmpGroups, circleLabelFromTitle } from "../lib/cmpGroups";
 import { HrDashboardCircleContext } from "../components/hrDashboard/hrDashboardCircleContext";
 import DrilldownModal from "../components/hrDashboard/DrilldownModal";
-
 import KpiCardsRow from "../components/hrAnalyticsV2/KpiCardsRow";
 import WorkforceOverviewFunnel from "../components/hrAnalyticsV2/WorkforceOverviewFunnel";
 import CircleWorkforcePanel from "../components/hrAnalyticsV2/CircleWorkforcePanel";
@@ -15,6 +13,7 @@ import CmpAnalyticsPanel from "../components/hrAnalyticsV2/CmpAnalyticsPanel";
 import DesignationAnalytics from "../components/hrAnalyticsV2/DesignationAnalytics";
 import ShortageSurplusLists from "../components/hrAnalyticsV2/ShortageSurplusLists";
 import JoiningAnalytics from "../components/hrAnalyticsV2/JoiningAnalytics";
+import ResignationAnalytics from "../components/hrAnalyticsV2/ResignationAnalytics";
 import AvailableEmployeeTrend from "../components/hrAnalyticsV2/AvailableEmployeeTrend";
 import PayrollAnalytics from "../components/hrAnalyticsV2/PayrollAnalytics";
 import SmartInsights from "../components/hrAnalyticsV2/SmartInsights";
@@ -62,6 +61,10 @@ export default function HrAnalyticsV2() {
   const quarterOptionsList = useMemo(() => quarterOptions(8), []);
 
   useEffect(() => {
+    // userCircleLabel is derived from the session and arrives asynchronously
+    // (null on first render until the session loads) — this pins a non-"ALL"
+    // user's filter to their own circle as soon as it's known.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (!isAllCircleUser && userCircleLabel) setSelectedCircle(userCircleLabel);
   }, [isAllCircleUser, userCircleLabel]);
 
@@ -169,6 +172,9 @@ export default function HrAnalyticsV2() {
   };
 
   useEffect(() => {
+    // Refetches from the API whenever a filter changes — the fetch itself
+    // is the synchronization the effect exists for.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void refresh();
     return () => abortRef.current?.abort();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -400,6 +406,13 @@ export default function HrAnalyticsV2() {
         <ShortageSurplusLists cmps={cmps} loading={loading} />
 
         <JoiningAnalytics rows={joiningRows} loading={loading} periodFilter={periodFilter} periodLabel={periodLabel} />
+        <ResignationAnalytics
+          rows={resignationRows}
+          activeEmployees={overview?.kpis?.activeEmployees}
+          loading={loading}
+          periodFilter={periodFilter}
+          periodLabel={periodLabel}
+        />
         <AvailableEmployeeTrend monthlyTrend={overview?.monthlyTrend} loading={loading} />
 
         {SHOW_OFFERED_SALARY_SECTION && <PayrollAnalytics payroll={payroll} loading={loading} />}
