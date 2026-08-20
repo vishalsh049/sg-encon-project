@@ -112,6 +112,13 @@ function Sidebar({ closeSidebar, collapsed, onExpandRequest }) {
     icon: ReceiptText,
     accessPage: "General Penalties",
   },
+  {
+    key: "expense-management",
+    label: "Expense Management",
+    path: "/dashboard/billing/expenses",
+    icon: ReceiptText,
+    accessPage: "Expense Management",
+  },
 
   // MANPOWER
 {

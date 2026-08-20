@@ -44,6 +44,17 @@ export function formatPercent(value) {
   return `${Number(value).toLocaleString("en-IN", { maximumFractionDigits: 2 })}%`;
 }
 
+// Auto-scaling Indian currency short form: ₹25,000 / ₹2.50 Lakh / ₹1.25 Crore.
+export function formatIndianCompact(value) {
+  if (value === null || value === undefined || value === "") return "—";
+  const num = Number(value);
+  if (!Number.isFinite(num)) return "—";
+  const abs = Math.abs(num);
+  if (abs >= 10000000) return `₹${(num / 10000000).toFixed(2)} Crore`;
+  if (abs >= 100000) return `₹${(num / 100000).toFixed(2)} Lakh`;
+  return `₹${num.toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
+}
+
 export function buildQuery(params) {
   const search = new URLSearchParams();
   Object.entries(params).forEach(([key, value]) => {

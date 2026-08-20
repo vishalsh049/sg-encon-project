@@ -14,6 +14,7 @@ export const PAGE_ID_MAP = {
   // Penalties
   "kpis-penalty": "KPIs Penalty",
   "general-penalties": "General Penalties",
+  "expense-management": "Expense Management",
 
   // Manpower
   "physical": "Physical",

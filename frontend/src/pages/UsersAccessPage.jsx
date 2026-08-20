@@ -50,6 +50,7 @@ const pageAccessList = [
       "billing-dashboard",
       "billing-status",
       "revenue",
+      "expense-management",
     ],
   },
 

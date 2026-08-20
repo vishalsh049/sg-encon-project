@@ -38,6 +38,7 @@ import TrainingSettings from "./pages/Training/Settings";
 import Profile from "./pages/Profile";
 import KpiPenalty from "./pages/KpiPenalty";
 import GeneralPenalty from "./pages/GeneralPenalty";
+import ExpenseManagement from "./pages/ExpenseManagement";
 
 function App() {
   return (
@@ -114,6 +115,12 @@ function App() {
   <Route path="billing/penalties/general" element={
     <ProtectedRoute page={"General Penalties"}>
       <GeneralPenalty />
+    </ProtectedRoute>
+  } />
+
+  <Route path="billing/expenses" element={
+    <ProtectedRoute page={"Expense Management"}>
+      <ExpenseManagement />
     </ProtectedRoute>
   } />
 
