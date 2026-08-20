@@ -4,9 +4,44 @@ import { formatCurrency } from "../../utils/penaltyFormat";
 import MetricTooltip from "./MetricTooltip";
 import TrendChart from "./TrendChart";
 
+// Merges the two independent byDomain breakdowns (KPI Penalty's is always
+// exactly Tower/Fiber/FTTx; General Penalty's domain is free text from the
+// uploaded Excel) into one row per domain, normalizing case/whitespace so
+// "fttx"/"FTTx "/"FTTx" from General Penalty line up with KPI Penalty's
+// canonical labels instead of showing as separate rows.
+function normalizeDomainKey(domain) {
+  const trimmed = String(domain || "").trim();
+  if (!trimmed) return "Unspecified";
+  const lower = trimmed.toLowerCase();
+  if (lower === "fttx") return "FTTx";
+  if (lower === "fiber") return "Fiber";
+  if (lower === "tower") return "Tower";
+  return trimmed;
+}
+
+function mergeDomainRows(kpiByDomain, generalByDomain) {
+  const merged = new Map();
+
+  (kpiByDomain || []).forEach((row) => {
+    const domain = normalizeDomainKey(row.domain);
+    const entry = merged.get(domain) || { domain, kpiPenalty: 0, genPenalty: 0 };
+    entry.kpiPenalty += Number(row.penaltyAmount || 0);
+    merged.set(domain, entry);
+  });
+
+  (generalByDomain || []).forEach((row) => {
+    const domain = normalizeDomainKey(row.domain);
+    const entry = merged.get(domain) || { domain, kpiPenalty: 0, genPenalty: 0 };
+    entry.genPenalty += Number(row.penaltyAccepted || 0);
+    merged.set(domain, entry);
+  });
+
+  return [...merged.values()].sort((a, b) => (b.kpiPenalty + b.genPenalty) - (a.kpiPenalty + a.genPenalty));
+}
+
 export default function PenaltyAnalyticsCard({ kpiPenalty, generalPenalty, insight, loading, trendSeries }) {
   const totalPenalties = Number(kpiPenalty?.totalPenaltyAmount || 0) + Number(generalPenalty?.totalPenaltyAccepted || 0);
-  const domainRows = generalPenalty?.byDomain || [];
+  const domainRows = mergeDomainRows(kpiPenalty?.byDomain, generalPenalty?.byDomain);
 
   return (
     <div className="p-5">
@@ -58,7 +93,7 @@ export default function PenaltyAnalyticsCard({ kpiPenalty, generalPenalty, insig
               <div className="text-[12px] font-semibold tracking-[0.26em] uppercase text-rose-700 dark:text-rose-400">
                 Penalty Breakdown
               </div>
-              <div className="text-[12px] tracking-[0.10em] text-text-muted mt-1">General Penalty by domain (accepted)</div>
+              <div className="text-[12px] tracking-[0.10em] text-text-muted mt-1">KPI + General Penalty by domain</div>
             </div>
           </div>
 
@@ -67,19 +102,17 @@ export default function PenaltyAnalyticsCard({ kpiPenalty, generalPenalty, insig
           </div>
         </div>
 
-        <div className="mb-3 flex items-center justify-between rounded-lg border border-border-color bg-surface-muted px-3 py-2">
-          <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-text-muted">KPI Penalty (all domains)</span>
-          <span className="text-xs font-semibold text-rose-700 dark:text-rose-400">{formatCurrency(kpiPenalty?.totalPenaltyAmount)}</span>
-        </div>
-
         {domainRows.length === 0 ? (
           <div className="rounded-lg border border-dashed border-border-color px-3 py-4 text-center text-xs text-text-muted">
-            No General Penalty records in this range.
+            No KPI or General Penalty records in this range.
           </div>
         ) : (
           <div className="overflow-hidden rounded-lg border border-border-color">
-            <div className="grid grid-cols-2 bg-surface-muted border-b border-border-color">
+            <div className="grid grid-cols-3 bg-surface-muted border-b border-border-color">
               <div className="px-3 py-2 text-[11px] font-bold uppercase tracking-[0.14em] text-text-muted">Domain</div>
+              <div className="px-3 py-2 text-[11px] font-bold uppercase tracking-[0.14em] text-rose-600 dark:text-rose-400 border-l border-border-color">
+                KPI Penalty
+              </div>
               <div className="px-3 py-2 text-[11px] font-bold uppercase tracking-[0.14em] text-orange-600 dark:text-orange-400 border-l border-border-color">
                 Gen Penalty
               </div>
@@ -88,11 +121,14 @@ export default function PenaltyAnalyticsCard({ kpiPenalty, generalPenalty, insig
             {domainRows.map((row, idx) => (
               <div
                 key={row.domain}
-                className={`grid grid-cols-2 ${idx < domainRows.length - 1 ? "border-b border-border-color" : ""}`}
+                className={`grid grid-cols-3 ${idx < domainRows.length - 1 ? "border-b border-border-color" : ""}`}
               >
                 <div className="p-3 text-xs font-semibold text-text-secondary">{row.domain}</div>
+                <div className="p-3 text-xs font-semibold text-rose-600 dark:text-rose-400 border-l border-border-color">
+                  {formatCurrency(row.kpiPenalty)}
+                </div>
                 <div className="p-3 text-xs font-semibold text-orange-600 dark:text-orange-400 border-l border-border-color">
-                  {formatCurrency(row.penaltyAccepted)}
+                  {formatCurrency(row.genPenalty)}
                 </div>
               </div>
             ))}

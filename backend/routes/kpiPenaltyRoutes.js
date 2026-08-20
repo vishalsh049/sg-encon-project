@@ -883,7 +883,31 @@ router.get("/summary", requirePagePermission("kpis-penalty", "view"), async (req
       params
     );
 
-    res.json({ success: true, data: { ...rows[0], byMonth: byMonthRows } });
+    // KPI Penalty records carry a kpi_category (Tower, ODSC, ESC, Facility,
+    // Fiber, FTTx F&D, FTTx OLT), not a domain — mapped onto the same
+    // Tower/Fiber/FTTx taxonomy DOMAIN_COLORS uses elsewhere. ODSC/ESC/
+    // Facility are Tower-site KPI feeds (same grouping Tower Reports uses
+    // for those site types), so they roll up under Tower.
+    const [byDomainRows] = await pool.query(
+      `SELECT
+         CASE
+           WHEN r.kpi_category IN ('Tower', 'ODSC', 'ESC', 'Facility') THEN 'Tower'
+           WHEN r.kpi_category = 'Fiber' THEN 'Fiber'
+           WHEN r.kpi_category IN ('FTTx F&D', 'FTTx OLT') THEN 'FTTx'
+           ELSE r.kpi_category
+         END AS domain,
+         COUNT(*) AS count,
+         COALESCE(SUM(r.penalty_amount), 0) AS penaltyAmount,
+         COALESCE(SUM(r.reward_amount), 0) AS rewardAmount
+       FROM kpi_penalty_records r
+       JOIN kpi_penalty_uploads u ON u.id = r.file_id
+       WHERE ${filters.join(" AND ")}
+       GROUP BY domain
+       ORDER BY penaltyAmount DESC`,
+      params
+    );
+
+    res.json({ success: true, data: { ...rows[0], byDomain: byDomainRows, byMonth: byMonthRows } });
   } catch (error) {
     console.error("KPI Penalty summary fetch failed:", error);
     res.status(500).json({ success: false, message: "Failed to load KPI Penalty summary." });
