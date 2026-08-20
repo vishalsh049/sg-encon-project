@@ -76,6 +76,13 @@ const maxBulkFiles = 12;
 // underscores, spaces or dashes, then _YYYY-MM-DD, then the extension.
 const bulkFileNamePattern = /^[^._\s-]+_(\d{4}-\d{2}-\d{2})\.[^.]+$/;
 
+// Mirrors extractFileNamePrefix() on the server: the file name's leading
+// token, before the first underscore — e.g. "hpodsc" in "hpodsc_2026-06-01.xlsx".
+const extractFileNamePrefix = (name = "") => {
+  const match = String(name || "").trim().match(/^([^._\s-]+)_/);
+  return match ? match[1] : null;
+};
+
 const isValidFile = (file) => {
   if (!file?.name) return false;
   return validExtensions.includes(file.name.split(".").pop().toLowerCase());
@@ -525,6 +532,19 @@ setTimeout(() => {
     [bulkFiles]
   );
 
+  // Catches a file named for a different Site Type than the one selected
+  // (e.g. a "gnb_..." file picked while Site Type = HPODSC) before it's ever
+  // sent to the server — mirrors the server-side check in reportRoutes.js.
+  const bulkSiteTypeIssues = useMemo(() => {
+    if (!siteType) return [];
+    return bulkFiles
+      .filter((item) => {
+        const prefix = extractFileNamePrefix(item.name);
+        return prefix && prefix.toUpperCase() !== siteType.toUpperCase();
+      })
+      .map((item) => item.name);
+  }, [bulkFiles, siteType]);
+
   // ── Delete ────────────────────────────────────────────────────────────────
 
   const handleDelete = (row) => {
@@ -844,7 +864,10 @@ setTimeout(() => {
   }, [editingId, siteType, reportType, date, file, bulkFiles.length, uploadType]);
 
   const canSubmitUpload =
-    !uploading && missingUploadFields.length === 0 && bulkNameIssues.length === 0;
+    !uploading &&
+    missingUploadFields.length === 0 &&
+    bulkNameIssues.length === 0 &&
+    bulkSiteTypeIssues.length === 0;
 
   const handleUpload = async () => {
     setModalMessage("");
@@ -2175,10 +2198,33 @@ setTimeout(() => {
                       </div>
                     ) : null}
 
+                    {bulkSiteTypeIssues.length ? (
+                      <div
+                        role="alert"
+                        className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-300"
+                      >
+                        <p className="font-semibold">
+                          {bulkSiteTypeIssues.length} file name
+                          {bulkSiteTypeIssues.length === 1 ? "" : "s"} {bulkSiteTypeIssues.length === 1 ? "does" : "do"} not match Site Type "{siteType}":
+                        </p>
+                        <ul className="mt-1 space-y-0.5">
+                          {bulkSiteTypeIssues.map((name) => (
+                            <li key={name} className="truncate font-mono">• {name}</li>
+                          ))}
+                        </ul>
+                        <p className="mt-1.5">
+                          Rename them to {siteType.toLowerCase()}_YYYY-MM-DD.xlsx, or remove them from the list.
+                        </p>
+                      </div>
+                    ) : null}
+
                     {bulkFiles.length > 0 ? (
                       <div className="max-h-52 space-y-1.5 overflow-y-auto rounded-2xl border border-border-color bg-surface p-2">
                         {bulkFiles.map((selectedFile) => {
                           const nameOk = bulkFileNamePattern.test(selectedFile.name);
+                          const filePrefix = extractFileNamePrefix(selectedFile.name);
+                          const siteTypeOk =
+                            !siteType || !filePrefix || filePrefix.toUpperCase() === siteType.toUpperCase();
                           return (
                             <div
                               key={selectedFile.name}
@@ -2196,12 +2242,12 @@ setTimeout(() => {
                               </span>
                               <span
                                 className={`flex-shrink-0 text-xs font-medium ${
-                                  nameOk
+                                  nameOk && siteTypeOk
                                     ? "text-green-600 dark:text-green-400"
                                     : "text-amber-600 dark:text-amber-400"
                                 }`}
                               >
-                                {nameOk ? "Ready" : "Bad name"}
+                                {!nameOk ? "Bad name" : !siteTypeOk ? "Wrong type" : "Ready"}
                               </span>
                               <button
                                 type="button"
@@ -2279,6 +2325,8 @@ setTimeout(() => {
                   title={
                     bulkNameIssues.length
                       ? "Fix or remove the badly named files first"
+                      : bulkSiteTypeIssues.length
+                      ? "Fix or remove the files that don't match the selected Site Type first"
                       : missingUploadFields.length
                       ? `Still needed: ${missingUploadFields.join(", ")}`
                       : undefined

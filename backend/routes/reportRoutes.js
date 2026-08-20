@@ -2134,24 +2134,51 @@ router.post("/upload", requirePagePermission("tower-reports", "edit"), (req, res
           })
           .filter(Boolean);
 
-        if (nameProblems.length) {
+        // A file named for a different Site Type than the one selected (e.g.
+        // a "gnb_..." file uploaded while Site Type = HPODSC) would otherwise
+        // be silently filed into the wrong Site Type's table. Checked
+        // separately from the date check above so a file can be flagged for
+        // either or both problems in one pass.
+        const siteTypeProblems = files
+          .map((file) => {
+            const name = String(file.originalname || "");
+            const prefix = extractFileNamePrefix(name);
+            if (!prefix || prefix.toUpperCase() === normalizedSiteType) return null;
+
+            return {
+              fileName: name,
+              reason: `The file name starts with "${prefix}", but the selected Site Type is "${normalizedSiteType}".`,
+            };
+          })
+          .filter(Boolean);
+
+        const nameProblemFiles = new Set(nameProblems.map((item) => item.fileName));
+        const allProblems = [
+          ...nameProblems,
+          ...siteTypeProblems.filter((item) => !nameProblemFiles.has(item.fileName)),
+        ];
+
+        if (allProblems.length) {
+          const exampleName = normalizedSiteType
+            ? `${normalizedSiteType.toLowerCase()}_2026-07-27.xlsx`
+            : "reporttype_YYYY-MM-DD.xlsx";
           return res.status(400).json({
             success: false,
             errorType: "file-name",
             message:
-              `${nameProblems.length} of ${files.length} file name${files.length === 1 ? "" : "s"} ` +
-              `could not be read, so nothing was uploaded.\n\n` +
-              nameProblems
+              `${allProblems.length} of ${files.length} file name${files.length === 1 ? "" : "s"} ` +
+              `could not be accepted, so nothing was uploaded.\n\n` +
+              allProblems
                 .map((item) => `• ${item.fileName}\n  ${item.reason}`)
                 .join("\n") +
-              `\n\n${bulkFileNameFormatHelp}\nExample: outage_2026-07-27.xlsx`,
-            errors: nameProblems.map((item) => ({
+              `\n\n${bulkFileNameFormatHelp}\nExample: ${exampleName}`,
+            errors: allProblems.map((item) => ({
               row: null,
               column: "File name",
               value: item.fileName,
-              expected: "reporttype_YYYY-MM-DD.xlsx",
+              expected: `${normalizedSiteType || "SITETYPE"}_YYYY-MM-DD.xlsx`,
               reason: item.reason,
-              fix: "Rename the file to reporttype_YYYY-MM-DD.xlsx and select it again.",
+              fix: `Rename the file to ${normalizedSiteType || "SITETYPE"}_YYYY-MM-DD.xlsx and select it again.`,
             })),
           });
         }
@@ -2458,6 +2485,14 @@ const streamBulkExportRows = async function* (sql, params) {
     connection.release();
   }
 };
+
+// The file name's leading token, before the first underscore — e.g. "hpodsc"
+// in "hpodsc_2026-06-01.xlsx". Used to confirm a file was actually named for
+// the Site Type it's being uploaded under.
+function extractFileNamePrefix(fileName = "") {
+  const match = String(fileName || "").trim().match(/^([^._\s-]+)_/);
+  return match ? match[1] : null;
+}
 
 function extractDateFromFileName(fileName = "") {
   const normalizedFileName = String(fileName || "").trim();
