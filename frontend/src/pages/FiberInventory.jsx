@@ -1,6 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Download, FileSpreadsheet, Pencil, Plus, Trash2, Upload, X } from "lucide-react";
+import { Listbox } from "@headlessui/react";
+import {
+  ChevronDown,
+  Download,
+  FileSpreadsheet,
+  Layers,
+  Pencil,
+  Plus,
+  Trash2,
+  Upload,
+  X,
+} from "lucide-react";
 import axios from "axios";
 import toast from "react-hot-toast";
 import Card from "../components/Card";
@@ -15,6 +26,27 @@ const cardConfig = [
   { title: "Intracity", key: "Intracity", tone: "green" },
   { title: "FTTx", key: "FTTx", tone: "gray" },
 ];
+
+// Fiber (Intercity/Intracity) and FTTx uploads use different column layouts.
+// The upload itself still auto-detects the real type per row server-side —
+// this only drives which template the "download format" link points to.
+const fileTypeOptions = [
+  { value: "Fiber", label: "Fiber (Intercity / Intracity)", format: "fiber_format.xlsx" },
+  { value: "FTTx", label: "FTTx", format: "fttx_format.xlsx" },
+];
+
+const listboxButtonClass =
+  "flex h-10 w-full items-center justify-between gap-2 rounded-xl border border-border-color bg-surface px-4 text-left text-sm text-text-primary shadow-sm transition hover:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-100 hover:dark:border-blue-500/30";
+const listboxOptionsClass =
+  "z-[10010] max-h-60 w-[var(--button-width)] overflow-auto rounded-2xl border border-border-color bg-surface p-1 shadow-[0_20px_60px_rgba(15,23,42,0.12)]";
+const listboxOptionClass = ({ active, selected }) =>
+  `cursor-pointer rounded-xl px-3 py-2 text-sm transition ${
+    active
+      ? "bg-blue-50 text-blue-700 dark:bg-blue-500/10 dark:text-blue-400"
+      : selected
+      ? "font-semibold text-text-primary"
+      : "text-text-secondary"
+  }`;
 
 function formatDate(value) {
   if (!value) return "-";
@@ -57,6 +89,7 @@ function FiberInventory() {
     uploadedBy: "",
     file: null,
   });
+  const [uploadFileType, setUploadFileType] = useState("Fiber");
   const [editForm, setEditForm] = useState({
   
     id: "",
@@ -135,6 +168,7 @@ useEffect(() => {
   const closeUploadModal = () => {
     setShowUploadModal(false);
     setUploadForm({ date: "", uploadedBy: "", file: null });
+    setUploadFileType("Fiber");
     setSaveError("");
   };
 
@@ -565,27 +599,56 @@ useEffect(() => {
                   </button>
                 </div>
 
+                <div className="mt-4">
+                  <label className="mb-2 block text-sm font-medium text-text-secondary">
+                    File Type
+                  </label>
+                  <Listbox value={uploadFileType} onChange={setUploadFileType}>
+                    <div className="relative">
+                      <Listbox.Button className={listboxButtonClass}>
+                        <span className="flex min-w-0 items-center gap-2">
+                          <Layers size={15} className="flex-shrink-0 text-text-muted" />
+                          <span className="truncate">
+                            {fileTypeOptions.find((opt) => opt.value === uploadFileType)?.label ||
+                              uploadFileType}
+                          </span>
+                        </span>
+                        <ChevronDown size={16} className="flex-shrink-0 text-text-muted" />
+                      </Listbox.Button>
+                      <Listbox.Options
+                        anchor={{ to: "bottom start", gap: "0.5rem" }}
+                        className={listboxOptionsClass}
+                      >
+                        {fileTypeOptions.map((opt) => (
+                          <Listbox.Option
+                            key={opt.value}
+                            value={opt.value}
+                            className={listboxOptionClass}
+                          >
+                            {opt.label}
+                          </Listbox.Option>
+                        ))}
+                      </Listbox.Options>
+                    </div>
+                  </Listbox>
+                </div>
+
                 <div className="mt-4 flex flex-wrap items-center gap-3 rounded-2xl border border-violet-200 bg-violet-50/60 px-4 py-3 dark:border-violet-500/20 dark:bg-violet-500/10">
                   <FileSpreadsheet size={16} className="flex-shrink-0 text-violet-600 dark:text-violet-400" />
                   <p className="min-w-0 flex-1 text-xs text-violet-800 dark:text-violet-300">
-                    Not sure which columns are accepted? Fiber (Intercity/Intracity) and
-                    FTTx use different layouts — download the one you need below.
+                    Your file must use the {uploadFileType} column layout, with headings on
+                    row 1.
                   </p>
                   <a
-                    href="/formats/fiber_format.xlsx"
-                    download="Fiber_Format.xlsx"
+                    href={`/formats/${
+                      fileTypeOptions.find((opt) => opt.value === uploadFileType)?.format ||
+                      "fiber_format.xlsx"
+                    }`}
+                    download={`${uploadFileType}_Format.xlsx`}
                     className="inline-flex h-9 items-center gap-2 rounded-xl border border-violet-200 bg-surface px-3 text-sm font-medium text-violet-700 transition hover:bg-violet-100 dark:border-violet-500/20 dark:text-violet-400 hover:dark:bg-violet-500/15"
                   >
                     <Download size={15} />
-                    Fiber format
-                  </a>
-                  <a
-                    href="/formats/fttx_format.xlsx"
-                    download="FTTx_Format.xlsx"
-                    className="inline-flex h-9 items-center gap-2 rounded-xl border border-violet-200 bg-surface px-3 text-sm font-medium text-violet-700 transition hover:bg-violet-100 dark:border-violet-500/20 dark:text-violet-400 hover:dark:bg-violet-500/15"
-                  >
-                    <Download size={15} />
-                    FTTx format
+                    {uploadFileType} format
                   </a>
                 </div>
 

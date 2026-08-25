@@ -633,7 +633,10 @@ parsedRows.push({
   // distinct columns in real files — normalizeKey gives them different keys
   // ("mp" vs "mp_code") so no disambiguation suffix is needed here.
   mp: cleanRow["mp"] || "",
-  mpCode: cleanRow["mp_code"] || "",
+  // "MP Code" and "CMP Code" are the same column under two names real files
+  // use interchangeably (same as CMP/MP itself) — accept either, case
+  // handled already by normalizeKey lowercasing every header.
+  mpCode: pickFirst(cleanRow, ["mp_code", "cmp_code"]) || "",
   month: cleanRow["month"] || "",
   // FTTx-only columns. "aerial_hoto_km" is a distinct measurement from the
   // plain "aerial" column above — the aerial-key scoring already excludes
