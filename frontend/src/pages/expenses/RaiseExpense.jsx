@@ -34,7 +34,7 @@ import {
 const INPUT =
   "w-full rounded-xl border border-border-color bg-surface px-3 py-2 text-sm text-text-primary outline-none transition focus:border-indigo-400 disabled:bg-surface-muted disabled:text-text-muted";
 const CELL_INPUT =
-  "w-full rounded-lg border border-border-color bg-surface px-2 py-1.5 text-sm text-text-primary outline-none focus:border-indigo-400";
+  "h-9 w-full rounded-lg border border-border-color bg-surface px-2.5 text-sm text-text-primary outline-none transition focus:border-indigo-400 disabled:bg-surface-muted disabled:text-text-muted";
 
 const ALLOWED_EXT = ["pdf", "jpg", "jpeg", "png"];
 const emptyRowKey = () => `r-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
@@ -544,7 +544,7 @@ export default function RaiseExpense() {
             </thead>
             <tbody className="divide-y divide-border-color">
               {rows.map((row, index) => (
-                <tr key={row.localKey} className="align-top">
+                <tr key={row.localKey} className="align-middle">
                   <td className="px-3 py-2 text-text-muted">{index + 1}</td>
                   <td className="px-3 py-2">
                     <input
@@ -693,17 +693,17 @@ function Field({ label, children, className = "" }) {
 
 function BillCell({ row, uploading, requiresBill, onPick, onOpen, onRemove }) {
   return (
-    <div className="min-w-[150px] space-y-1">
+    <div className="min-w-[160px] space-y-1">
       {row.attachments.map((att) => (
         <div
           key={att.id}
-          className="flex items-center gap-1 rounded-md border border-border-color bg-surface px-1.5 py-1 text-xs"
+          className="flex h-9 items-center gap-1 rounded-lg border border-border-color bg-surface px-2 text-xs"
         >
           <FileText size={13} className="shrink-0 text-indigo-500" />
           <button
             type="button"
             onClick={() => onOpen(att.id)}
-            className="max-w-[90px] truncate text-indigo-600 hover:underline dark:text-indigo-300"
+            className="min-w-0 flex-1 truncate text-left text-indigo-600 hover:underline dark:text-indigo-300"
             title={att.fileName}
           >
             {att.fileName}
@@ -711,7 +711,7 @@ function BillCell({ row, uploading, requiresBill, onPick, onOpen, onRemove }) {
           <button
             type="button"
             onClick={() => onRemove(att.id)}
-            className="ml-auto text-text-muted hover:text-rose-600"
+            className="shrink-0 text-text-muted hover:text-rose-600"
             title="Remove bill"
           >
             <X size={12} />
@@ -722,7 +722,7 @@ function BillCell({ row, uploading, requiresBill, onPick, onOpen, onRemove }) {
         type="button"
         onClick={onPick}
         disabled={uploading}
-        className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-medium transition disabled:opacity-50 ${
+        className={`inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-lg border px-2.5 text-xs font-medium transition disabled:opacity-50 ${
           requiresBill && !row.attachments.length
             ? "border-amber-300 bg-amber-50 text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300"
             : "border-border-color bg-surface text-text-secondary hover:bg-surface-muted"
