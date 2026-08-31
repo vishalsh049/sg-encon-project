@@ -7,6 +7,7 @@ import { CARD_SHELL } from "../../components/billingDashboard/theme";
 import ClaimStatusBadge from "../../components/expenses/ClaimStatusBadge";
 import ClaimProgressTracker from "../../components/expenses/ClaimProgressTracker";
 import AuditTimeline from "../../components/expenses/AuditTimeline";
+import ItemClassification from "../../components/expenses/ItemClassification";
 import { formatCurrency, formatDate } from "../../utils/penaltyFormat";
 import { fetchClaim, openBill } from "../../lib/expenseClaimsApi";
 
@@ -148,8 +149,7 @@ export default function ExpenseClaimDetail() {
                 <th className="px-3 py-2.5">#</th>
                 <th className="px-3 py-2.5">Date</th>
                 <th className="px-3 py-2.5">Category</th>
-                <th className="px-3 py-2.5">Sub Category</th>
-                <th className="px-3 py-2.5">Description</th>
+                <th className="px-3 py-2.5">Description &amp; Details</th>
                 <th className="px-3 py-2.5 text-right">Claimed</th>
                 {showL1 ? <th className="px-3 py-2.5 text-right">L1</th> : null}
                 {showL2 ? <th className="px-3 py-2.5 text-right">L2</th> : null}
@@ -167,13 +167,13 @@ export default function ExpenseClaimDetail() {
                       {formatDate((item.expenseDate || "").toString().slice(0, 10))}
                     </td>
                     <td className="whitespace-nowrap px-3 py-2 font-medium text-text-primary">
-                      {item.category}
+                      {item.workCategory || item.category || "—"}
                     </td>
-                    <td className="whitespace-nowrap px-3 py-2 text-text-secondary">
-                      {item.subCategory || "—"}
-                    </td>
-                    <td className="max-w-[240px] truncate px-3 py-2 text-text-secondary" title={item.description || ""}>
-                      {item.description || "—"}
+                    <td className="px-3 py-2 text-text-secondary">
+                      <div className="max-w-[320px] truncate" title={item.description || ""}>
+                        {item.description || "—"}
+                      </div>
+                      <ItemClassification item={item} className="mt-1" />
                     </td>
                     <td className="whitespace-nowrap px-3 py-2 text-right font-medium text-text-primary">
                       {formatCurrency(item.claimedAmount)}
@@ -221,7 +221,7 @@ export default function ExpenseClaimDetail() {
             </tbody>
             <tfoot>
               <tr className="bg-surface-muted/60 font-semibold text-text-primary">
-                <td className="px-3 py-2.5" colSpan={5}>
+                <td className="px-3 py-2.5" colSpan={4}>
                   Total
                 </td>
                 <td className="px-3 py-2.5 text-right">{formatCurrency(claim.totalClaimed)}</td>

@@ -4,12 +4,14 @@ import { Loader2, Plus, RefreshCw, Trash2 } from "lucide-react";
 
 import { CARD_SHELL } from "../../components/billingDashboard/theme";
 import { formatCurrency } from "../../utils/penaltyFormat";
-import { admin, fetchAdminConfig } from "../../lib/expenseClaimsApi";
+import { admin, createVendor, fetchAdminConfig } from "../../lib/expenseClaimsApi";
 
 const TABS = [
   { key: "matrix", label: "Approval Matrix" },
-  { key: "categories", label: "Categories" },
-  { key: "subCategories", label: "Sub Categories" },
+  { key: "vendors", label: "Vendors" },
+  { key: "vendorTypes", label: "Vendor Types" },
+  { key: "employeeTypes", label: "Employee Types" },
+  { key: "pos", label: "PO Master" },
 ];
 const INPUT =
   "w-full rounded-lg border border-border-color bg-surface px-2.5 py-1.5 text-sm text-text-primary outline-none focus:border-indigo-400";
@@ -68,7 +70,7 @@ export default function ExpenseClaimsAdmin() {
             Expense Claims — Master Data
           </h1>
           <p className="mt-0.5 text-sm text-text-secondary">
-            Configure the approval chain, expense categories and sub-categories. No code change needed.
+            Configure the approval chain, approval matrix, vendors, vendor / employee types and the PO master. No code change needed.
           </p>
         </div>
         <button
@@ -100,9 +102,195 @@ export default function ExpenseClaimsAdmin() {
       </div>
 
       {tab === "matrix" ? <MatrixTab cfg={cfg} run={run} busy={busy} /> : null}
-      {tab === "categories" ? <CategoriesTab cfg={cfg} run={run} busy={busy} /> : null}
-      {tab === "subCategories" ? <SubCategoriesTab cfg={cfg} run={run} busy={busy} /> : null}
+      {tab === "vendors" ? <VendorsTab cfg={cfg} run={run} busy={busy} /> : null}
+      {tab === "vendorTypes" ? (
+        <NameMasterTab rows={cfg.vendorTypes} run={run} busy={busy} label="Vendor Type" api={admin.addVendorType} apiUpd={admin.updateVendorType} apiDel={admin.deleteVendorType} />
+      ) : null}
+      {tab === "employeeTypes" ? (
+        <NameMasterTab rows={cfg.employeeTypes} run={run} busy={busy} label="Employee Type" api={admin.addEmployeeType} apiUpd={admin.updateEmployeeType} apiDel={admin.deleteEmployeeType} />
+      ) : null}
+      {tab === "pos" ? <POsTab cfg={cfg} run={run} busy={busy} /> : null}
     </div>
+  );
+}
+
+/* ---------------- Generic name master (vendor / employee types) ---------------- */
+function NameMasterTab({ rows = [], run, busy, label, api, apiUpd, apiDel }) {
+  const [name, setName] = useState("");
+  return (
+    <Table
+      head={
+        <>
+          <th className={TH}>{label}</th>
+          <th className={TH}>Active</th>
+          <th className={TH}></th>
+        </>
+      }
+    >
+      {rows.map((r) => (
+        <tr key={r.id}>
+          <td className={TD}>{r.name}</td>
+          <td className={TD}>
+            <input type="checkbox" checked={r.isActive} onChange={() => run(() => apiUpd(r.id, { isActive: !r.isActive }), "Updated.")} />
+          </td>
+          <td className={TD}>
+            <button type="button" disabled={busy} onClick={() => run(() => apiDel(r.id), "Removed.")} className="text-text-muted hover:text-rose-600">
+              <Trash2 size={14} />
+            </button>
+          </td>
+        </tr>
+      ))}
+      <tr className="bg-surface-muted/40">
+        <td className={TD}>
+          <input className={INPUT} value={name} onChange={(e) => setName(e.target.value)} placeholder={`New ${label}`} />
+        </td>
+        <td className={TD} />
+        <td className={TD}>
+          <button
+            type="button"
+            disabled={busy || !name.trim()}
+            onClick={() => run(() => api({ name: name.trim() }), `${label} added.`).then(() => setName(""))}
+            className="inline-flex items-center gap-1 rounded-lg bg-indigo-500 px-2.5 py-1 text-xs font-semibold text-white disabled:opacity-50"
+          >
+            <Plus size={12} /> Add
+          </button>
+        </td>
+      </tr>
+    </Table>
+  );
+}
+
+/* ---------------- Vendors ---------------- */
+function VendorsTab({ cfg, run, busy }) {
+  const empty = { name: "", vendorType: "", gstin: "", phone: "" };
+  const [form, setForm] = useState(empty);
+  const types = (cfg.vendorTypes || []).filter((t) => t.isActive).map((t) => t.name);
+  return (
+    <Table
+      head={
+        <>
+          <th className={TH}>Vendor</th>
+          <th className={TH}>Type</th>
+          <th className={TH}>GSTIN</th>
+          <th className={TH}>Phone</th>
+          <th className={TH}>Active</th>
+          <th className={TH}></th>
+        </>
+      }
+    >
+      {(cfg.vendors || []).map((v) => (
+        <tr key={v.id}>
+          <td className={TD}>{v.name}</td>
+          <td className={TD}>{v.vendorType || "—"}</td>
+          <td className={TD}>{v.gstin || "—"}</td>
+          <td className={TD}>{v.phone || "—"}</td>
+          <td className={TD}>
+            <input type="checkbox" checked={v.isActive} onChange={() => run(() => admin.updateVendor(v.id, { isActive: !v.isActive }), "Updated.")} />
+          </td>
+          <td className={TD}>
+            <button type="button" disabled={busy} onClick={() => run(() => admin.deleteVendor(v.id), "Removed.")} className="text-text-muted hover:text-rose-600">
+              <Trash2 size={14} />
+            </button>
+          </td>
+        </tr>
+      ))}
+      <tr className="bg-surface-muted/40">
+        <td className={TD}><input className={INPUT} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="New vendor name" /></td>
+        <td className={TD}>
+          <select className={INPUT} value={form.vendorType} onChange={(e) => setForm({ ...form, vendorType: e.target.value })}>
+            <option value="">Type…</option>
+            {types.map((t) => <option key={t} value={t}>{t}</option>)}
+          </select>
+        </td>
+        <td className={TD}><input className={INPUT} value={form.gstin} onChange={(e) => setForm({ ...form, gstin: e.target.value.toUpperCase() })} placeholder="GSTIN" /></td>
+        <td className={TD}><input className={INPUT} value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="Phone" /></td>
+        <td className={TD} />
+        <td className={TD}>
+          <button
+            type="button"
+            disabled={busy || !form.name.trim()}
+            onClick={() => run(() => createVendor({ name: form.name.trim(), vendorType: form.vendorType || null, gstin: form.gstin.trim() || null, phone: form.phone.trim() || null }), "Vendor added.").then(() => setForm(empty))}
+            className="inline-flex items-center gap-1 rounded-lg bg-indigo-500 px-2.5 py-1 text-xs font-semibold text-white disabled:opacity-50"
+          >
+            <Plus size={12} /> Add
+          </button>
+        </td>
+      </tr>
+    </Table>
+  );
+}
+
+/* ---------------- PO Master ---------------- */
+function POsTab({ cfg, run, busy }) {
+  const empty = { poNumber: "", workCategory: "", domain: "", clientName: "", siteRoute: "", estimateWccAmount: "" };
+  const [form, setForm] = useState(empty);
+  return (
+    <Table
+      head={
+        <>
+          <th className={TH}>PO No.</th>
+          <th className={TH}>Category</th>
+          <th className={TH}>Domain</th>
+          <th className={TH}>Client</th>
+          <th className={TH}>Est. WCC</th>
+          <th className={TH}>Active</th>
+          <th className={TH}></th>
+        </>
+      }
+    >
+      {(cfg.pos || []).map((p) => (
+        <tr key={p.id}>
+          <td className={TD}>{p.poNumber}</td>
+          <td className={TD}>{p.workCategory || "—"}</td>
+          <td className={TD}>{p.domain || "—"}</td>
+          <td className={TD}>{p.clientName || "—"}</td>
+          <td className={TD}>{p.estimateWccAmount != null ? formatCurrency(p.estimateWccAmount) : "—"}</td>
+          <td className={TD}>
+            <input type="checkbox" checked={p.isActive} onChange={() => run(() => admin.updatePO(p.id, { isActive: !p.isActive }), "Updated.")} />
+          </td>
+          <td className={TD}>
+            <button type="button" disabled={busy} onClick={() => run(() => admin.deletePO(p.id), "Removed.")} className="text-text-muted hover:text-rose-600">
+              <Trash2 size={14} />
+            </button>
+          </td>
+        </tr>
+      ))}
+      <tr className="bg-surface-muted/40">
+        <td className={TD}><input className={INPUT} value={form.poNumber} onChange={(e) => setForm({ ...form, poNumber: e.target.value })} placeholder="PO number" /></td>
+        <td className={TD}>
+          <select className={INPUT} value={form.workCategory} onChange={(e) => setForm({ ...form, workCategory: e.target.value })}>
+            <option value="">Any</option>
+            {["O&M", "OOS", "Project"].map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
+        </td>
+        <td className={TD}>
+          <select className={INPUT} value={form.domain} onChange={(e) => setForm({ ...form, domain: e.target.value })}>
+            <option value="">—</option>
+            {["Fiber", "FTTx", "Utility", "Others"].map((d) => <option key={d} value={d}>{d}</option>)}
+          </select>
+        </td>
+        <td className={TD}><input className={INPUT} value={form.clientName} onChange={(e) => setForm({ ...form, clientName: e.target.value })} placeholder="Client" /></td>
+        <td className={TD}><input className={INPUT} type="number" value={form.estimateWccAmount} onChange={(e) => setForm({ ...form, estimateWccAmount: e.target.value })} placeholder="0.00" /></td>
+        <td className={TD} />
+        <td className={TD}>
+          <button
+            type="button"
+            disabled={busy || !form.poNumber.trim()}
+            onClick={() => run(() => admin.addPO({
+              poNumber: form.poNumber.trim(),
+              workCategory: form.workCategory || null,
+              domain: form.domain || null,
+              clientName: form.clientName.trim() || null,
+              siteRoute: form.siteRoute.trim() || null,
+              estimateWccAmount: form.estimateWccAmount === "" ? null : Number(form.estimateWccAmount),
+            }), "PO added.").then(() => setForm(empty))}
+            className="inline-flex items-center gap-1 rounded-lg bg-indigo-500 px-2.5 py-1 text-xs font-semibold text-white disabled:opacity-50"
+          >
+            <Plus size={12} /> Add
+          </button>
+        </td>
+      </tr>
+    </Table>
   );
 }
 
@@ -324,87 +512,6 @@ function UserSelect({ value, onChange, options }) {
         <option key={u.id} value={u.id}>{u.name}{u.designation ? ` · ${u.designation}` : ""}</option>
       ))}
     </select>
-  );
-}
-
-/* ---------------- Categories ---------------- */
-function CategoriesTab({ cfg, run, busy }) {
-  const [name, setName] = useState("");
-  const [requiresBill, setRequiresBill] = useState(false);
-  return (
-    <Table
-      head={
-        <>
-          <th className={TH}>Category</th>
-          <th className={TH}>Bill Required</th>
-          <th className={TH}>Active</th>
-        </>
-      }
-    >
-      {cfg.categories.map((cat) => (
-        <tr key={cat.id}>
-          <td className={TD}>{cat.name}</td>
-          <td className={TD}>
-            <input type="checkbox" checked={cat.requiresBill} onChange={() => run(() => admin.updateCategory(cat.id, { requiresBill: !cat.requiresBill }), "Updated.")} />
-          </td>
-          <td className={TD}>
-            <input type="checkbox" checked={cat.isActive} onChange={() => run(() => admin.updateCategory(cat.id, { isActive: !cat.isActive }), "Updated.")} />
-          </td>
-        </tr>
-      ))}
-      <tr className="bg-surface-muted/40">
-        <td className={TD}><input className={INPUT} value={name} onChange={(e) => setName(e.target.value)} placeholder="New category name" /></td>
-        <td className={TD}><input type="checkbox" checked={requiresBill} onChange={(e) => setRequiresBill(e.target.checked)} /></td>
-        <td className={TD}>
-          <button type="button" disabled={busy || !name.trim()} onClick={() => run(() => admin.addCategory({ name: name.trim(), requiresBill }), "Category added.").then(() => { setName(""); setRequiresBill(false); })} className="inline-flex items-center gap-1 rounded-lg bg-indigo-500 px-2.5 py-1 text-xs font-semibold text-white disabled:opacity-50">
-            <Plus size={12} /> Add
-          </button>
-        </td>
-      </tr>
-    </Table>
-  );
-}
-
-/* ---------------- Sub Categories ---------------- */
-function SubCategoriesTab({ cfg, run, busy }) {
-  const [categoryId, setCategoryId] = useState("");
-  const [name, setName] = useState("");
-  return (
-    <Table
-      head={
-        <>
-          <th className={TH}>Category</th>
-          <th className={TH}>Sub Category</th>
-          <th className={TH}></th>
-        </>
-      }
-    >
-      {cfg.subCategories.map((s) => (
-        <tr key={s.id}>
-          <td className={TD}>{s.category}</td>
-          <td className={TD}>{s.name}</td>
-          <td className={TD}>
-            <button type="button" disabled={busy} onClick={() => run(() => admin.deleteSubCategory(s.id), "Deleted.")} className="text-text-muted hover:text-rose-600">
-              <Trash2 size={14} />
-            </button>
-          </td>
-        </tr>
-      ))}
-      <tr className="bg-surface-muted/40">
-        <td className={TD}>
-          <select className={INPUT} value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
-            <option value="">Choose category…</option>
-            {cfg.categories.map((cat) => <option key={cat.id} value={cat.id}>{cat.name}</option>)}
-          </select>
-        </td>
-        <td className={TD}><input className={INPUT} value={name} onChange={(e) => setName(e.target.value)} placeholder="New sub-category" /></td>
-        <td className={TD}>
-          <button type="button" disabled={busy || !categoryId || !name.trim()} onClick={() => run(() => admin.addSubCategory({ categoryId: Number(categoryId), name: name.trim() }), "Added.").then(() => setName(""))} className="inline-flex items-center gap-1 rounded-lg bg-indigo-500 px-2.5 py-1 text-xs font-semibold text-white disabled:opacity-50">
-            <Plus size={12} /> Add
-          </button>
-        </td>
-      </tr>
-    </Table>
   );
 }
 

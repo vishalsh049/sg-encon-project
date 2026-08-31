@@ -7,6 +7,7 @@ import { CARD_SHELL } from "../../components/billingDashboard/theme";
 import ClaimStatusBadge from "../../components/expenses/ClaimStatusBadge";
 import ClaimProgressTracker from "../../components/expenses/ClaimProgressTracker";
 import AuditTimeline from "../../components/expenses/AuditTimeline";
+import ItemClassification from "../../components/expenses/ItemClassification";
 import { financeStatusMeta } from "../../lib/expenseClaimStatus";
 import { useUser } from "../../context/UserContext";
 import { formatCurrency, formatDate } from "../../utils/penaltyFormat";
@@ -284,9 +285,12 @@ export default function FinanceClaimDetail() {
                 return (
                   <tr key={it.id}>
                     <td className="px-3 py-2 text-text-muted">{index + 1}</td>
-                    <td className="whitespace-nowrap px-3 py-2 font-medium text-text-primary">{it.category}</td>
-                    <td className="max-w-[240px] truncate px-3 py-2 text-text-secondary" title={it.description || ""}>
-                      {it.description || "—"}
+                    <td className="whitespace-nowrap px-3 py-2 font-medium text-text-primary">{it.workCategory || it.category}</td>
+                    <td className="px-3 py-2 text-text-secondary">
+                      <div className="max-w-[300px] truncate" title={it.description || ""}>
+                        {it.description || "—"}
+                      </div>
+                      <ItemClassification item={it} className="mt-1" />
                     </td>
                     <td className="whitespace-nowrap px-3 py-2 text-right text-text-primary">
                       {formatCurrency(it.claimedAmount)}

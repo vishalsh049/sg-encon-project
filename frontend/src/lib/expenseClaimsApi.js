@@ -43,6 +43,24 @@ export function lookupEmployee(code) {
   return request(`${BASE}/employee-lookup${toQueryString({ code })}`);
 }
 
+// Dynamic Raise Expense — pickers
+export function searchEmployees(search) {
+  return request(`${BASE}/employees${toQueryString({ search })}`);
+}
+export function fetchVendors(params = {}) {
+  return request(`${BASE}/vendors${toQueryString(params)}`);
+}
+export function createVendor(payload) {
+  return request(`${BASE}/vendors`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+export function fetchPOs(params = {}) {
+  return request(`${BASE}/pos${toQueryString(params)}`);
+}
+
 export function fetchMyClaims(filters = {}) {
   return request(`${BASE}/claims${toQueryString(filters)}`);
 }
@@ -193,6 +211,18 @@ export const admin = {
   addMatrix: (b) => adminWrite("matrix", "POST", b),
   updateMatrix: (id, b) => adminWrite(`matrix/${id}`, "PUT", b),
   deleteMatrix: (id) => adminWrite(`matrix/${id}`, "DELETE"),
+  // dynamic-form masters
+  addVendorType: (b) => adminWrite("vendor-types", "POST", b),
+  updateVendorType: (id, b) => adminWrite(`vendor-types/${id}`, "PUT", b),
+  deleteVendorType: (id) => adminWrite(`vendor-types/${id}`, "DELETE"),
+  addEmployeeType: (b) => adminWrite("employee-types", "POST", b),
+  updateEmployeeType: (id, b) => adminWrite(`employee-types/${id}`, "PUT", b),
+  deleteEmployeeType: (id) => adminWrite(`employee-types/${id}`, "DELETE"),
+  updateVendor: (id, b) => adminWrite(`vendors/${id}`, "PUT", b),
+  deleteVendor: (id) => adminWrite(`vendors/${id}`, "DELETE"),
+  addPO: (b) => adminWrite("pos", "POST", b),
+  updatePO: (id, b) => adminWrite(`pos/${id}`, "PUT", b),
+  deletePO: (id) => adminWrite(`pos/${id}`, "DELETE"),
 };
 
 // --- Notifications --------------------------------------------------

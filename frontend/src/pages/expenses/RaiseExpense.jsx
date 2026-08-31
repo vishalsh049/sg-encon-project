@@ -1,22 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import toast from "react-hot-toast";
-import {
-  ArrowLeft,
-  FileText,
-  Loader2,
-  Paperclip,
-  Plus,
-  Save,
-  Send,
-  Trash2,
-  Upload,
-  X,
-} from "lucide-react";
+import { ArrowLeft, Loader2, Plus, Save, Send, Trash2 } from "lucide-react";
 
 import { CARD_SHELL } from "../../components/billingDashboard/theme";
 import ConfirmDialog from "../../components/ConfirmDialog";
 import ClaimProgressTracker from "../../components/expenses/ClaimProgressTracker";
+import ExpenseItemCard from "../../components/expenses/ExpenseItemCard";
 import { formatCurrency } from "../../utils/penaltyFormat";
 import {
   createClaim,
@@ -32,9 +22,7 @@ import {
 } from "../../lib/expenseClaimsApi";
 
 const INPUT =
-  "w-full rounded-xl border border-border-color bg-surface px-3 py-2 text-sm text-text-primary outline-none transition focus:border-indigo-400 disabled:bg-surface-muted disabled:text-text-muted";
-const CELL_INPUT =
-  "h-9 w-full rounded-lg border border-border-color bg-surface px-2.5 text-sm text-text-primary outline-none transition focus:border-indigo-400 disabled:bg-surface-muted disabled:text-text-muted";
+  "h-10 w-full rounded-xl border border-border-color bg-surface px-3 text-sm text-text-primary outline-none transition focus:border-indigo-400 disabled:bg-surface-muted disabled:text-text-muted";
 
 const ALLOWED_EXT = ["pdf", "jpg", "jpeg", "png"];
 const emptyRowKey = () => `r-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
@@ -44,11 +32,25 @@ function blankRow() {
     localKey: emptyRowKey(),
     id: null,
     expenseDate: "",
-    category: "",
-    subCategory: "",
+    expenseFor: "employee",
+    employeeType: "",
+    empRefCode: "",
+    empRefName: "",
+    vendorId: null,
+    vendorName: "",
+    vendorType: "",
+    claimType: "",
+    billingType: "",
+    clientName: "",
+    workCategory: "",
+    poNumber: "",
+    domain: "",
+    otherDomain: "",
+    siteRoute: "",
     description: "",
     claimedAmount: "",
     billNumber: "",
+    estimateWccAmount: null,
     attachments: [],
   };
 }
@@ -63,11 +65,25 @@ function rowsFromBundle(bundle) {
     localKey: emptyRowKey(),
     id: item.id,
     expenseDate: item.expenseDate ? String(item.expenseDate).slice(0, 10) : "",
-    category: item.category || "",
-    subCategory: item.subCategory || "",
+    expenseFor: item.expenseFor || "employee",
+    employeeType: item.employeeType || "",
+    empRefCode: item.empRefCode || "",
+    empRefName: item.empRefName || "",
+    vendorId: item.vendorId || null,
+    vendorName: item.vendorName || "",
+    vendorType: item.vendorType || "",
+    claimType: item.claimType || "",
+    billingType: item.billingType || "",
+    clientName: item.clientName || "",
+    workCategory: item.workCategory || "",
+    poNumber: item.poNumber || "",
+    domain: item.domain || "",
+    otherDomain: item.otherDomain || "",
+    siteRoute: item.siteRoute || "",
     description: item.description || "",
     claimedAmount: item.claimedAmount != null ? String(item.claimedAmount) : "",
     billNumber: item.billNumber || "",
+    estimateWccAmount: item.estimateWccAmount != null ? item.estimateWccAmount : null,
     attachments: byItem.get(item.id) || [],
   }));
 }
@@ -84,6 +100,8 @@ export default function RaiseExpense() {
 
   const [form, setForm] = useState({ employeeCode: "" });
   const [rows, setRows] = useState([blankRow()]);
+  const [collapsed, setCollapsed] = useState({}); // { [localKey]: true }
+  const [itemErrorMap, setItemErrorMap] = useState({}); // { [localKey]: string[] }
 
   // Employee identity resolved from the Physical employee master by HRMS ID.
   const [emp, setEmp] = useState(null); // { employeeName, department, designation, circle, mobile, email, ... }
@@ -178,30 +196,48 @@ export default function RaiseExpense() {
     [rows]
   );
 
-  const subCategoriesFor = (category) => (meta?.subCategories?.[category] || []);
-  const categoryRequiresBill = (category) =>
-    Boolean(meta?.categories?.find((c) => c.name === category)?.requiresBill);
-
   const setRow = (localKey, patch) =>
     setRows((prev) => prev.map((r) => (r.localKey === localKey ? { ...r, ...patch } : r)));
 
-  const addRow = () => setRows((prev) => [...prev, blankRow()]);
+  const addRow = () => {
+    setRows((prev) => [...prev, blankRow()]);
+    setCollapsed({});
+  };
 
   const removeRow = (localKey) =>
     setRows((prev) => (prev.length === 1 ? [blankRow()] : prev.filter((r) => r.localKey !== localKey)));
 
+  function itemPayload(r) {
+    return {
+      id: r.id || undefined,
+      expenseDate: r.expenseDate || null,
+      expenseFor: r.expenseFor || "employee",
+      employeeType: r.employeeType || null,
+      empRefCode: r.empRefCode || null,
+      empRefName: r.empRefName || null,
+      vendorId: r.vendorId || null,
+      vendorName: r.vendorName || null,
+      vendorType: r.vendorType || null,
+      claimType: r.claimType || null,
+      billingType: r.billingType || null,
+      clientName: r.clientName || null,
+      workCategory: r.workCategory || null,
+      poNumber: r.poNumber || null,
+      domain: r.domain || null,
+      otherDomain: r.otherDomain || null,
+      siteRoute: r.siteRoute || null,
+      description: r.description || null,
+      claimedAmount: Number(r.claimedAmount) || 0,
+      billNumber: r.billNumber || null,
+      estimateWccAmount:
+        r.estimateWccAmount === "" || r.estimateWccAmount == null ? null : Number(r.estimateWccAmount),
+    };
+  }
+
   function buildPayload() {
     return {
       employeeCode: form.employeeCode.trim() || null,
-      items: rows.map((r) => ({
-        id: r.id || undefined,
-        expenseDate: r.expenseDate || null,
-        category: r.category,
-        subCategory: r.subCategory || null,
-        description: r.description || null,
-        claimedAmount: Number(r.claimedAmount) || 0,
-        billNumber: r.billNumber || null,
-      })),
+      items: rows.map(itemPayload),
     };
   }
 
@@ -243,23 +279,61 @@ export default function RaiseExpense() {
     }
   };
 
+  // Per-item conditional validation — mirrors the server. Only fields relevant
+  // to each item's own selections are checked.
+  const validateItemRow = (r) => {
+    const e = [];
+    if (!r.expenseDate) e.push("Expense Date is required.");
+    if (!(Number(r.claimedAmount) > 0)) e.push("Claimed Amount must be greater than zero.");
+    if (r.expenseFor === "employee") {
+      if (!r.employeeType) e.push("Employee Type is required.");
+      if (!r.empRefCode) e.push("Select an Employee.");
+    } else {
+      if (!r.vendorType) e.push("Vendor Type is required.");
+      if (!r.vendorId) e.push("Select a Vendor.");
+    }
+    if (!r.claimType) e.push("Claim Type is required.");
+    if (!r.billingType) e.push("Billing Type is required.");
+    if (r.billingType === "billable" && !r.clientName?.trim()) e.push("Client / Account is required for a Billable expense.");
+    if (!r.workCategory) e.push("Expense Category is required.");
+    if (["O&M", "OOS", "Project"].includes(r.workCategory) && !r.poNumber) {
+      e.push(`PO No. is required for ${r.workCategory}.`);
+    }
+    if (r.workCategory === "O&M") {
+      if (!r.domain) e.push("Domain is required for O&M.");
+      if (r.domain === "Others" && !r.otherDomain?.trim()) e.push('Other Domain Name is required when Domain is "Others".');
+    }
+    if (!r.siteRoute?.trim()) e.push("Site / Route Details is required.");
+    if (!r.description?.trim()) e.push("Expense Description is required.");
+    if (r.claimType === "reimbursement" && !r.attachments.length) {
+      e.push("Attach a bill/invoice — required for a Reimbursement expense.");
+    }
+    return e;
+  };
+
   const clientValidate = () => {
     const errs = [];
+    const map = {};
     if (form.employeeCode.trim() && empLookup.status !== "found") {
       errs.push(`Employee ID "${form.employeeCode.trim()}" is not verified — click Fetch and make sure the details load.`);
     }
     if (!form.employeeCode.trim() && !emp?.employeeName) {
-      errs.push("Enter your Employee ID / HRMS ID and fetch the details.");
+      errs.push("Enter the Claimant's Employee ID / HRMS ID and fetch the details.");
     }
     if (!rows.length) errs.push("Add at least one expense item.");
     rows.forEach((r, i) => {
-      const n = i + 1;
-      if (!r.category) errs.push(`Row ${n}: choose an Expense Category.`);
-      if (!r.expenseDate) errs.push(`Row ${n}: enter the Expense Date.`);
-      if (!(Number(r.claimedAmount) > 0)) errs.push(`Row ${n}: enter a Claimed Amount greater than zero.`);
-      if (r.category && categoryRequiresBill(r.category) && !r.attachments.length) {
-        errs.push(`Row ${n}: attach a bill/invoice for "${r.category}".`);
+      const rowErrs = validateItemRow(r);
+      if (rowErrs.length) {
+        map[r.localKey] = rowErrs;
+        errs.push(`Item ${i + 1}: ${rowErrs.length} field(s) need attention.`);
       }
+    });
+    setItemErrorMap(map);
+    // expand any card with errors
+    setCollapsed((prev) => {
+      const next = { ...prev };
+      Object.keys(map).forEach((k) => { next[k] = false; });
+      return next;
     });
     return errs;
   };
@@ -386,7 +460,7 @@ export default function RaiseExpense() {
             {claimNumber ? `Edit Claim ${claimNumber}` : "Raise Expense"}
           </h1>
           <p className="mt-0.5 text-sm text-text-secondary">
-            One claim can hold many expense items. The total is calculated for you.
+            Build each expense step by step. One claim can hold many items — the total is calculated for you.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -440,9 +514,9 @@ export default function RaiseExpense() {
 
       {/* Claim Information */}
       <div className={`${CARD_SHELL} p-4`}>
-        <h2 className="mb-3 text-sm font-semibold text-text-primary">Claim Information</h2>
+        <h2 className="mb-3 text-sm font-semibold text-text-primary">Claimant Details</h2>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          <Field label="Employee ID / HRMS ID" className="sm:col-span-2 lg:col-span-3">
+          <Field label="Claimant Employee ID / HRMS ID" className="sm:col-span-2 lg:col-span-3">
             <div className="flex flex-wrap items-center gap-2">
               <input
                 className={`${INPUT} sm:max-w-xs ${
@@ -480,7 +554,7 @@ export default function RaiseExpense() {
                 <span className="text-sm font-medium text-rose-600 dark:text-rose-400">{empLookup.message}</span>
               ) : (
                 <span className="text-xs text-text-muted">
-                  Enter the ID and the rest fills in from the employee master.
+                  The person raising this claim. Details fill in from the employee master.
                 </span>
               )}
             </div>
@@ -514,10 +588,12 @@ export default function RaiseExpense() {
         </div>
       </div>
 
-      {/* Expense Items */}
+      {/* Expense Items — one editable card per item, progressive disclosure */}
       <div className={`${CARD_SHELL} overflow-hidden`}>
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border-color/70 px-4 py-3">
-          <h2 className="text-sm font-semibold text-text-primary">Expense Items</h2>
+          <h2 className="text-sm font-semibold text-text-primary">
+            Expense Items ({rows.length})
+          </h2>
           <button
             type="button"
             onClick={addRow}
@@ -527,127 +603,39 @@ export default function RaiseExpense() {
           </button>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="min-w-[960px] w-full text-left text-sm">
-            <thead>
-              <tr className="bg-surface-muted text-[11px] font-semibold uppercase tracking-[0.08em] text-text-muted">
-                <th className="px-3 py-2.5">#</th>
-                <th className="px-3 py-2.5">Expense Date</th>
-                <th className="px-3 py-2.5">Category</th>
-                <th className="px-3 py-2.5">Sub Category</th>
-                <th className="px-3 py-2.5">Description</th>
-                <th className="px-3 py-2.5 text-right">Claimed Amount</th>
-                <th className="px-3 py-2.5">Bill / Invoice</th>
-                <th className="px-3 py-2.5">Bill Number</th>
-                <th className="px-3 py-2.5 text-right">Action</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border-color">
-              {rows.map((row, index) => (
-                <tr key={row.localKey} className="align-middle">
-                  <td className="px-3 py-2 text-text-muted">{index + 1}</td>
-                  <td className="px-3 py-2">
-                    <input
-                      type="date"
-                      className={CELL_INPUT}
-                      value={row.expenseDate}
-                      onChange={(e) => setRow(row.localKey, { expenseDate: e.target.value })}
-                    />
-                  </td>
-                  <td className="px-3 py-2">
-                    <select
-                      className={CELL_INPUT}
-                      value={row.category}
-                      onChange={(e) =>
-                        setRow(row.localKey, { category: e.target.value, subCategory: "" })
-                      }
-                    >
-                      <option value="">Select…</option>
-                      {(meta?.categories || []).map((c) => (
-                        <option key={c.name} value={c.name}>
-                          {c.name}
-                        </option>
-                      ))}
-                    </select>
-                  </td>
-                  <td className="px-3 py-2">
-                    <select
-                      className={CELL_INPUT}
-                      value={row.subCategory}
-                      onChange={(e) => setRow(row.localKey, { subCategory: e.target.value })}
-                      disabled={!row.category}
-                    >
-                      <option value="">—</option>
-                      {subCategoriesFor(row.category).map((s) => (
-                        <option key={s} value={s}>
-                          {s}
-                        </option>
-                      ))}
-                    </select>
-                  </td>
-                  <td className="px-3 py-2">
-                    <input
-                      className={CELL_INPUT}
-                      placeholder="Details"
-                      value={row.description}
-                      onChange={(e) => setRow(row.localKey, { description: e.target.value })}
-                    />
-                  </td>
-                  <td className="px-3 py-2">
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      className={`${CELL_INPUT} text-right`}
-                      placeholder="0.00"
-                      value={row.claimedAmount}
-                      onChange={(e) => setRow(row.localKey, { claimedAmount: e.target.value })}
-                    />
-                  </td>
-                  <td className="px-3 py-2">
-                    <BillCell
-                      row={row}
-                      uploading={uploadingKey === row.localKey}
-                      requiresBill={categoryRequiresBill(row.category)}
-                      onPick={() => pickFile(row.localKey)}
-                      onOpen={(attId) =>
-                        openBill(attId).catch((err) => toast.error(err.message))
-                      }
-                      onRemove={(attId) => handleRemoveBill(row, attId)}
-                    />
-                    <input
-                      ref={(el) => (fileInputs.current[row.localKey] = el)}
-                      type="file"
-                      accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
-                      className="hidden"
-                      onChange={(e) => {
-                        handleFileChosen(row, e.target.files?.[0]);
-                        e.target.value = "";
-                      }}
-                    />
-                  </td>
-                  <td className="px-3 py-2">
-                    <input
-                      className={CELL_INPUT}
-                      placeholder="Invoice #"
-                      value={row.billNumber}
-                      onChange={(e) => setRow(row.localKey, { billNumber: e.target.value })}
-                    />
-                  </td>
-                  <td className="px-3 py-2 text-right">
-                    <button
-                      type="button"
-                      onClick={() => removeRow(row.localKey)}
-                      className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-border-color text-text-muted transition hover:border-rose-300 hover:text-rose-600"
-                      title="Remove row"
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="space-y-3 p-3 sm:p-4">
+          {rows.map((row, index) => (
+            <div key={row.localKey}>
+              <ExpenseItemCard
+                item={row}
+                index={index}
+                meta={meta}
+                errors={itemErrorMap[row.localKey] || []}
+                collapsed={Boolean(collapsed[row.localKey])}
+                onToggle={() =>
+                  setCollapsed((p) => ({ ...p, [row.localKey]: !p[row.localKey] }))
+                }
+                onChange={(p) => setRow(row.localKey, p)}
+                onRemove={() => removeRow(row.localKey)}
+                removable={rows.length > 1}
+                attachments={row.attachments}
+                uploading={uploadingKey === row.localKey}
+                onPickFile={() => pickFile(row.localKey)}
+                onOpenBill={(attId) => openBill(attId).catch((err) => toast.error(err.message))}
+                onRemoveBill={(attId) => handleRemoveBill(row, attId)}
+              />
+              <input
+                ref={(el) => (fileInputs.current[row.localKey] = el)}
+                type="file"
+                accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
+                className="hidden"
+                onChange={(e) => {
+                  handleFileChosen(row, e.target.files?.[0]);
+                  e.target.value = "";
+                }}
+              />
+            </div>
+          ))}
         </div>
 
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border-color/70 bg-surface-muted/50 px-4 py-3">
@@ -688,55 +676,5 @@ function Field({ label, children, className = "" }) {
       </span>
       {children}
     </label>
-  );
-}
-
-function BillCell({ row, uploading, requiresBill, onPick, onOpen, onRemove }) {
-  return (
-    <div className="min-w-[160px] space-y-1">
-      {row.attachments.map((att) => (
-        <div
-          key={att.id}
-          className="flex h-9 items-center gap-1 rounded-lg border border-border-color bg-surface px-2 text-xs"
-        >
-          <FileText size={13} className="shrink-0 text-indigo-500" />
-          <button
-            type="button"
-            onClick={() => onOpen(att.id)}
-            className="min-w-0 flex-1 truncate text-left text-indigo-600 hover:underline dark:text-indigo-300"
-            title={att.fileName}
-          >
-            {att.fileName}
-          </button>
-          <button
-            type="button"
-            onClick={() => onRemove(att.id)}
-            className="shrink-0 text-text-muted hover:text-rose-600"
-            title="Remove bill"
-          >
-            <X size={12} />
-          </button>
-        </div>
-      ))}
-      <button
-        type="button"
-        onClick={onPick}
-        disabled={uploading}
-        className={`inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-lg border px-2.5 text-xs font-medium transition disabled:opacity-50 ${
-          requiresBill && !row.attachments.length
-            ? "border-amber-300 bg-amber-50 text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300"
-            : "border-border-color bg-surface text-text-secondary hover:bg-surface-muted"
-        }`}
-      >
-        {uploading ? (
-          <Loader2 className="animate-spin" size={12} />
-        ) : row.attachments.length ? (
-          <Upload size={12} />
-        ) : (
-          <Paperclip size={12} />
-        )}
-        {row.attachments.length ? "Add another" : requiresBill ? "Bill required" : "Attach bill"}
-      </button>
-    </div>
   );
 }

@@ -70,6 +70,52 @@ const DEFAULT_COST_CENTRES = [
   { name: "Uttar Pradesh East", code: "UPE" },
 ];
 
+// ---------------------------------------------------------------------------
+// Dynamic Raise Expense — per-item classification (enhancement).
+// UI labels are mapped here so the DB stores stable short values.
+// ---------------------------------------------------------------------------
+
+// Who the expense is for.
+const EXPENSE_FOR = ["employee", "vendor"];
+
+// Claim type — applies to both Employee and Vendor expenses.
+const CLAIM_TYPES = [
+  { value: "advance", label: "Advance", hint: "Request funds before spending" },
+  {
+    value: "reimbursement",
+    label: "Reimbursement / After Expense",
+    hint: "Claim an expense that has already been incurred",
+  },
+];
+
+const BILLING_TYPES = [
+  { value: "billable", label: "Billable" },
+  { value: "non_billable", label: "Non-Billable" },
+];
+
+// The dynamic driver. Fixed set (not admin-editable) — the form logic keys off
+// these exact names.
+const WORK_CATEGORIES = ["O&M", "OOS", "Project"];
+
+// Domain choices for O&M work.
+const EXPENSE_CLAIM_DOMAINS = ["Fiber", "FTTx", "Utility", "Others"];
+
+// Seed lists for the small admin-editable masters.
+const DEFAULT_VENDOR_TYPES = [
+  "Contractor",
+  "Supplier",
+  "Service Provider",
+  "Transporter",
+  "Manpower Agency",
+  "Other",
+];
+const DEFAULT_EMPLOYEE_TYPES = [
+  "On-Roll",
+  "Off-Roll / Contract",
+  "Third Party",
+  "Sub-Contractor",
+];
+
 // Bill upload rules.
 const ALLOWED_BILL_EXTENSIONS = ["pdf", "jpg", "jpeg", "png"];
 const ALLOWED_BILL_MIME_TYPES = [
@@ -96,6 +142,13 @@ module.exports = {
   DEFAULT_CATEGORIES,
   DEFAULT_SUB_CATEGORIES,
   DEFAULT_COST_CENTRES,
+  EXPENSE_FOR,
+  CLAIM_TYPES,
+  BILLING_TYPES,
+  WORK_CATEGORIES,
+  EXPENSE_CLAIM_DOMAINS,
+  DEFAULT_VENDOR_TYPES,
+  DEFAULT_EMPLOYEE_TYPES,
   ALLOWED_BILL_EXTENSIONS,
   ALLOWED_BILL_MIME_TYPES,
   MAX_BILL_BYTES,

@@ -15,6 +15,7 @@ import ConfirmDialog from "../../components/ConfirmDialog";
 import ClaimStatusBadge from "../../components/expenses/ClaimStatusBadge";
 import ClaimProgressTracker from "../../components/expenses/ClaimProgressTracker";
 import AuditTimeline from "../../components/expenses/AuditTimeline";
+import ItemClassification from "../../components/expenses/ItemClassification";
 import { useUser } from "../../context/UserContext";
 import { formatCurrency, formatDate } from "../../utils/penaltyFormat";
 import {
@@ -343,16 +344,16 @@ export default function ApproveClaimDetail() {
                   <tr key={it.id} className="align-top">
                     <td className="px-3 py-2 text-text-muted">{index + 1}</td>
                     <td className="whitespace-nowrap px-3 py-2 font-medium text-text-primary">
-                      {it.category}
-                      {it.subCategory ? (
-                        <span className="block text-xs text-text-muted">{it.subCategory}</span>
-                      ) : null}
+                      {it.workCategory || it.category}
                     </td>
-                    <td className="max-w-[220px] truncate px-3 py-2 text-text-secondary" title={it.description || ""}>
-                      {it.description || "—"}
+                    <td className="px-3 py-2 text-text-secondary">
+                      <div className="max-w-[280px] truncate" title={it.description || ""}>
+                        {it.description || "—"}
+                      </div>
                       <span className="block text-xs text-text-muted">
                         {formatDate((it.expenseDate || "").toString().slice(0, 10))}
                       </span>
+                      <ItemClassification item={it} className="mt-1" />
                     </td>
                     <td className="whitespace-nowrap px-3 py-2 text-right font-medium text-text-primary">
                       {formatCurrency(it.claimedAmount)}

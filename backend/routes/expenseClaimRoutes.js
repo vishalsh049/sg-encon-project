@@ -27,11 +27,21 @@ const {
   DEFAULT_SUB_CATEGORIES,
   DEFAULT_COST_CENTRES,
   EMPLOYEE_EDITABLE_STATUSES,
+  EXPENSE_FOR,
+  CLAIM_TYPES,
+  BILLING_TYPES,
+  WORK_CATEGORIES,
+  EXPENSE_CLAIM_DOMAINS,
+  DEFAULT_VENDOR_TYPES,
+  DEFAULT_EMPLOYEE_TYPES,
   ALLOWED_BILL_EXTENSIONS,
   ALLOWED_BILL_MIME_TYPES,
   MAX_BILL_BYTES,
   PAGE_IDS,
 } = require("../constants/expenseClaimConstants");
+
+const CLAIM_TYPE_VALUES = CLAIM_TYPES.map((t) => t.value);
+const BILLING_TYPE_VALUES = BILLING_TYPES.map((t) => t.value);
 
 router.use(authMiddleware);
 
@@ -263,7 +273,88 @@ async function ensureTablesOnce() {
     )
   `);
 
+  // ------------------------------------------------------------------------
+  // Dynamic Raise Expense — small admin-managed masters (enhancement).
+  // ------------------------------------------------------------------------
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS expense_vendor_types (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      name VARCHAR(120) NOT NULL UNIQUE,
+      is_active TINYINT(1) NOT NULL DEFAULT 1,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS expense_employee_types (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      name VARCHAR(120) NOT NULL UNIQUE,
+      is_active TINYINT(1) NOT NULL DEFAULT 1,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS expense_vendors (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      name VARCHAR(200) NOT NULL,
+      vendor_type VARCHAR(120) NULL,
+      gstin VARCHAR(20) NULL,
+      phone VARCHAR(20) NULL,
+      email VARCHAR(150) NULL,
+      is_active TINYINT(1) NOT NULL DEFAULT 1,
+      created_by INT NULL,
+      created_by_name VARCHAR(160) NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      UNIQUE KEY uniq_vendor_name_type (name, vendor_type),
+      INDEX idx_vendor_type (vendor_type)
+    )
+  `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS expense_pos (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      po_number VARCHAR(80) NOT NULL UNIQUE,
+      work_category VARCHAR(20) NULL,
+      domain VARCHAR(60) NULL,
+      client_name VARCHAR(200) NULL,
+      site_route VARCHAR(300) NULL,
+      estimate_wcc_amount DECIMAL(14,2) NULL,
+      description VARCHAR(500) NULL,
+      is_active TINYINT(1) NOT NULL DEFAULT 1,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      INDEX idx_po_category (work_category)
+    )
+  `);
+
+  // Additive columns on expense_claim_items for the dynamic form. All optional,
+  // backward-compatible (no existing rows depend on them).
+  await ensureColumn("expense_claim_items", "expense_for", "VARCHAR(12) NULL");
+  await ensureColumn("expense_claim_items", "employee_type", "VARCHAR(120) NULL");
+  await ensureColumn("expense_claim_items", "emp_ref_code", "VARCHAR(60) NULL");
+  await ensureColumn("expense_claim_items", "emp_ref_name", "VARCHAR(160) NULL");
+  await ensureColumn("expense_claim_items", "vendor_id", "INT NULL");
+  await ensureColumn("expense_claim_items", "vendor_name", "VARCHAR(200) NULL");
+  await ensureColumn("expense_claim_items", "vendor_type", "VARCHAR(120) NULL");
+  await ensureColumn("expense_claim_items", "claim_type", "VARCHAR(20) NULL");
+  await ensureColumn("expense_claim_items", "billing_type", "VARCHAR(20) NULL");
+  await ensureColumn("expense_claim_items", "client_name", "VARCHAR(200) NULL");
+  await ensureColumn("expense_claim_items", "work_category", "VARCHAR(20) NULL");
+  await ensureColumn("expense_claim_items", "po_number", "VARCHAR(80) NULL");
+  await ensureColumn("expense_claim_items", "domain", "VARCHAR(60) NULL");
+  await ensureColumn("expense_claim_items", "other_domain", "VARCHAR(120) NULL");
+  await ensureColumn("expense_claim_items", "site_route", "VARCHAR(500) NULL");
+  await ensureColumn("expense_claim_items", "estimate_wcc_amount", "DECIMAL(14,2) NULL");
+
   await seedMasters();
+}
+
+// Add a column only if it isn't already there (safe to run every boot).
+async function ensureColumn(table, column, definition) {
+  try {
+    await pool.query(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+  } catch (error) {
+    if (error.code !== "ER_DUP_FIELDNAME") throw error;
+  }
 }
 
 async function seedMasters() {
@@ -285,6 +376,21 @@ async function seedMasters() {
         [subRows]
       );
     }
+  }
+
+  const [vtCount] = await pool.query(`SELECT COUNT(*) AS c FROM expense_vendor_types`);
+  if (vtCount[0].c === 0) {
+    await pool.query(
+      `INSERT INTO expense_vendor_types (name) VALUES ?`,
+      [DEFAULT_VENDOR_TYPES.map((n) => [n])]
+    );
+  }
+  const [etCount] = await pool.query(`SELECT COUNT(*) AS c FROM expense_employee_types`);
+  if (etCount[0].c === 0) {
+    await pool.query(
+      `INSERT INTO expense_employee_types (name) VALUES ?`,
+      [DEFAULT_EMPLOYEE_TYPES.map((n) => [n])]
+    );
   }
 
   const [ccCount] = await pool.query(`SELECT COUNT(*) AS c FROM expense_cost_centres`);
@@ -408,34 +514,78 @@ async function getActiveCategories() {
   return rows;
 }
 
-// Validate one incoming item. `strict` (submit) also requires a real date and
-// a positive amount; draft save is lenient so half-filled rows can be kept.
+// Validate one incoming expense item for the dynamic form. `strict` (submit)
+// enforces every conditionally-required field; a draft save is lenient so
+// half-filled cards can be kept. Only fields relevant to the item's own
+// selections are ever validated.
+// `categoryNames` is kept for signature compatibility with older callers.
 function validateItem(raw, index, categoryNames, { strict }) {
   const errors = [];
-  const label = `Row ${index + 1}`;
+  const label = `Item ${index + 1}`;
+  const s = (v) => String(v ?? "").trim();
 
-  const category = String(raw?.category || "").trim();
-  if (!category) {
-    errors.push(`${label}: Expense Category is required.`);
-  } else if (categoryNames.length && !categoryNames.includes(category)) {
-    errors.push(`${label}: "${category}" is not a valid Expense Category.`);
-  }
+  const expenseFor = s(raw?.expenseFor ?? raw?.expense_for).toLowerCase() || "employee";
+  const employeeType = s(raw?.employeeType ?? raw?.employee_type);
+  const empRefCode = s(raw?.empRefCode ?? raw?.emp_ref_code);
+  const empRefName = s(raw?.empRefName ?? raw?.emp_ref_name);
+  const vendorId = Number(raw?.vendorId ?? raw?.vendor_id) || null;
+  const vendorName = s(raw?.vendorName ?? raw?.vendor_name);
+  const vendorType = s(raw?.vendorType ?? raw?.vendor_type);
+  const claimType = s(raw?.claimType ?? raw?.claim_type).toLowerCase();
+  const billingType = s(raw?.billingType ?? raw?.billing_type).toLowerCase();
+  const clientName = s(raw?.clientName ?? raw?.client_name);
+  const workCategory = s(raw?.workCategory ?? raw?.work_category);
+  const poNumber = s(raw?.poNumber ?? raw?.po_number);
+  const domain = s(raw?.domain);
+  const otherDomain = s(raw?.otherDomain ?? raw?.other_domain);
+  const siteRoute = s(raw?.siteRoute ?? raw?.site_route);
+  const description = s(raw?.description);
+  const wccRaw = raw?.estimateWccAmount ?? raw?.estimate_wcc_amount;
+  const estimateWcc =
+    wccRaw === null || wccRaw === undefined || wccRaw === "" ? null : toMoney(wccRaw);
 
   const expenseDate = normalizeDate(raw?.expenseDate ?? raw?.expense_date);
-  if (expenseDate === undefined) {
-    errors.push(`${label}: Expense Date is not a valid date.`);
-  } else if (strict && !expenseDate) {
-    errors.push(`${label}: Expense Date is required.`);
-  }
+  if (expenseDate === undefined) errors.push(`${label}: Expense Date is not a valid date.`);
+  else if (strict && !expenseDate) errors.push(`${label}: Expense Date is required.`);
 
   const amount = toMoney(raw?.claimedAmount ?? raw?.claimed_amount);
-  if (Number.isNaN(amount)) {
-    errors.push(`${label}: Claimed Amount must be a number.`);
-  } else if (amount < 0) {
-    errors.push(`${label}: Claimed Amount cannot be negative.`);
-  } else if (strict && amount <= 0) {
-    errors.push(`${label}: Claimed Amount must be greater than zero.`);
+  if (Number.isNaN(amount)) errors.push(`${label}: Claimed Amount must be a number.`);
+  else if (amount < 0) errors.push(`${label}: Claimed Amount cannot be negative.`);
+  else if (strict && amount <= 0) errors.push(`${label}: Claimed Amount must be greater than zero.`);
+
+  if (!EXPENSE_FOR.includes(expenseFor)) errors.push(`${label}: choose whether this is an Employee or Vendor expense.`);
+
+  if (strict) {
+    if (expenseFor === "employee") {
+      if (!employeeType) errors.push(`${label}: Employee Type is required.`);
+      if (!empRefCode) errors.push(`${label}: select an Employee.`);
+    } else if (expenseFor === "vendor") {
+      if (!vendorType) errors.push(`${label}: Vendor Type is required.`);
+      if (!vendorId) errors.push(`${label}: select a Vendor.`);
+    }
+    if (!claimType) errors.push(`${label}: Claim Type is required.`);
+    if (!billingType) errors.push(`${label}: Billing Type is required.`);
+    if (!workCategory) errors.push(`${label}: Expense Category is required.`);
+    if (!siteRoute) errors.push(`${label}: Site / Route Details is required.`);
+    if (!description) errors.push(`${label}: Expense Description is required.`);
+
+    if (billingType === "billable" && !clientName) {
+      errors.push(`${label}: Client / Account is required for a Billable expense.`);
+    }
+    if (["O&M", "OOS", "Project"].includes(workCategory) && !poNumber) {
+      errors.push(`${label}: PO No. is required for ${workCategory}.`);
+    }
+    if (workCategory === "O&M") {
+      if (!domain) errors.push(`${label}: Domain is required for O&M.`);
+      if (domain === "Others" && !otherDomain) {
+        errors.push(`${label}: Other Domain Name is required when Domain is "Others".`);
+      }
+    }
   }
+  if (claimType && !CLAIM_TYPE_VALUES.includes(claimType)) errors.push(`${label}: invalid Claim Type.`);
+  if (billingType && !BILLING_TYPE_VALUES.includes(billingType)) errors.push(`${label}: invalid Billing Type.`);
+  if (workCategory && !WORK_CATEGORIES.includes(workCategory)) errors.push(`${label}: invalid Expense Category.`);
+  if (estimateWcc !== null && Number.isNaN(estimateWcc)) errors.push(`${label}: Estimate WCC Amount must be a number.`);
 
   return {
     errors,
@@ -443,11 +593,29 @@ function validateItem(raw, index, categoryNames, { strict }) {
       id: Number(raw?.id) || null,
       srNo: Number(raw?.srNo || raw?.sr_no || index + 1),
       expenseDate: expenseDate || null,
-      category,
-      subCategory: String(raw?.subCategory ?? raw?.sub_category ?? "").trim() || null,
-      description: String(raw?.description ?? "").trim() || null,
+      // legacy columns kept null by the new form
+      category: workCategory || "General",
+      subCategory: null,
+      description: description || null,
       claimedAmount: Number.isNaN(amount) ? 0 : amount,
       billNumber: String(raw?.billNumber ?? raw?.bill_number ?? "").trim() || null,
+      // dynamic-form fields
+      expenseFor: EXPENSE_FOR.includes(expenseFor) ? expenseFor : "employee",
+      employeeType: employeeType || null,
+      empRefCode: empRefCode || null,
+      empRefName: empRefName || null,
+      vendorId,
+      vendorName: vendorName || null,
+      vendorType: vendorType || null,
+      claimType: claimType || null,
+      billingType: billingType || null,
+      clientName: billingType === "billable" ? clientName || null : null,
+      workCategory: workCategory || null,
+      poNumber: poNumber || null,
+      domain: workCategory === "O&M" ? domain || null : domain || null,
+      otherDomain: domain === "Others" ? otherDomain || null : null,
+      siteRoute: siteRoute || null,
+      estimateWccAmount: estimateWcc,
     },
   };
 }
@@ -491,6 +659,22 @@ function mapItem(row) {
     description: row.description,
     claimedAmount: Number(row.claimed_amount || 0),
     billNumber: row.bill_number,
+    expenseFor: row.expense_for || "employee",
+    employeeType: row.employee_type || null,
+    empRefCode: row.emp_ref_code || null,
+    empRefName: row.emp_ref_name || null,
+    vendorId: row.vendor_id || null,
+    vendorName: row.vendor_name || null,
+    vendorType: row.vendor_type || null,
+    claimType: row.claim_type || null,
+    billingType: row.billing_type || null,
+    clientName: row.client_name || null,
+    workCategory: row.work_category || null,
+    poNumber: row.po_number || null,
+    domain: row.domain || null,
+    otherDomain: row.other_domain || null,
+    siteRoute: row.site_route || null,
+    estimateWccAmount: row.estimate_wcc_amount === null || row.estimate_wcc_amount === undefined ? null : Number(row.estimate_wcc_amount),
     l1ApprovedAmount: row.l1_approved_amount === null ? null : Number(row.l1_approved_amount),
     l1Decision: row.l1_decision,
     l1Reason: row.l1_reason,
@@ -718,28 +902,26 @@ router.get("/meta", requirePagePermission(PAGE, "view"), async (req, res) => {
   try {
     await ensureTables();
 
-    const [categories, subCatRows, profile] = await Promise.all([
+    const [categories, profile, vtRows, etRows] = await Promise.all([
       getActiveCategories(),
-      pool.query(
-        `SELECT s.name, c.name AS category
-         FROM expense_claim_sub_categories s
-         JOIN expense_claim_categories c ON c.id = s.category_id
-         WHERE s.is_active = 1 ORDER BY c.display_order ASC, s.name ASC`
-      ),
       loadEmployeeProfile(req.authUser.id),
+      pool.query(`SELECT name FROM expense_vendor_types WHERE is_active = 1 ORDER BY name ASC`),
+      pool.query(`SELECT name FROM expense_employee_types WHERE is_active = 1 ORDER BY name ASC`),
     ]);
-
-    const subCategories = {};
-    subCatRows[0].forEach((row) => {
-      if (!subCategories[row.category]) subCategories[row.category] = [];
-      subCategories[row.category].push(row.name);
-    });
 
     res.json({
       success: true,
       data: {
+        // legacy — kept so nothing that still reads it breaks
         categories: categories.map((c) => ({ name: c.name, requiresBill: Boolean(c.requires_bill) })),
-        subCategories,
+        // dynamic Raise Expense form
+        expenseFor: EXPENSE_FOR,
+        claimTypes: CLAIM_TYPES,
+        billingTypes: BILLING_TYPES,
+        workCategories: WORK_CATEGORIES,
+        domains: EXPENSE_CLAIM_DOMAINS,
+        vendorTypes: vtRows[0].map((r) => r.name),
+        employeeTypes: etRows[0].map((r) => r.name),
         myProfile: {
           employeeName: profile?.name || req.authUser.name || "",
           employeeCode: profile?.employee_id || "",
@@ -770,6 +952,136 @@ router.get("/employee-lookup", requirePagePermission(PAGE, "view"), async (req, 
     res.json({ success: true, data: emp });
   } catch (error) {
     fail(res, error, "Employee lookup failed.");
+  }
+});
+
+// GET /api/expense-claims/employees?search=  — searchable employee picker
+// (reuses the Physical employee master; no new employee table).
+router.get("/employees", requirePagePermission(PAGE, "view"), async (req, res) => {
+  try {
+    await ensureTables();
+    const search = String(req.query.search || "").trim();
+    const params = [];
+    let where = "COALESCE(is_deleted, 0) = 0 AND employee_code IS NOT NULL AND employee_code <> ''";
+    if (search) {
+      where += " AND (employee_code LIKE ? OR employee_name LIKE ?)";
+      params.push(`%${search}%`, `%${search}%`);
+    }
+    const [rows] = await pool.query(
+      `SELECT employee_code, employee_name, function_name, job_role, scrum_job_role,
+              circle, cmp, employment_status
+       FROM physical WHERE ${where}
+       ORDER BY employee_name ASC LIMIT 30`,
+      params
+    );
+    res.json({
+      success: true,
+      data: rows.map((r) => ({
+        employeeCode: r.employee_code,
+        employeeName: r.employee_name || "",
+        designation: r.job_role || r.scrum_job_role || "",
+        department: r.function_name || "",
+        circle: r.circle || "",
+        cmp: r.cmp || "",
+        status: r.employment_status || "",
+      })),
+    });
+  } catch (error) {
+    fail(res, error, "Employee search failed.");
+  }
+});
+
+function mapVendor(r) {
+  return {
+    id: r.id,
+    name: r.name,
+    vendorType: r.vendor_type || null,
+    gstin: r.gstin || null,
+    phone: r.phone || null,
+    email: r.email || null,
+    isActive: Boolean(r.is_active),
+  };
+}
+
+// GET /api/expense-claims/vendors?type=&search=
+router.get("/vendors", requirePagePermission(PAGE, "view"), async (req, res) => {
+  try {
+    await ensureTables();
+    const type = String(req.query.type || "").trim();
+    const search = String(req.query.search || "").trim();
+    const where = ["is_active = 1"];
+    const params = [];
+    if (type) { where.push("vendor_type = ?"); params.push(type); }
+    if (search) { where.push("name LIKE ?"); params.push(`%${search}%`); }
+    const [rows] = await pool.query(
+      `SELECT * FROM expense_vendors WHERE ${where.join(" AND ")} ORDER BY name ASC LIMIT 50`,
+      params
+    );
+    res.json({ success: true, data: rows.map(mapVendor) });
+  } catch (error) {
+    fail(res, error, "Vendor list failed.");
+  }
+});
+
+// POST /api/expense-claims/vendors  — used by the "+ Add Vendor" modal.
+router.post("/vendors", requirePagePermission(PAGE, "edit"), async (req, res) => {
+  try {
+    await ensureTables();
+    const name = String(req.body?.name || "").trim();
+    const vendorType = String(req.body?.vendorType || "").trim() || null;
+    if (!name) throw httpError(400, "Vendor name is required.");
+    const [ins] = await pool.query(
+      `INSERT INTO expense_vendors (name, vendor_type, gstin, phone, email, created_by, created_by_name)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [
+        name, vendorType,
+        String(req.body?.gstin || "").trim() || null,
+        String(req.body?.phone || "").trim() || null,
+        String(req.body?.email || "").trim() || null,
+        req.authUser.id, actorName(req.authUser),
+      ]
+    );
+    const [rows] = await pool.query(`SELECT * FROM expense_vendors WHERE id = ?`, [ins.insertId]);
+    res.status(201).json({ success: true, data: mapVendor(rows[0]) });
+  } catch (error) {
+    if (error.code === "ER_DUP_ENTRY") {
+      return fail(res, httpError(409, "A vendor with that name and type already exists."));
+    }
+    fail(res, error, "Failed to add the vendor.");
+  }
+});
+
+function mapPO(r) {
+  return {
+    id: r.id,
+    poNumber: r.po_number,
+    workCategory: r.work_category || null,
+    domain: r.domain || null,
+    clientName: r.client_name || null,
+    siteRoute: r.site_route || null,
+    estimateWccAmount: r.estimate_wcc_amount === null || r.estimate_wcc_amount === undefined ? null : Number(r.estimate_wcc_amount),
+    description: r.description || null,
+    isActive: Boolean(r.is_active),
+  };
+}
+
+// GET /api/expense-claims/pos?category=&search=
+router.get("/pos", requirePagePermission(PAGE, "view"), async (req, res) => {
+  try {
+    await ensureTables();
+    const category = String(req.query.category || "").trim();
+    const search = String(req.query.search || "").trim();
+    const where = ["is_active = 1"];
+    const params = [];
+    if (category) { where.push("(work_category = ? OR work_category IS NULL)"); params.push(category); }
+    if (search) { where.push("(po_number LIKE ? OR client_name LIKE ?)"); params.push(`%${search}%`, `%${search}%`); }
+    const [rows] = await pool.query(
+      `SELECT * FROM expense_pos WHERE ${where.join(" AND ")} ORDER BY po_number ASC LIMIT 50`,
+      params
+    );
+    res.json({ success: true, data: rows.map(mapPO) });
+  } catch (error) {
+    fail(res, error, "PO list failed.");
   }
 });
 
@@ -886,30 +1198,34 @@ async function persistItems(conn, claimId, items) {
   const existingIds = new Set(existing.map((r) => r.id));
   const keepIds = new Set();
 
+  // Column list shared by INSERT and UPDATE (dynamic form + legacy columns).
+  const dynCols = [
+    "expense_date", "category", "sub_category", "description", "claimed_amount", "bill_number",
+    "expense_for", "employee_type", "emp_ref_code", "emp_ref_name",
+    "vendor_id", "vendor_name", "vendor_type", "claim_type", "billing_type", "client_name",
+    "work_category", "po_number", "domain", "other_domain", "site_route", "estimate_wcc_amount",
+  ];
+  const dynVals = (item) => [
+    item.expenseDate, item.category, item.subCategory, item.description, item.claimedAmount, item.billNumber,
+    item.expenseFor, item.employeeType, item.empRefCode, item.empRefName,
+    item.vendorId, item.vendorName, item.vendorType, item.claimType, item.billingType, item.clientName,
+    item.workCategory, item.poNumber, item.domain, item.otherDomain, item.siteRoute, item.estimateWccAmount,
+  ];
+
   let srNo = 1;
   for (const item of items) {
     if (item.id && existingIds.has(item.id)) {
       await conn.query(
-        `UPDATE expense_claim_items SET
-           sr_no = ?, expense_date = ?, category = ?, sub_category = ?, description = ?,
-           claimed_amount = ?, bill_number = ?
+        `UPDATE expense_claim_items SET sr_no = ?, ${dynCols.map((c) => `${c} = ?`).join(", ")}
          WHERE id = ? AND claim_id = ?`,
-        [
-          srNo, item.expenseDate, item.category, item.subCategory, item.description,
-          item.claimedAmount, item.billNumber, item.id, claimId,
-        ]
+        [srNo, ...dynVals(item), item.id, claimId]
       );
       keepIds.add(item.id);
     } else {
       const [ins] = await conn.query(
-        `INSERT INTO expense_claim_items
-           (claim_id, sr_no, expense_date, category, sub_category, description,
-            claimed_amount, bill_number)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-        [
-          claimId, srNo, item.expenseDate, item.category, item.subCategory,
-          item.description, item.claimedAmount, item.billNumber,
-        ]
+        `INSERT INTO expense_claim_items (claim_id, sr_no, ${dynCols.join(", ")})
+         VALUES (?, ?, ${dynCols.map(() => "?").join(", ")})`,
+        [claimId, srNo, ...dynVals(item)]
       );
       keepIds.add(ins.insertId);
     }
@@ -1002,11 +1318,10 @@ router.post("/claims", requirePagePermission(PAGE, "edit"), async (req, res) => 
     await ensureTables();
     const body = parseClaimBody(req.body);
 
-    const categoryNames = (await getActiveCategories()).map((c) => c.name);
     const parsedItems = [];
     const errors = [];
     body.items.forEach((raw, index) => {
-      const { errors: itemErrors, value } = validateItem(raw, index, categoryNames, { strict: false });
+      const { errors: itemErrors, value } = validateItem(raw, index, [], { strict: false });
       errors.push(...itemErrors);
       parsedItems.push(value);
     });
@@ -1068,11 +1383,10 @@ router.put("/claims/:id", requirePagePermission(PAGE, "edit"), async (req, res) 
     const claim = await loadOwnEditableClaim(req.params.id, req.authUser);
     const body = parseClaimBody(req.body);
 
-    const categoryNames = (await getActiveCategories()).map((c) => c.name);
     const parsedItems = [];
     const errors = [];
     body.items.forEach((raw, index) => {
-      const { errors: itemErrors, value } = validateItem(raw, index, categoryNames, { strict: false });
+      const { errors: itemErrors, value } = validateItem(raw, index, [], { strict: false });
       errors.push(...itemErrors);
       parsedItems.push(value);
     });
@@ -1153,10 +1467,6 @@ router.post("/claims/:id/submit", requirePagePermission(PAGE, "edit"), async (re
     );
     if (!items.length) throw httpError(400, "Add at least one expense item before submitting.");
 
-    const categories = await getActiveCategories();
-    const categoryNames = categories.map((c) => c.name);
-    const requiresBill = new Map(categories.map((c) => [c.name, Boolean(c.requires_bill)]));
-
     const [attachRows] = await pool.query(
       `SELECT item_id, COUNT(*) AS c FROM expense_claim_attachments WHERE claim_id = ? GROUP BY item_id`,
       [claim.id]
@@ -1165,23 +1475,12 @@ router.post("/claims/:id/submit", requirePagePermission(PAGE, "edit"), async (re
 
     const errors = [];
     items.forEach((row, index) => {
-      const { errors: itemErrors } = validateItem(
-        {
-          id: row.id,
-          expenseDate: row.expense_date,
-          category: row.category,
-          subCategory: row.sub_category,
-          description: row.description,
-          claimedAmount: row.claimed_amount,
-          billNumber: row.bill_number,
-        },
-        index,
-        categoryNames,
-        { strict: true }
-      );
+      // `row` carries snake_case columns; validateItem reads both cases.
+      const { errors: itemErrors } = validateItem(row, index, [], { strict: true });
       errors.push(...itemErrors);
-      if (requiresBill.get(row.category) && !billCountByItem.get(row.id)) {
-        errors.push(`Row ${index + 1}: a bill/invoice is required for "${row.category}".`);
+      // A reimbursement (after-expense) claim must carry proof.
+      if ((row.claim_type || "").toLowerCase() === "reimbursement" && !billCountByItem.get(row.id)) {
+        errors.push(`Item ${index + 1}: attach a bill/invoice — required for a Reimbursement expense.`);
       }
     });
     if (errors.length) throw httpError(400, "This claim cannot be submitted yet.", { rowErrors: errors });
@@ -2278,11 +2577,22 @@ router.get("/finance-export", requirePagePermission(FINANCE_PAGE, "download"), a
       );
       detailSheet = items.map((i) => ({
         "Claim Number": i.claim_number || "",
-        "Employee ID": i.employee_code || "",
-        "Employee Name": i.employee_name || "",
+        "Claimant ID": i.employee_code || "",
+        "Claimant Name": i.employee_name || "",
         "Expense Date": i.expense_date ? String(i.expense_date).slice(0, 10) : "",
-        Category: i.category,
-        "Sub Category": i.sub_category || "",
+        "Expense For": i.expense_for || "",
+        "Employee Type": i.employee_type || "",
+        "Employee (item)": [i.emp_ref_name, i.emp_ref_code].filter(Boolean).join(" / "),
+        "Vendor Type": i.vendor_type || "",
+        Vendor: i.vendor_name || "",
+        "Claim Type": i.claim_type || "",
+        "Billing Type": i.billing_type || "",
+        "Client / Account": i.client_name || "",
+        "Expense Category": i.work_category || i.category || "",
+        "PO No.": i.po_number || "",
+        Domain: i.domain === "Others" ? `Others: ${i.other_domain || ""}` : i.domain || "",
+        "Site / Route": i.site_route || "",
+        "Estimate WCC": i.estimate_wcc_amount === null || i.estimate_wcc_amount === undefined ? "" : Number(i.estimate_wcc_amount),
         Description: i.description || "",
         "Bill Number": i.bill_number || "",
         "Claimed Amount": Number(i.claimed_amount || 0),
@@ -2463,6 +2773,10 @@ router.get("/admin/config", requirePagePermission(ADMIN_PAGE, "view"), async (re
     const [costCentres] = await pool.query(
       `SELECT id, name, code, is_active FROM expense_cost_centres ORDER BY name ASC`
     );
+    const [vendorTypes] = await pool.query(`SELECT id, name, is_active FROM expense_vendor_types ORDER BY name ASC`);
+    const [employeeTypes] = await pool.query(`SELECT id, name, is_active FROM expense_employee_types ORDER BY name ASC`);
+    const [vendors] = await pool.query(`SELECT * FROM expense_vendors ORDER BY name ASC LIMIT 1000`);
+    const [pos] = await pool.query(`SELECT * FROM expense_pos ORDER BY po_number ASC LIMIT 1000`);
     const [matrix] = await pool.query(
       `SELECT m.*, u1.name AS l1_name, u2.name AS l2_name, u3.name AS final_name
        FROM expense_approval_matrix m
@@ -2486,6 +2800,10 @@ router.get("/admin/config", requirePagePermission(ADMIN_PAGE, "view"), async (re
           id: s.id, categoryId: s.category_id, category: s.category, name: s.name, isActive: Boolean(s.is_active),
         })),
         costCentres: costCentres.map((c) => ({ id: c.id, name: c.name, code: c.code, isActive: Boolean(c.is_active) })),
+        vendorTypes: vendorTypes.map((r) => ({ id: r.id, name: r.name, isActive: Boolean(r.is_active) })),
+        employeeTypes: employeeTypes.map((r) => ({ id: r.id, name: r.name, isActive: Boolean(r.is_active) })),
+        vendors: vendors.map(mapVendor),
+        pos: pos.map(mapPO),
         matrix: matrix.map((m) => ({
           id: m.id, category: m.category, minAmount: Number(m.min_amount),
           maxAmount: m.max_amount === null ? null : Number(m.max_amount),
@@ -2602,6 +2920,136 @@ router.delete("/admin/cost-centres/:id", requirePagePermission(ADMIN_PAGE, "edit
     res.json({ success: true });
   } catch (error) {
     fail(res, error, "Failed to delete the cost centre.");
+  }
+});
+
+// --- simple name masters: vendor types & employee types ------------------
+function simpleMasterRoutes(slug, table, label) {
+  router.post(`/admin/${slug}`, requirePagePermission(ADMIN_PAGE, "edit"), async (req, res) => {
+    try {
+      await ensureTables();
+      const name = String(req.body?.name ?? "").trim();
+      if (!name) throw httpError(400, `${label} name is required.`);
+      await pool.query(`INSERT INTO ${table} (name) VALUES (?)`, [name]);
+      res.json({ success: true });
+    } catch (error) {
+      if (error.code === "ER_DUP_ENTRY") return fail(res, httpError(409, `That ${label.toLowerCase()} already exists.`));
+      fail(res, error, `Failed to add the ${label.toLowerCase()}.`);
+    }
+  });
+  router.put(`/admin/${slug}/:id`, requirePagePermission(ADMIN_PAGE, "edit"), async (req, res) => {
+    try {
+      await ensureTables();
+      const sets = [];
+      const params = [];
+      if (req.body?.name !== undefined) { sets.push("name = ?"); params.push(String(req.body.name).trim()); }
+      if (req.body?.isActive !== undefined) { sets.push("is_active = ?"); params.push(req.body.isActive ? 1 : 0); }
+      if (!sets.length) throw httpError(400, "Nothing to update.");
+      await pool.query(`UPDATE ${table} SET ${sets.join(", ")} WHERE id = ?`, [...params, req.params.id]);
+      res.json({ success: true });
+    } catch (error) {
+      fail(res, error, `Failed to update the ${label.toLowerCase()}.`);
+    }
+  });
+  router.delete(`/admin/${slug}/:id`, requirePagePermission(ADMIN_PAGE, "edit"), async (req, res) => {
+    try {
+      await ensureTables();
+      await pool.query(`DELETE FROM ${table} WHERE id = ?`, [req.params.id]);
+      res.json({ success: true });
+    } catch (error) {
+      fail(res, error, `Failed to delete the ${label.toLowerCase()}.`);
+    }
+  });
+}
+simpleMasterRoutes("vendor-types", "expense_vendor_types", "Vendor Type");
+simpleMasterRoutes("employee-types", "expense_employee_types", "Employee Type");
+
+// --- vendors ---
+router.put("/admin/vendors/:id", requirePagePermission(ADMIN_PAGE, "edit"), async (req, res) => {
+  try {
+    await ensureTables();
+    const map = { name: "name", vendorType: "vendor_type", gstin: "gstin", phone: "phone", email: "email" };
+    const sets = [];
+    const params = [];
+    Object.entries(map).forEach(([k, col]) => {
+      if (req.body?.[k] !== undefined) { sets.push(`${col} = ?`); params.push(String(req.body[k]).trim() || null); }
+    });
+    if (req.body?.isActive !== undefined) { sets.push("is_active = ?"); params.push(req.body.isActive ? 1 : 0); }
+    if (!sets.length) throw httpError(400, "Nothing to update.");
+    await pool.query(`UPDATE expense_vendors SET ${sets.join(", ")} WHERE id = ?`, [...params, req.params.id]);
+    res.json({ success: true });
+  } catch (error) {
+    fail(res, error, "Failed to update the vendor.");
+  }
+});
+router.delete("/admin/vendors/:id", requirePagePermission(ADMIN_PAGE, "edit"), async (req, res) => {
+  try {
+    await ensureTables();
+    await pool.query(`UPDATE expense_vendors SET is_active = 0 WHERE id = ?`, [req.params.id]);
+    res.json({ success: true });
+  } catch (error) {
+    fail(res, error, "Failed to remove the vendor.");
+  }
+});
+
+// --- PO master ---
+router.post("/admin/pos", requirePagePermission(ADMIN_PAGE, "edit"), async (req, res) => {
+  try {
+    await ensureTables();
+    const poNumber = String(req.body?.poNumber ?? "").trim();
+    if (!poNumber) throw httpError(400, "PO Number is required.");
+    const wcc = req.body?.estimateWccAmount;
+    await pool.query(
+      `INSERT INTO expense_pos (po_number, work_category, domain, client_name, site_route, estimate_wcc_amount, description)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [
+        poNumber,
+        String(req.body?.workCategory ?? "").trim() || null,
+        String(req.body?.domain ?? "").trim() || null,
+        String(req.body?.clientName ?? "").trim() || null,
+        String(req.body?.siteRoute ?? "").trim() || null,
+        wcc === "" || wcc === null || wcc === undefined ? null : toMoney(wcc),
+        String(req.body?.description ?? "").trim() || null,
+      ]
+    );
+    res.json({ success: true });
+  } catch (error) {
+    if (error.code === "ER_DUP_ENTRY") return fail(res, httpError(409, "That PO Number already exists."));
+    fail(res, error, "Failed to add the PO.");
+  }
+});
+router.put("/admin/pos/:id", requirePagePermission(ADMIN_PAGE, "edit"), async (req, res) => {
+  try {
+    await ensureTables();
+    const map = {
+      poNumber: "po_number", workCategory: "work_category", domain: "domain",
+      clientName: "client_name", siteRoute: "site_route", description: "description",
+    };
+    const sets = [];
+    const params = [];
+    Object.entries(map).forEach(([k, col]) => {
+      if (req.body?.[k] !== undefined) { sets.push(`${col} = ?`); params.push(String(req.body[k]).trim() || null); }
+    });
+    if (req.body?.estimateWccAmount !== undefined) {
+      const w = req.body.estimateWccAmount;
+      sets.push("estimate_wcc_amount = ?");
+      params.push(w === "" || w === null ? null : toMoney(w));
+    }
+    if (req.body?.isActive !== undefined) { sets.push("is_active = ?"); params.push(req.body.isActive ? 1 : 0); }
+    if (!sets.length) throw httpError(400, "Nothing to update.");
+    await pool.query(`UPDATE expense_pos SET ${sets.join(", ")} WHERE id = ?`, [...params, req.params.id]);
+    res.json({ success: true });
+  } catch (error) {
+    fail(res, error, "Failed to update the PO.");
+  }
+});
+router.delete("/admin/pos/:id", requirePagePermission(ADMIN_PAGE, "edit"), async (req, res) => {
+  try {
+    await ensureTables();
+    await pool.query(`UPDATE expense_pos SET is_active = 0 WHERE id = ?`, [req.params.id]);
+    res.json({ success: true });
+  } catch (error) {
+    fail(res, error, "Failed to remove the PO.");
   }
 });
 
