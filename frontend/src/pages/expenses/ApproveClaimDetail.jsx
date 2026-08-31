@@ -238,7 +238,11 @@ export default function ApproveClaimDetail() {
               </span>
             ) : null}
           </div>
-          <p className="mt-0.5 text-sm text-text-secondary">{claim.purpose || "No purpose provided"}</p>
+          <p className="mt-0.5 text-sm text-text-secondary">
+            {claim.employeeName}
+            {claim.employeeCode ? ` · ${claim.employeeCode}` : ""}
+            {claim.department ? ` · ${claim.department}` : ""}
+          </p>
         </div>
       </div>
 
@@ -268,28 +272,17 @@ export default function ApproveClaimDetail() {
             <Detail label="Employee ID" value={claim.employeeCode} />
             <Detail label="Department" value={claim.department} />
             <Detail label="Designation" value={claim.designation} />
-            <Detail label="Cost Centre" value={claim.costCentre} />
             <Detail label="Circle" value={claim.circle} />
+            <Detail label="CMP" value={claim.cmp} />
           </dl>
         </div>
         <div className={`${CARD_SHELL} p-4`}>
           <h2 className="mb-3 text-sm font-semibold text-text-primary">Claim Details</h2>
           <dl className="grid grid-cols-2 gap-x-4 gap-y-2.5 text-sm">
             <Detail
-              label="Expense Period"
-              value={
-                claim.periodFrom || claim.periodTo
-                  ? `${formatDate((claim.periodFrom || "").toString().slice(0, 10))} — ${formatDate(
-                      (claim.periodTo || "").toString().slice(0, 10)
-                    )}`
-                  : "—"
-              }
-            />
-            <Detail
               label="Submitted On"
               value={claim.submittedAt ? formatDate(claim.submittedAt.toString().slice(0, 10)) : "—"}
             />
-            <Detail label="Remarks" value={claim.remarks} />
             <Detail label="Total Claimed" value={formatCurrency(claim.totalClaimed)} strong />
             {claim.l1ApprovedTotal != null ? (
               <Detail label="L1 Approved" value={formatCurrency(claim.l1ApprovedTotal)} />

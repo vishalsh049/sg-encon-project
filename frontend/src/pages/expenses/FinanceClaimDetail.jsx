@@ -133,7 +133,11 @@ export default function FinanceClaimDetail() {
             </span>
           ) : null}
         </div>
-        <p className="mt-0.5 text-sm text-text-secondary">{claim.purpose || "No purpose provided"}</p>
+        <p className="mt-0.5 text-sm text-text-secondary">
+          {claim.employeeName}
+          {claim.employeeCode ? ` · ${claim.employeeCode}` : ""}
+          {claim.department ? ` · ${claim.department}` : ""}
+        </p>
       </div>
 
       <div className={`${CARD_SHELL} p-4`}>
@@ -161,7 +165,8 @@ export default function FinanceClaimDetail() {
             <Detail label="Employee" value={claim.employeeName} />
             <Detail label="Employee ID" value={claim.employeeCode} />
             <Detail label="Department" value={claim.department} />
-            <Detail label="Cost Centre" value={claim.costCentre} />
+            <Detail label="CMP" value={claim.cmp} />
+            <Detail label="Circle" value={claim.circle} />
             <Detail label="L1 Approver" value={approvers?.l1} />
             <Detail label="L2 Approver" value={approvers?.l2} />
             <Detail label="Final Approver" value={approvers?.final} />

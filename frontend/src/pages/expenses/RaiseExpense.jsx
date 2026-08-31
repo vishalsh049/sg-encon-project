@@ -85,14 +85,7 @@ export default function RaiseExpense() {
   const [status, setStatus] = useState("draft");
   const [claimNumber, setClaimNumber] = useState(null);
 
-  const [form, setForm] = useState({
-    employeeCode: "",
-    costCentre: "",
-    purpose: "",
-    periodFrom: "",
-    periodTo: "",
-    remarks: "",
-  });
+  const [form, setForm] = useState({ employeeCode: "" });
   const [rows, setRows] = useState([blankRow()]);
 
   // Employee identity resolved from the Physical employee master by HRMS ID.
@@ -147,14 +140,7 @@ export default function RaiseExpense() {
         setClaimId(b.claim.id);
         setStatus(b.claim.status);
         setClaimNumber(b.claim.claimNumber);
-        setForm({
-          employeeCode: b.claim.employeeCode || "",
-          costCentre: b.claim.costCentre || "",
-          purpose: b.claim.purpose || "",
-          periodFrom: b.claim.periodFrom ? String(b.claim.periodFrom).slice(0, 10) : "",
-          periodTo: b.claim.periodTo ? String(b.claim.periodTo).slice(0, 10) : "",
-          remarks: b.claim.remarks || "",
-        });
+        setForm({ employeeCode: b.claim.employeeCode || "" });
         const mapped = rowsFromBundle(b);
         setRows(mapped.length ? mapped : [blankRow()]);
         if (b.claim.employeeCode) {
@@ -249,11 +235,6 @@ export default function RaiseExpense() {
   function buildPayload() {
     return {
       employeeCode: form.employeeCode.trim() || null,
-      costCentre: form.costCentre || null,
-      purpose: form.purpose || null,
-      periodFrom: form.periodFrom || null,
-      periodTo: form.periodTo || null,
-      remarks: form.remarks || null,
       items: rows.map((r) => ({
         id: r.id || undefined,
         expenseDate: r.expenseDate || null,
@@ -561,19 +542,8 @@ export default function RaiseExpense() {
           <Field label="Circle">
             <input className={INPUT} value={emp?.circle || "—"} disabled />
           </Field>
-          <Field label="Cost Centre">
-            <select
-              className={INPUT}
-              value={form.costCentre}
-              onChange={(e) => setForm((f) => ({ ...f, costCentre: e.target.value }))}
-            >
-              <option value="">Select cost centre…</option>
-              {(meta?.costCentres || []).map((cc) => (
-                <option key={cc} value={cc}>
-                  {cc}
-                </option>
-              ))}
-            </select>
+          <Field label="CMP">
+            <input className={INPUT} value={emp?.cmp || "—"} disabled />
           </Field>
           {emp?.mobile || emp?.email || emp?.reportingManager ? (
             <Field label="Contact / Reporting" className="sm:col-span-2 lg:col-span-1">
@@ -586,38 +556,6 @@ export default function RaiseExpense() {
               />
             </Field>
           ) : null}
-          <Field label="Expense Purpose" className="sm:col-span-2 lg:col-span-3">
-            <input
-              className={INPUT}
-              placeholder="e.g. Client visit — Delhi to Mumbai"
-              value={form.purpose}
-              onChange={(e) => setForm((f) => ({ ...f, purpose: e.target.value }))}
-            />
-          </Field>
-          <Field label="Expense Period From">
-            <input
-              type="date"
-              className={INPUT}
-              value={form.periodFrom}
-              onChange={(e) => setForm((f) => ({ ...f, periodFrom: e.target.value }))}
-            />
-          </Field>
-          <Field label="Expense Period To">
-            <input
-              type="date"
-              className={INPUT}
-              value={form.periodTo}
-              onChange={(e) => setForm((f) => ({ ...f, periodTo: e.target.value }))}
-            />
-          </Field>
-          <Field label="Overall Remarks" className="sm:col-span-2 lg:col-span-1">
-            <input
-              className={INPUT}
-              placeholder="Optional"
-              value={form.remarks}
-              onChange={(e) => setForm((f) => ({ ...f, remarks: e.target.value }))}
-            />
-          </Field>
         </div>
       </div>
 

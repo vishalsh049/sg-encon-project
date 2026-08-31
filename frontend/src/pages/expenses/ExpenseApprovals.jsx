@@ -128,8 +128,8 @@ export default function ExpenseApprovals() {
                   <th className="px-4 py-2.5">Claim No</th>
                   <th className="px-4 py-2.5">Employee</th>
                   <th className="px-4 py-2.5">Department</th>
-                  <th className="px-4 py-2.5">Purpose</th>
-                  <th className="px-4 py-2.5">Expense Period</th>
+                  <th className="px-4 py-2.5">CMP</th>
+                  <th className="px-4 py-2.5">Items</th>
                   <th className="px-4 py-2.5 text-right">Total Claimed</th>
                   <th className="px-4 py-2.5">Submitted</th>
                   <th className="px-4 py-2.5">Status</th>
@@ -167,21 +167,11 @@ export default function ExpenseApprovals() {
                         <td className="whitespace-nowrap px-4 py-2.5 text-text-secondary">
                           {row.department || "—"}
                         </td>
-                        <td
-                          className="max-w-[240px] truncate px-4 py-2.5 text-text-secondary"
-                          title={row.purpose || ""}
-                        >
-                          {row.purpose || "—"}
-                          <span className="ml-1 text-xs text-text-muted">
-                            ({row.itemCount} item{row.itemCount === 1 ? "" : "s"})
-                          </span>
+                        <td className="whitespace-nowrap px-4 py-2.5 text-text-secondary">
+                          {row.cmp || "—"}
                         </td>
                         <td className="whitespace-nowrap px-4 py-2.5 text-text-secondary">
-                          {row.periodFrom || row.periodTo
-                            ? `${formatDate((row.periodFrom || "").toString().slice(0, 10))} – ${formatDate(
-                                (row.periodTo || "").toString().slice(0, 10)
-                              )}`
-                            : "—"}
+                          {row.itemCount} item{row.itemCount === 1 ? "" : "s"}
                         </td>
                         <td className="whitespace-nowrap px-4 py-2.5 text-right font-medium text-text-primary">
                           {formatCurrency(row.totalClaimed)}

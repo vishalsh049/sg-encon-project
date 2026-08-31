@@ -10,7 +10,6 @@ const TABS = [
   { key: "matrix", label: "Approval Matrix" },
   { key: "categories", label: "Categories" },
   { key: "subCategories", label: "Sub Categories" },
-  { key: "costCentres", label: "Cost Centres" },
   { key: "policies", label: "Policies" },
 ];
 const INPUT =
@@ -70,7 +69,7 @@ export default function ExpenseClaimsAdmin() {
             Expense Claims — Master Data
           </h1>
           <p className="mt-0.5 text-sm text-text-secondary">
-            Configure the approval matrix, categories, cost centres and policy limits. No code change needed.
+            Configure the approval chain, categories, sub-categories and policy limits. No code change needed.
           </p>
         </div>
         <button
@@ -104,7 +103,6 @@ export default function ExpenseClaimsAdmin() {
       {tab === "matrix" ? <MatrixTab cfg={cfg} run={run} busy={busy} /> : null}
       {tab === "categories" ? <CategoriesTab cfg={cfg} run={run} busy={busy} /> : null}
       {tab === "subCategories" ? <SubCategoriesTab cfg={cfg} run={run} busy={busy} /> : null}
-      {tab === "costCentres" ? <CostCentresTab cfg={cfg} run={run} busy={busy} /> : null}
       {tab === "policies" ? <PoliciesTab cfg={cfg} run={run} busy={busy} /> : null}
     </div>
   );
@@ -404,49 +402,6 @@ function SubCategoriesTab({ cfg, run, busy }) {
         <td className={TD}><input className={INPUT} value={name} onChange={(e) => setName(e.target.value)} placeholder="New sub-category" /></td>
         <td className={TD}>
           <button type="button" disabled={busy || !categoryId || !name.trim()} onClick={() => run(() => admin.addSubCategory({ categoryId: Number(categoryId), name: name.trim() }), "Added.").then(() => setName(""))} className="inline-flex items-center gap-1 rounded-lg bg-indigo-500 px-2.5 py-1 text-xs font-semibold text-white disabled:opacity-50">
-            <Plus size={12} /> Add
-          </button>
-        </td>
-      </tr>
-    </Table>
-  );
-}
-
-/* ---------------- Cost Centres ---------------- */
-function CostCentresTab({ cfg, run, busy }) {
-  const [name, setName] = useState("");
-  const [code, setCode] = useState("");
-  return (
-    <Table
-      head={
-        <>
-          <th className={TH}>Name</th>
-          <th className={TH}>Code</th>
-          <th className={TH}>Active</th>
-          <th className={TH}></th>
-        </>
-      }
-    >
-      {cfg.costCentres.map((cc) => (
-        <tr key={cc.id}>
-          <td className={TD}>{cc.name}</td>
-          <td className={TD}>{cc.code || "—"}</td>
-          <td className={TD}>
-            <input type="checkbox" checked={cc.isActive} onChange={() => run(() => admin.updateCostCentre(cc.id, { isActive: !cc.isActive }), "Updated.")} />
-          </td>
-          <td className={TD}>
-            <button type="button" disabled={busy} onClick={() => run(() => admin.deleteCostCentre(cc.id), "Deleted.")} className="text-text-muted hover:text-rose-600">
-              <Trash2 size={14} />
-            </button>
-          </td>
-        </tr>
-      ))}
-      <tr className="bg-surface-muted/40">
-        <td className={TD}><input className={INPUT} value={name} onChange={(e) => setName(e.target.value)} placeholder="New cost centre" /></td>
-        <td className={TD}><input className={INPUT} value={code} onChange={(e) => setCode(e.target.value)} placeholder="Code" /></td>
-        <td className={TD}></td>
-        <td className={TD}>
-          <button type="button" disabled={busy || !name.trim()} onClick={() => run(() => admin.addCostCentre({ name: name.trim(), code: code.trim() }), "Added.").then(() => { setName(""); setCode(""); })} className="inline-flex items-center gap-1 rounded-lg bg-indigo-500 px-2.5 py-1 text-xs font-semibold text-white disabled:opacity-50">
             <Plus size={12} /> Add
           </button>
         </td>

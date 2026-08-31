@@ -27,7 +27,7 @@ const SORTS = [
 ];
 const PAGE_SIZE = 20;
 const EMPTY_FILTERS = {
-  claimNumber: "", employee: "", employeeId: "", department: "", costCentre: "",
+  claimNumber: "", employee: "", employeeId: "", department: "", cmp: "",
   category: "", dateFrom: "", dateTo: "", claimMin: "", claimMax: "",
   approvedMin: "", approvedMax: "", status: "", financeStatus: "", approver: "",
 };
@@ -56,7 +56,7 @@ export default function FinanceExpenseProcessing() {
   const [dir, setDir] = useState("desc");
   const [page, setPage] = useState(1);
 
-  const [meta, setMeta] = useState({ departments: [], costCentres: [], categories: [], approvers: [], financeStatuses: [] });
+  const [meta, setMeta] = useState({ departments: [], cmps: [], categories: [], approvers: [], financeStatuses: [] });
   const [rows, setRows] = useState([]);
   const [total, setTotal] = useState(0);
   const [counts, setCounts] = useState({ pending: 0, processed: 0, rejected: 0, all: 0 });
@@ -222,9 +222,9 @@ export default function FinanceExpenseProcessing() {
               <option value="">Any Department</option>
               {meta.departments.map((d) => <option key={d} value={d}>{d}</option>)}
             </select>
-            <select className={INPUT} value={draft.costCentre} onChange={(e) => setDraft({ ...draft, costCentre: e.target.value })}>
-              <option value="">Any Cost Centre</option>
-              {meta.costCentres.map((c) => <option key={c} value={c}>{c}</option>)}
+            <select className={INPUT} value={draft.cmp} onChange={(e) => setDraft({ ...draft, cmp: e.target.value })}>
+              <option value="">Any CMP</option>
+              {meta.cmps.map((c) => <option key={c} value={c}>{c}</option>)}
             </select>
             <select className={INPUT} value={draft.category} onChange={(e) => setDraft({ ...draft, category: e.target.value })}>
               <option value="">Any Category</option>
@@ -290,7 +290,7 @@ export default function FinanceExpenseProcessing() {
                   <th className="px-4 py-2.5">Claim No</th>
                   <th className="px-4 py-2.5">Employee</th>
                   <th className="px-4 py-2.5">Department</th>
-                  <th className="px-4 py-2.5">Cost Centre</th>
+                  <th className="px-4 py-2.5">CMP</th>
                   <th className="px-4 py-2.5">Submitted</th>
                   <th className="px-4 py-2.5 text-right">Claimed</th>
                   <th className="px-4 py-2.5 text-right">Final Approved</th>
@@ -326,7 +326,7 @@ export default function FinanceExpenseProcessing() {
                           </span>
                         </td>
                         <td className="whitespace-nowrap px-4 py-2.5 text-text-secondary">{row.department || "—"}</td>
-                        <td className="whitespace-nowrap px-4 py-2.5 text-text-secondary">{row.costCentre || "—"}</td>
+                        <td className="whitespace-nowrap px-4 py-2.5 text-text-secondary">{row.cmp || "—"}</td>
                         <td className="whitespace-nowrap px-4 py-2.5 text-text-secondary">
                           {formatDate((row.submittedAt || "").toString().slice(0, 10))}
                         </td>

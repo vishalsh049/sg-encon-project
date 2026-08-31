@@ -73,7 +73,7 @@ export default function ExpenseClaimDetail() {
             <ClaimStatusBadge status={claim.status} />
           </div>
           <p className="mt-0.5 text-sm text-text-secondary">
-            {claim.purpose || "No purpose provided"}
+            {claim.employeeName ? `${claim.employeeName}${claim.employeeCode ? ` · ${claim.employeeCode}` : ""}` : "Expense claim"}
           </p>
         </div>
         {editable ? (
@@ -101,8 +101,8 @@ export default function ExpenseClaimDetail() {
             <Detail label="Employee ID" value={claim.employeeCode} />
             <Detail label="Department" value={claim.department} />
             <Detail label="Designation" value={claim.designation} />
-            <Detail label="Cost Centre" value={claim.costCentre} />
             <Detail label="Circle" value={claim.circle} />
+            <Detail label="CMP" value={claim.cmp} />
           </dl>
         </div>
 
@@ -110,18 +110,6 @@ export default function ExpenseClaimDetail() {
         <div className={`${CARD_SHELL} p-4`}>
           <h2 className="mb-3 text-sm font-semibold text-text-primary">Claim Details</h2>
           <dl className="grid grid-cols-2 gap-x-4 gap-y-2.5 text-sm">
-            <Detail label="Purpose" value={claim.purpose} />
-            <Detail
-              label="Expense Period"
-              value={
-                claim.periodFrom || claim.periodTo
-                  ? `${formatDate((claim.periodFrom || "").toString().slice(0, 10))} — ${formatDate(
-                      (claim.periodTo || "").toString().slice(0, 10)
-                    )}`
-                  : "—"
-              }
-            />
-            <Detail label="Remarks" value={claim.remarks} />
             <Detail label="Submitted On" value={claim.submittedAt ? formatDate(claim.submittedAt.toString().slice(0, 10)) : "—"} />
             <Detail label="Total Claimed" value={formatCurrency(claim.totalClaimed)} strong />
             {claim.l1ApprovedTotal != null ? (

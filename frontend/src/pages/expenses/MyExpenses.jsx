@@ -138,7 +138,7 @@ export default function MyExpenses() {
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search claim number, purpose, cost centre…"
+          placeholder="Search claim number, employee, CMP…"
           className="w-full border-0 bg-transparent text-sm text-text-primary outline-none placeholder:text-text-muted"
         />
       </div>
@@ -173,7 +173,7 @@ export default function MyExpenses() {
                 <tr className="bg-surface-muted text-[11px] font-semibold uppercase tracking-[0.08em] text-text-muted">
                   <th className="px-4 py-2.5">Claim No</th>
                   <th className="px-4 py-2.5">Date</th>
-                  <th className="px-4 py-2.5">Purpose</th>
+                  <th className="px-4 py-2.5">Items</th>
                   <th className="px-4 py-2.5 text-right">Claimed</th>
                   <th className="px-4 py-2.5 text-right">Approved</th>
                   <th className="px-4 py-2.5">Status</th>
@@ -205,11 +205,8 @@ export default function MyExpenses() {
                             (row.submittedAt || row.createdAt || "").toString().slice(0, 10)
                           )}
                         </td>
-                        <td className="max-w-[280px] truncate px-4 py-2.5 text-text-secondary" title={row.purpose || ""}>
-                          {row.purpose || "—"}
-                          <span className="ml-1 text-xs text-text-muted">
-                            ({row.itemCount} item{row.itemCount === 1 ? "" : "s"})
-                          </span>
+                        <td className="whitespace-nowrap px-4 py-2.5 text-text-secondary">
+                          {row.itemCount} item{row.itemCount === 1 ? "" : "s"}
                         </td>
                         <td className="whitespace-nowrap px-4 py-2.5 text-right font-medium text-text-primary">
                           {formatCurrency(row.totalClaimed)}

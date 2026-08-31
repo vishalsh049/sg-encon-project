@@ -466,11 +466,7 @@ function mapClaim(row) {
     department: row.department,
     designation: row.designation,
     circle: row.circle,
-    costCentre: row.cost_centre,
-    purpose: row.purpose,
-    periodFrom: row.period_from,
-    periodTo: row.period_to,
-    remarks: row.remarks,
+    cmp: row.cost_centre, // `cost_centre` column now holds the employee's CMP
     totalClaimed: Number(row.total_claimed || 0),
     l1ApprovedTotal: row.l1_approved_total === null ? null : Number(row.l1_approved_total),
     l2ApprovedTotal: row.l2_approved_total === null ? null : Number(row.l2_approved_total),
@@ -794,16 +790,13 @@ router.get("/meta", requirePagePermission(PAGE, "view"), async (req, res) => {
   try {
     await ensureTables();
 
-    const [categories, subCatRows, costCentres, profile, policies] = await Promise.all([
+    const [categories, subCatRows, profile, policies] = await Promise.all([
       getActiveCategories(),
       pool.query(
         `SELECT s.name, c.name AS category
          FROM expense_claim_sub_categories s
          JOIN expense_claim_categories c ON c.id = s.category_id
          WHERE s.is_active = 1 ORDER BY c.display_order ASC, s.name ASC`
-      ),
-      pool.query(
-        `SELECT name, code FROM expense_cost_centres WHERE is_active = 1 ORDER BY name ASC`
       ),
       loadEmployeeProfile(req.authUser.id),
       getActivePolicies(),
@@ -820,7 +813,6 @@ router.get("/meta", requirePagePermission(PAGE, "view"), async (req, res) => {
       data: {
         categories: categories.map((c) => ({ name: c.name, requiresBill: Boolean(c.requires_bill) })),
         subCategories,
-        costCentres: costCentres[0].map((c) => c.name),
         policies: policies.map((p) => ({
           category: p.category,
           subCategory: p.subCategory,
@@ -1018,11 +1010,6 @@ function parseClaimBody(body) {
   const items = Array.isArray(body?.items) ? body.items : [];
   return {
     employeeCode: String(body?.employeeCode ?? "").trim() || null,
-    costCentre: String(body?.costCentre ?? "").trim() || null,
-    purpose: String(body?.purpose ?? "").trim() || null,
-    periodFrom: normalizeDate(body?.periodFrom),
-    periodTo: normalizeDate(body?.periodTo),
-    remarks: String(body?.remarks ?? "").trim() || null,
     items,
   };
 }
@@ -1076,22 +1063,17 @@ async function resolveEmployeeSnapshot(authUser, employeeCode) {
       department: emp.department || null,
       designation: emp.designation || null,
       circle: emp.circle || null,
+      cmp: emp.cmp || null,
     };
   }
   const profile = await loadEmployeeProfile(authUser.id);
-  return employeeSnapshot(profile, authUser);
+  return { ...employeeSnapshot(profile, authUser), cmp: null };
 }
 
 router.post("/claims", requirePagePermission(PAGE, "edit"), async (req, res) => {
   try {
     await ensureTables();
     const body = parseClaimBody(req.body);
-    if (body.periodFrom === undefined || body.periodTo === undefined) {
-      throw httpError(400, "Expense period dates are invalid.");
-    }
-    if (body.periodFrom && body.periodTo && body.periodFrom > body.periodTo) {
-      throw httpError(400, "Expense Period From cannot be after Period To.");
-    }
 
     const categoryNames = (await getActiveCategories()).map((c) => c.name);
     const parsedItems = [];
@@ -1109,13 +1091,11 @@ router.post("/claims", requirePagePermission(PAGE, "edit"), async (req, res) => 
       const [ins] = await conn.query(
         `INSERT INTO expense_claims
            (employee_user_id, employee_name, employee_code, department, designation, circle,
-            cost_centre, purpose, period_from, period_to, remarks,
-            current_status, current_stage, created_by)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', 'employee', ?)`,
+            cost_centre, current_status, current_stage, created_by)
+         VALUES (?, ?, ?, ?, ?, ?, ?, 'draft', 'employee', ?)`,
         [
           snap.employee_user_id, snap.employee_name, snap.employee_code, snap.department,
-          snap.designation, snap.circle, body.costCentre, body.purpose,
-          body.periodFrom, body.periodTo, body.remarks, req.authUser.id,
+          snap.designation, snap.circle, snap.cmp, req.authUser.id,
         ]
       );
       const claimId = ins.insertId;
@@ -1160,12 +1140,6 @@ router.put("/claims/:id", requirePagePermission(PAGE, "edit"), async (req, res) 
     await ensureTables();
     const claim = await loadOwnEditableClaim(req.params.id, req.authUser);
     const body = parseClaimBody(req.body);
-    if (body.periodFrom === undefined || body.periodTo === undefined) {
-      throw httpError(400, "Expense period dates are invalid.");
-    }
-    if (body.periodFrom && body.periodTo && body.periodFrom > body.periodTo) {
-      throw httpError(400, "Expense Period From cannot be after Period To.");
-    }
 
     const categoryNames = (await getActiveCategories()).map((c) => c.name);
     const parsedItems = [];
@@ -1182,12 +1156,11 @@ router.put("/claims/:id", requirePagePermission(PAGE, "edit"), async (req, res) 
     await withTransaction(async (conn) => {
       await conn.query(
         `UPDATE expense_claims SET
-           employee_name = ?, employee_code = ?, department = ?, designation = ?, circle = ?,
-           cost_centre = ?, purpose = ?, period_from = ?, period_to = ?, remarks = ?
+           employee_name = ?, employee_code = ?, department = ?, designation = ?, circle = ?, cost_centre = ?
          WHERE id = ?`,
         [
           snap.employee_name, snap.employee_code, snap.department, snap.designation, snap.circle,
-          body.costCentre, body.purpose, body.periodFrom, body.periodTo, body.remarks, claim.id,
+          snap.cmp, claim.id,
         ]
       );
       const total = await persistItems(conn, claim.id, parsedItems);
@@ -2015,10 +1988,7 @@ function financeRow(row) {
     department: row.department,
     designation: row.designation,
     circle: row.circle,
-    costCentre: row.cost_centre,
-    purpose: row.purpose,
-    periodFrom: row.period_from,
-    periodTo: row.period_to,
+    cmp: row.cost_centre,
     submittedAt: row.submitted_at,
     totalClaimed: Number(row.total_claimed || 0),
     l1ApprovedTotal: row.l1_approved_total === null ? null : Number(row.l1_approved_total),
@@ -2075,9 +2045,9 @@ function buildFinanceFilters(req) {
     filters.push("c.department = ?");
     params.push(q.department);
   }
-  if (q.costCentre) {
+  if (q.cmp) {
     filters.push("c.cost_centre = ?");
-    params.push(q.costCentre);
+    params.push(q.cmp);
   }
   if (q.category) {
     filters.push(
@@ -2155,8 +2125,8 @@ router.get("/finance-meta", requirePagePermission(FINANCE_PAGE, "view"), async (
       `SELECT DISTINCT department FROM expense_claims
        WHERE department IS NOT NULL AND department <> '' ORDER BY department ASC`
     );
-    const [costCentres] = await pool.query(
-      `SELECT DISTINCT cost_centre FROM expense_claims
+    const [cmps] = await pool.query(
+      `SELECT DISTINCT cost_centre AS cmp FROM expense_claims
        WHERE cost_centre IS NOT NULL AND cost_centre <> '' ORDER BY cost_centre ASC`
     );
     const [categories] = await pool.query(
@@ -2175,7 +2145,7 @@ router.get("/finance-meta", requirePagePermission(FINANCE_PAGE, "view"), async (
       success: true,
       data: {
         departments: departments.map((r) => r.department),
-        costCentres: costCentres.map((r) => r.cost_centre),
+        cmps: cmps.map((r) => r.cmp),
         categories: categories.map((r) => r.name),
         approvers: approvers.map((r) => ({ id: r.id, name: r.name })),
         financeStatuses: FINANCE_STATUSES,
@@ -2395,9 +2365,8 @@ router.get("/finance-export", requirePagePermission(FINANCE_PAGE, "download"), a
       "Employee Name": c.employee_name || "",
       Department: c.department || "",
       Designation: c.designation || "",
-      "Cost Centre": c.cost_centre || "",
-      Purpose: c.purpose || "",
-      "Expense Period": [c.period_from, c.period_to].filter(Boolean).join(" to "),
+      CMP: c.cost_centre || "",
+      Circle: c.circle || "",
       "Submission Date": c.submitted_at ? String(c.submitted_at).slice(0, 10) : "",
       "Total Claimed": Number(c.total_claimed || 0),
       "L1 Approved": c.l1_approved_total === null ? "" : Number(c.l1_approved_total),
@@ -2485,9 +2454,9 @@ function dashboardFilters(req) {
     filters.push("c.department = ?");
     params.push(req.query.department);
   }
-  if (req.query.costCentre) {
+  if (req.query.cmp) {
     filters.push("c.cost_centre = ?");
-    params.push(req.query.costCentre);
+    params.push(req.query.cmp);
   }
   return { where: filters.join(" AND "), params };
 }
