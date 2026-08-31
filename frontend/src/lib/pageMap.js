@@ -16,6 +16,13 @@ export const PAGE_ID_MAP = {
   "general-penalties": "General Penalties",
   "expense-management": "Expense Management",
 
+  // Expense Claims (employee reimbursement workflow)
+  "my-expenses": "My Expenses",
+  "expense-approvals": "Expense Approvals",
+  "expense-finance": "Expense Finance",
+  "expense-claims-dashboard": "Expense Claims Dashboard",
+  "expense-claims-admin": "Expense Claims Admin",
+
   // Manpower
   "physical": "Physical",
   "physical dashboard": "Physical",

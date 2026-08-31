@@ -11,6 +11,11 @@ frontend/dist/
 dist/
 build/
 
+# Deploy artifacts (Hostinger archive uploads / staging copies)
+*-deploy.zip
+frontend/*-deploy.zip
+staging_backend/
+
 # Runtime upload storage (user-uploaded files, not source)
 backend/uploads/*
 !backend/uploads/.gitkeep

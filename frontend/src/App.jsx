@@ -39,6 +39,15 @@ import Profile from "./pages/Profile";
 import KpiPenalty from "./pages/KpiPenalty";
 import GeneralPenalty from "./pages/GeneralPenalty";
 import ExpenseManagement from "./pages/ExpenseManagement";
+import MyExpenses from "./pages/expenses/MyExpenses";
+import RaiseExpense from "./pages/expenses/RaiseExpense";
+import ExpenseClaimDetail from "./pages/expenses/ExpenseClaimDetail";
+import ExpenseApprovals from "./pages/expenses/ExpenseApprovals";
+import ApproveClaimDetail from "./pages/expenses/ApproveClaimDetail";
+import FinanceExpenseProcessing from "./pages/expenses/FinanceExpenseProcessing";
+import FinanceClaimDetail from "./pages/expenses/FinanceClaimDetail";
+import ExpenseClaimsDashboard from "./pages/expenses/ExpenseClaimsDashboard";
+import ExpenseClaimsAdmin from "./pages/expenses/ExpenseClaimsAdmin";
 
 function App() {
   return (
@@ -121,6 +130,67 @@ function App() {
   <Route path="billing/expenses" element={
     <ProtectedRoute page={"Expense Management"}>
       <ExpenseManagement />
+    </ProtectedRoute>
+  } />
+
+  {/* Expense Claims (employee reimbursement workflow) */}
+  <Route path="expense-claims/my" element={
+    <ProtectedRoute page={"My Expenses"}>
+      <MyExpenses />
+    </ProtectedRoute>
+  } />
+
+  <Route path="expense-claims/raise" element={
+    <ProtectedRoute page={"My Expenses"}>
+      <RaiseExpense />
+    </ProtectedRoute>
+  } />
+
+  <Route path="expense-claims/raise/:id" element={
+    <ProtectedRoute page={"My Expenses"}>
+      <RaiseExpense />
+    </ProtectedRoute>
+  } />
+
+  <Route path="expense-claims/my/:id" element={
+    <ProtectedRoute page={"My Expenses"}>
+      <ExpenseClaimDetail />
+    </ProtectedRoute>
+  } />
+
+  <Route path="expense-claims/approvals" element={
+    <ProtectedRoute page={"Expense Approvals"}>
+      <ExpenseApprovals />
+    </ProtectedRoute>
+  } />
+
+  <Route path="expense-claims/approvals/:id" element={
+    <ProtectedRoute page={"Expense Approvals"}>
+      <ApproveClaimDetail />
+    </ProtectedRoute>
+  } />
+
+  <Route path="expense-claims/finance" element={
+    <ProtectedRoute page={"Expense Finance"}>
+      <FinanceExpenseProcessing />
+    </ProtectedRoute>
+  } />
+
+  <Route path="expense-claims/finance/:id" element={
+    <ProtectedRoute page={"Expense Finance"}>
+      <FinanceClaimDetail />
+    </ProtectedRoute>
+  } />
+
+  <Route path="expense-claims/dashboard" element={
+    <ProtectedRoute page={"Expense Claims Dashboard"}>
+      <ExpenseClaimsDashboard />
+    </ProtectedRoute>
+  } />
+
+  <Route path="expense-claims/admin" element={
+    <ProtectedRoute page={"Expense Claims Admin"}>
+      <ExpenseClaimsAdmin />
     </ProtectedRoute>
   } />
 

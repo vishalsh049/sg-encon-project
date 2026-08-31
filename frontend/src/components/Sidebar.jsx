@@ -120,6 +120,44 @@ function Sidebar({ closeSidebar, collapsed, onExpandRequest }) {
     accessPage: "Expense Management",
   },
 
+  // EXPENSE CLAIMS
+  {
+    key: "my-expenses",
+    label: "My Expenses",
+    path: "/dashboard/expense-claims/my",
+    icon: ReceiptText,
+    accessPage: "My Expenses",
+    section: "EXPENSES",
+  },
+  {
+    key: "expense-approvals",
+    label: "Expense Approvals",
+    path: "/dashboard/expense-claims/approvals",
+    icon: ReceiptText,
+    accessPage: "Expense Approvals",
+  },
+  {
+    key: "expense-finance",
+    label: "Expense Finance",
+    path: "/dashboard/expense-claims/finance",
+    icon: ReceiptText,
+    accessPage: "Expense Finance",
+  },
+  {
+    key: "expense-claims-dashboard",
+    label: "Expense Dashboard",
+    path: "/dashboard/expense-claims/dashboard",
+    icon: ReceiptText,
+    accessPage: "Expense Claims Dashboard",
+  },
+  {
+    key: "expense-claims-admin",
+    label: "Expense Master Data",
+    path: "/dashboard/expense-claims/admin",
+    icon: ReceiptText,
+    accessPage: "Expense Claims Admin",
+  },
+
   // MANPOWER
 {
   key: "hr-dashboard",

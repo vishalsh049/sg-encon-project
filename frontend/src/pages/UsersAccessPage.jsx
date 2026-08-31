@@ -62,6 +62,17 @@ const pageAccessList = [
     ],
   },
 
+  {
+    title: "Expense Claims",
+    pages: [
+      "my-expenses",
+      "expense-approvals",
+      "expense-finance",
+      "expense-claims-dashboard",
+      "expense-claims-admin",
+    ],
+  },
+
 {
   title: "Manpower",
  pages: [
