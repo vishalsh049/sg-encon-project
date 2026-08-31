@@ -1193,20 +1193,11 @@ router.get("/summary", requirePagePermission(PAGE_ID, "view"), async (req, res) 
       params
     );
 
-    // Budget vs Actual — scoped to the same circle/category filters, using
-    // the same circle-access restriction applied to actuals.
-    const { month, circle, category, dateFrom, dateTo } = req.query;
-    const budgetFilters = ["1=1"];
+    // Budget vs Actual — month-level budget (not split by circle or category),
+    // stored against the fixed "ALL" scope by POST /budgets.
+    const { month, dateFrom, dateTo } = req.query;
+    const budgetFilters = ["b.circle = 'ALL'", "b.expense_category = 'ALL'"];
     const budgetParams = [];
-    addCircleFilter(budgetFilters, budgetParams, req.authUser, "b.circle");
-    if (circle) {
-      budgetFilters.push("b.circle = ?");
-      budgetParams.push(circle);
-    }
-    if (category) {
-      budgetFilters.push("b.expense_category = ?");
-      budgetParams.push(category);
-    }
     if (month && refMonth) {
       budgetFilters.push("b.month_date = ?");
       budgetParams.push(refMonth);
@@ -1508,22 +1499,18 @@ router.delete("/uploads/:uploadId", requirePagePermission(PAGE_ID, "delete"), as
 router.get("/budgets", requirePagePermission(PAGE_ID, "view"), async (req, res) => {
   try {
     await ensureTables();
-    const { month, circle } = req.query;
+    const { month } = req.query;
 
-    const filters = ["1=1"];
+    // Month-level budgets only (fixed "ALL" scope).
+    const filters = ["circle = 'ALL'", "expense_category = 'ALL'"];
     const params = [];
-    addCircleFilter(filters, params, req.authUser, "circle");
     if (month) {
       filters.push("month_date = ?");
       params.push(month);
     }
-    if (circle) {
-      filters.push("circle = ?");
-      params.push(circle);
-    }
 
     const [rows] = await pool.query(
-      `SELECT * FROM expense_budgets WHERE ${filters.join(" AND ")} ORDER BY month_date DESC, circle ASC, expense_category ASC`,
+      `SELECT * FROM expense_budgets WHERE ${filters.join(" AND ")} ORDER BY month_date DESC`,
       params
     );
     res.json({ success: true, data: rows });
@@ -1536,26 +1523,27 @@ router.get("/budgets", requirePagePermission(PAGE_ID, "view"), async (req, res) 
 router.post("/budgets", requirePagePermission(PAGE_ID, "edit"), async (req, res) => {
   try {
     await ensureTables();
-    const { monthDate, circle, category, budgetAmount } = req.body;
+    const { monthDate, budgetAmount } = req.body;
 
-    if (!monthDate || !circle || !category || budgetAmount === undefined || budgetAmount === "") {
-      return res.status(400).json({ success: false, message: "Month, Circle, Category and Budget Amount are required." });
+    if (!monthDate || budgetAmount === undefined || budgetAmount === "") {
+      return res.status(400).json({ success: false, message: "Month and Budget Amount are required." });
     }
     const amount = Number(budgetAmount);
     if (!Number.isFinite(amount) || amount < 0) {
       return res.status(400).json({ success: false, message: "Budget Amount must be a valid non-negative number." });
     }
-    if (!canAccessCircle(req.authUser, circle)) {
-      return res.status(403).json({ success: false, message: "You cannot set a budget for another circle." });
-    }
 
     const monthFirstOfMonth = `${String(monthDate).slice(0, 7)}-01`;
+    // Month-level budget — not split by circle or category. Stored against a
+    // fixed "ALL" scope so the existing (month, circle, category) unique key
+    // still upserts one row per month.
+    const BUDGET_SCOPE = "ALL";
 
     await pool.query(
       `INSERT INTO expense_budgets (month_date, circle, expense_category, budget_amount, updated_by)
        VALUES (?, ?, ?, ?, ?)
        ON DUPLICATE KEY UPDATE budget_amount = VALUES(budget_amount), updated_by = VALUES(updated_by)`,
-      [monthFirstOfMonth, circle, category, amount, req.authUser?.name || req.authUser?.username || null]
+      [monthFirstOfMonth, BUDGET_SCOPE, BUDGET_SCOPE, amount, req.authUser?.name || req.authUser?.username || null]
     );
 
     res.json({ success: true });

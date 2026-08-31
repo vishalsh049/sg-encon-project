@@ -18,8 +18,6 @@ import {
   SlidersHorizontal,
   Target,
   Trash2,
-  TrendingDown,
-  TrendingUp,
   UploadCloud,
   Wallet,
   X,
@@ -50,14 +48,12 @@ const PAGE_SIZE = 50;
 
 const EMPTY_UPLOAD_FORM = { date: todayIso(), uploadedBy: "", file: null };
 const EMPTY_FILTERS = {
-  month: "", circle: "", cmp: "", domain: "", category: "", expenseType: "",
-  vendor: "", status: "", dateFrom: "", dateTo: "", search: "",
+  month: "", circle: "", cmp: "", category: "", status: "", search: "",
 };
 
 const FILTER_LABELS = {
-  month: "Month", circle: "Circle", cmp: "CMP", domain: "Domain",
-  category: "Category", expenseType: "Expense Type", vendor: "Vendor",
-  status: "Status", dateFrom: "From", dateTo: "To", search: "Search",
+  month: "Month", circle: "Circle", cmp: "CMP",
+  category: "Category", status: "Status", search: "Search",
 };
 
 const STATUS_META = {
@@ -184,7 +180,7 @@ function ExpenseManagement() {
 
   // --- budget modal --------------------------------------------------------
   const [budgetModalOpen, setBudgetModalOpen] = useState(false);
-  const [budgetForm, setBudgetForm] = useState({ monthDate: "", circle: "", category: "", budgetAmount: "" });
+  const [budgetForm, setBudgetForm] = useState({ monthDate: "", budgetAmount: "" });
   const [savingBudget, setSavingBudget] = useState(false);
 
   // --- fetchers --------------------------------------------------------------
@@ -289,11 +285,6 @@ function ExpenseManagement() {
   }, [draftFilters.circle, circleData]);
 
   const updateDraft = (key, value) => setDraftFilters((prev) => ({ ...prev, [key]: value }));
-
-  const applyFilters = () => {
-    setPage(1);
-    setFilters(draftFilters);
-  };
 
   const resetFilters = () => {
     setPage(1);
@@ -530,16 +521,14 @@ function ExpenseManagement() {
     const now = new Date();
     setBudgetForm({
       monthDate: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`,
-      circle: filters.circle || circleData.circles[0] || "",
-      category: filters.category || meta.categories[0] || "",
       budgetAmount: "",
     });
     setBudgetModalOpen(true);
   };
 
   const saveBudget = async () => {
-    if (!budgetForm.monthDate || !budgetForm.circle || !budgetForm.category || budgetForm.budgetAmount === "") {
-      toast.error("Please fill in Month, Circle, Category and Budget Amount.");
+    if (!budgetForm.monthDate || budgetForm.budgetAmount === "") {
+      toast.error("Please fill in Month and Budget Amount.");
       return;
     }
     setSavingBudget(true);
@@ -549,8 +538,6 @@ function ExpenseManagement() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           monthDate: `${budgetForm.monthDate}-01`,
-          circle: budgetForm.circle,
-          category: budgetForm.category,
           budgetAmount: Number(budgetForm.budgetAmount),
         }),
       });
@@ -709,51 +696,33 @@ function ExpenseManagement() {
               ) : null}
             </div>
 
-            <div className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-              <select value={draftFilters.month} onChange={(e) => updateDraft("month", e.target.value)} className="app-select">
+            <div className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+              <select value={draftFilters.month} onChange={(e) => setFilterAndApply("month", e.target.value)} className="app-select">
                 <option value="">All Months</option>
                 {monthOptions.map((month) => (<option key={month} value={month}>{month}</option>))}
               </select>
 
-              <select value={draftFilters.circle} onChange={(e) => updateDraft("circle", e.target.value)} className="app-select">
+              <select value={draftFilters.circle} onChange={(e) => setFilterAndApply("circle", e.target.value)} className="app-select">
                 <option value="">All Circles</option>
                 {circleData.circles.map((circle) => (<option key={circle} value={circle}>{circle}</option>))}
               </select>
 
-              <select value={draftFilters.cmp} onChange={(e) => updateDraft("cmp", e.target.value)} className="app-select">
+              <select value={draftFilters.cmp} onChange={(e) => setFilterAndApply("cmp", e.target.value)} className="app-select">
                 <option value="">All CMPs</option>
                 {cmpOptions.map((cmp) => (<option key={cmp} value={cmp}>{cmp}</option>))}
               </select>
 
-              <select value={draftFilters.domain} onChange={(e) => updateDraft("domain", e.target.value)} className="app-select">
-                <option value="">All Domains</option>
-                {meta.domains.map((domain) => (<option key={domain} value={domain}>{domain}</option>))}
-              </select>
-
-              <select value={draftFilters.category} onChange={(e) => updateDraft("category", e.target.value)} className="app-select">
+              <select value={draftFilters.category} onChange={(e) => setFilterAndApply("category", e.target.value)} className="app-select">
                 <option value="">All Categories</option>
                 {meta.categories.map((category) => (<option key={category} value={category}>{category}</option>))}
               </select>
 
-              <select value={draftFilters.expenseType} onChange={(e) => updateDraft("expenseType", e.target.value)} className="app-select">
-                <option value="">All Expense Types</option>
-                {meta.expenseTypes.map((type) => (<option key={type} value={type}>{type}</option>))}
-              </select>
-
-              <select value={draftFilters.vendor} onChange={(e) => updateDraft("vendor", e.target.value)} className="app-select">
-                <option value="">All Vendors</option>
-                {meta.vendors.map((vendor) => (<option key={vendor} value={vendor}>{vendor}</option>))}
-              </select>
-
-              <select value={draftFilters.status} onChange={(e) => updateDraft("status", e.target.value)} className="app-select">
+              <select value={draftFilters.status} onChange={(e) => setFilterAndApply("status", e.target.value)} className="app-select">
                 <option value="">All Statuses</option>
                 {meta.statuses.map((status) => (
                   <option key={status} value={status}>{STATUS_META[status]?.label || status}</option>
                 ))}
               </select>
-
-              <PremiumDatePicker value={draftFilters.dateFrom} onChange={(value) => updateDraft("dateFrom", value)} placeholder="From date" />
-              <PremiumDatePicker value={draftFilters.dateTo} onChange={(value) => updateDraft("dateTo", value)} placeholder="To date" />
 
               <div className="flex h-10 items-center gap-2 rounded-xl border border-border-color bg-surface px-3">
                 <Search size={14} className="text-text-muted" />
@@ -761,20 +730,15 @@ function ExpenseManagement() {
                   type="text"
                   value={draftFilters.search}
                   onChange={(e) => updateDraft("search", e.target.value)}
-                  placeholder="Search vendor/bill/description..."
+                  onKeyDown={(e) => { if (e.key === "Enter") setFilterAndApply("search", draftFilters.search); }}
+                  onBlur={() => { if (draftFilters.search !== filters.search) setFilterAndApply("search", draftFilters.search); }}
+                  placeholder="Search vendor/bill/description... (Enter)"
                   className="w-full border-0 bg-transparent text-sm text-text-secondary outline-none placeholder:text-text-muted"
                 />
               </div>
             </div>
 
             <div className="mt-3 flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                onClick={applyFilters}
-                className="inline-flex h-9 items-center justify-center rounded-full bg-gradient-to-r from-rose-500 to-red-500 px-5 text-xs font-semibold text-white shadow-sm hover:opacity-95"
-              >
-                Apply Filters
-              </button>
               <button
                 type="button"
                 onClick={resetFilters}
@@ -824,22 +788,12 @@ function ExpenseManagement() {
           ) : (
             <>
               {/* KPI cards */}
-              <div className="mt-2 grid grid-cols-2 gap-2 lg:grid-cols-4">
-                <KpiCard accentKey="neutral" icon={Wallet} label="Total Expense" value={loadingSummary ? "…" : formatIndianCompact(summary?.total ?? 0)} loading={loadingSummary && !summary} />
-                <KpiCard accentKey="completed" icon={CheckCircle2} label="Approved Expense" value={loadingSummary ? "…" : formatIndianCompact(summary?.approved ?? 0)} loading={loadingSummary && !summary} />
-                <KpiCard accentKey="pending" icon={Clock} label="Pending Expense" value={loadingSummary ? "…" : formatIndianCompact(summary?.pending ?? 0)} loading={loadingSummary && !summary} />
-                <KpiCard accentKey="penalty" icon={XCircle} label="Rejected Expense" value={loadingSummary ? "…" : formatIndianCompact(summary?.rejected ?? 0)} loading={loadingSummary && !summary} />
-                <KpiCard accentKey="pmLoss" icon={CreditCard} label="Paid Expense" value={loadingSummary ? "…" : formatIndianCompact(summary?.paid ?? 0)} loading={loadingSummary && !summary} />
-                <KpiCard accentKey="revenue" icon={TrendingUp} label="This Month" value={loadingSummary ? "…" : formatIndianCompact(summary?.thisMonth ?? 0)} loading={loadingSummary && !summary} />
-                <KpiCard accentKey="neutral" icon={TrendingDown} label="Previous Month" value={loadingSummary ? "…" : formatIndianCompact(summary?.previousMonth ?? 0)} loading={loadingSummary && !summary} />
-                <KpiCard
-                  accentKey="indigoAccent"
-                  icon={Target}
-                  label="Budget Utilization"
-                  value={loadingSummary ? "…" : summary?.budget?.budgetTotal ? `${summary.budget.utilizationPercent}%` : "Not set"}
-                  description={summary?.budget?.overBudget ? "Over Budget" : undefined}
-                  loading={loadingSummary && !summary}
-                />
+              <div className="mt-2 grid grid-cols-2 gap-2 lg:grid-cols-3 xl:grid-cols-5">
+                <KpiCard compact accentKey="neutral" icon={Wallet} label="Total Expense" value={loadingSummary ? "…" : formatIndianCompact(summary?.total ?? 0)} loading={loadingSummary && !summary} />
+                <KpiCard compact accentKey="completed" icon={CheckCircle2} label="Approved Expense" value={loadingSummary ? "…" : formatIndianCompact(summary?.approved ?? 0)} loading={loadingSummary && !summary} />
+                <KpiCard compact accentKey="pending" icon={Clock} label="Pending Expense" value={loadingSummary ? "…" : formatIndianCompact(summary?.pending ?? 0)} loading={loadingSummary && !summary} />
+                <KpiCard compact accentKey="penalty" icon={XCircle} label="Rejected Expense" value={loadingSummary ? "…" : formatIndianCompact(summary?.rejected ?? 0)} loading={loadingSummary && !summary} />
+                <KpiCard compact accentKey="pmLoss" icon={CreditCard} label="Paid Expense" value={loadingSummary ? "…" : formatIndianCompact(summary?.paid ?? 0)} loading={loadingSummary && !summary} />
               </div>
 
               {/* Monthly Expense Trend */}
@@ -1436,18 +1390,6 @@ function ExpenseManagement() {
               <div>
                 <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-text-muted">Month</label>
                 <input type="month" value={budgetForm.monthDate} onChange={(e) => setBudgetForm((prev) => ({ ...prev, monthDate: e.target.value }))} className="app-input w-full" />
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-text-muted">Circle</label>
-                <select value={budgetForm.circle} onChange={(e) => setBudgetForm((prev) => ({ ...prev, circle: e.target.value }))} className="app-select w-full">
-                  {circleData.circles.map((circle) => (<option key={circle} value={circle}>{circle}</option>))}
-                </select>
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-text-muted">Expense Category</label>
-                <select value={budgetForm.category} onChange={(e) => setBudgetForm((prev) => ({ ...prev, category: e.target.value }))} className="app-select w-full">
-                  {meta.categories.map((category) => (<option key={category} value={category}>{category}</option>))}
-                </select>
               </div>
               <div>
                 <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-text-muted">Budget Amount</label>

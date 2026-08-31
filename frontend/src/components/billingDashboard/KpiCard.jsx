@@ -24,17 +24,20 @@ export default function KpiCard({
   // this to let label/description wrap to full text instead (e.g. HR
   // Analytics V2's cards, which have longer formula-style descriptions).
   wrapText = false,
+  // Smaller label / value / icon for tighter grids (e.g. Expense Management's
+  // 5-across KPI row).
+  compact = false,
 }) {
   const accent = ACCENTS[accentKey] || ACCENTS.neutral;
   const trendPositive = typeof trend === "number" && trend >= 0;
   const clampClass = wrapText ? "" : "truncate";
 
   return (
-    <div className={`${CARD_SHELL} p-4 flex flex-col gap-3`}>
+    <div className={`${CARD_SHELL} ${compact ? "p-3" : "p-4"} flex flex-col gap-3`}>
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <div className="flex items-center gap-1.5">
-            <div className={`text-[10px] font-bold uppercase tracking-[0.22em] text-text-muted ${clampClass}`}>
+            <div className={`${compact ? "text-[10px] tracking-[0.16em]" : "text-[10px] tracking-[0.22em]"} font-bold uppercase text-text-muted ${clampClass}`}>
               {label}
             </div>
             {tooltip && <MetricTooltip text={tooltip} />}
@@ -43,20 +46,20 @@ export default function KpiCard({
           {loading ? (
             <div className="mt-2 h-7 w-24 animate-pulse rounded-md bg-surface-muted" />
           ) : (
-            <div className={`mt-1 text-[22px] font-bold tracking-[-0.04em] ${accent.label}`}>
+            <div className={`mt-1 ${compact ? "text-[18px]" : "text-[22px]"} font-bold tracking-[-0.04em] ${accent.label}`}>
               {value}
             </div>
           )}
 
           {description && (
-            <div className={`mt-1 text-xs text-text-muted ${clampClass}`}>{description}</div>
+            <div className={`mt-1 ${compact ? "text-[11px]" : "text-xs"} text-text-muted ${clampClass}`}>{description}</div>
           )}
         </div>
 
         <div
-          className={`h-10 w-10 shrink-0 rounded-2xl bg-gradient-to-br ${accent.gradient} flex items-center justify-center text-white shadow-md`}
+          className={`${compact ? "h-8 w-8" : "h-10 w-10"} shrink-0 rounded-2xl bg-gradient-to-br ${accent.gradient} flex items-center justify-center text-white shadow-md`}
         >
-          {Icon && <Icon size={18} />}
+          {Icon && <Icon size={compact ? 15 : 18} />}
         </div>
       </div>
 
