@@ -22,6 +22,15 @@ const TABS = [
 
 const PAGE_SIZE = 20;
 
+// Earliest–latest expense date across the claim's items.
+function expenseDateRange(row) {
+  const from = (row.expenseDateFrom || "").toString().slice(0, 10);
+  const to = (row.expenseDateTo || "").toString().slice(0, 10);
+  if (!from && !to) return "—";
+  if (!to || from === to) return formatDate(from || to);
+  return `${formatDate(from)} – ${formatDate(to)}`;
+}
+
 export default function MyExpenses() {
   const navigate = useNavigate();
   const [tab, setTab] = useState("all");
@@ -172,7 +181,8 @@ export default function MyExpenses() {
               <thead>
                 <tr className="bg-surface-muted text-[11px] font-semibold uppercase tracking-[0.08em] text-text-muted">
                   <th className="px-4 py-2.5">Claim No</th>
-                  <th className="px-4 py-2.5">Date</th>
+                  <th className="px-4 py-2.5">Expense Date</th>
+                  <th className="px-4 py-2.5">Submitted</th>
                   <th className="px-4 py-2.5">Items</th>
                   <th className="px-4 py-2.5 text-right">Claimed</th>
                   <th className="px-4 py-2.5 text-right">Approved</th>
@@ -184,7 +194,7 @@ export default function MyExpenses() {
                 {loading && rows.length === 0
                   ? Array.from({ length: 5 }).map((_, i) => (
                       <tr key={i}>
-                        <td colSpan={7} className="px-4 py-3">
+                        <td colSpan={8} className="px-4 py-3">
                           <div className="h-4 w-full animate-pulse rounded bg-surface-muted" />
                         </td>
                       </tr>
@@ -199,6 +209,9 @@ export default function MyExpenses() {
                           {row.claimNumber || (
                             <span className="italic text-text-muted">Draft</span>
                           )}
+                        </td>
+                        <td className="whitespace-nowrap px-4 py-2.5 text-text-secondary">
+                          {expenseDateRange(row)}
                         </td>
                         <td className="whitespace-nowrap px-4 py-2.5 text-text-secondary">
                           {formatDate(

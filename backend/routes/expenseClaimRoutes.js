@@ -428,9 +428,6 @@ function validateItem(raw, index, categoryNames, { strict }) {
     errors.push(`${label}: Expense Date is required.`);
   }
 
-  const billDate = normalizeDate(raw?.billDate ?? raw?.bill_date);
-  if (billDate === undefined) errors.push(`${label}: Bill Date is not a valid date.`);
-
   const amount = toMoney(raw?.claimedAmount ?? raw?.claimed_amount);
   if (Number.isNaN(amount)) {
     errors.push(`${label}: Claimed Amount must be a number.`);
@@ -451,7 +448,6 @@ function validateItem(raw, index, categoryNames, { strict }) {
       description: String(raw?.description ?? "").trim() || null,
       claimedAmount: Number.isNaN(amount) ? 0 : amount,
       billNumber: String(raw?.billNumber ?? raw?.bill_number ?? "").trim() || null,
-      billDate: billDate || null,
     },
   };
 }
@@ -495,7 +491,6 @@ function mapItem(row) {
     description: row.description,
     claimedAmount: Number(row.claimed_amount || 0),
     billNumber: row.bill_number,
-    billDate: row.bill_date,
     l1ApprovedAmount: row.l1_approved_amount === null ? null : Number(row.l1_approved_amount),
     l1Decision: row.l1_decision,
     l1Reason: row.l1_reason,
@@ -834,7 +829,9 @@ router.get("/claims", requirePagePermission(PAGE, "view"), async (req, res) => {
     );
     const [rows] = await pool.query(
       `SELECT c.*,
-              (SELECT COUNT(*) FROM expense_claim_items i WHERE i.claim_id = c.id) AS item_count
+              (SELECT COUNT(*) FROM expense_claim_items i WHERE i.claim_id = c.id) AS item_count,
+              (SELECT MIN(i.expense_date) FROM expense_claim_items i WHERE i.claim_id = c.id) AS expense_date_from,
+              (SELECT MAX(i.expense_date) FROM expense_claim_items i WHERE i.claim_id = c.id) AS expense_date_to
        FROM expense_claims c
        WHERE ${whereClause}
        ORDER BY (c.current_status = 'draft') DESC, c.updated_at DESC, c.id DESC
@@ -844,7 +841,12 @@ router.get("/claims", requirePagePermission(PAGE, "view"), async (req, res) => {
 
     res.json({
       success: true,
-      data: rows.map((row) => ({ ...mapClaim(row), itemCount: Number(row.item_count || 0) })),
+      data: rows.map((row) => ({
+        ...mapClaim(row),
+        itemCount: Number(row.item_count || 0),
+        expenseDateFrom: row.expense_date_from || null,
+        expenseDateTo: row.expense_date_to || null,
+      })),
       total: countRows[0].total,
       page,
       pageSize,
@@ -890,11 +892,11 @@ async function persistItems(conn, claimId, items) {
       await conn.query(
         `UPDATE expense_claim_items SET
            sr_no = ?, expense_date = ?, category = ?, sub_category = ?, description = ?,
-           claimed_amount = ?, bill_number = ?, bill_date = ?
+           claimed_amount = ?, bill_number = ?
          WHERE id = ? AND claim_id = ?`,
         [
           srNo, item.expenseDate, item.category, item.subCategory, item.description,
-          item.claimedAmount, item.billNumber, item.billDate, item.id, claimId,
+          item.claimedAmount, item.billNumber, item.id, claimId,
         ]
       );
       keepIds.add(item.id);
@@ -902,11 +904,11 @@ async function persistItems(conn, claimId, items) {
       const [ins] = await conn.query(
         `INSERT INTO expense_claim_items
            (claim_id, sr_no, expense_date, category, sub_category, description,
-            claimed_amount, bill_number, bill_date)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            claimed_amount, bill_number)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           claimId, srNo, item.expenseDate, item.category, item.subCategory,
-          item.description, item.claimedAmount, item.billNumber, item.billDate,
+          item.description, item.claimedAmount, item.billNumber,
         ]
       );
       keepIds.add(ins.insertId);
@@ -1172,7 +1174,6 @@ router.post("/claims/:id/submit", requirePagePermission(PAGE, "edit"), async (re
           description: row.description,
           claimedAmount: row.claimed_amount,
           billNumber: row.bill_number,
-          billDate: row.bill_date,
         },
         index,
         categoryNames,
@@ -2284,7 +2285,6 @@ router.get("/finance-export", requirePagePermission(FINANCE_PAGE, "download"), a
         "Sub Category": i.sub_category || "",
         Description: i.description || "",
         "Bill Number": i.bill_number || "",
-        "Bill Date": i.bill_date ? String(i.bill_date).slice(0, 10) : "",
         "Claimed Amount": Number(i.claimed_amount || 0),
         "L1 Approved": i.l1_approved_amount === null ? "" : Number(i.l1_approved_amount),
         "L1 Reason": i.l1_reason || "",

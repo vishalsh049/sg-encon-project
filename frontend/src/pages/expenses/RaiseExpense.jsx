@@ -49,7 +49,6 @@ function blankRow() {
     description: "",
     claimedAmount: "",
     billNumber: "",
-    billDate: "",
     attachments: [],
   };
 }
@@ -69,7 +68,6 @@ function rowsFromBundle(bundle) {
     description: item.description || "",
     claimedAmount: item.claimedAmount != null ? String(item.claimedAmount) : "",
     billNumber: item.billNumber || "",
-    billDate: item.billDate ? String(item.billDate).slice(0, 10) : "",
     attachments: byItem.get(item.id) || [],
   }));
 }
@@ -203,7 +201,6 @@ export default function RaiseExpense() {
         description: r.description || null,
         claimedAmount: Number(r.claimedAmount) || 0,
         billNumber: r.billNumber || null,
-        billDate: r.billDate || null,
       })),
     };
   }
@@ -531,7 +528,7 @@ export default function RaiseExpense() {
         </div>
 
         <div className="overflow-x-auto">
-          <table className="min-w-[1080px] w-full text-left text-sm">
+          <table className="min-w-[960px] w-full text-left text-sm">
             <thead>
               <tr className="bg-surface-muted text-[11px] font-semibold uppercase tracking-[0.08em] text-text-muted">
                 <th className="px-3 py-2.5">#</th>
@@ -542,7 +539,6 @@ export default function RaiseExpense() {
                 <th className="px-3 py-2.5 text-right">Claimed Amount</th>
                 <th className="px-3 py-2.5">Bill / Invoice</th>
                 <th className="px-3 py-2.5">Bill Number</th>
-                <th className="px-3 py-2.5">Bill Date</th>
                 <th className="px-3 py-2.5 text-right">Action</th>
               </tr>
             </thead>
@@ -636,14 +632,6 @@ export default function RaiseExpense() {
                       placeholder="Invoice #"
                       value={row.billNumber}
                       onChange={(e) => setRow(row.localKey, { billNumber: e.target.value })}
-                    />
-                  </td>
-                  <td className="px-3 py-2">
-                    <input
-                      type="date"
-                      className={CELL_INPUT}
-                      value={row.billDate}
-                      onChange={(e) => setRow(row.localKey, { billDate: e.target.value })}
                     />
                   </td>
                   <td className="px-3 py-2 text-right">
