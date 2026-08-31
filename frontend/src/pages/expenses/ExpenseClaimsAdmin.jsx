@@ -10,7 +10,6 @@ const TABS = [
   { key: "matrix", label: "Approval Matrix" },
   { key: "categories", label: "Categories" },
   { key: "subCategories", label: "Sub Categories" },
-  { key: "policies", label: "Policies" },
 ];
 const INPUT =
   "w-full rounded-lg border border-border-color bg-surface px-2.5 py-1.5 text-sm text-text-primary outline-none focus:border-indigo-400";
@@ -69,7 +68,7 @@ export default function ExpenseClaimsAdmin() {
             Expense Claims — Master Data
           </h1>
           <p className="mt-0.5 text-sm text-text-secondary">
-            Configure the approval chain, categories, sub-categories and policy limits. No code change needed.
+            Configure the approval chain, expense categories and sub-categories. No code change needed.
           </p>
         </div>
         <button
@@ -103,7 +102,6 @@ export default function ExpenseClaimsAdmin() {
       {tab === "matrix" ? <MatrixTab cfg={cfg} run={run} busy={busy} /> : null}
       {tab === "categories" ? <CategoriesTab cfg={cfg} run={run} busy={busy} /> : null}
       {tab === "subCategories" ? <SubCategoriesTab cfg={cfg} run={run} busy={busy} /> : null}
-      {tab === "policies" ? <PoliciesTab cfg={cfg} run={run} busy={busy} /> : null}
     </div>
   );
 }
@@ -410,80 +408,3 @@ function SubCategoriesTab({ cfg, run, busy }) {
   );
 }
 
-/* ---------------- Policies ---------------- */
-function PoliciesTab({ cfg, run, busy }) {
-  const empty = { category: "", subCategory: "", period: "day", maxAmount: "", hardLimit: false };
-  const [form, setForm] = useState(empty);
-  return (
-    <div className="space-y-2">
-      <p className="text-xs text-text-muted">
-        A <strong>hard</strong> limit blocks submission. A soft limit lets the claim through but flags the item
-        as a policy exception, and the approver must give a reason to approve it.
-      </p>
-      <Table
-        head={
-          <>
-            <th className={TH}>Category</th>
-            <th className={TH}>Sub Category</th>
-            <th className={TH}>Period</th>
-            <th className={TH}>Max Amount</th>
-            <th className={TH}>Hard</th>
-            <th className={TH}>Active</th>
-            <th className={TH}></th>
-          </>
-        }
-      >
-        {cfg.policies.map((p) => (
-          <tr key={p.id}>
-            <td className={TD}>{p.category}</td>
-            <td className={TD}>{p.subCategory || "—"}</td>
-            <td className={TD}>{p.period === "day" ? "Per day" : "Per entry"}</td>
-            <td className={TD}>{formatCurrency(p.maxAmount)}</td>
-            <td className={TD}>
-              <input type="checkbox" checked={p.hardLimit} onChange={() => run(() => admin.updatePolicy(p.id, { hardLimit: !p.hardLimit }), "Updated.")} />
-            </td>
-            <td className={TD}>
-              <input type="checkbox" checked={p.isActive} onChange={() => run(() => admin.updatePolicy(p.id, { isActive: !p.isActive }), "Updated.")} />
-            </td>
-            <td className={TD}>
-              <button type="button" disabled={busy} onClick={() => run(() => admin.deletePolicy(p.id), "Deleted.")} className="text-text-muted hover:text-rose-600">
-                <Trash2 size={14} />
-              </button>
-            </td>
-          </tr>
-        ))}
-        <tr className="bg-surface-muted/40">
-          <td className={TD}>
-            <select className={INPUT} value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}>
-              <option value="">Category…</option>
-              {cfg.categories.map((cat) => <option key={cat.id} value={cat.name}>{cat.name}</option>)}
-            </select>
-          </td>
-          <td className={TD}><input className={INPUT} value={form.subCategory} onChange={(e) => setForm({ ...form, subCategory: e.target.value })} placeholder="(optional)" /></td>
-          <td className={TD}>
-            <select className={INPUT} value={form.period} onChange={(e) => setForm({ ...form, period: e.target.value })}>
-              <option value="day">Per day</option>
-              <option value="claim">Per entry</option>
-            </select>
-          </td>
-          <td className={TD}><input className={INPUT} type="number" value={form.maxAmount} onChange={(e) => setForm({ ...form, maxAmount: e.target.value })} placeholder="0.00" /></td>
-          <td className={TD}><input type="checkbox" checked={form.hardLimit} onChange={(e) => setForm({ ...form, hardLimit: e.target.checked })} /></td>
-          <td className={TD}></td>
-          <td className={TD}>
-            <button
-              type="button"
-              disabled={busy || !form.category || !(Number(form.maxAmount) > 0)}
-              onClick={() => run(() => admin.addPolicy({
-                category: form.category, subCategory: form.subCategory.trim() || null,
-                period: form.period, maxAmount: Number(form.maxAmount), hardLimit: form.hardLimit,
-              }), "Policy added.").then(() => setForm(empty))}
-              className="inline-flex items-center gap-1 rounded-lg bg-indigo-500 px-2.5 py-1 text-xs font-semibold text-white disabled:opacity-50"
-            >
-              <Plus size={12} /> Add
-            </button>
-          </td>
-        </tr>
-      </Table>
-    </div>
-  );
-}

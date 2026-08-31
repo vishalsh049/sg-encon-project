@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import toast from "react-hot-toast";
 import {
-  AlertTriangle,
   ArrowLeft,
   FileText,
   Loader2,
@@ -181,45 +180,6 @@ export default function RaiseExpense() {
     [rows]
   );
 
-  // Client-side mirror of the server policy engine — advisory only; the server
-  // is the source of truth and blocks hard-limit breaches on submit.
-  const policyWarnings = useMemo(() => {
-    const policies = meta?.policies || [];
-    const norm = (v) => String(v ?? "").trim().toLowerCase();
-    const map = new Map();
-    if (!policies.length) return map;
-    rows.forEach((row) => {
-      const amount = Number(row.claimedAmount) || 0;
-      if (!row.category || amount <= 0) return;
-      policies.forEach((p) => {
-        if (norm(p.category) !== norm(row.category)) return;
-        if (p.subCategory && norm(p.subCategory) !== norm(row.subCategory)) return;
-        let compare = amount;
-        let scope = "per entry";
-        if (p.period === "day") {
-          scope = "per day";
-          compare = rows.reduce((s, o) => {
-            if (
-              norm(o.category) === norm(row.category) &&
-              (!p.subCategory || norm(o.subCategory) === norm(row.subCategory)) &&
-              String(o.expenseDate) === String(row.expenseDate)
-            ) {
-              return s + (Number(o.claimedAmount) || 0);
-            }
-            return s;
-          }, 0);
-        }
-        if (compare > p.maxAmount + 0.001) {
-          map.set(row.localKey, {
-            hard: p.hardLimit,
-            message: `${scope === "per day" ? "Daily" : "This"} ${row.category} total ₹${compare.toLocaleString("en-IN")} exceeds the policy limit of ₹${p.maxAmount.toLocaleString("en-IN")} (${scope})${p.hardLimit ? " — hard limit, submission blocked" : ""}.`,
-          });
-        }
-      });
-    });
-    return map;
-  }, [rows, meta]);
-
   const subCategoriesFor = (category) => (meta?.subCategories?.[category] || []);
   const categoryRequiresBill = (category) =>
     Boolean(meta?.categories?.find((c) => c.name === category)?.requiresBill);
@@ -303,8 +263,6 @@ export default function RaiseExpense() {
       if (r.category && categoryRequiresBill(r.category) && !r.attachments.length) {
         errs.push(`Row ${n}: attach a bill/invoice for "${r.category}".`);
       }
-      const pw = policyWarnings.get(r.localKey);
-      if (pw?.hard) errs.push(`Row ${n}: ${pw.message}`);
     });
     return errs;
   };
@@ -644,21 +602,11 @@ export default function RaiseExpense() {
                       type="number"
                       min="0"
                       step="0.01"
-                      className={`${CELL_INPUT} text-right ${
-                        policyWarnings.get(row.localKey)
-                          ? "border-amber-400 bg-amber-50 dark:bg-amber-500/10"
-                          : ""
-                      }`}
+                      className={`${CELL_INPUT} text-right`}
                       placeholder="0.00"
                       value={row.claimedAmount}
                       onChange={(e) => setRow(row.localKey, { claimedAmount: e.target.value })}
                     />
-                    {policyWarnings.get(row.localKey) ? (
-                      <span className="mt-1 flex items-start gap-1 text-[11px] text-amber-700 dark:text-amber-400">
-                        <AlertTriangle size={11} className="mt-0.5 shrink-0" />
-                        {policyWarnings.get(row.localKey).message}
-                      </span>
-                    ) : null}
                   </td>
                   <td className="px-3 py-2">
                     <BillCell

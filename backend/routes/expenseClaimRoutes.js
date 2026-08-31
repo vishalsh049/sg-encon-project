@@ -584,73 +584,6 @@ async function notify(conn, { userId, claimId, claimNumber, type, message }) {
   );
 }
 
-async function getActivePolicies() {
-  const [rows] = await pool.query(
-    `SELECT id, category, sub_category, period, max_amount, hard_limit
-     FROM expense_policies WHERE is_active = 1`
-  );
-  return rows.map((r) => ({
-    id: r.id,
-    category: r.category,
-    subCategory: r.sub_category,
-    period: r.period,
-    maxAmount: Number(r.max_amount),
-    hardLimit: Boolean(r.hard_limit),
-  }));
-}
-
-// Evaluate every item against the active policies. `items` carry
-// { category, subCategory, expenseDate, claimedAmount } (camel or snake).
-function evaluatePolicies(items, policies) {
-  const norm = (v) => String(v ?? "").trim().toLowerCase();
-  const results = []; // { index, message, hard }
-
-  items.forEach((raw, index) => {
-    const category = raw.category;
-    const subCategory = raw.subCategory ?? raw.sub_category ?? null;
-    const amount = Number(raw.claimedAmount ?? raw.claimed_amount ?? 0);
-    const date = raw.expenseDate ?? raw.expense_date ?? null;
-
-    const matches = policies.filter(
-      (p) =>
-        norm(p.category) === norm(category) &&
-        (!p.subCategory || norm(p.subCategory) === norm(subCategory))
-    );
-
-    matches.forEach((p) => {
-      let compareValue = amount;
-      let scope = "per entry";
-      if (p.period === "day") {
-        scope = "per day";
-        compareValue = items.reduce((sum, other) => {
-          const oCat = other.category;
-          const oSub = other.subCategory ?? other.sub_category ?? null;
-          const oDate = other.expenseDate ?? other.expense_date ?? null;
-          if (
-            norm(oCat) === norm(category) &&
-            (!p.subCategory || norm(oSub) === norm(subCategory)) &&
-            String(oDate) === String(date)
-          ) {
-            return sum + Number(other.claimedAmount ?? other.claimed_amount ?? 0);
-          }
-          return sum;
-        }, 0);
-      }
-      if (compareValue > p.maxAmount + 0.001) {
-        results.push({
-          index,
-          hard: p.hardLimit,
-          message: `Row ${index + 1}: ${category}${
-            p.subCategory ? ` / ${p.subCategory}` : ""
-          } ${scope} total ${compareValue.toFixed(2)} exceeds the policy limit of ${p.maxAmount.toFixed(2)}.`,
-        });
-      }
-    });
-  });
-
-  return results;
-}
-
 // Atomic per-year counter. Runs on the transaction's connection so the row lock
 // from the UPDATE is held until the claim row is written.
 async function nextClaimNumber(conn, year) {
@@ -790,7 +723,7 @@ router.get("/meta", requirePagePermission(PAGE, "view"), async (req, res) => {
   try {
     await ensureTables();
 
-    const [categories, subCatRows, profile, policies] = await Promise.all([
+    const [categories, subCatRows, profile] = await Promise.all([
       getActiveCategories(),
       pool.query(
         `SELECT s.name, c.name AS category
@@ -799,7 +732,6 @@ router.get("/meta", requirePagePermission(PAGE, "view"), async (req, res) => {
          WHERE s.is_active = 1 ORDER BY c.display_order ASC, s.name ASC`
       ),
       loadEmployeeProfile(req.authUser.id),
-      getActivePolicies(),
     ]);
 
     const subCategories = {};
@@ -813,13 +745,6 @@ router.get("/meta", requirePagePermission(PAGE, "view"), async (req, res) => {
       data: {
         categories: categories.map((c) => ({ name: c.name, requiresBill: Boolean(c.requires_bill) })),
         subCategories,
-        policies: policies.map((p) => ({
-          category: p.category,
-          subCategory: p.subCategory,
-          period: p.period,
-          maxAmount: p.maxAmount,
-          hardLimit: p.hardLimit,
-        })),
         myProfile: {
           employeeName: profile?.name || req.authUser.name || "",
           employeeCode: profile?.employee_id || "",
@@ -1260,25 +1185,6 @@ router.post("/claims/:id/submit", requirePagePermission(PAGE, "edit"), async (re
     });
     if (errors.length) throw httpError(400, "This claim cannot be submitted yet.", { rowErrors: errors });
 
-    // Policy engine — hard limits block submission; soft limits flag the item.
-    const policies = await getActivePolicies();
-    const policyHits = evaluatePolicies(
-      items.map((i) => ({
-        category: i.category,
-        subCategory: i.sub_category,
-        expenseDate: i.expense_date,
-        claimedAmount: i.claimed_amount,
-      })),
-      policies
-    );
-    const hardHits = policyHits.filter((h) => h.hard);
-    if (hardHits.length) {
-      throw httpError(400, "This claim exceeds a hard policy limit and cannot be submitted.", {
-        rowErrors: hardHits.map((h) => h.message),
-      });
-    }
-    const exceptionItemIds = new Set(policyHits.map((h) => items[h.index]?.id).filter(Boolean));
-
     const total = round2(items.reduce((sum, i) => sum + Number(i.claimed_amount || 0), 0));
     const year = new Date().getFullYear();
 
@@ -1319,16 +1225,6 @@ router.post("/claims/:id/submit", requirePagePermission(PAGE, "edit"), async (re
         );
       }
 
-      // Stamp / clear policy-exception flags for this submission.
-      await conn.query(`UPDATE expense_claim_items SET policy_exception = 0 WHERE claim_id = ?`, [claim.id]);
-      if (exceptionItemIds.size) {
-        await conn.query(
-          `UPDATE expense_claim_items SET policy_exception = 1
-           WHERE claim_id = ? AND id IN (${[...exceptionItemIds].map(() => "?").join(",")})`,
-          [claim.id, ...exceptionItemIds]
-        );
-      }
-
       await conn.query(
         `UPDATE expense_claims SET
            claim_number = ?, total_claimed = ?, current_status = 'pending_l1', current_stage = 'l1',
@@ -1351,13 +1247,7 @@ router.post("/claims/:id/submit", requirePagePermission(PAGE, "edit"), async (re
         fromStatus: claim.current_status,
         toStatus: "pending_l1",
         newAmount: total,
-        reason: policyHits.length ? policyHits.map((h) => h.message).join(" ") : null,
-        meta: {
-          claimNumber,
-          itemCount: items.length,
-          l1ApproverUserId: approvers.l1_user_id,
-          policyExceptions: policyHits.length,
-        },
+        meta: { claimNumber, itemCount: items.length, l1ApproverUserId: approvers.l1_user_id },
       });
 
       await notify(conn, {
@@ -1728,12 +1618,6 @@ router.post("/claims/:id/decision", requirePagePermission(APPROVALS_PAGE, "edit"
         errors.push(
           `${label}: a reason is required for a ${approved <= 0 ? "rejection" : "partial approval"}.`
         );
-        return;
-      }
-      // Approving (in full or part) an item flagged as a policy exception also
-      // needs a reason on record (business rule #15).
-      if (item.policy_exception && normalized !== "rejected" && !reason) {
-        errors.push(`${label}: this item exceeds a policy limit — a reason is required to approve it.`);
         return;
       }
 
@@ -2408,7 +2292,6 @@ router.get("/finance-export", requirePagePermission(FINANCE_PAGE, "download"), a
         "L2 Reason": i.l2_reason || "",
         "Final Approved": i.final_approved_amount === null ? "" : Number(i.final_approved_amount),
         "Final Reason": i.final_reason || "",
-        "Policy Exception": i.policy_exception ? "Yes" : "No",
       }));
     }
 
@@ -2560,12 +2443,11 @@ router.get("/dashboard", requirePagePermission(DASH_PAGE, "view"), async (req, r
 });
 
 // ===========================================================================
-// PHASE 8/9 — Admin: categories, sub-categories, cost centres, policies,
-// approval matrix. All guarded by the expense-claims-admin page permission.
+// Admin: categories, sub-categories, cost centres, approval matrix.
+// All guarded by the expense-claims-admin page permission.
 // ===========================================================================
 
 const ADMIN_PAGE = PAGE_IDS.admin; // "expense-claims-admin"
-const POLICY_PERIODS = ["day", "claim"];
 
 router.get("/admin/config", requirePagePermission(ADMIN_PAGE, "view"), async (req, res) => {
   try {
@@ -2580,9 +2462,6 @@ router.get("/admin/config", requirePagePermission(ADMIN_PAGE, "view"), async (re
     );
     const [costCentres] = await pool.query(
       `SELECT id, name, code, is_active FROM expense_cost_centres ORDER BY name ASC`
-    );
-    const [policies] = await pool.query(
-      `SELECT id, category, sub_category, period, max_amount, hard_limit, is_active FROM expense_policies ORDER BY category ASC, id ASC`
     );
     const [matrix] = await pool.query(
       `SELECT m.*, u1.name AS l1_name, u2.name AS l2_name, u3.name AS final_name
@@ -2607,10 +2486,6 @@ router.get("/admin/config", requirePagePermission(ADMIN_PAGE, "view"), async (re
           id: s.id, categoryId: s.category_id, category: s.category, name: s.name, isActive: Boolean(s.is_active),
         })),
         costCentres: costCentres.map((c) => ({ id: c.id, name: c.name, code: c.code, isActive: Boolean(c.is_active) })),
-        policies: policies.map((p) => ({
-          id: p.id, category: p.category, subCategory: p.sub_category, period: p.period,
-          maxAmount: Number(p.max_amount), hardLimit: Boolean(p.hard_limit), isActive: Boolean(p.is_active),
-        })),
         matrix: matrix.map((m) => ({
           id: m.id, category: m.category, minAmount: Number(m.min_amount),
           maxAmount: m.max_amount === null ? null : Number(m.max_amount),
@@ -2727,64 +2602,6 @@ router.delete("/admin/cost-centres/:id", requirePagePermission(ADMIN_PAGE, "edit
     res.json({ success: true });
   } catch (error) {
     fail(res, error, "Failed to delete the cost centre.");
-  }
-});
-
-// --- policies ---
-router.post("/admin/policies", requirePagePermission(ADMIN_PAGE, "edit"), async (req, res) => {
-  try {
-    await ensureTables();
-    const category = String(req.body?.category ?? "").trim();
-    const period = String(req.body?.period ?? "day").trim().toLowerCase();
-    const maxAmount = toMoney(req.body?.maxAmount);
-    if (!category) throw httpError(400, "Category is required.");
-    if (!POLICY_PERIODS.includes(period)) throw httpError(400, "Period must be 'day' or 'claim'.");
-    if (Number.isNaN(maxAmount) || maxAmount <= 0) throw httpError(400, "Max amount must be a positive number.");
-    await pool.query(
-      `INSERT INTO expense_policies (category, sub_category, period, max_amount, hard_limit)
-       VALUES (?, ?, ?, ?, ?)`,
-      [category, String(req.body?.subCategory ?? "").trim() || null, period, maxAmount, req.body?.hardLimit ? 1 : 0]
-    );
-    res.json({ success: true });
-  } catch (error) {
-    fail(res, error, "Failed to add the policy.");
-  }
-});
-
-router.put("/admin/policies/:id", requirePagePermission(ADMIN_PAGE, "edit"), async (req, res) => {
-  try {
-    await ensureTables();
-    const sets = [];
-    const params = [];
-    if (req.body?.category !== undefined) { sets.push("category = ?"); params.push(String(req.body.category).trim()); }
-    if (req.body?.subCategory !== undefined) { sets.push("sub_category = ?"); params.push(String(req.body.subCategory).trim() || null); }
-    if (req.body?.period !== undefined) {
-      const p = String(req.body.period).toLowerCase();
-      if (!POLICY_PERIODS.includes(p)) throw httpError(400, "Period must be 'day' or 'claim'.");
-      sets.push("period = ?"); params.push(p);
-    }
-    if (req.body?.maxAmount !== undefined) {
-      const m = toMoney(req.body.maxAmount);
-      if (Number.isNaN(m) || m <= 0) throw httpError(400, "Max amount must be a positive number.");
-      sets.push("max_amount = ?"); params.push(m);
-    }
-    if (req.body?.hardLimit !== undefined) { sets.push("hard_limit = ?"); params.push(req.body.hardLimit ? 1 : 0); }
-    if (req.body?.isActive !== undefined) { sets.push("is_active = ?"); params.push(req.body.isActive ? 1 : 0); }
-    if (!sets.length) throw httpError(400, "Nothing to update.");
-    await pool.query(`UPDATE expense_policies SET ${sets.join(", ")} WHERE id = ?`, [...params, req.params.id]);
-    res.json({ success: true });
-  } catch (error) {
-    fail(res, error, "Failed to update the policy.");
-  }
-});
-
-router.delete("/admin/policies/:id", requirePagePermission(ADMIN_PAGE, "edit"), async (req, res) => {
-  try {
-    await ensureTables();
-    await pool.query(`DELETE FROM expense_policies WHERE id = ?`, [req.params.id]);
-    res.json({ success: true });
-  } catch (error) {
-    fail(res, error, "Failed to delete the policy.");
   }
 });
 

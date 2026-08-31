@@ -105,10 +105,7 @@ export default function ApproveClaimDetail() {
       else approved = ceiling;
       approved = Math.max(0, Math.min(approved, ceiling));
       const reduced = Number(it.claimedAmount || 0) - approved;
-      const needsReason =
-        d.kind === "reject" ||
-        approved < ceiling - 0.001 ||
-        (it.policyException && d.kind !== "reject");
+      const needsReason = d.kind === "reject" || approved < ceiling - 0.001;
       return { item: it, decision: d, ceiling, approved, reduced, needsReason };
     });
     const claimed = rows.reduce((s, r) => s + Number(r.item.claimedAmount || 0), 0);
@@ -349,11 +346,6 @@ export default function ApproveClaimDetail() {
                       {it.category}
                       {it.subCategory ? (
                         <span className="block text-xs text-text-muted">{it.subCategory}</span>
-                      ) : null}
-                      {it.policyException ? (
-                        <span className="mt-0.5 inline-block rounded bg-amber-100 px-1 text-[10px] font-semibold text-amber-700 dark:bg-amber-500/15 dark:text-amber-300">
-                          Policy exception
-                        </span>
                       ) : null}
                     </td>
                     <td className="max-w-[220px] truncate px-3 py-2 text-text-secondary" title={it.description || ""}>
