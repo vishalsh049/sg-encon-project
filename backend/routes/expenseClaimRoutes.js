@@ -564,9 +564,8 @@ function validateItem(raw, index, categoryNames, { strict }) {
 
   if (strict) {
     if (expenseFor === "employee") {
-      if (!employeeType) errors.push(`${label}: Employee Type is required.`);
+      if (!empRefCode) errors.push(`${label}: enter and fetch a valid Employee ID / HRMS ID.`);
     } else if (expenseFor === "vendor") {
-      if (!vendorType) errors.push(`${label}: Vendor Type is required.`);
       if (!vendorId) errors.push(`${label}: select a Vendor.`);
     }
     if (!category) errors.push(`${label}: Category is required.`);
@@ -1504,6 +1503,20 @@ router.post("/claims/:id/submit", requirePagePermission(PAGE, "edit"), async (re
         errors.push(`Item ${index + 1}: attach a bill/invoice — required for a Reimbursement expense.`);
       }
     });
+
+    // Each Employee-Expense item must point at a real employee master record.
+    // Also snapshot a claim-level CMP from the first employee item (Finance filters on it).
+    let claimCmp = claim.cost_centre || null;
+    for (let index = 0; index < items.length; index += 1) {
+      const row = items[index];
+      if ((row.expense_for || "employee") !== "employee" || !row.emp_ref_code) continue;
+      const emp = await lookupPhysicalEmployee(row.emp_ref_code);
+      if (!emp) {
+        errors.push(`Item ${index + 1}: Employee ID "${row.emp_ref_code}" was not found in the employee master.`);
+      } else if (!claimCmp) {
+        claimCmp = emp.cmp || null;
+      }
+    }
     if (errors.length) throw httpError(400, "This claim cannot be submitted yet.", { rowErrors: errors });
 
     const total = round2(items.reduce((sum, i) => sum + Number(i.claimed_amount || 0), 0));
@@ -1548,12 +1561,13 @@ router.post("/claims/:id/submit", requirePagePermission(PAGE, "edit"), async (re
 
       await conn.query(
         `UPDATE expense_claims SET
-           claim_number = ?, total_claimed = ?, current_status = 'pending_l1', current_stage = 'l1',
+           claim_number = ?, total_claimed = ?, cost_centre = ?,
+           current_status = 'pending_l1', current_stage = 'l1',
            l1_approver_user_id = ?, l2_approver_user_id = ?, final_approver_user_id = ?,
            current_approver_user_id = ?, submitted_at = NOW()
          WHERE id = ?`,
         [
-          claimNumber, total,
+          claimNumber, total, claimCmp,
           approvers.l1_user_id, approvers.l2_user_id || null, approvers.final_user_id || null,
           approvers.l1_user_id, claim.id,
         ]

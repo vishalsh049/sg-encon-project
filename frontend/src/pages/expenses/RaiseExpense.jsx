@@ -14,15 +14,11 @@ import {
   deleteClaim,
   fetchClaim,
   fetchExpenseMeta,
-  lookupEmployee as lookupEmployeeApi,
   openBill,
   submitClaim,
   updateClaim,
   uploadBill,
 } from "../../lib/expenseClaimsApi";
-
-const INPUT =
-  "h-10 w-full rounded-xl border border-border-color bg-surface px-3 text-sm text-text-primary outline-none transition focus:border-indigo-400 disabled:bg-surface-muted disabled:text-text-muted";
 
 const ALLOWED_EXT = ["pdf", "jpg", "jpeg", "png"];
 const emptyRowKey = () => `r-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
@@ -100,14 +96,9 @@ export default function RaiseExpense() {
   const [status, setStatus] = useState("draft");
   const [claimNumber, setClaimNumber] = useState(null);
 
-  const [form, setForm] = useState({ employeeCode: "" });
   const [rows, setRows] = useState([blankRow()]);
   const [collapsed, setCollapsed] = useState({}); // { [localKey]: true }
   const [itemErrorMap, setItemErrorMap] = useState({}); // { [localKey]: string[] }
-
-  // Employee identity resolved from the Physical employee master by HRMS ID.
-  const [emp, setEmp] = useState(null); // { employeeName, designation, circle, cmp, bankAccount, ifsc, ... }
-  const [empLookup, setEmpLookup] = useState({ status: "idle", message: "" }); // idle | loading | found | notfound | error
 
   const [savingDraft, setSavingDraft] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -116,29 +107,6 @@ export default function RaiseExpense() {
   const [rowErrors, setRowErrors] = useState([]);
   const [uploadingKey, setUploadingKey] = useState(null);
   const fileInputs = useRef({});
-
-  const runEmployeeLookup = useCallback(async (code) => {
-    const trimmed = String(code || "").trim();
-    if (!trimmed) {
-      setEmp(null);
-      setEmpLookup({ status: "idle", message: "" });
-      return null;
-    }
-    setEmpLookup({ status: "loading", message: "" });
-    try {
-      const res = await lookupEmployeeApi(trimmed);
-      setEmp(res.data);
-      setEmpLookup({ status: "found", message: res.data.employeeName || "Employee found" });
-      return res.data;
-    } catch (error) {
-      setEmp(null);
-      setEmpLookup({
-        status: error.status === 404 ? "notfound" : "error",
-        message: error.message || "Lookup failed",
-      });
-      return null;
-    }
-  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -157,36 +125,15 @@ export default function RaiseExpense() {
         setClaimId(b.claim.id);
         setStatus(b.claim.status);
         setClaimNumber(b.claim.claimNumber);
-        setForm({ employeeCode: b.claim.employeeCode || "" });
         const mapped = rowsFromBundle(b);
         setRows(mapped.length ? mapped : [blankRow()]);
-        if (b.claim.employeeCode) {
-          runEmployeeLookup(b.claim.employeeCode);
-        } else if (b.claim.employeeName) {
-          // Older claim saved before HRMS lookup existed — show the stored snapshot.
-          setEmp({
-            employeeCode: "",
-            employeeName: b.claim.employeeName,
-            department: b.claim.department || "",
-            designation: b.claim.designation || "",
-            circle: b.claim.circle || "",
-          });
-          setEmpLookup({ status: "found", message: b.claim.employeeName });
-        }
-      } else {
-        // New claim — prefill with the signed-in user's own HRMS id if we have one.
-        const myCode = metaRes.data?.myProfile?.employeeCode || "";
-        if (myCode) {
-          setForm((f) => ({ ...f, employeeCode: myCode }));
-          runEmployeeLookup(myCode);
-        }
       }
     } catch (error) {
       toast.error(error.message || "Failed to load the Raise Expense form.");
     } finally {
       setLoading(false);
     }
-  }, [routeId, navigate, runEmployeeLookup]);
+  }, [routeId, navigate]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -238,13 +185,12 @@ export default function RaiseExpense() {
   }
 
   function buildPayload() {
-    return {
-      employeeCode: form.employeeCode.trim() || null,
-      items: rows.map(itemPayload),
-    };
+    // The claim belongs to the signed-in user; each item carries its own
+    // Employee / Vendor party. The server resolves the claimant from the token.
+    return { items: rows.map(itemPayload) };
   }
 
-  // Persists the current form + rows. Returns the fresh bundle, and reconciles
+  // Persists the current rows. Returns the fresh bundle, and reconciles
   // server-assigned item ids back onto local rows (needed before a bill upload).
   const persistDraft = useCallback(
     async ({ silent } = {}) => {
@@ -266,7 +212,7 @@ export default function RaiseExpense() {
       if (!silent) toast.success("Draft saved.");
       return b;
     },
-    [claimId, form, rows] // eslint-disable-line react-hooks/exhaustive-deps
+    [claimId, rows] // eslint-disable-line react-hooks/exhaustive-deps
   );
 
   const handleSaveDraft = async () => {
@@ -290,9 +236,8 @@ export default function RaiseExpense() {
     if (!r.category?.trim()) e.push("Category is required.");
     if (!(Number(r.claimedAmount) > 0)) e.push("Claimed Amount must be greater than zero.");
     if (r.expenseFor === "employee") {
-      if (!r.employeeType) e.push("Employee Type is required.");
+      if (!r.empRefCode) e.push("Enter a valid Employee ID / HRMS ID and click Fetch.");
     } else {
-      if (!r.vendorType) e.push("Vendor Type is required.");
       if (!r.vendorId) e.push("Select a Vendor.");
     }
     if (!r.claimType) e.push("Claim Type is required.");
@@ -317,12 +262,6 @@ export default function RaiseExpense() {
   const clientValidate = () => {
     const errs = [];
     const map = {};
-    if (form.employeeCode.trim() && empLookup.status !== "found") {
-      errs.push(`Employee ID "${form.employeeCode.trim()}" is not verified — click Fetch and make sure the details load.`);
-    }
-    if (!form.employeeCode.trim() && !emp?.employeeName) {
-      errs.push("Enter the Claimant's Employee ID / HRMS ID and fetch the details.");
-    }
     if (!rows.length) errs.push("Add at least one expense item.");
     rows.forEach((r, i) => {
       const rowErrs = validateItemRow(r);
@@ -463,7 +402,7 @@ export default function RaiseExpense() {
             {claimNumber ? `Edit Claim ${claimNumber}` : "Raise Expense"}
           </h1>
           <p className="mt-0.5 text-sm text-text-secondary">
-            Build each expense step by step. One claim can hold many items — the total is calculated for you.
+            Build each expense step by step. One claim can hold many items — each with its own Employee or Vendor.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -514,85 +453,6 @@ export default function RaiseExpense() {
           </ul>
         </div>
       ) : null}
-
-      {/* Claim Information */}
-      <div className={`${CARD_SHELL} p-4`}>
-        <h2 className="mb-3 text-sm font-semibold text-text-primary">Claimant Details</h2>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          <Field label="Claimant Employee ID / HRMS ID" className="sm:col-span-2 lg:col-span-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <input
-                className={`${INPUT} sm:max-w-xs ${
-                  empLookup.status === "notfound" || empLookup.status === "error"
-                    ? "border-rose-400 bg-rose-50 dark:bg-rose-500/10"
-                    : empLookup.status === "found"
-                    ? "border-emerald-400"
-                    : ""
-                }`}
-                placeholder="e.g. SG15392"
-                value={form.employeeCode}
-                onChange={(e) => setForm((f) => ({ ...f, employeeCode: e.target.value }))}
-                onBlur={(e) => runEmployeeLookup(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    runEmployeeLookup(e.currentTarget.value);
-                  }
-                }}
-              />
-              <button
-                type="button"
-                onClick={() => runEmployeeLookup(form.employeeCode)}
-                disabled={empLookup.status === "loading" || !form.employeeCode.trim()}
-                className="inline-flex h-10 items-center gap-1.5 rounded-xl border border-border-color bg-surface px-4 text-sm font-medium text-text-secondary transition hover:bg-surface-muted disabled:opacity-50"
-              >
-                {empLookup.status === "loading" ? <Loader2 className="animate-spin" size={14} /> : null}
-                Fetch
-              </button>
-              {empLookup.status === "found" ? (
-                <span className="text-sm font-medium text-emerald-600 dark:text-emerald-400">
-                  ✓ {empLookup.message}
-                </span>
-              ) : empLookup.status === "notfound" || empLookup.status === "error" ? (
-                <span className="text-sm font-medium text-rose-600 dark:text-rose-400">{empLookup.message}</span>
-              ) : (
-                <span className="text-xs text-text-muted">
-                  The person raising this claim. Details fill in from the employee master.
-                </span>
-              )}
-            </div>
-          </Field>
-          <Field label="Employee Name">
-            <input className={INPUT} value={emp?.employeeName || ""} disabled placeholder="—" />
-          </Field>
-          <Field label="Designation">
-            <input className={INPUT} value={emp?.designation || "—"} disabled />
-          </Field>
-          <Field label="Circle">
-            <input className={INPUT} value={emp?.circle || "—"} disabled />
-          </Field>
-          <Field label="CMP">
-            <input className={INPUT} value={emp?.cmp || "—"} disabled />
-          </Field>
-          <Field label="Bank Account No.">
-            <input className={INPUT} value={emp?.bankAccount || "—"} disabled />
-          </Field>
-          <Field label="IFSC Code">
-            <input className={INPUT} value={emp?.ifsc || "—"} disabled />
-          </Field>
-          {emp?.mobile || emp?.email || emp?.reportingManager ? (
-            <Field label="Contact / Reporting" className="sm:col-span-2 lg:col-span-1">
-              <input
-                className={INPUT}
-                disabled
-                value={[emp?.mobile, emp?.email, emp?.reportingManager ? `RM: ${emp.reportingManager}` : ""]
-                  .filter(Boolean)
-                  .join("  ·  ")}
-              />
-            </Field>
-          ) : null}
-        </div>
-      </div>
 
       {/* Expense Items — one editable card per item, progressive disclosure */}
       <div className={`${CARD_SHELL} overflow-hidden`}>
@@ -671,16 +531,5 @@ export default function RaiseExpense() {
         onCancel={() => setConfirmDelete(false)}
       />
     </div>
-  );
-}
-
-function Field({ label, children, className = "" }) {
-  return (
-    <label className={`block ${className}`}>
-      <span className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.1em] text-text-muted">
-        {label}
-      </span>
-      {children}
-    </label>
   );
 }

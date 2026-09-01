@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Building2,
   ChevronDown,
@@ -14,7 +14,7 @@ import {
 
 import EntitySelect from "./EntitySelect";
 import AddVendorModal from "./AddVendorModal";
-import { fetchPOs, fetchVendors } from "../../lib/expenseClaimsApi";
+import { fetchPOs, fetchVendors, lookupEmployee } from "../../lib/expenseClaimsApi";
 import { formatCurrency } from "../../utils/penaltyFormat";
 
 const FIELD =
@@ -80,6 +80,181 @@ function ChoiceCards({ label, required, options, value, onChange, cols = 2 }) {
   );
 }
 
+// Read-only summary of a fetched master record (employee / vendor).
+function ReadOnlyInfo({ title, rows }) {
+  const visible = rows.filter(([, v]) => v !== null && v !== undefined && String(v) !== "");
+  if (!visible.length) return null;
+  return (
+    <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-3 dark:border-emerald-500/20 dark:bg-emerald-500/10">
+      <div className="mb-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300">✓ {title}</div>
+      <dl className="grid grid-cols-1 gap-x-4 gap-y-1.5 sm:grid-cols-2 lg:grid-cols-3">
+        {visible.map(([k, v]) => (
+          <div key={k} className="min-w-0">
+            <dt className="text-[10px] font-semibold uppercase tracking-wide text-text-muted">{k}</dt>
+            <dd className="truncate text-sm text-text-primary" title={String(v)}>
+              {v}
+            </dd>
+          </div>
+        ))}
+      </dl>
+    </div>
+  );
+}
+
+// --- Employee Expense: ID + Fetch, read-only master details -----------------
+// Rendered with a stable key so switching party type remounts it clean.
+function EmployeeParty({ item, patch }) {
+  const [empInput, setEmpInput] = useState(item.empRefCode || "");
+  const [busy, setBusy] = useState(false);
+  const [info, setInfo] = useState(null);
+  const [error, setError] = useState("");
+
+  const fetchEmployee = async (codeArg) => {
+    const code = String(codeArg ?? empInput).trim();
+    if (!code) return;
+    setBusy(true);
+    setError("");
+    try {
+      const res = await lookupEmployee(code);
+      const e = res.data;
+      setInfo(e);
+      setEmpInput(e.employeeCode || code);
+      patch({ empRefCode: e.employeeCode || code, empRefName: e.employeeName || "" });
+    } catch (err) {
+      setInfo(null);
+      setError(
+        err?.status === 404
+          ? "Employee not found. Please check the Employee ID / HRMS ID."
+          : err?.message || "Employee lookup failed. Please try again."
+      );
+      patch({ empRefCode: "", empRefName: "" });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // Load master details once for an already-saved item.
+  useEffect(() => {
+    if (item.empRefCode) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      fetchEmployee(item.empRefCode);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return (
+    <div className="space-y-3">
+      <Field label="Employee ID / HRMS ID" required>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <input
+            className={`${FIELD} sm:max-w-xs ${
+              error
+                ? "border-rose-400 bg-rose-50 dark:bg-rose-500/10"
+                : item.empRefCode
+                ? "border-emerald-400"
+                : ""
+            }`}
+            placeholder="Enter Employee ID / HRMS ID"
+            value={empInput}
+            onChange={(e) => setEmpInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                fetchEmployee();
+              }
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => fetchEmployee()}
+            disabled={busy || !empInput.trim()}
+            className="inline-flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-xl border border-border-color bg-surface px-5 text-sm font-medium text-text-secondary transition hover:bg-surface-muted disabled:opacity-50"
+          >
+            {busy ? <Loader2 className="animate-spin" size={14} /> : null}
+            Fetch
+          </button>
+        </div>
+      </Field>
+      {error ? (
+        <p className="text-sm font-medium text-rose-600 dark:text-rose-400">{error}</p>
+      ) : info && info.employeeCode === item.empRefCode ? (
+        <ReadOnlyInfo
+          title="Employee Found"
+          rows={[
+            ["Employee Name", info.employeeName],
+            ["Employee ID / HRMS ID", info.employeeCode],
+            ["Designation", info.designation],
+            ["Circle", info.circle],
+            ["CMP", info.cmp],
+            ["Bank Account No.", info.bankAccount],
+            ["IFSC Code", info.ifsc],
+          ]}
+        />
+      ) : (
+        <p className="text-xs text-text-muted">
+          Enter the Employee ID / HRMS ID and click Fetch to load details from the employee master.
+        </p>
+      )}
+    </div>
+  );
+}
+
+// --- Vendor Expense: search / select from the vendor master -----------------
+function VendorParty({ item, patch, onAddVendor, registerCreated }) {
+  const [info, setInfo] = useState(null);
+
+  // Let the parent hand us the vendor it just created via the Add modal.
+  useEffect(() => {
+    registerCreated(setInfo);
+  }, [registerCreated]);
+
+  const shown =
+    info ||
+    (item.vendorId ? { id: item.vendorId, name: item.vendorName, vendorType: item.vendorType } : null);
+
+  return (
+    <div className="space-y-3">
+      <Field label="Vendor" required>
+        <EntitySelect
+          value={item.vendorId ? { id: item.vendorId, name: item.vendorName } : null}
+          onChange={(o) => {
+            setInfo(o || null);
+            patch({
+              vendorId: o?.id || null,
+              vendorName: o?.name || "",
+              vendorType: o?.vendorType || "",
+            });
+          }}
+          fetcher={async (q) => (await fetchVendors({ search: q })).data}
+          getLabel={(o) => o.name}
+          getSub={(o) => [o.vendorType, o.gstin].filter(Boolean).join(" · ")}
+          placeholder="Search / Select Vendor"
+          trailing={
+            <button
+              type="button"
+              onClick={onAddVendor}
+              className="inline-flex h-10 shrink-0 items-center gap-1 rounded-xl border border-indigo-200 bg-indigo-50 px-3 text-sm font-semibold text-indigo-700 transition hover:bg-indigo-100 dark:border-indigo-500/20 dark:bg-indigo-500/10 dark:text-indigo-300"
+            >
+              + Add
+            </button>
+          }
+        />
+      </Field>
+      {shown ? (
+        <ReadOnlyInfo
+          title="Vendor Selected"
+          rows={[
+            ["Vendor Name", shown.name],
+            ["Vendor Code", shown.id],
+            ["Vendor Type", shown.vendorType],
+            ["GSTIN", shown.gstin],
+          ]}
+        />
+      ) : null}
+    </div>
+  );
+}
+
 export default function ExpenseItemCard({
   item,
   index,
@@ -98,6 +273,12 @@ export default function ExpenseItemCard({
 }) {
   const [addVendorOpen, setAddVendorOpen] = useState(false);
   const patch = (p) => onChange(p);
+
+  // Bridge so the Add-Vendor modal can push its new record into <VendorParty>.
+  const vendorCreatedSetterRef = useRef(null);
+  const registerCreated = useCallback((fn) => {
+    vendorCreatedSetterRef.current = fn;
+  }, []);
 
   const claimTypeOpts = (meta?.claimTypes || []).map((t) => ({ ...t }));
   const billingOpts = (meta?.billingTypes || []).map((t) => ({ ...t }));
@@ -168,7 +349,39 @@ export default function ExpenseItemCard({
             </ul>
           ) : null}
 
-          {/* Step 1 — date + category */}
+          {/* Step 1 — expense for */}
+          <ChoiceCards
+            label="Expense For"
+            required
+            value={item.expenseFor}
+            onChange={(v) =>
+              patch(
+                v === "employee"
+                  ? { expenseFor: v, vendorId: null, vendorName: "", vendorType: "" }
+                  : { expenseFor: v, employeeType: "", empRefCode: "", empRefName: "" }
+              )
+            }
+            options={[
+              { value: "employee", label: "Employee Expense", icon: UserRound },
+              { value: "vendor", label: "Vendor Expense", icon: Building2 },
+            ]}
+          />
+
+          {/* Step 2 — party details (dynamic, remounts on switch) */}
+          {item.expenseFor === "employee" ? (
+            <EmployeeParty key="employee-party" item={item} patch={patch} />
+          ) : (
+            <VendorParty
+              key="vendor-party"
+              item={item}
+              patch={patch}
+              vendorTypes={meta?.vendorTypes || []}
+              onAddVendor={() => setAddVendorOpen(true)}
+              registerCreated={registerCreated}
+            />
+          )}
+
+          {/* Step 3 — date + category */}
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="Expense Date" required>
               <input
@@ -197,85 +410,7 @@ export default function ExpenseItemCard({
             </Field>
           </div>
 
-          {/* Step 2 — expense for */}
-          <ChoiceCards
-            label="Expense For"
-            required
-            value={item.expenseFor}
-            onChange={(v) =>
-              patch(
-                v === "employee"
-                  ? { expenseFor: v, vendorId: null, vendorName: "", vendorType: "" }
-                  : { expenseFor: v, employeeType: "", empRefCode: "", empRefName: "" }
-              )
-            }
-            options={[
-              { value: "employee", label: "Employee Expense", icon: UserRound },
-              { value: "vendor", label: "Vendor Expense", icon: Building2 },
-            ]}
-          />
-
-          {item.expenseFor === "employee" ? (
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Field label="Employee Type" required>
-                <select
-                  className={FIELD}
-                  value={item.employeeType}
-                  onChange={(e) => patch({ employeeType: e.target.value })}
-                >
-                  <option value="">Select Employee Type</option>
-                  {(meta?.employeeTypes || []).map((t) => (
-                    <option key={t} value={t}>
-                      {t}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-            </div>
-          ) : (
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Field label="Vendor Type" required>
-                <select
-                  className={FIELD}
-                  value={item.vendorType}
-                  onChange={(e) => patch({ vendorType: e.target.value, vendorId: null, vendorName: "" })}
-                >
-                  <option value="">Select Vendor Type</option>
-                  {(meta?.vendorTypes || []).map((t) => (
-                    <option key={t} value={t}>
-                      {t}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-              <Field label="Vendor" required>
-                <EntitySelect
-                  value={item.vendorId ? { id: item.vendorId, name: item.vendorName } : null}
-                  onChange={(o) =>
-                    patch({
-                      vendorId: o?.id || null,
-                      vendorName: o?.name || "",
-                    })
-                  }
-                  fetcher={async (q) => (await fetchVendors({ type: item.vendorType || undefined, search: q })).data}
-                  getLabel={(o) => o.name}
-                  getSub={(o) => [o.vendorType, o.gstin].filter(Boolean).join(" · ")}
-                  placeholder="Search / Select Vendor"
-                  trailing={
-                    <button
-                      type="button"
-                      onClick={() => setAddVendorOpen(true)}
-                      className="inline-flex h-10 shrink-0 items-center gap-1 rounded-xl border border-indigo-200 bg-indigo-50 px-3 text-sm font-semibold text-indigo-700 transition hover:bg-indigo-100 dark:border-indigo-500/20 dark:bg-indigo-500/10 dark:text-indigo-300"
-                    >
-                      + Add
-                    </button>
-                  }
-                />
-              </Field>
-            </div>
-          )}
-
-          {/* Step 3 — claim type */}
+          {/* Step 4 — claim type */}
           <ChoiceCards
             label="Claim Type"
             required
@@ -284,7 +419,7 @@ export default function ExpenseItemCard({
             options={claimTypeOpts.map((t) => ({ value: t.value, label: t.label, hint: t.hint }))}
           />
 
-          {/* Step 4 — billing type */}
+          {/* Step 5 — billing type */}
           <div className="space-y-3">
             <ChoiceCards
               label="Billing Type"
@@ -307,7 +442,7 @@ export default function ExpenseItemCard({
             ) : null}
           </div>
 
-          {/* Step 5 — expense category */}
+          {/* Step 6 — expense category */}
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="Expense Category" required>
               <select
@@ -492,13 +627,14 @@ export default function ExpenseItemCard({
         vendorTypes={meta?.vendorTypes || []}
         defaultType={item.vendorType || ""}
         onClose={() => setAddVendorOpen(false)}
-        onCreated={(v) =>
+        onCreated={(v) => {
           patch({
             vendorId: v.id,
             vendorName: v.name,
             vendorType: v.vendorType || item.vendorType,
-          })
-        }
+          });
+          if (vendorCreatedSetterRef.current) vendorCreatedSetterRef.current(v);
+        }}
       />
     </div>
   );
