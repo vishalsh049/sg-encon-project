@@ -108,7 +108,7 @@ export default function RaiseExpense() {
   const [itemErrorMap, setItemErrorMap] = useState({}); // { [localKey]: string[] }
 
   // Employee identity resolved from the Physical employee master by HRMS ID.
-  const [emp, setEmp] = useState(null); // { employeeName, department, designation, circle, mobile, email, ... }
+  const [emp, setEmp] = useState(null); // { employeeName, designation, circle, cmp, bankAccount, ifsc, ... }
   const [empLookup, setEmpLookup] = useState({ status: "idle", message: "" }); // idle | loading | found | notfound | error
 
   const [savingDraft, setSavingDraft] = useState(false);
@@ -571,9 +571,6 @@ export default function RaiseExpense() {
           <Field label="Employee Name">
             <input className={INPUT} value={emp?.employeeName || ""} disabled placeholder="—" />
           </Field>
-          <Field label="Department">
-            <input className={INPUT} value={emp?.department || "—"} disabled />
-          </Field>
           <Field label="Designation">
             <input className={INPUT} value={emp?.designation || "—"} disabled />
           </Field>
@@ -582,6 +579,12 @@ export default function RaiseExpense() {
           </Field>
           <Field label="CMP">
             <input className={INPUT} value={emp?.cmp || "—"} disabled />
+          </Field>
+          <Field label="Bank Account No.">
+            <input className={INPUT} value={emp?.bankAccount || "—"} disabled />
+          </Field>
+          <Field label="IFSC Code">
+            <input className={INPUT} value={emp?.ifsc || "—"} disabled />
           </Field>
           {emp?.mobile || emp?.email || emp?.reportingManager ? (
             <Field label="Contact / Reporting" className="sm:col-span-2 lg:col-span-1">
