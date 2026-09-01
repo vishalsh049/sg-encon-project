@@ -565,7 +565,6 @@ function validateItem(raw, index, categoryNames, { strict }) {
   if (strict) {
     if (expenseFor === "employee") {
       if (!employeeType) errors.push(`${label}: Employee Type is required.`);
-      if (!empRefCode) errors.push(`${label}: select an Employee.`);
     } else if (expenseFor === "vendor") {
       if (!vendorType) errors.push(`${label}: Vendor Type is required.`);
       if (!vendorId) errors.push(`${label}: select a Vendor.`);

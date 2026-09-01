@@ -14,7 +14,7 @@ import {
 
 import EntitySelect from "./EntitySelect";
 import AddVendorModal from "./AddVendorModal";
-import { fetchPOs, fetchVendors, searchEmployees } from "../../lib/expenseClaimsApi";
+import { fetchPOs, fetchVendors } from "../../lib/expenseClaimsApi";
 import { formatCurrency } from "../../utils/penaltyFormat";
 
 const FIELD =
@@ -231,21 +231,6 @@ export default function ExpenseItemCard({
                   ))}
                 </select>
               </Field>
-              <Field label="Employee" required>
-                <EntitySelect
-                  value={item.empRefCode ? { id: item.empRefCode, employeeName: item.empRefName, employeeCode: item.empRefCode } : null}
-                  onChange={(o) =>
-                    patch({
-                      empRefCode: o?.employeeCode || "",
-                      empRefName: o?.employeeName || "",
-                    })
-                  }
-                  fetcher={async (q) => (await searchEmployees(q)).data}
-                  getLabel={(o) => o.employeeName || o.employeeCode}
-                  getSub={(o) => [o.employeeCode, o.designation, o.circle].filter(Boolean).join(" · ")}
-                  placeholder="Search / Select Employee"
-                />
-              </Field>
             </div>
           ) : (
             <div className="grid gap-3 sm:grid-cols-2">
@@ -323,22 +308,31 @@ export default function ExpenseItemCard({
           </div>
 
           {/* Step 5 — expense category */}
-          <ChoiceCards
-            label="Expense Category"
-            required
-            cols={3}
-            value={item.workCategory}
-            onChange={(v) =>
-              patch({
-                workCategory: v,
-                // reset category-specific fields
-                domain: v === "O&M" ? item.domain : "",
-                otherDomain: "",
-                estimateWccAmount: v === "Project" ? item.estimateWccAmount : null,
-              })
-            }
-            options={workCats.map((c) => ({ value: c, label: c }))}
-          />
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="Expense Category" required>
+              <select
+                className={FIELD}
+                value={item.workCategory}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  patch({
+                    workCategory: v,
+                    // reset category-specific fields
+                    domain: v === "O&M" ? item.domain : "",
+                    otherDomain: "",
+                    estimateWccAmount: v === "Project" ? item.estimateWccAmount : null,
+                  });
+                }}
+              >
+                <option value="">Select Expense Category</option>
+                {workCats.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          </div>
 
           {needsPO ? (
             <div className="grid gap-3 sm:grid-cols-2">

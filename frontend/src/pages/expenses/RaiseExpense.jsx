@@ -291,7 +291,6 @@ export default function RaiseExpense() {
     if (!(Number(r.claimedAmount) > 0)) e.push("Claimed Amount must be greater than zero.");
     if (r.expenseFor === "employee") {
       if (!r.employeeType) e.push("Employee Type is required.");
-      if (!r.empRefCode) e.push("Select an Employee.");
     } else {
       if (!r.vendorType) e.push("Vendor Type is required.");
       if (!r.vendorId) e.push("Select a Vendor.");
