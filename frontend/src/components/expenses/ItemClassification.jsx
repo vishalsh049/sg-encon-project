@@ -9,11 +9,10 @@ export default function ItemClassification({ item, className = "" }) {
   if (!item) return null;
   // Nothing to show for legacy claims saved before the dynamic form.
   const hasDynamic =
-    item.claimType || item.billingType || item.workCategory || item.vendorName || item.empRefName || item.poNumber || item.category;
+    item.claimType || item.billingType || item.workCategory || item.vendorName || item.empRefName || item.poNumber;
   if (!hasDynamic) return null;
   const chips = [];
 
-  if (item.category && item.category !== "General") chips.push(`Category: ${item.category}`);
   if (item.expenseFor === "vendor") {
     chips.push(item.vendorName ? `Vendor: ${item.vendorName}` : "Vendor");
     if (item.vendorType) chips.push(item.vendorType);

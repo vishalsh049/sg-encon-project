@@ -381,7 +381,7 @@ export default function ExpenseItemCard({
             />
           )}
 
-          {/* Step 3 — date + category */}
+          {/* Step 3 — date */}
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="Expense Date" required>
               <input
@@ -390,23 +390,6 @@ export default function ExpenseItemCard({
                 value={item.expenseDate}
                 onChange={(e) => patch({ expenseDate: e.target.value })}
               />
-            </Field>
-            <Field label="Category">
-              <select
-                className={FIELD}
-                value={item.category || ""}
-                onChange={(e) => patch({ category: e.target.value })}
-              >
-                <option value="">Select Category</option>
-                {(meta?.categories || []).map((c) => {
-                  const name = typeof c === "string" ? c : c.name;
-                  return (
-                    <option key={name} value={name}>
-                      {name}
-                    </option>
-                  );
-                })}
-              </select>
             </Field>
           </div>
 

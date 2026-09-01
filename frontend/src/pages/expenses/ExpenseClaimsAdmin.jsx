@@ -8,7 +8,6 @@ import { admin, createVendor, fetchAdminConfig } from "../../lib/expenseClaimsAp
 
 const TABS = [
   { key: "matrix", label: "Approval Matrix" },
-  { key: "categories", label: "Categories" },
   { key: "vendors", label: "Vendors" },
   { key: "vendorTypes", label: "Vendor Types" },
   { key: "employeeTypes", label: "Employee Types" },
@@ -71,7 +70,7 @@ export default function ExpenseClaimsAdmin() {
             Expense Settings
           </h1>
           <p className="mt-0.5 text-sm text-text-secondary">
-            Configure the approval chain, approval matrix, expense categories, vendors, vendor / employee types and the PO master. No code change needed.
+            Configure the approval chain, approval matrix, vendors, vendor / employee types and the PO master. No code change needed.
           </p>
         </div>
         <button
@@ -103,7 +102,6 @@ export default function ExpenseClaimsAdmin() {
       </div>
 
       {tab === "matrix" ? <MatrixTab cfg={cfg} run={run} busy={busy} /> : null}
-      {tab === "categories" ? <CategoriesTab cfg={cfg} run={run} busy={busy} /> : null}
       {tab === "vendors" ? <VendorsTab cfg={cfg} run={run} busy={busy} /> : null}
       {tab === "vendorTypes" ? (
         <NameMasterTab rows={cfg.vendorTypes} run={run} busy={busy} label="Vendor Type" api={admin.addVendorType} apiUpd={admin.updateVendorType} apiDel={admin.deleteVendorType} />
@@ -159,62 +157,6 @@ function NameMasterTab({ rows = [], run, busy, label, api, apiUpd, apiDel }) {
         </td>
       </tr>
     </Table>
-  );
-}
-
-/* ---------------- Expense Categories ---------------- */
-function CategoriesTab({ cfg, run, busy }) {
-  const [name, setName] = useState("");
-  const rows = cfg.categories || [];
-  return (
-    <div className="space-y-2">
-      <p className="text-xs text-text-muted">
-        These appear as the <strong>Category</strong> dropdown on every expense item in Raise Expense.
-      </p>
-      <Table
-        head={
-          <>
-            <th className={TH}>Category</th>
-            <th className={TH}>Active</th>
-            <th className={TH}></th>
-          </>
-        }
-      >
-        {rows.map((c) => (
-          <tr key={c.id}>
-            <td className={TD}>{c.name}</td>
-            <td className={TD}>
-              <input
-                type="checkbox"
-                checked={c.isActive}
-                onChange={() => run(() => admin.updateCategory(c.id, { isActive: !c.isActive }), "Updated.")}
-              />
-            </td>
-            <td className={TD}>
-              <button type="button" disabled={busy} onClick={() => run(() => admin.deleteCategory(c.id), "Removed.")} className="text-text-muted hover:text-rose-600">
-                <Trash2 size={14} />
-              </button>
-            </td>
-          </tr>
-        ))}
-        <tr className="bg-surface-muted/40">
-          <td className={TD}>
-            <input className={INPUT} value={name} onChange={(e) => setName(e.target.value)} placeholder="New category (e.g. Travel, Fuel, Food)" />
-          </td>
-          <td className={TD} />
-          <td className={TD}>
-            <button
-              type="button"
-              disabled={busy || !name.trim()}
-              onClick={() => run(() => admin.addCategory({ name: name.trim() }), "Category added.").then(() => setName(""))}
-              className="inline-flex items-center gap-1 rounded-lg bg-indigo-500 px-2.5 py-1 text-xs font-semibold text-white disabled:opacity-50"
-            >
-              <Plus size={12} /> Add
-            </button>
-          </td>
-        </tr>
-      </Table>
-    </div>
   );
 }
 

@@ -28,7 +28,6 @@ function blankRow() {
     localKey: emptyRowKey(),
     id: null,
     expenseDate: "",
-    category: "",
     expenseFor: "employee",
     employeeType: "",
     empRefCode: "",
@@ -62,7 +61,6 @@ function rowsFromBundle(bundle) {
     localKey: emptyRowKey(),
     id: item.id,
     expenseDate: item.expenseDate ? String(item.expenseDate).slice(0, 10) : "",
-    category: item.category || "",
     expenseFor: item.expenseFor || "employee",
     employeeType: item.employeeType || "",
     empRefCode: item.empRefCode || "",
@@ -160,7 +158,6 @@ export default function RaiseExpense() {
     return {
       id: r.id || undefined,
       expenseDate: r.expenseDate || null,
-      category: r.category || null,
       expenseFor: r.expenseFor || "employee",
       employeeType: r.employeeType || null,
       empRefCode: r.empRefCode || null,
