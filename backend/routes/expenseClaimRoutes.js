@@ -568,7 +568,6 @@ function validateItem(raw, index, categoryNames, { strict }) {
     } else if (expenseFor === "vendor") {
       if (!vendorId) errors.push(`${label}: select a Vendor.`);
     }
-    if (!category) errors.push(`${label}: Category is required.`);
     if (!claimType) errors.push(`${label}: Claim Type is required.`);
     if (!billingType) errors.push(`${label}: Billing Type is required.`);
     if (!workCategory) errors.push(`${label}: Expense Category is required.`);

@@ -391,7 +391,7 @@ export default function ExpenseItemCard({
                 onChange={(e) => patch({ expenseDate: e.target.value })}
               />
             </Field>
-            <Field label="Category" required>
+            <Field label="Category">
               <select
                 className={FIELD}
                 value={item.category || ""}

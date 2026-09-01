@@ -233,7 +233,6 @@ export default function RaiseExpense() {
   const validateItemRow = (r) => {
     const e = [];
     if (!r.expenseDate) e.push("Expense Date is required.");
-    if (!r.category?.trim()) e.push("Category is required.");
     if (!(Number(r.claimedAmount) > 0)) e.push("Claimed Amount must be greater than zero.");
     if (r.expenseFor === "employee") {
       if (!r.empRefCode) e.push("Enter a valid Employee ID / HRMS ID and click Fetch.");
