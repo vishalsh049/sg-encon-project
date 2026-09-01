@@ -50,6 +50,8 @@ function blankRow() {
     description: "",
     claimedAmount: "",
     billNumber: "",
+    bankAccount: "",
+    ifsc: "",
     estimateWccAmount: null,
     attachments: [],
   };
@@ -83,6 +85,8 @@ function rowsFromBundle(bundle) {
     description: item.description || "",
     claimedAmount: item.claimedAmount != null ? String(item.claimedAmount) : "",
     billNumber: item.billNumber || "",
+    bankAccount: item.bankAccount || "",
+    ifsc: item.ifsc || "",
     estimateWccAmount: item.estimateWccAmount != null ? item.estimateWccAmount : null,
     attachments: byItem.get(item.id) || [],
   }));
@@ -229,6 +233,8 @@ export default function RaiseExpense() {
       description: r.description || null,
       claimedAmount: Number(r.claimedAmount) || 0,
       billNumber: r.billNumber || null,
+      bankAccount: r.bankAccount?.trim() || null,
+      ifsc: r.ifsc?.trim().toUpperCase() || null,
       estimateWccAmount:
         r.estimateWccAmount === "" || r.estimateWccAmount == null ? null : Number(r.estimateWccAmount),
     };
@@ -305,6 +311,9 @@ export default function RaiseExpense() {
     }
     if (!r.siteRoute?.trim()) e.push("Site / Route Details is required.");
     if (!r.description?.trim()) e.push("Expense Description is required.");
+    if (!r.bankAccount?.trim()) e.push("Bank Account Number is required.");
+    if (!r.ifsc?.trim()) e.push("IFSC Code is required.");
+    else if (!/^[A-Za-z]{4}0[A-Za-z0-9]{6}$/.test(r.ifsc.trim())) e.push("IFSC Code looks invalid (11 chars, e.g. HDFC0001234).");
     if (r.claimType === "reimbursement" && !r.attachments.length) {
       e.push("Attach a bill/invoice — required for a Reimbursement expense.");
     }

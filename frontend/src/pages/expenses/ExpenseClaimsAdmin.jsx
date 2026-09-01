@@ -162,7 +162,7 @@ function NameMasterTab({ rows = [], run, busy, label, api, apiUpd, apiDel }) {
 
 /* ---------------- Vendors ---------------- */
 function VendorsTab({ cfg, run, busy }) {
-  const empty = { name: "", vendorType: "", gstin: "", phone: "" };
+  const empty = { name: "", vendorType: "", gstin: "", phone: "", bankAccount: "", ifsc: "" };
   const [form, setForm] = useState(empty);
   const types = (cfg.vendorTypes || []).filter((t) => t.isActive).map((t) => t.name);
   return (
@@ -172,7 +172,8 @@ function VendorsTab({ cfg, run, busy }) {
           <th className={TH}>Vendor</th>
           <th className={TH}>Type</th>
           <th className={TH}>GSTIN</th>
-          <th className={TH}>Phone</th>
+          <th className={TH}>Bank A/C</th>
+          <th className={TH}>IFSC</th>
           <th className={TH}>Active</th>
           <th className={TH}></th>
         </>
@@ -183,7 +184,8 @@ function VendorsTab({ cfg, run, busy }) {
           <td className={TD}>{v.name}</td>
           <td className={TD}>{v.vendorType || "—"}</td>
           <td className={TD}>{v.gstin || "—"}</td>
-          <td className={TD}>{v.phone || "—"}</td>
+          <td className={TD}>{v.bankAccount || "—"}</td>
+          <td className={TD}>{v.ifsc || "—"}</td>
           <td className={TD}>
             <input type="checkbox" checked={v.isActive} onChange={() => run(() => admin.updateVendor(v.id, { isActive: !v.isActive }), "Updated.")} />
           </td>
@@ -203,13 +205,14 @@ function VendorsTab({ cfg, run, busy }) {
           </select>
         </td>
         <td className={TD}><input className={INPUT} value={form.gstin} onChange={(e) => setForm({ ...form, gstin: e.target.value.toUpperCase() })} placeholder="GSTIN" /></td>
-        <td className={TD}><input className={INPUT} value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="Phone" /></td>
+        <td className={TD}><input className={INPUT} value={form.bankAccount} onChange={(e) => setForm({ ...form, bankAccount: e.target.value.replace(/[^0-9]/g, "") })} placeholder="Account no." /></td>
+        <td className={TD}><input className={INPUT} value={form.ifsc} onChange={(e) => setForm({ ...form, ifsc: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 11) })} placeholder="IFSC" /></td>
         <td className={TD} />
         <td className={TD}>
           <button
             type="button"
             disabled={busy || !form.name.trim()}
-            onClick={() => run(() => createVendor({ name: form.name.trim(), vendorType: form.vendorType || null, gstin: form.gstin.trim() || null, phone: form.phone.trim() || null }), "Vendor added.").then(() => setForm(empty))}
+            onClick={() => run(() => createVendor({ name: form.name.trim(), vendorType: form.vendorType || null, gstin: form.gstin.trim() || null, phone: form.phone.trim() || null, bankAccount: form.bankAccount.trim() || null, ifsc: form.ifsc.trim() || null }), "Vendor added.").then(() => setForm(empty))}
             className="inline-flex items-center gap-1 rounded-lg bg-indigo-500 px-2.5 py-1 text-xs font-semibold text-white disabled:opacity-50"
           >
             <Plus size={12} /> Add

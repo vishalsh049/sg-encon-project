@@ -344,6 +344,10 @@ async function ensureTablesOnce() {
   await ensureColumn("expense_claim_items", "other_domain", "VARCHAR(120) NULL");
   await ensureColumn("expense_claim_items", "site_route", "VARCHAR(500) NULL");
   await ensureColumn("expense_claim_items", "estimate_wcc_amount", "DECIMAL(14,2) NULL");
+  await ensureColumn("expense_claim_items", "bank_account", "VARCHAR(40) NULL");
+  await ensureColumn("expense_claim_items", "ifsc", "VARCHAR(20) NULL");
+  await ensureColumn("expense_vendors", "bank_account", "VARCHAR(40) NULL");
+  await ensureColumn("expense_vendors", "ifsc", "VARCHAR(20) NULL");
 
   await seedMasters();
 }
@@ -540,6 +544,8 @@ function validateItem(raw, index, categoryNames, { strict }) {
   const otherDomain = s(raw?.otherDomain ?? raw?.other_domain);
   const siteRoute = s(raw?.siteRoute ?? raw?.site_route);
   const description = s(raw?.description);
+  const bankAccount = s(raw?.bankAccount ?? raw?.bank_account);
+  const ifsc = s(raw?.ifsc).toUpperCase();
   const wccRaw = raw?.estimateWccAmount ?? raw?.estimate_wcc_amount;
   const estimateWcc =
     wccRaw === null || wccRaw === undefined || wccRaw === "" ? null : toMoney(wccRaw);
@@ -568,6 +574,8 @@ function validateItem(raw, index, categoryNames, { strict }) {
     if (!workCategory) errors.push(`${label}: Expense Category is required.`);
     if (!siteRoute) errors.push(`${label}: Site / Route Details is required.`);
     if (!description) errors.push(`${label}: Expense Description is required.`);
+    if (!bankAccount) errors.push(`${label}: Bank Account Number is required.`);
+    if (!ifsc) errors.push(`${label}: IFSC Code is required.`);
 
     if (billingType === "billable" && !clientName) {
       errors.push(`${label}: Client / Account is required for a Billable expense.`);
@@ -581,6 +589,9 @@ function validateItem(raw, index, categoryNames, { strict }) {
         errors.push(`${label}: Other Domain Name is required when Domain is "Others".`);
       }
     }
+  }
+  if (ifsc && !/^[A-Za-z]{4}0[A-Za-z0-9]{6}$/.test(ifsc)) {
+    errors.push(`${label}: IFSC Code looks invalid (expected 11 characters, e.g. HDFC0001234).`);
   }
   if (claimType && !CLAIM_TYPE_VALUES.includes(claimType)) errors.push(`${label}: invalid Claim Type.`);
   if (billingType && !BILLING_TYPE_VALUES.includes(billingType)) errors.push(`${label}: invalid Billing Type.`);
@@ -616,6 +627,8 @@ function validateItem(raw, index, categoryNames, { strict }) {
       otherDomain: domain === "Others" ? otherDomain || null : null,
       siteRoute: siteRoute || null,
       estimateWccAmount: estimateWcc,
+      bankAccount: bankAccount || null,
+      ifsc: ifsc || null,
     },
   };
 }
@@ -675,6 +688,8 @@ function mapItem(row) {
     otherDomain: row.other_domain || null,
     siteRoute: row.site_route || null,
     estimateWccAmount: row.estimate_wcc_amount === null || row.estimate_wcc_amount === undefined ? null : Number(row.estimate_wcc_amount),
+    bankAccount: row.bank_account || null,
+    ifsc: row.ifsc || null,
     l1ApprovedAmount: row.l1_approved_amount === null ? null : Number(row.l1_approved_amount),
     l1Decision: row.l1_decision,
     l1Reason: row.l1_reason,
@@ -969,7 +984,7 @@ router.get("/employees", requirePagePermission(PAGE, "view"), async (req, res) =
     }
     const [rows] = await pool.query(
       `SELECT employee_code, employee_name, function_name, job_role, scrum_job_role,
-              circle, cmp, employment_status
+              circle, cmp, employment_status, bank_account_no, ifsc_code
        FROM physical WHERE ${where}
        ORDER BY employee_name ASC LIMIT 30`,
       params
@@ -984,6 +999,8 @@ router.get("/employees", requirePagePermission(PAGE, "view"), async (req, res) =
         circle: r.circle || "",
         cmp: r.cmp || "",
         status: r.employment_status || "",
+        bankAccount: r.bank_account_no || "",
+        ifsc: r.ifsc_code || "",
       })),
     });
   } catch (error) {
@@ -999,6 +1016,8 @@ function mapVendor(r) {
     gstin: r.gstin || null,
     phone: r.phone || null,
     email: r.email || null,
+    bankAccount: r.bank_account || null,
+    ifsc: r.ifsc || null,
     isActive: Boolean(r.is_active),
   };
 }
@@ -1031,13 +1050,15 @@ router.post("/vendors", requirePagePermission(PAGE, "edit"), async (req, res) =>
     const vendorType = String(req.body?.vendorType || "").trim() || null;
     if (!name) throw httpError(400, "Vendor name is required.");
     const [ins] = await pool.query(
-      `INSERT INTO expense_vendors (name, vendor_type, gstin, phone, email, created_by, created_by_name)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO expense_vendors (name, vendor_type, gstin, phone, email, bank_account, ifsc, created_by, created_by_name)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         name, vendorType,
         String(req.body?.gstin || "").trim() || null,
         String(req.body?.phone || "").trim() || null,
         String(req.body?.email || "").trim() || null,
+        String(req.body?.bankAccount || "").trim() || null,
+        String(req.body?.ifsc || "").trim().toUpperCase() || null,
         req.authUser.id, actorName(req.authUser),
       ]
     );
@@ -1204,12 +1225,14 @@ async function persistItems(conn, claimId, items) {
     "expense_for", "employee_type", "emp_ref_code", "emp_ref_name",
     "vendor_id", "vendor_name", "vendor_type", "claim_type", "billing_type", "client_name",
     "work_category", "po_number", "domain", "other_domain", "site_route", "estimate_wcc_amount",
+    "bank_account", "ifsc",
   ];
   const dynVals = (item) => [
     item.expenseDate, item.category, item.subCategory, item.description, item.claimedAmount, item.billNumber,
     item.expenseFor, item.employeeType, item.empRefCode, item.empRefName,
     item.vendorId, item.vendorName, item.vendorType, item.claimType, item.billingType, item.clientName,
     item.workCategory, item.poNumber, item.domain, item.otherDomain, item.siteRoute, item.estimateWccAmount,
+    item.bankAccount, item.ifsc,
   ];
 
   let srNo = 1;
@@ -1265,7 +1288,7 @@ async function lookupPhysicalEmployee(employeeCode) {
   const [rows] = await pool.query(
     `SELECT employee_code, employee_name, function_name, job_role, scrum_job_role,
             circle, cmp, cluster, mobile_number, company_email_id, date_of_joining,
-            reporting_manager, employment_status
+            reporting_manager, employment_status, bank_account_no, ifsc_code
      FROM physical
      WHERE TRIM(LOWER(employee_code)) = TRIM(LOWER(?)) AND COALESCE(is_deleted, 0) = 0
      LIMIT 1`,
@@ -1286,6 +1309,8 @@ async function lookupPhysicalEmployee(employeeCode) {
     dateOfJoining: r.date_of_joining ? String(r.date_of_joining).slice(0, 10) : "",
     reportingManager: r.reporting_manager || "",
     employmentStatus: r.employment_status || "",
+    bankAccount: r.bank_account_no || "",
+    ifsc: r.ifsc_code || "",
   };
 }
 
@@ -2593,6 +2618,8 @@ router.get("/finance-export", requirePagePermission(FINANCE_PAGE, "download"), a
         Domain: i.domain === "Others" ? `Others: ${i.other_domain || ""}` : i.domain || "",
         "Site / Route": i.site_route || "",
         "Estimate WCC": i.estimate_wcc_amount === null || i.estimate_wcc_amount === undefined ? "" : Number(i.estimate_wcc_amount),
+        "Bank A/C": i.bank_account || "",
+        IFSC: i.ifsc || "",
         Description: i.description || "",
         "Bill Number": i.bill_number || "",
         "Claimed Amount": Number(i.claimed_amount || 0),
@@ -2968,7 +2995,7 @@ simpleMasterRoutes("employee-types", "expense_employee_types", "Employee Type");
 router.put("/admin/vendors/:id", requirePagePermission(ADMIN_PAGE, "edit"), async (req, res) => {
   try {
     await ensureTables();
-    const map = { name: "name", vendorType: "vendor_type", gstin: "gstin", phone: "phone", email: "email" };
+    const map = { name: "name", vendorType: "vendor_type", gstin: "gstin", phone: "phone", email: "email", bankAccount: "bank_account", ifsc: "ifsc" };
     const sets = [];
     const params = [];
     Object.entries(map).forEach(([k, col]) => {

@@ -19,6 +19,8 @@ export default function AddVendorModal({ open, vendorTypes = [], defaultType = "
     gstin: "",
     phone: "",
     email: "",
+    bankAccount: "",
+    ifsc: "",
   });
   const [saving, setSaving] = useState(false);
 
@@ -37,6 +39,8 @@ export default function AddVendorModal({ open, vendorTypes = [], defaultType = "
         gstin: form.gstin.trim() || null,
         phone: form.phone.trim() || null,
         email: form.email.trim() || null,
+        bankAccount: form.bankAccount.trim() || null,
+        ifsc: form.ifsc.trim().toUpperCase() || null,
       });
       toast.success("Vendor added.");
       onCreated?.(res.data);
@@ -105,6 +109,25 @@ export default function AddVendorModal({ open, vendorTypes = [], defaultType = "
                   className={INPUT}
                   value={form.phone}
                   onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
+                  placeholder="Optional"
+                />
+              </label>
+              <label className="block">
+                <span className={LABEL}>Bank Account Number</span>
+                <input
+                  className={INPUT}
+                  value={form.bankAccount}
+                  onChange={(e) => setForm((f) => ({ ...f, bankAccount: e.target.value.replace(/[^0-9]/g, "") }))}
+                  placeholder="Optional"
+                  inputMode="numeric"
+                />
+              </label>
+              <label className="block">
+                <span className={LABEL}>IFSC Code</span>
+                <input
+                  className={INPUT}
+                  value={form.ifsc}
+                  onChange={(e) => setForm((f) => ({ ...f, ifsc: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 11) }))}
                   placeholder="Optional"
                 />
               </label>
