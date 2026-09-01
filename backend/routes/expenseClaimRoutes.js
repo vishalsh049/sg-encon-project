@@ -382,6 +382,18 @@ async function seedMasters() {
     }
   }
 
+  // The three operational categories always exist and stay active — the
+  // PO / Domain / WCC rules key off these exact names. Admins may add or
+  // remove any other category.
+  await pool.query(
+    `INSERT IGNORE INTO expense_claim_categories (name, display_order, requires_bill) VALUES ?`,
+    [WORK_CATEGORIES.map((name, i) => [name, i, 0])]
+  );
+  await pool.query(
+    `UPDATE expense_claim_categories SET is_active = 1 WHERE name IN (?)`,
+    [WORK_CATEGORIES]
+  );
+
   const [vtCount] = await pool.query(`SELECT COUNT(*) AS c FROM expense_vendor_types`);
   if (vtCount[0].c === 0) {
     await pool.query(
@@ -589,7 +601,6 @@ function validateItem(raw, index, categoryNames, { strict }) {
   }
   if (claimType && !CLAIM_TYPE_VALUES.includes(claimType)) errors.push(`${label}: invalid Claim Type.`);
   if (billingType && !BILLING_TYPE_VALUES.includes(billingType)) errors.push(`${label}: invalid Billing Type.`);
-  if (workCategory && !WORK_CATEGORIES.includes(workCategory)) errors.push(`${label}: invalid Expense Category.`);
   if (estimateWcc !== null && Number.isNaN(estimateWcc)) errors.push(`${label}: Estimate WCC Amount must be a number.`);
 
   return {
@@ -927,7 +938,7 @@ router.get("/meta", requirePagePermission(PAGE, "view"), async (req, res) => {
         expenseFor: EXPENSE_FOR,
         claimTypes: CLAIM_TYPES,
         billingTypes: BILLING_TYPES,
-        workCategories: WORK_CATEGORIES,
+        workCategories: categories.map((c) => c.name),
         domains: EXPENSE_CLAIM_DOMAINS,
         vendorTypes: vtRows[0].map((r) => r.name),
         employeeTypes: etRows[0].map((r) => r.name),
