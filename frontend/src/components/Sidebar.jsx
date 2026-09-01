@@ -152,7 +152,7 @@ function Sidebar({ closeSidebar, collapsed, onExpandRequest }) {
   },
   {
     key: "expense-claims-admin",
-    label: "Expense Master Data",
+    label: "Expense Settings",
     path: "/dashboard/expense-claims/admin",
     icon: ReceiptText,
     accessPage: "Expense Claims Admin",

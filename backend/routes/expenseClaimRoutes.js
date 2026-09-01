@@ -1493,7 +1493,7 @@ router.post("/claims/:id/submit", requirePagePermission(PAGE, "edit"), async (re
       if (!approvers || !approvers.l1_user_id) {
         throw httpError(
           409,
-          "Approvers have not been set up yet. Ask an administrator to open Expense Master Data → Default Approval Chain and choose the L1 / L2 / Final approvers."
+          "Approvers have not been set up yet. Ask an administrator to open Expense Settings → Default Approval Chain and choose the L1 / L2 / Final approvers."
         );
       }
       if (approvers.l1_user_id === claim.employee_user_id) {

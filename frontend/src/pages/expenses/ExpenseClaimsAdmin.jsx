@@ -67,7 +67,7 @@ export default function ExpenseClaimsAdmin() {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-lg font-semibold tracking-tight text-text-primary sm:text-xl">
-            Expense Claims — Master Data
+            Expense Settings
           </h1>
           <p className="mt-0.5 text-sm text-text-secondary">
             Configure the approval chain, approval matrix, vendors, vendor / employee types and the PO master. No code change needed.
