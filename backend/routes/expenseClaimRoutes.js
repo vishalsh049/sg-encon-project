@@ -3175,7 +3175,44 @@ router.put("/admin/approval-chain", requirePagePermission(ADMIN_PAGE, "edit"), a
         [l1, l2, fin]
       );
     }
-    res.json({ success: true });
+
+    // Re-point claims that are still waiting for their very first (L1) approval —
+    // a claim froze its approver ids at submit time, so without this a chain
+    // change would never reach claims that were submitted earlier.
+    const [pendingL1] = await pool.query(
+      `SELECT id, claim_number, total_claimed, current_approver_user_id
+       FROM expense_claims WHERE current_status = 'pending_l1' AND employee_user_id <> ?`,
+      [l1]
+    );
+    const toReroute = pendingL1.filter((c) => c.current_approver_user_id !== l1);
+    if (pendingL1.length) {
+      await pool.query(
+        `UPDATE expense_claims
+         SET l1_approver_user_id = ?, l2_approver_user_id = ?, final_approver_user_id = ?,
+             current_approver_user_id = ?
+         WHERE current_status = 'pending_l1' AND employee_user_id <> ?`,
+        [l1, l2, fin, l1, l1]
+      );
+      for (const c of toReroute) {
+        await notify(pool, {
+          userId: l1,
+          claimId: c.id,
+          claimNumber: c.claim_number,
+          type: "approval_pending",
+          message: `Claim ${c.claim_number} (${formatINR(Number(c.total_claimed || 0))}) is now routed to you for L1 approval.`,
+        });
+        await writeAudit(pool, {
+          claimId: c.id,
+          actorUserId: req.authUser.id,
+          actorName: actorName(req.authUser),
+          stage: "l1",
+          action: "APPROVERS_REROUTED",
+          meta: { l1UserId: l1, l2UserId: l2, finalUserId: fin },
+        });
+      }
+    }
+
+    res.json({ success: true, data: { rerouted: toReroute.length } });
   } catch (error) {
     fail(res, error, "Failed to save the approval chain.");
   }

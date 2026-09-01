@@ -83,7 +83,7 @@ export default function ExpenseClaimsAdmin() {
         </button>
       </div>
 
-      <ApprovalChainCard users={cfg.users} run={run} busy={busy} />
+      <ApprovalChainCard users={cfg.users} reloadConfig={load} busy={busy} />
 
       <div className="flex flex-wrap gap-1 rounded-xl border border-border-color bg-surface p-1">
         {TABS.map((t) => (
@@ -369,10 +369,11 @@ function POsTab({ cfg, run, busy }) {
 }
 
 /* ---------------- Default Approval Chain (simple settings) ---------------- */
-function ApprovalChainCard({ users, run, busy }) {
+function ApprovalChainCard({ users = [], reloadConfig, busy }) {
   const [chain, setChain] = useState(null); // { l1UserId, l2UserId, finalUserId, l1Name, ... , configured }
   const [form, setForm] = useState({ l1UserId: "", l2UserId: "", finalUserId: "" });
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -396,22 +397,43 @@ function ApprovalChainCard({ users, run, busy }) {
     load();
   }, [load]);
 
-  const save = () =>
-    run(
-      () =>
-        admin.saveApprovalChain({
-          l1UserId: form.l1UserId ? Number(form.l1UserId) : null,
-          l2UserId: form.l2UserId ? Number(form.l2UserId) : null,
-          finalUserId: form.finalUserId ? Number(form.finalUserId) : null,
-        }),
-      "Approval chain saved."
-    ).then(load);
+  const labelOf = (id) => {
+    if (!id) return null;
+    const u = users.find((x) => String(x.id) === String(id));
+    if (!u) return `User #${id}`;
+    return u.designation ? `${u.name} · ${u.designation}` : u.name;
+  };
 
-  const dirty =
-    chain &&
-    (String(chain.l1UserId || "") !== form.l1UserId ||
-      String(chain.l2UserId || "") !== form.l2UserId ||
-      String(chain.finalUserId || "") !== form.finalUserId);
+  const save = async () => {
+    if (!form.l1UserId) return toast.error("Pick an L1 approver — it is required.");
+    if (form.l2UserId && form.l2UserId === form.l1UserId) return toast.error("L2 approver must be different from L1.");
+    if (form.finalUserId && (form.finalUserId === form.l1UserId || form.finalUserId === form.l2UserId)) {
+      return toast.error("Final approver must be different from L1 and L2.");
+    }
+    setSaving(true);
+    try {
+      const res = await admin.saveApprovalChain({
+        l1UserId: Number(form.l1UserId),
+        l2UserId: form.l2UserId ? Number(form.l2UserId) : null,
+        finalUserId: form.finalUserId ? Number(form.finalUserId) : null,
+      });
+      const n = res?.data?.rerouted || 0;
+      toast.success(
+        n
+          ? `Approval chain saved. ${n} pending claim${n === 1 ? "" : "s"} re-routed to the new L1 approver.`
+          : "Approval chain saved."
+      );
+      await load();
+      reloadConfig?.();
+    } catch (error) {
+      toast.error(error.message || "Failed to save the approval chain.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const selected = [labelOf(form.l1UserId), labelOf(form.l2UserId), labelOf(form.finalUserId)].filter(Boolean);
+  const disabled = busy || saving;
 
   return (
     <div className={`${CARD_SHELL} p-4`}>
@@ -427,18 +449,41 @@ function ApprovalChainCard({ users, run, busy }) {
         </div>
       ) : (
         <>
+          {users.length === 0 ? (
+            <p className="mt-3 text-xs font-medium text-rose-600 dark:text-rose-400">
+              No active users are available to choose as approvers.
+            </p>
+          ) : null}
+
           <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
             <ChainSelect label="L1 approver (required)" value={form.l1UserId} onChange={(v) => setForm((f) => ({ ...f, l1UserId: v }))} users={users} />
             <ChainSelect label="L2 approver (optional)" value={form.l2UserId} onChange={(v) => setForm((f) => ({ ...f, l2UserId: v }))} users={users} />
             <ChainSelect label="Final approver (optional)" value={form.finalUserId} onChange={(v) => setForm((f) => ({ ...f, finalUserId: v }))} users={users} />
           </div>
 
+          <div className="mt-3 rounded-lg border border-border-color bg-surface-muted/40 px-3 py-2 text-xs">
+            {selected.length ? (
+              <span className="text-text-secondary">
+                Selected:{" "}
+                {selected.map((p, i) => (
+                  <span key={i}>
+                    {i > 0 ? " → " : ""}
+                    <strong className="text-text-primary">{p}</strong>
+                  </span>
+                ))}{" "}
+                → Finance
+              </span>
+            ) : (
+              <span className="text-text-muted">No approver selected yet — pick at least an L1 approver.</span>
+            )}
+          </div>
+
           <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
             {chain?.configured ? (
-              <span className="text-xs text-text-secondary">
-                Current: <strong>{chain.l1Name || "—"}</strong>
-                {chain.l2Name ? <> → <strong>{chain.l2Name}</strong></> : null}
-                {chain.finalName ? <> → <strong>{chain.finalName}</strong></> : null} → Finance
+              <span className="text-xs text-emerald-600 dark:text-emerald-400">
+                ✓ Active chain: <strong>{chain.l1Name || `User #${chain.l1UserId}`}</strong>
+                {chain.l2UserId ? <> → <strong>{chain.l2Name || `User #${chain.l2UserId}`}</strong></> : null}
+                {chain.finalUserId ? <> → <strong>{chain.finalName || `User #${chain.finalUserId}`}</strong></> : null} → Finance
               </span>
             ) : (
               <span className="text-xs font-medium text-rose-600 dark:text-rose-400">
@@ -448,9 +493,10 @@ function ApprovalChainCard({ users, run, busy }) {
             <button
               type="button"
               onClick={save}
-              disabled={busy || !form.l1UserId || !dirty}
+              disabled={disabled || !form.l1UserId}
               className="inline-flex h-9 items-center gap-1.5 rounded-full bg-gradient-to-r from-indigo-500 to-violet-500 px-5 text-sm font-semibold text-white disabled:opacity-50"
             >
+              {saving ? <Loader2 className="animate-spin" size={14} /> : null}
               Save Approval Chain
             </button>
           </div>
@@ -467,7 +513,7 @@ function ChainSelect({ label, value, onChange, users }) {
       <select className={INPUT} value={value} onChange={(e) => onChange(e.target.value)}>
         <option value="">— none —</option>
         {users.map((u) => (
-          <option key={u.id} value={u.id}>
+          <option key={u.id} value={String(u.id)}>
             {u.name}
             {u.designation ? ` · ${u.designation}` : ""}
           </option>
