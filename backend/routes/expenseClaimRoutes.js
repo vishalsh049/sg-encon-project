@@ -574,8 +574,6 @@ function validateItem(raw, index, categoryNames, { strict }) {
     if (!workCategory) errors.push(`${label}: Expense Category is required.`);
     if (!siteRoute) errors.push(`${label}: Site / Route Details is required.`);
     if (!description) errors.push(`${label}: Expense Description is required.`);
-    if (!bankAccount) errors.push(`${label}: Bank Account Number is required.`);
-    if (!ifsc) errors.push(`${label}: IFSC Code is required.`);
 
     if (billingType === "billable" && !clientName) {
       errors.push(`${label}: Client / Account is required for a Billable expense.`);
@@ -589,9 +587,6 @@ function validateItem(raw, index, categoryNames, { strict }) {
         errors.push(`${label}: Other Domain Name is required when Domain is "Others".`);
       }
     }
-  }
-  if (ifsc && !/^[A-Za-z]{4}0[A-Za-z0-9]{6}$/.test(ifsc)) {
-    errors.push(`${label}: IFSC Code looks invalid (expected 11 characters, e.g. HDFC0001234).`);
   }
   if (claimType && !CLAIM_TYPE_VALUES.includes(claimType)) errors.push(`${label}: invalid Claim Type.`);
   if (billingType && !BILLING_TYPE_VALUES.includes(billingType)) errors.push(`${label}: invalid Billing Type.`);
@@ -2618,8 +2613,6 @@ router.get("/finance-export", requirePagePermission(FINANCE_PAGE, "download"), a
         Domain: i.domain === "Others" ? `Others: ${i.other_domain || ""}` : i.domain || "",
         "Site / Route": i.site_route || "",
         "Estimate WCC": i.estimate_wcc_amount === null || i.estimate_wcc_amount === undefined ? "" : Number(i.estimate_wcc_amount),
-        "Bank A/C": i.bank_account || "",
-        IFSC: i.ifsc || "",
         Description: i.description || "",
         "Bill Number": i.bill_number || "",
         "Claimed Amount": Number(i.claimed_amount || 0),

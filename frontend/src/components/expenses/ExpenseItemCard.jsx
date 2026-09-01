@@ -221,8 +221,6 @@ export default function ExpenseItemCard({
                     patch({
                       empRefCode: o?.employeeCode || "",
                       empRefName: o?.employeeName || "",
-                      bankAccount: o?.bankAccount || item.bankAccount || "",
-                      ifsc: o?.ifsc || item.ifsc || "",
                     })
                   }
                   fetcher={async (q) => (await searchEmployees(q)).data}
@@ -255,8 +253,6 @@ export default function ExpenseItemCard({
                     patch({
                       vendorId: o?.id || null,
                       vendorName: o?.name || "",
-                      bankAccount: o?.bankAccount || item.bankAccount || "",
-                      ifsc: o?.ifsc || item.ifsc || "",
                     })
                   }
                   fetcher={async (q) => (await fetchVendors({ type: item.vendorType || undefined, search: q })).data}
@@ -419,27 +415,6 @@ export default function ExpenseItemCard({
                 placeholder="0.00"
               />
             </Field>
-            <Field
-              label="Bank Account Number"
-              required
-              hint={item.expenseFor === "vendor" ? "Vendor's account" : "Payee employee's account — auto-filled from the master when available"}
-            >
-              <input
-                className={FIELD}
-                value={item.bankAccount}
-                onChange={(e) => patch({ bankAccount: e.target.value.replace(/[^0-9]/g, "") })}
-                placeholder="Account number"
-                inputMode="numeric"
-              />
-            </Field>
-            <Field label="IFSC Code" required>
-              <input
-                className={`${FIELD} uppercase`}
-                value={item.ifsc}
-                onChange={(e) => patch({ ifsc: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 11) })}
-                placeholder="e.g. HDFC0001234"
-              />
-            </Field>
             <Field label="Bill Number">
               <input
                 className={FIELD}
@@ -511,8 +486,6 @@ export default function ExpenseItemCard({
             vendorId: v.id,
             vendorName: v.name,
             vendorType: v.vendorType || item.vendorType,
-            bankAccount: v.bankAccount || item.bankAccount || "",
-            ifsc: v.ifsc || item.ifsc || "",
           })
         }
       />

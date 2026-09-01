@@ -27,8 +27,6 @@ export default function ItemClassification({ item, className = "" }) {
   if (item.domain) chips.push(`Domain: ${item.domain === "Others" ? item.otherDomain || "Others" : item.domain}`);
   if (item.siteRoute) chips.push(`Site/Route: ${item.siteRoute}`);
   if (item.estimateWccAmount != null) chips.push(`Est. WCC: ${formatCurrency(item.estimateWccAmount)}`);
-  if (item.bankAccount) chips.push(`A/C: ${item.bankAccount}`);
-  if (item.ifsc) chips.push(`IFSC: ${item.ifsc}`);
 
   if (!chips.length) return null;
   return (
