@@ -102,7 +102,7 @@ export default function ExpenseApprovals() {
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search claim number, employee, department, purpose…"
+          placeholder="Search claim number, employee, designation…"
           className="w-full border-0 bg-transparent text-sm text-text-primary outline-none placeholder:text-text-muted"
         />
       </div>
@@ -122,12 +122,14 @@ export default function ExpenseApprovals() {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="min-w-[900px] w-full text-left text-sm">
+            <table className="min-w-[1040px] w-full text-left text-sm">
               <thead>
                 <tr className="bg-surface-muted text-[11px] font-semibold uppercase tracking-[0.08em] text-text-muted">
                   <th className="px-4 py-2.5">Claim No</th>
                   <th className="px-4 py-2.5">Employee</th>
-                  <th className="px-4 py-2.5">Department</th>
+                  <th className="px-4 py-2.5">Employee ID</th>
+                  <th className="px-4 py-2.5">Designation</th>
+                  <th className="px-4 py-2.5">Circle</th>
                   <th className="px-4 py-2.5">CMP</th>
                   <th className="px-4 py-2.5">Items</th>
                   <th className="px-4 py-2.5 text-right">Total Claimed</th>
@@ -139,7 +141,7 @@ export default function ExpenseApprovals() {
                 {loading && rows.length === 0
                   ? Array.from({ length: 5 }).map((_, i) => (
                       <tr key={i}>
-                        <td colSpan={8} className="px-4 py-3">
+                        <td colSpan={10} className="px-4 py-3">
                           <div className="h-4 w-full animate-pulse rounded bg-surface-muted" />
                         </td>
                       </tr>
@@ -160,12 +162,15 @@ export default function ExpenseApprovals() {
                         </td>
                         <td className="whitespace-nowrap px-4 py-2.5 text-text-secondary">
                           {row.employeeName || "—"}
-                          <span className="ml-1 text-xs text-text-muted">
-                            {row.employeeCode ? `(${row.employeeCode})` : ""}
-                          </span>
                         </td>
                         <td className="whitespace-nowrap px-4 py-2.5 text-text-secondary">
-                          {row.department || "—"}
+                          {row.employeeCode || "—"}
+                        </td>
+                        <td className="whitespace-nowrap px-4 py-2.5 text-text-secondary">
+                          {row.designation || "—"}
+                        </td>
+                        <td className="whitespace-nowrap px-4 py-2.5 text-text-secondary">
+                          {row.circle || "—"}
                         </td>
                         <td className="whitespace-nowrap px-4 py-2.5 text-text-secondary">
                           {row.cmp || "—"}
