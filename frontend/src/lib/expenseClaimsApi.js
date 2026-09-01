@@ -203,6 +203,7 @@ export const admin = {
   saveApprovalChain: (b) => adminWrite("approval-chain", "PUT", b),
   addCategory: (b) => adminWrite("categories", "POST", b),
   updateCategory: (id, b) => adminWrite(`categories/${id}`, "PUT", b),
+  deleteCategory: (id) => adminWrite(`categories/${id}`, "DELETE"),
   addSubCategory: (b) => adminWrite("sub-categories", "POST", b),
   deleteSubCategory: (id) => adminWrite(`sub-categories/${id}`, "DELETE"),
   addCostCentre: (b) => adminWrite("cost-centres", "POST", b),

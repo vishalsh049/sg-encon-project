@@ -32,6 +32,7 @@ function blankRow() {
     localKey: emptyRowKey(),
     id: null,
     expenseDate: "",
+    category: "",
     expenseFor: "employee",
     employeeType: "",
     empRefCode: "",
@@ -65,6 +66,7 @@ function rowsFromBundle(bundle) {
     localKey: emptyRowKey(),
     id: item.id,
     expenseDate: item.expenseDate ? String(item.expenseDate).slice(0, 10) : "",
+    category: item.category || "",
     expenseFor: item.expenseFor || "employee",
     employeeType: item.employeeType || "",
     empRefCode: item.empRefCode || "",
@@ -211,6 +213,7 @@ export default function RaiseExpense() {
     return {
       id: r.id || undefined,
       expenseDate: r.expenseDate || null,
+      category: r.category || null,
       expenseFor: r.expenseFor || "employee",
       employeeType: r.employeeType || null,
       empRefCode: r.empRefCode || null,
@@ -284,6 +287,7 @@ export default function RaiseExpense() {
   const validateItemRow = (r) => {
     const e = [];
     if (!r.expenseDate) e.push("Expense Date is required.");
+    if (!r.category?.trim()) e.push("Category is required.");
     if (!(Number(r.claimedAmount) > 0)) e.push("Claimed Amount must be greater than zero.");
     if (r.expenseFor === "employee") {
       if (!r.employeeType) e.push("Employee Type is required.");

@@ -538,6 +538,7 @@ function validateItem(raw, index, categoryNames, { strict }) {
   const claimType = s(raw?.claimType ?? raw?.claim_type).toLowerCase();
   const billingType = s(raw?.billingType ?? raw?.billing_type).toLowerCase();
   const clientName = s(raw?.clientName ?? raw?.client_name);
+  const category = s(raw?.category);
   const workCategory = s(raw?.workCategory ?? raw?.work_category);
   const poNumber = s(raw?.poNumber ?? raw?.po_number);
   const domain = s(raw?.domain);
@@ -569,6 +570,7 @@ function validateItem(raw, index, categoryNames, { strict }) {
       if (!vendorType) errors.push(`${label}: Vendor Type is required.`);
       if (!vendorId) errors.push(`${label}: select a Vendor.`);
     }
+    if (!category) errors.push(`${label}: Category is required.`);
     if (!claimType) errors.push(`${label}: Claim Type is required.`);
     if (!billingType) errors.push(`${label}: Billing Type is required.`);
     if (!workCategory) errors.push(`${label}: Expense Category is required.`);
@@ -599,8 +601,8 @@ function validateItem(raw, index, categoryNames, { strict }) {
       id: Number(raw?.id) || null,
       srNo: Number(raw?.srNo || raw?.sr_no || index + 1),
       expenseDate: expenseDate || null,
-      // legacy columns kept null by the new form
-      category: workCategory || "General",
+      // admin-managed expense head (dropdown on each item); falls back for legacy rows
+      category: category || workCategory || "General",
       subCategory: null,
       description: description || null,
       claimedAmount: Number.isNaN(amount) ? 0 : amount,
@@ -2869,6 +2871,17 @@ router.put("/admin/categories/:id", requirePagePermission(ADMIN_PAGE, "edit"), a
     res.json({ success: true });
   } catch (error) {
     fail(res, error, "Failed to update the category.");
+  }
+});
+
+router.delete("/admin/categories/:id", requirePagePermission(ADMIN_PAGE, "edit"), async (req, res) => {
+  try {
+    await ensureTables();
+    // Soft delete — existing claim items keep their stored category label.
+    await pool.query(`UPDATE expense_claim_categories SET is_active = 0 WHERE id = ?`, [req.params.id]);
+    res.json({ success: true });
+  } catch (error) {
+    fail(res, error, "Failed to remove the category.");
   }
 });
 
