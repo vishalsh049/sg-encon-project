@@ -1563,10 +1563,10 @@ router.post("/claims/:id/submit", requirePagePermission(PAGE, "edit"), async (re
 
     await withTransaction(async (conn) => {
       const approvers = await resolveApprovers(conn, "ALL", total);
-      if (!approvers || !approvers.l1_user_id) {
+      if (!approvers || !approvers.l1_user_id || !approvers.l2_user_id) {
         throw httpError(
           409,
-          "Approvers have not been set up yet. Ask an administrator to open Expense Settings → Default Approval Chain and choose the L1 / L2 / Final approvers."
+          "Approvers have not been set up yet. Ask an administrator to open Expense Settings → Default Approval Chain and choose the L1 and L2 approvers (Final is optional)."
         );
       }
       if (approvers.l1_user_id === claim.employee_user_id) {
@@ -3182,7 +3182,7 @@ router.get("/admin/approval-chain", requirePagePermission(ADMIN_PAGE, "view"), a
         l1Name: rule?.l1_name ?? null,
         l2Name: rule?.l2_name ?? null,
         finalName: rule?.final_name ?? null,
-        configured: Boolean(rule?.l1_user_id),
+        configured: Boolean(rule?.l1_user_id && rule?.l2_user_id),
       },
     });
   } catch (error) {
@@ -3198,7 +3198,8 @@ router.put("/admin/approval-chain", requirePagePermission(ADMIN_PAGE, "edit"), a
     const l2 = num(req.body?.l2UserId);
     const fin = num(req.body?.finalUserId);
     if (!l1) throw httpError(400, "Pick an L1 approver — it is required.");
-    if (l2 && l2 === l1) throw httpError(400, "L2 approver must be different from L1.");
+    if (!l2) throw httpError(400, "Pick an L2 approver — it is required.");
+    if (l2 === l1) throw httpError(400, "L2 approver must be different from L1.");
     if (fin && (fin === l1 || fin === l2)) throw httpError(400, "Final approver must be different from L1 and L2.");
 
     const rule = await getCatchAllRule();
@@ -3270,21 +3271,22 @@ function parseMatrixBody(body) {
     throw httpError(400, "Max amount must be blank or greater than the min amount.");
   }
   const num = (v) => (v === null || v === undefined || v === "" ? null : Number(v));
-  return {
-    category,
-    minAmount,
-    maxAmount,
-    l1: num(body?.l1UserId),
-    l2: num(body?.l2UserId),
-    final: num(body?.finalUserId),
-  };
+  const l1 = num(body?.l1UserId);
+  const l2 = num(body?.l2UserId);
+  const final = num(body?.finalUserId);
+  if (!l1) throw httpError(400, "An L1 approver is required.");
+  if (!l2) throw httpError(400, "An L2 approver is required.");
+  if (l2 === l1) throw httpError(400, "L2 approver must be different from L1.");
+  if (final && (final === l1 || final === l2)) {
+    throw httpError(400, "Final approver must be different from L1 and L2.");
+  }
+  return { category, minAmount, maxAmount, l1, l2, final };
 }
 
 router.post("/admin/matrix", requirePagePermission(ADMIN_PAGE, "edit"), async (req, res) => {
   try {
     await ensureTables();
     const m = parseMatrixBody(req.body);
-    if (!m.l1) throw httpError(400, "An L1 approver is required.");
     await pool.query(
       `INSERT INTO expense_approval_matrix (category, min_amount, max_amount, l1_user_id, l2_user_id, final_user_id)
        VALUES (?, ?, ?, ?, ?, ?)`,

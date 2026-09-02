@@ -406,7 +406,8 @@ function ApprovalChainCard({ users = [], reloadConfig, busy }) {
 
   const save = async () => {
     if (!form.l1UserId) return toast.error("Pick an L1 approver — it is required.");
-    if (form.l2UserId && form.l2UserId === form.l1UserId) return toast.error("L2 approver must be different from L1.");
+    if (!form.l2UserId) return toast.error("Pick an L2 approver — it is required.");
+    if (form.l2UserId === form.l1UserId) return toast.error("L2 approver must be different from L1.");
     if (form.finalUserId && (form.finalUserId === form.l1UserId || form.finalUserId === form.l2UserId)) {
       return toast.error("Final approver must be different from L1 and L2.");
     }
@@ -414,7 +415,7 @@ function ApprovalChainCard({ users = [], reloadConfig, busy }) {
     try {
       const res = await admin.saveApprovalChain({
         l1UserId: Number(form.l1UserId),
-        l2UserId: form.l2UserId ? Number(form.l2UserId) : null,
+        l2UserId: Number(form.l2UserId),
         finalUserId: form.finalUserId ? Number(form.finalUserId) : null,
       });
       const n = res?.data?.rerouted || 0;
@@ -439,8 +440,8 @@ function ApprovalChainCard({ users = [], reloadConfig, busy }) {
     <div className={`${CARD_SHELL} p-4`}>
       <h2 className="text-sm font-semibold text-text-primary">Default Approval Chain</h2>
       <p className="mt-0.5 text-xs text-text-muted">
-        Every submitted claim is routed to these people, in order. L2 and Final are optional — leave them
-        blank to skip that level. (Category / amount-specific overrides can be added in the Approval Matrix tab below.)
+        Every submitted claim is routed to these people, in order. L1 and L2 are required; Final is optional —
+        leave it blank to skip that level. (Category / amount-specific overrides can be added in the Approval Matrix tab below.)
       </p>
 
       {loading ? (
@@ -457,7 +458,7 @@ function ApprovalChainCard({ users = [], reloadConfig, busy }) {
 
           <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
             <ChainSelect label="L1 approver (required)" value={form.l1UserId} onChange={(v) => setForm((f) => ({ ...f, l1UserId: v }))} users={users} />
-            <ChainSelect label="L2 approver (optional)" value={form.l2UserId} onChange={(v) => setForm((f) => ({ ...f, l2UserId: v }))} users={users} />
+            <ChainSelect label="L2 approver (required)" value={form.l2UserId} onChange={(v) => setForm((f) => ({ ...f, l2UserId: v }))} users={users} />
             <ChainSelect label="Final approver (optional)" value={form.finalUserId} onChange={(v) => setForm((f) => ({ ...f, finalUserId: v }))} users={users} />
           </div>
 
@@ -474,7 +475,7 @@ function ApprovalChainCard({ users = [], reloadConfig, busy }) {
                 → Finance
               </span>
             ) : (
-              <span className="text-text-muted">No approver selected yet — pick at least an L1 approver.</span>
+              <span className="text-text-muted">No approver selected yet — pick an L1 and an L2 approver.</span>
             )}
           </div>
 
@@ -487,13 +488,13 @@ function ApprovalChainCard({ users = [], reloadConfig, busy }) {
               </span>
             ) : (
               <span className="text-xs font-medium text-rose-600 dark:text-rose-400">
-                ⚠ No approvers set — employees cannot submit claims until you save an L1 approver.
+                ⚠ Chain incomplete — employees cannot submit claims until you save an L1 and an L2 approver.
               </span>
             )}
             <button
               type="button"
               onClick={save}
-              disabled={disabled || !form.l1UserId}
+              disabled={disabled || !form.l1UserId || !form.l2UserId}
               className="inline-flex h-9 items-center gap-1.5 rounded-full bg-gradient-to-r from-indigo-500 to-violet-500 px-5 text-sm font-semibold text-white disabled:opacity-50"
             >
               {saving ? <Loader2 className="animate-spin" size={14} /> : null}
@@ -548,7 +549,7 @@ function MatrixTab({ cfg, run, busy }) {
     <div className="space-y-2">
       <p className="text-xs text-text-muted">
         The first matching rule wins — a specific category beats <code>ALL</code>, then the highest matching
-        minimum amount. Every submitted claim must match at least one rule with an L1 approver.
+        minimum amount. Every submitted claim must match at least one rule with an L1 and an L2 approver (Final optional).
       </p>
       <Table
         head={
@@ -604,13 +605,13 @@ function MatrixTab({ cfg, run, busy }) {
           <td className={TD}>
             <button
               type="button"
-              disabled={busy || !form.l1UserId}
+              disabled={busy || !form.l1UserId || !form.l2UserId}
               onClick={() => run(() => admin.addMatrix({
                 category: form.category || "ALL",
                 minAmount: Number(form.minAmount) || 0,
                 maxAmount: form.maxAmount === "" ? null : Number(form.maxAmount),
                 l1UserId: Number(form.l1UserId),
-                l2UserId: form.l2UserId ? Number(form.l2UserId) : null,
+                l2UserId: Number(form.l2UserId),
                 finalUserId: form.finalUserId ? Number(form.finalUserId) : null,
               }), "Rule added.").then(() => setForm(empty))}
               className="inline-flex items-center gap-1 rounded-lg bg-indigo-500 px-2.5 py-1 text-xs font-semibold text-white disabled:opacity-50"
