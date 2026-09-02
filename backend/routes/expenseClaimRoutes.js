@@ -838,8 +838,22 @@ async function fetchClaimBundle(claimId) {
     [claimId]
   );
 
+  // Fall back to the first employee item's reference when the claim itself has
+  // no employee-master snapshot (dynamic Raise Expense form keeps identity per
+  // item, and older submitted claims never had it filled).
+  const mappedClaim = mapClaim(claim);
+  if (!mappedClaim.employeeCode || !mappedClaim.employeeName) {
+    const firstEmp = items.find(
+      (i) => (i.expense_for || "employee") === "employee" && i.emp_ref_code
+    );
+    if (firstEmp) {
+      mappedClaim.employeeCode = mappedClaim.employeeCode || firstEmp.emp_ref_code || null;
+      mappedClaim.employeeName = mappedClaim.employeeName || firstEmp.emp_ref_name || null;
+    }
+  }
+
   return {
-    claim: mapClaim(claim),
+    claim: mappedClaim,
     items: items.map(mapItem),
     attachments: attachments.map(mapAttachment),
     audit: audit.map(mapAudit),
@@ -1515,16 +1529,31 @@ router.post("/claims/:id/submit", requirePagePermission(PAGE, "edit"), async (re
     });
 
     // Each Employee-Expense item must point at a real employee master record.
-    // Also snapshot a claim-level CMP from the first employee item (Finance filters on it).
+    // Also snapshot claim-level identity (CMP, Employee ID, name, department,
+    // designation, circle) from the first employee item, unless the claim already
+    // carries its own. Finance filters on CMP; the approvals queue shows the
+    // Employee ID.
     let claimCmp = claim.cost_centre || null;
+    let claimEmpCode = claim.employee_code || null;
+    let claimEmpName = claim.employee_name || null;
+    let claimDept = claim.department || null;
+    let claimDesig = claim.designation || null;
+    let claimCircle = claim.circle || null;
     for (let index = 0; index < items.length; index += 1) {
       const row = items[index];
       if ((row.expense_for || "employee") !== "employee" || !row.emp_ref_code) continue;
       const emp = await lookupPhysicalEmployee(row.emp_ref_code);
       if (!emp) {
         errors.push(`Item ${index + 1}: Employee ID "${row.emp_ref_code}" was not found in the employee master.`);
-      } else if (!claimCmp) {
-        claimCmp = emp.cmp || null;
+        continue;
+      }
+      if (!claimCmp) claimCmp = emp.cmp || null;
+      if (!claimEmpCode) {
+        claimEmpCode = emp.employeeCode || row.emp_ref_code || null;
+        claimEmpName = claimEmpName || emp.employeeName || row.emp_ref_name || null;
+        claimDept = claimDept || emp.department || null;
+        claimDesig = claimDesig || emp.designation || null;
+        claimCircle = claimCircle || emp.circle || null;
       }
     }
     if (errors.length) throw httpError(400, "This claim cannot be submitted yet.", { rowErrors: errors });
@@ -1572,12 +1601,14 @@ router.post("/claims/:id/submit", requirePagePermission(PAGE, "edit"), async (re
       await conn.query(
         `UPDATE expense_claims SET
            claim_number = ?, total_claimed = ?, cost_centre = ?,
+           employee_code = ?, employee_name = ?, department = ?, designation = ?, circle = ?,
            current_status = 'pending_l1', current_stage = 'l1',
            l1_approver_user_id = ?, l2_approver_user_id = ?, final_approver_user_id = ?,
            current_approver_user_id = ?, submitted_at = NOW()
          WHERE id = ?`,
         [
           claimNumber, total, claimCmp,
+          claimEmpCode, claimEmpName, claimDept, claimDesig, claimCircle,
           approvers.l1_user_id, approvers.l2_user_id || null, approvers.final_user_id || null,
           approvers.l1_user_id, claim.id,
         ]
@@ -1834,7 +1865,15 @@ router.get("/approvals", requirePagePermission(APPROVALS_PAGE, "view"), async (r
     );
     const [rows] = await pool.query(
       `SELECT c.*,
-              (SELECT COUNT(*) FROM expense_claim_items i WHERE i.claim_id = c.id) AS item_count
+              (SELECT COUNT(*) FROM expense_claim_items i WHERE i.claim_id = c.id) AS item_count,
+              (SELECT i.emp_ref_code FROM expense_claim_items i
+                WHERE i.claim_id = c.id AND (i.expense_for = 'employee' OR i.expense_for IS NULL)
+                  AND i.emp_ref_code IS NOT NULL AND i.emp_ref_code <> ''
+                ORDER BY i.sr_no ASC, i.id ASC LIMIT 1) AS first_emp_code,
+              (SELECT i.emp_ref_name FROM expense_claim_items i
+                WHERE i.claim_id = c.id AND (i.expense_for = 'employee' OR i.expense_for IS NULL)
+                  AND i.emp_ref_code IS NOT NULL AND i.emp_ref_code <> ''
+                ORDER BY i.sr_no ASC, i.id ASC LIMIT 1) AS first_emp_name
        FROM expense_claims c
        WHERE ${whereClause}
        ORDER BY ${orderBy}
@@ -1846,6 +1885,8 @@ router.get("/approvals", requirePagePermission(APPROVALS_PAGE, "view"), async (r
       success: true,
       data: rows.map((row) => ({
         ...mapClaim(row),
+        employeeCode: row.employee_code || row.first_emp_code || null,
+        employeeName: row.employee_name || row.first_emp_name || null,
         itemCount: Number(row.item_count || 0),
         myStage:
           row.current_status === "pending_l1"

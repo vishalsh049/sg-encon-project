@@ -27,18 +27,9 @@ function formatTime(value) {
   });
 }
 
-const statusStyles = {
-  All: "bg-surface-muted text-text-secondary",
-  Active: "bg-emerald-500 text-white shadow-emerald-950/20",
-  Inactive: "bg-surface text-text-secondary",
-};
-
 export default function Scrum() {
   const [data, setData] = useState([]);
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("All");
-  const [stateFilter, setStateFilter] = useState("");
-  const [vendorFilter, setVendorFilter] = useState("");
   const [file, setFile] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [downloading, setDownloading] = useState(false);
@@ -46,66 +37,32 @@ export default function Scrum() {
   const [showModal, setShowModal] = useState(false);
   const [uploadDate, setUploadDate] = useState("");
   const [uploadedBy, setUploadedBy] = useState("");
-  const [latestUpload, setLatestUpload] = useState(null);
-  const [vendorOpen, setVendorOpen] = useState(false);
-  const [selected, setSelected] = useState([]); 
+  const [selected, setSelected] = useState([]);
   const [uploads, setUploads] = useState([]);
-  const [roleSummary, setRoleSummary] = useState([]);
   const [progress, setProgress] = useState(0);
-  const [processing, setProcessing] = useState(false);
 
   const refreshScrumData = async () => {
-    const [uploadsRes, dataRes, latestRes, roleRes] = await Promise.all([
+    const [uploadsRes, dataRes] = await Promise.all([
     authFetch(buildApiUrl("/api/manpower/scrum/uploads")),
     authFetch(buildApiUrl("/api/manpower/scrum")),
-    authFetch(buildApiUrl("/api/manpower/scrum/latest-upload")),
-    authFetch(buildApiUrl("/api/manpower/scrum/job-role-summary"))
    ]);
 
-    const [uploadsData, scrumData, latestData, roleData] = await Promise.all([
+    const [uploadsData, scrumData] = await Promise.all([
     uploadsRes.json(),
     dataRes.json(),
-    latestRes.json(),
-    roleRes.json()
    ]);
-   setRoleSummary(Array.isArray(roleData) ? roleData : []);
 
     setUploads(Array.isArray(uploadsData) ? uploadsData : []);
     setData(Array.isArray(scrumData) ? scrumData : []);
-    setLatestUpload(latestData || null);
   };
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     refreshScrumData().catch(() => {
       setUploads([]);
       setData([]);
-      setLatestUpload(null);
     });
   }, []);
-
-  const filteredData = data.filter((item) => {
-    const matchSearch =
-      item.resource_name?.toLowerCase().includes(search.toLowerCase()) ||
-      item.job_role?.toLowerCase().includes(search.toLowerCase());
-
-    const matchStatus =
-      statusFilter === "All" || item.status === statusFilter;
-
-    const matchState = !stateFilter || item.state === stateFilter;
-    const matchVendor = !vendorFilter || item.vendor === vendorFilter;
-
-    return matchSearch && matchStatus && matchState && matchVendor;
-  });
-
-  const uniqueStates = useMemo(
-    () => [...new Set(data.map((item) => item.state).filter(Boolean))],
-    [data]
-  );
-
-  const uniqueVendors = useMemo(
-    () => [...new Set(data.map((item) => item.vendor).filter(Boolean))],
-    [data]
-  );
 
   const stats = useMemo(() => {
   const activeCount = data.filter(
@@ -149,10 +106,6 @@ const handleUpload = async () => {
   );
 
   setProgress(percent);
-
-  if (percent === 100) {
-    setProcessing(true); // ✅ start processing state
-  }
 },
       }
     );
