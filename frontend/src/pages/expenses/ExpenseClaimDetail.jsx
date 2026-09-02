@@ -104,6 +104,8 @@ export default function ExpenseClaimDetail() {
             <Detail label="Designation" value={claim.designation} />
             <Detail label="Circle" value={claim.circle} />
             <Detail label="CMP" value={claim.cmp} />
+            <Detail label="Bank Account" value={claim.bankAccount} />
+            <Detail label="IFSC" value={claim.ifsc} />
           </dl>
         </div>
 

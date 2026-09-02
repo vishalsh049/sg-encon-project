@@ -19,6 +19,11 @@ export default function ItemClassification({ item, className = "" }) {
   } else {
     chips.push(item.empRefName ? `Emp: ${item.empRefName}${item.empRefCode ? ` (${item.empRefCode})` : ""}` : "Employee");
     if (item.employeeType) chips.push(item.employeeType);
+    if (item.empRefDesignation) chips.push(item.empRefDesignation);
+    if (item.empRefCircle) chips.push(`Circle: ${item.empRefCircle}`);
+    if (item.empRefCmp) chips.push(`CMP: ${item.empRefCmp}`);
+    if (item.bankAccount) chips.push(`A/C: ${item.bankAccount}`);
+    if (item.ifsc) chips.push(`IFSC: ${item.ifsc}`);
   }
   if (item.claimType) chips.push(item.claimType === "advance" ? "Advance" : "Reimbursement");
   if (item.billingType) chips.push(item.billingType === "billable" ? `Billable${item.clientName ? ` · ${item.clientName}` : ""}` : "Non-Billable");

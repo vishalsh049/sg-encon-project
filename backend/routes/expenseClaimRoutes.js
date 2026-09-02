@@ -21,7 +21,7 @@ const router = express.Router();
 
 const { db } = require("../config/db");
 const { authMiddleware } = require("../middleware/circleAccess");
-const { requirePagePermission } = require("../middleware/pagePermission");
+const { requirePagePermission, hasPagePermission } = require("../middleware/pagePermission");
 const {
   DEFAULT_CATEGORIES,
   DEFAULT_SUB_CATEGORIES,
@@ -332,6 +332,9 @@ async function ensureTablesOnce() {
   await ensureColumn("expense_claim_items", "employee_type", "VARCHAR(120) NULL");
   await ensureColumn("expense_claim_items", "emp_ref_code", "VARCHAR(60) NULL");
   await ensureColumn("expense_claim_items", "emp_ref_name", "VARCHAR(160) NULL");
+  await ensureColumn("expense_claim_items", "emp_ref_designation", "VARCHAR(120) NULL");
+  await ensureColumn("expense_claim_items", "emp_ref_circle", "VARCHAR(120) NULL");
+  await ensureColumn("expense_claim_items", "emp_ref_cmp", "VARCHAR(120) NULL");
   await ensureColumn("expense_claim_items", "vendor_id", "INT NULL");
   await ensureColumn("expense_claim_items", "vendor_name", "VARCHAR(200) NULL");
   await ensureColumn("expense_claim_items", "vendor_type", "VARCHAR(120) NULL");
@@ -348,6 +351,10 @@ async function ensureTablesOnce() {
   await ensureColumn("expense_claim_items", "ifsc", "VARCHAR(20) NULL");
   await ensureColumn("expense_vendors", "bank_account", "VARCHAR(40) NULL");
   await ensureColumn("expense_vendors", "ifsc", "VARCHAR(20) NULL");
+
+  // Finance records the exact amount actually paid (<= final approved). Additive
+  // and null-safe for existing finance rows.
+  await ensureColumn("expense_claim_finance", "payment_amount", "DECIMAL(14,2) NULL");
 
   await seedMasters();
 }
@@ -544,6 +551,9 @@ function validateItem(raw, index, categoryNames, { strict }) {
   const employeeType = s(raw?.employeeType ?? raw?.employee_type);
   const empRefCode = s(raw?.empRefCode ?? raw?.emp_ref_code);
   const empRefName = s(raw?.empRefName ?? raw?.emp_ref_name);
+  const empRefDesignation = s(raw?.empRefDesignation ?? raw?.emp_ref_designation);
+  const empRefCircle = s(raw?.empRefCircle ?? raw?.emp_ref_circle);
+  const empRefCmp = s(raw?.empRefCmp ?? raw?.emp_ref_cmp);
   const vendorId = Number(raw?.vendorId ?? raw?.vendor_id) || null;
   const vendorName = s(raw?.vendorName ?? raw?.vendor_name);
   const vendorType = s(raw?.vendorType ?? raw?.vendor_type);
@@ -620,6 +630,9 @@ function validateItem(raw, index, categoryNames, { strict }) {
       employeeType: employeeType || null,
       empRefCode: empRefCode || null,
       empRefName: empRefName || null,
+      empRefDesignation: empRefDesignation || null,
+      empRefCircle: empRefCircle || null,
+      empRefCmp: empRefCmp || null,
       vendorId,
       vendorName: vendorName || null,
       vendorType: vendorType || null,
@@ -681,6 +694,9 @@ function mapItem(row) {
     employeeType: row.employee_type || null,
     empRefCode: row.emp_ref_code || null,
     empRefName: row.emp_ref_name || null,
+    empRefDesignation: row.emp_ref_designation || null,
+    empRefCircle: row.emp_ref_circle || null,
+    empRefCmp: row.emp_ref_cmp || null,
     vendorId: row.vendor_id || null,
     vendorName: row.vendor_name || null,
     vendorType: row.vendor_type || null,
@@ -838,18 +854,21 @@ async function fetchClaimBundle(claimId) {
     [claimId]
   );
 
-  // Fall back to the first employee item's reference when the claim itself has
-  // no employee-master snapshot (dynamic Raise Expense form keeps identity per
-  // item, and older submitted claims never had it filled).
+  // The Employee Details card reflects the expense's employee — the first
+  // employee item's frozen master snapshot — not whoever raised the claim.
+  // Bank account / IFSC live only on the item; surface the first one here too.
   const mappedClaim = mapClaim(claim);
-  if (!mappedClaim.employeeCode || !mappedClaim.employeeName) {
-    const firstEmp = items.find(
-      (i) => (i.expense_for || "employee") === "employee" && i.emp_ref_code
-    );
-    if (firstEmp) {
-      mappedClaim.employeeCode = mappedClaim.employeeCode || firstEmp.emp_ref_code || null;
-      mappedClaim.employeeName = mappedClaim.employeeName || firstEmp.emp_ref_name || null;
-    }
+  const firstEmp = items.find(
+    (i) => (i.expense_for || "employee") === "employee" && i.emp_ref_code
+  );
+  if (firstEmp) {
+    mappedClaim.employeeCode = firstEmp.emp_ref_code || mappedClaim.employeeCode || null;
+    mappedClaim.employeeName = firstEmp.emp_ref_name || mappedClaim.employeeName || null;
+    mappedClaim.designation = firstEmp.emp_ref_designation || mappedClaim.designation || null;
+    mappedClaim.circle = firstEmp.emp_ref_circle || mappedClaim.circle || null;
+    mappedClaim.cmp = firstEmp.emp_ref_cmp || mappedClaim.cmp || null;
+    mappedClaim.bankAccount = firstEmp.bank_account || null;
+    mappedClaim.ifsc = firstEmp.ifsc || null;
   }
 
   return {
@@ -867,6 +886,10 @@ function mapFinance(row) {
     financeStatus: row.finance_status,
     paymentReference: row.payment_reference,
     paymentDate: row.payment_date,
+    paymentAmount:
+      row.payment_amount === null || row.payment_amount === undefined
+        ? null
+        : Number(row.payment_amount),
     financeRemarks: row.finance_remarks,
     processedBy: row.processed_by,
     processedByUserId: row.processed_by_user_id,
@@ -875,17 +898,46 @@ function mapFinance(row) {
   };
 }
 
-// Can `authUser` see this claim? Phase 1: the owner, an admin, or a user who is
-// on the approval chain / assigned as current approver.
+// Can `authUser` see this claim? The owner, an admin, or a user who is on the
+// approval chain / assigned as current approver. Finance / dashboard / admin
+// page holders can see any claim's documents (they review claims they were never
+// personally assigned to).
 function canViewClaim(authUser, claimRow) {
   if (isAdmin(authUser)) return true;
   if (claimRow.employee_user_id === authUser.id) return true;
-  return [
-    claimRow.current_approver_user_id,
-    claimRow.l1_approver_user_id,
-    claimRow.l2_approver_user_id,
-    claimRow.final_approver_user_id,
-  ].includes(authUser.id);
+  if (
+    [
+      claimRow.current_approver_user_id,
+      claimRow.l1_approver_user_id,
+      claimRow.l2_approver_user_id,
+      claimRow.final_approver_user_id,
+    ].includes(authUser.id)
+  ) {
+    return true;
+  }
+  return (
+    hasPagePermission(authUser, PAGE_IDS.finance, "view") ||
+    hasPagePermission(authUser, PAGE_IDS.dashboard, "view") ||
+    hasPagePermission(authUser, PAGE_IDS.admin, "view")
+  );
+}
+
+// A bill/document is reachable by anyone who can open some part of the Expense
+// Claims module; the per-claim check (canViewClaim) still runs afterwards.
+function requireExpenseModuleView(req, res, next) {
+  const u = req.authUser;
+  const ok =
+    hasPagePermission(u, PAGE_IDS.employee, "view") ||
+    hasPagePermission(u, PAGE_IDS.approvals, "view") ||
+    hasPagePermission(u, PAGE_IDS.finance, "view") ||
+    hasPagePermission(u, PAGE_IDS.dashboard, "view") ||
+    hasPagePermission(u, PAGE_IDS.admin, "view");
+  if (!ok) {
+    return res
+      .status(403)
+      .json({ success: false, message: "You do not have access to Expense Claims documents." });
+  }
+  return next();
 }
 
 // ---------------------------------------------------------------------------
@@ -1242,6 +1294,7 @@ async function persistItems(conn, claimId, items) {
   const dynCols = [
     "expense_date", "category", "sub_category", "description", "claimed_amount", "bill_number",
     "expense_for", "employee_type", "emp_ref_code", "emp_ref_name",
+    "emp_ref_designation", "emp_ref_circle", "emp_ref_cmp",
     "vendor_id", "vendor_name", "vendor_type", "claim_type", "billing_type", "client_name",
     "work_category", "po_number", "domain", "other_domain", "site_route", "estimate_wcc_amount",
     "bank_account", "ifsc",
@@ -1249,6 +1302,7 @@ async function persistItems(conn, claimId, items) {
   const dynVals = (item) => [
     item.expenseDate, item.category, item.subCategory, item.description, item.claimedAmount, item.billNumber,
     item.expenseFor, item.employeeType, item.empRefCode, item.empRefName,
+    item.empRefDesignation, item.empRefCircle, item.empRefCmp,
     item.vendorId, item.vendorName, item.vendorType, item.claimType, item.billingType, item.clientName,
     item.workCategory, item.poNumber, item.domain, item.otherDomain, item.siteRoute, item.estimateWccAmount,
     item.bankAccount, item.ifsc,
@@ -1529,16 +1583,18 @@ router.post("/claims/:id/submit", requirePagePermission(PAGE, "edit"), async (re
     });
 
     // Each Employee-Expense item must point at a real employee master record.
-    // Also snapshot claim-level identity (CMP, Employee ID, name, department,
-    // designation, circle) from the first employee item, unless the claim already
-    // carries its own. Finance filters on CMP; the approvals queue shows the
-    // Employee ID.
+    // Re-read every employee item's master fields from `physical` so the snapshot
+    // stored on the claim/item is authoritative (the client only sends the ID).
+    // The claim-level identity card + approvals queue reflect the FIRST employee
+    // item's employee; per-item chips carry the rest for multi-employee claims.
     let claimCmp = claim.cost_centre || null;
     let claimEmpCode = claim.employee_code || null;
     let claimEmpName = claim.employee_name || null;
     let claimDept = claim.department || null;
     let claimDesig = claim.designation || null;
     let claimCircle = claim.circle || null;
+    let claimEmpSnapshotTaken = false;
+    const itemMasterRefresh = []; // [{ id, emp }]
     for (let index = 0; index < items.length; index += 1) {
       const row = items[index];
       if ((row.expense_for || "employee") !== "employee" || !row.emp_ref_code) continue;
@@ -1547,13 +1603,15 @@ router.post("/claims/:id/submit", requirePagePermission(PAGE, "edit"), async (re
         errors.push(`Item ${index + 1}: Employee ID "${row.emp_ref_code}" was not found in the employee master.`);
         continue;
       }
-      if (!claimCmp) claimCmp = emp.cmp || null;
-      if (!claimEmpCode) {
-        claimEmpCode = emp.employeeCode || row.emp_ref_code || null;
-        claimEmpName = claimEmpName || emp.employeeName || row.emp_ref_name || null;
-        claimDept = claimDept || emp.department || null;
-        claimDesig = claimDesig || emp.designation || null;
-        claimCircle = claimCircle || emp.circle || null;
+      itemMasterRefresh.push({ id: row.id, emp });
+      if (!claimEmpSnapshotTaken) {
+        claimEmpSnapshotTaken = true;
+        claimEmpCode = emp.employeeCode || row.emp_ref_code || claimEmpCode;
+        claimEmpName = emp.employeeName || claimEmpName;
+        claimDept = emp.department || claimDept;
+        claimDesig = emp.designation || claimDesig;
+        claimCircle = emp.circle || claimCircle;
+        claimCmp = emp.cmp || claimCmp;
       }
     }
     if (errors.length) throw httpError(400, "This claim cannot be submitted yet.", { rowErrors: errors });
@@ -1595,6 +1653,21 @@ router.post("/claims/:id/submit", requirePagePermission(PAGE, "edit"), async (re
              l1_approved_total = NULL, l2_approved_total = NULL, final_approved_total = NULL
            WHERE id = ?`,
           [claim.id]
+        );
+      }
+
+      // Freeze each employee item's master snapshot (name / designation / circle /
+      // CMP / bank account / IFSC) from `physical` as of submit time.
+      for (const { id, emp } of itemMasterRefresh) {
+        await conn.query(
+          `UPDATE expense_claim_items SET
+             emp_ref_name = ?, emp_ref_designation = ?, emp_ref_circle = ?, emp_ref_cmp = ?,
+             bank_account = ?, ifsc = ?
+           WHERE id = ? AND claim_id = ?`,
+          [
+            emp.employeeName || null, emp.designation || null, emp.circle || null, emp.cmp || null,
+            emp.bankAccount || null, emp.ifsc || null, id, claim.id,
+          ]
         );
       }
 
@@ -1703,7 +1776,7 @@ router.post(
   }
 );
 
-router.get("/attachments/:attId", requirePagePermission(PAGE, "view"), async (req, res) => {
+router.get("/attachments/:attId", requireExpenseModuleView, async (req, res) => {
   try {
     await ensureTables();
     const [rows] = await pool.query(
@@ -1885,8 +1958,8 @@ router.get("/approvals", requirePagePermission(APPROVALS_PAGE, "view"), async (r
       success: true,
       data: rows.map((row) => ({
         ...mapClaim(row),
-        employeeCode: row.employee_code || row.first_emp_code || null,
-        employeeName: row.employee_name || row.first_emp_name || null,
+        employeeCode: row.first_emp_code || row.employee_code || null,
+        employeeName: row.first_emp_name || row.employee_name || null,
         itemCount: Number(row.item_count || 0),
         myStage:
           row.current_status === "pending_l1"
@@ -2274,6 +2347,10 @@ function financeRow(row) {
       financeStatus: row.finance_status || (row.current_status === "completed" ? "processed" : "pending"),
       paymentReference: row.payment_reference || null,
       paymentDate: row.payment_date || null,
+      paymentAmount:
+        row.payment_amount === null || row.payment_amount === undefined
+          ? null
+          : Number(row.payment_amount),
       financeRemarks: row.finance_remarks || null,
       processedBy: row.processed_by || null,
       processedAt: row.processed_at || null,
@@ -2287,10 +2364,22 @@ function buildFinanceFilters(req) {
   const params = [];
 
   const tab = String(q.tab || "pending").trim().toLowerCase();
-  if (tab === "pending") filters.push("c.current_status = 'pending_finance'");
-  else if (tab === "processed") filters.push("c.current_status = 'completed'");
-  else if (tab === "rejected") filters.push("c.current_status = 'rejected'");
-  else filters.push("c.claim_number IS NOT NULL"); // "all"
+  if (tab === "pending") {
+    // Truly untouched — reached finance, not yet picked up / held / paid.
+    filters.push(
+      "c.current_status = 'pending_finance' AND COALESCE(f.finance_status, 'pending') = 'pending'"
+    );
+  } else if (tab === "processing") {
+    filters.push("c.current_status = 'pending_finance' AND f.finance_status = 'processing'");
+  } else if (tab === "on_hold") {
+    filters.push("c.current_status = 'pending_finance' AND f.finance_status = 'on_hold'");
+  } else if (tab === "processed") {
+    filters.push("c.current_status = 'completed'");
+  } else if (tab === "rejected") {
+    filters.push("c.current_status = 'rejected'");
+  } else {
+    filters.push("c.claim_number IS NOT NULL"); // "all"
+  }
 
   const like = (v) => `%${v}%`;
   if (q.search) {
@@ -2449,7 +2538,7 @@ router.get("/finance", requirePagePermission(FINANCE_PAGE, "view"), async (req, 
       params
     );
     const [rows] = await pool.query(
-      `SELECT c.*, f.finance_status, f.payment_reference, f.payment_date, f.finance_remarks,
+      `SELECT c.*, f.finance_status, f.payment_reference, f.payment_date, f.payment_amount, f.finance_remarks,
               f.processed_by, f.processed_at,
               u1.name AS l1_approver_name, u2.name AS l2_approver_name, u3.name AS final_approver_name,
               (SELECT COUNT(*) FROM expense_claim_items i WHERE i.claim_id = c.id) AS item_count
@@ -2463,11 +2552,14 @@ router.get("/finance", requirePagePermission(FINANCE_PAGE, "view"), async (req, 
     // Tab counters for the header chips.
     const [tally] = await pool.query(
       `SELECT
-         SUM(current_status = 'pending_finance') AS pending,
-         SUM(current_status = 'completed') AS processed,
-         SUM(current_status = 'rejected') AS rejected,
-         SUM(claim_number IS NOT NULL) AS total
-       FROM expense_claims`
+         SUM(c.current_status = 'pending_finance' AND COALESCE(f.finance_status, 'pending') = 'pending') AS pending,
+         SUM(c.current_status = 'pending_finance' AND f.finance_status = 'processing') AS processing,
+         SUM(c.current_status = 'pending_finance' AND f.finance_status = 'on_hold') AS on_hold,
+         SUM(c.current_status = 'completed') AS processed,
+         SUM(c.current_status = 'rejected') AS rejected,
+         SUM(c.claim_number IS NOT NULL) AS total
+       FROM expense_claims c
+       LEFT JOIN expense_claim_finance f ON f.claim_id = c.id`
     );
 
     res.json({
@@ -2478,6 +2570,8 @@ router.get("/finance", requirePagePermission(FINANCE_PAGE, "view"), async (req, 
       pageSize,
       counts: {
         pending: Number(tally[0].pending || 0),
+        processing: Number(tally[0].processing || 0),
+        on_hold: Number(tally[0].on_hold || 0),
         processed: Number(tally[0].processed || 0),
         rejected: Number(tally[0].rejected || 0),
         all: Number(tally[0].total || 0),
@@ -2535,9 +2629,30 @@ router.post("/finance/:id", requirePagePermission(FINANCE_PAGE, "edit"), async (
     const paymentDate = normalizeDate(req.body?.paymentDate);
     if (paymentDate === undefined) throw httpError(400, "Payment Date is not a valid date.");
 
+    // Payment amount — optional, but never more than the final approved amount.
+    const finalApproved =
+      claim.final_approved_total === null ? null : Number(claim.final_approved_total);
+    const rawAmount = req.body?.paymentAmount;
+    let paymentAmount =
+      rawAmount === "" || rawAmount === null || rawAmount === undefined ? null : toMoney(rawAmount);
+    if (paymentAmount !== null && Number.isNaN(paymentAmount)) {
+      throw httpError(400, "Payment Amount is not a valid number.");
+    }
+    if (paymentAmount !== null && paymentAmount < 0) {
+      throw httpError(400, "Payment Amount cannot be negative.");
+    }
+    if (paymentAmount !== null && finalApproved !== null && paymentAmount > finalApproved + 0.001) {
+      throw httpError(
+        400,
+        `Payment Amount cannot exceed the Final Approved amount (${formatINR(finalApproved)}).`
+      );
+    }
+
     if (financeStatus === "processed") {
       if (!paymentReference) throw httpError(400, "A Payment Reference Number is required to mark a claim Processed.");
       if (!paymentDate) throw httpError(400, "A Payment Date is required to mark a claim Processed.");
+      // Default a processed claim's paid amount to the full final-approved amount.
+      if (paymentAmount === null) paymentAmount = finalApproved;
     }
 
     const nextClaimStatus = financeStatus === "processed" ? "completed" : "pending_finance";
@@ -2548,18 +2663,19 @@ router.post("/finance/:id", requirePagePermission(FINANCE_PAGE, "edit"), async (
     await withTransaction(async (conn) => {
       await conn.query(
         `INSERT INTO expense_claim_finance
-           (claim_id, finance_status, payment_reference, payment_date, finance_remarks,
+           (claim_id, finance_status, payment_reference, payment_date, payment_amount, finance_remarks,
             processed_by, processed_by_user_id, processed_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ${financeStatus === "processed" ? "NOW()" : "NULL"})
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ${financeStatus === "processed" ? "NOW()" : "NULL"})
          ON DUPLICATE KEY UPDATE
            finance_status = VALUES(finance_status),
            payment_reference = VALUES(payment_reference),
            payment_date = VALUES(payment_date),
+           payment_amount = VALUES(payment_amount),
            finance_remarks = VALUES(finance_remarks),
            processed_by = VALUES(processed_by),
            processed_by_user_id = VALUES(processed_by_user_id),
            processed_at = ${financeStatus === "processed" ? "NOW()" : "NULL"}`,
-        [claim.id, financeStatus, paymentReference, paymentDate, financeRemarks, processedBy, processedByUserId]
+        [claim.id, financeStatus, paymentReference, paymentDate, paymentAmount, financeRemarks, processedBy, processedByUserId]
       );
 
       await conn.query(
@@ -2578,7 +2694,7 @@ router.post("/finance/:id", requirePagePermission(FINANCE_PAGE, "edit"), async (
         toStatus: nextClaimStatus,
         newAmount: claim.final_approved_total === null ? null : Number(claim.final_approved_total),
         reason: financeRemarks,
-        meta: { financeStatus, paymentReference, paymentDate },
+        meta: { financeStatus, paymentReference, paymentDate, paymentAmount },
       });
 
       if (financeStatus === "processed") {
@@ -2587,7 +2703,9 @@ router.post("/finance/:id", requirePagePermission(FINANCE_PAGE, "edit"), async (
           claimId: claim.id,
           claimNumber: claim.claim_number,
           type: "finance_processed",
-          message: `Claim ${claim.claim_number} has been processed by Finance. Payment reference: ${paymentReference}.`,
+          message: `Claim ${claim.claim_number} has been processed by Finance${
+            paymentAmount !== null ? ` — ${formatINR(paymentAmount)}` : ""
+          }. Payment reference: ${paymentReference}.`,
         });
       } else if (financeStatus === "on_hold") {
         await notify(conn, {
@@ -2609,9 +2727,90 @@ router.post("/finance/:id", requirePagePermission(FINANCE_PAGE, "edit"), async (
   }
 });
 
+// POST /api/expense-claims/finance/:id/send-back — Finance returns a claim to the
+// employee for correction. On resubmission the claim restarts at pending_l1 with
+// every prior L1/L2/Final decision cleared (see the submit route), so a claim that
+// was materially changed after finance review is re-approved end to end.
+router.post("/finance/:id/send-back", requirePagePermission(FINANCE_PAGE, "edit"), async (req, res) => {
+  try {
+    await ensureTables();
+    const [claimRows] = await pool.query(`SELECT * FROM expense_claims WHERE id = ?`, [req.params.id]);
+    const claim = claimRows[0];
+    if (!claim) throw httpError(404, "Claim not found.");
+    if (claim.current_status !== "pending_finance") {
+      throw httpError(409, "Finance can only send back a claim that is pending finance processing.");
+    }
+    const reason = String(req.body?.reason ?? "").trim();
+    if (!reason) throw httpError(400, "A reason is required when Finance sends a claim back.");
+
+    await withTransaction(async (conn) => {
+      await conn.query(
+        `UPDATE expense_claims SET
+           current_status = 'returned', current_stage = 'employee', current_approver_user_id = NULL
+         WHERE id = ?`,
+        [claim.id]
+      );
+      // Reset the finance record — no partial payment capture survives a send-back.
+      await conn.query(
+        `UPDATE expense_claim_finance SET
+           finance_status = 'pending', payment_reference = NULL, payment_date = NULL,
+           payment_amount = NULL, finance_remarks = NULL,
+           processed_by = NULL, processed_by_user_id = NULL, processed_at = NULL
+         WHERE claim_id = ?`,
+        [claim.id]
+      );
+      await writeAudit(conn, {
+        claimId: claim.id,
+        actorUserId: req.authUser.id,
+        actorName: actorName(req.authUser),
+        stage: "finance",
+        action: "FINANCE_SENT_BACK",
+        fromStatus: claim.current_status,
+        toStatus: "returned",
+        reason,
+      });
+      await notify(conn, {
+        userId: claim.employee_user_id,
+        claimId: claim.id,
+        claimNumber: claim.claim_number,
+        type: "returned",
+        message: `Claim ${claim.claim_number} was sent back by Finance (${actorName(req.authUser)}): ${reason}. Correct it and resubmit — it will go through the approval chain again.`,
+      });
+    });
+
+    const bundle = await fetchClaimBundle(claim.id);
+    bundle.approvers = await approverNames(claim);
+    res.json({ success: true, data: bundle });
+  } catch (error) {
+    fail(res, error, "Failed to send the claim back.");
+  }
+});
+
 // ===========================================================================
 // PHASE 6 — Excel export (respects the finance filter set). Two sheets.
 // ===========================================================================
+
+// Builds a worksheet from a header row + data rows, then decorates chosen cells
+// with real Excel hyperlinks (cell.l). `rows[i].links` maps a 0-based column
+// index to { name, url }.
+function sheetWithLinks(headers, rows) {
+  const aoa = [headers, ...rows.map((r) => r.cells)];
+  const ws = xlsx.utils.aoa_to_sheet(aoa);
+  rows.forEach((r, ri) => {
+    Object.entries(r.links || {}).forEach(([col, link]) => {
+      if (!link || !link.url) return;
+      const ref = xlsx.utils.encode_cell({ r: ri + 1, c: Number(col) });
+      ws[ref] = { t: "s", v: link.name || "Open document", l: { Target: link.url, Tooltip: "Open document" } };
+    });
+  });
+  return ws;
+}
+
+const APPROVAL_AUDIT_ACTIONS = [
+  "L1_APPROVED", "L1_APPROVED_WITH_CHANGES",
+  "L2_APPROVED", "L2_APPROVED_WITH_CHANGES",
+  "FINAL_APPROVED", "FINAL_APPROVED_WITH_CHANGES",
+];
 
 // Path is deliberately NOT "/finance/export" — that collides with "/finance/:id".
 router.get("/finance-export", requirePagePermission(FINANCE_PAGE, "download"), async (req, res) => {
@@ -2619,9 +2818,26 @@ router.get("/finance-export", requirePagePermission(FINANCE_PAGE, "download"), a
     await ensureTables();
     const { filters, params } = buildFinanceFilters(req);
 
+    // Auth-gated document links. Opening one requires a signed-in browser session
+    // with access to the claim (see the /attachments/:id route) — the export
+    // never exposes a public URL.
+    const baseUrl =
+      process.env.PUBLIC_API_BASE_URL || `${req.protocol}://${req.get("host")}`;
+    const attUrl = (id) => `${baseUrl}/api/expense-claims/attachments/${id}`;
+
     const [claims] = await pool.query(
-      `SELECT c.*, f.finance_status, f.payment_reference, f.payment_date, f.finance_remarks, f.processed_by,
-              u1.name AS l1_name, u2.name AS l2_name, u3.name AS final_name
+      `SELECT c.*,
+              f.finance_status, f.payment_reference, f.payment_date, f.payment_amount,
+              f.finance_remarks, f.processed_by, f.processed_at,
+              u1.name AS l1_name, u2.name AS l2_name, u3.name AS final_name,
+              (SELECT i.bank_account FROM expense_claim_items i
+                 WHERE i.claim_id = c.id AND (i.expense_for = 'employee' OR i.expense_for IS NULL)
+                   AND i.bank_account IS NOT NULL AND i.bank_account <> ''
+                 ORDER BY i.sr_no ASC, i.id ASC LIMIT 1) AS bank_account,
+              (SELECT i.ifsc FROM expense_claim_items i
+                 WHERE i.claim_id = c.id AND (i.expense_for = 'employee' OR i.expense_for IS NULL)
+                   AND i.ifsc IS NOT NULL AND i.ifsc <> ''
+                 ORDER BY i.sr_no ASC, i.id ASC LIMIT 1) AS ifsc
        ${FINANCE_BASE_FROM}
        WHERE ${filters}
        ORDER BY c.submitted_at DESC, c.id DESC
@@ -2629,79 +2845,160 @@ router.get("/finance-export", requirePagePermission(FINANCE_PAGE, "download"), a
       params
     );
 
-    const summarySheet = claims.map((c) => ({
-      "Claim Number": c.claim_number || "",
-      "Employee ID": c.employee_code || "",
-      "Employee Name": c.employee_name || "",
-      Department: c.department || "",
-      Designation: c.designation || "",
-      CMP: c.cost_centre || "",
-      Circle: c.circle || "",
-      "Submission Date": c.submitted_at ? String(c.submitted_at).slice(0, 10) : "",
-      "Total Claimed": Number(c.total_claimed || 0),
-      "L1 Approved": c.l1_approved_total === null ? "" : Number(c.l1_approved_total),
-      "L2 Approved": c.l2_approved_total === null ? "" : Number(c.l2_approved_total),
-      "Final Approved": c.final_approved_total === null ? "" : Number(c.final_approved_total),
-      "L1 Approver": c.l1_name || "",
-      "L2 Approver": c.l2_name || "",
-      "Final Approver": c.final_name || "",
-      Status: c.current_status,
-      "Finance Status": c.finance_status || (c.current_status === "completed" ? "processed" : "pending"),
-      "Payment Reference": c.payment_reference || "",
-      "Payment Date": c.payment_date ? String(c.payment_date).slice(0, 10) : "",
-    }));
+    const ids = claims.map((c) => c.id);
+    const placeholders = ids.map(() => "?").join(",");
 
-    let detailSheet = [];
-    if (claims.length) {
-      const ids = claims.map((c) => c.id);
-      const [items] = await pool.query(
-        `SELECT i.*, c.claim_number, c.employee_code, c.employee_name
-         FROM expense_claim_items i JOIN expense_claims c ON c.id = i.claim_id
-         WHERE i.claim_id IN (${ids.map(() => "?").join(",")})
-         ORDER BY i.claim_id ASC, i.sr_no ASC`,
-        ids
+    // Approval timestamps come from the audit trail (no dedicated columns).
+    const apprDates = new Map(); // claimId -> { l1, l2, final }
+    if (ids.length) {
+      const [ad] = await pool.query(
+        `SELECT claim_id, stage, MAX(created_at) AS at
+         FROM expense_claim_audit
+         WHERE claim_id IN (${placeholders})
+           AND stage IN ('l1','l2','final')
+           AND action IN (${APPROVAL_AUDIT_ACTIONS.map(() => "?").join(",")})
+         GROUP BY claim_id, stage`,
+        [...ids, ...APPROVAL_AUDIT_ACTIONS]
       );
-      detailSheet = items.map((i) => ({
-        "Claim Number": i.claim_number || "",
-        "Claimant ID": i.employee_code || "",
-        "Claimant Name": i.employee_name || "",
-        "Expense Date": i.expense_date ? String(i.expense_date).slice(0, 10) : "",
-        "Expense For": i.expense_for || "",
-        "Employee Type": i.employee_type || "",
-        "Employee (item)": [i.emp_ref_name, i.emp_ref_code].filter(Boolean).join(" / "),
-        "Vendor Type": i.vendor_type || "",
-        Vendor: i.vendor_name || "",
-        "Claim Type": i.claim_type || "",
-        "Billing Type": i.billing_type || "",
-        "Client / Account": i.client_name || "",
-        "Expense Category": i.work_category || i.category || "",
-        "PO No.": i.po_number || "",
-        Domain: i.domain === "Others" ? `Others: ${i.other_domain || ""}` : i.domain || "",
-        "Site / Route": i.site_route || "",
-        "Estimate WCC": i.estimate_wcc_amount === null || i.estimate_wcc_amount === undefined ? "" : Number(i.estimate_wcc_amount),
-        Description: i.description || "",
-        "Bill Number": i.bill_number || "",
-        "Claimed Amount": Number(i.claimed_amount || 0),
-        "L1 Approved": i.l1_approved_amount === null ? "" : Number(i.l1_approved_amount),
-        "L1 Reason": i.l1_reason || "",
-        "L2 Approved": i.l2_approved_amount === null ? "" : Number(i.l2_approved_amount),
-        "L2 Reason": i.l2_reason || "",
-        "Final Approved": i.final_approved_amount === null ? "" : Number(i.final_approved_amount),
-        "Final Reason": i.final_reason || "",
-      }));
+      ad.forEach((r) => {
+        const entry = apprDates.get(r.claim_id) || {};
+        entry[r.stage] = r.at;
+        apprDates.set(r.claim_id, entry);
+      });
     }
 
+    // Attachments, grouped per claim and per item.
+    const docsByClaim = new Map();
+    const docsByItem = new Map();
+    if (ids.length) {
+      const [atts] = await pool.query(
+        `SELECT id, claim_id, item_id, file_name FROM expense_claim_attachments
+         WHERE claim_id IN (${placeholders})
+         ORDER BY claim_id ASC, item_id ASC, id ASC`,
+        ids
+      );
+      atts.forEach((a) => {
+        const doc = { name: a.file_name || `bill-${a.id}`, url: attUrl(a.id) };
+        if (!docsByClaim.has(a.claim_id)) docsByClaim.set(a.claim_id, []);
+        docsByClaim.get(a.claim_id).push(doc);
+        if (a.item_id != null) {
+          if (!docsByItem.has(a.item_id)) docsByItem.set(a.item_id, []);
+          docsByItem.get(a.item_id).push(doc);
+        }
+      });
+    }
+
+    let items = [];
+    if (ids.length) {
+      const [rows] = await pool.query(
+        `SELECT i.* FROM expense_claim_items i
+         WHERE i.claim_id IN (${placeholders})
+         ORDER BY i.claim_id ASC, i.sr_no ASC, i.id ASC`,
+        ids
+      );
+      items = rows;
+    }
+
+    const DOC_CAP = 12;
+    const maxClaimDocs = Math.min(
+      DOC_CAP,
+      claims.reduce((m, c) => Math.max(m, (docsByClaim.get(c.id) || []).length), 0)
+    );
+    const maxItemDocs = Math.min(
+      DOC_CAP,
+      items.reduce((m, i) => Math.max(m, (docsByItem.get(i.id) || []).length), 0)
+    );
+
+    // ---- Sheet 1: Claims (one row per claim) ------------------------------
+    const claimHeadersFixed = [
+      "Claim Number", "Employee Name", "Employee ID", "Department", "Designation", "Circle", "CMP",
+      "Bank Account", "IFSC", "Submitted Date", "Status", "Finance Status",
+      "Total Claimed", "L1 Approved", "L2 Approved", "Final Approved", "Payment Amount",
+      "L1 Approver", "L1 Approval Date", "L2 Approver", "L2 Approval Date",
+      "Final Approver", "Final Approval Date",
+      "Payment Reference", "Payment Date", "Finance Remarks", "Created Date", "Completed Date",
+    ];
+    const claimHeaders = [
+      ...claimHeadersFixed,
+      ...Array.from({ length: maxClaimDocs }, (_, k) => `Document ${k + 1}`),
+    ];
+    const num = (v) => (v === null || v === undefined ? "" : Number(v));
+    const day = (v) => (v ? String(v).slice(0, 10) : "");
+
+    const claimRows = claims.map((c) => {
+      const d = apprDates.get(c.id) || {};
+      const docs = docsByClaim.get(c.id) || [];
+      const cells = [
+        c.claim_number || "", c.employee_name || "", c.employee_code || "", c.department || "",
+        c.designation || "", c.circle || "", c.cost_centre || "",
+        c.bank_account || "", c.ifsc || "", day(c.submitted_at), c.current_status,
+        c.finance_status || (c.current_status === "completed" ? "processed" : "pending"),
+        Number(c.total_claimed || 0), num(c.l1_approved_total), num(c.l2_approved_total),
+        num(c.final_approved_total), num(c.payment_amount),
+        c.l1_name || "", day(d.l1), c.l2_name || "", day(d.l2), c.final_name || "", day(d.final),
+        c.payment_reference || "", day(c.payment_date), c.finance_remarks || "",
+        day(c.created_at), c.current_status === "completed" ? day(c.processed_at) : "",
+      ];
+      const links = {};
+      for (let k = 0; k < maxClaimDocs; k += 1) {
+        cells.push(docs[k] ? docs[k].name : "");
+        if (docs[k]) links[claimHeadersFixed.length + k] = docs[k];
+      }
+      return { cells, links };
+    });
+
+    // ---- Sheet 2: Expense Items (one row per item) ----------------------
+    const itemHeadersFixed = [
+      "Claim Number", "Item No", "Expense For", "Employee / Vendor", "Employee ID", "Vendor Name",
+      "Expense Date", "Claim Type", "Billing Type", "Expense Category", "Sub Category",
+      "PO Number", "Domain", "Client", "Site / Route", "WCC Amount", "Description", "Bill Number",
+      "Claimed Amount", "L1 Approved", "L1 Reason", "L2 Approved", "L2 Reason",
+      "Final Approved", "Final Reason", "Finance Amount",
+    ];
+    const itemHeaders = [
+      ...itemHeadersFixed,
+      ...Array.from({ length: maxItemDocs }, (_, k) => `Document ${k + 1}`),
+    ];
+    const claimNoById = new Map(claims.map((c) => [c.id, c.claim_number || ""]));
+
+    const itemRows = items.map((i) => {
+      const docs = docsByItem.get(i.id) || [];
+      const financeAmount =
+        i.final_approved_amount !== null
+          ? Number(i.final_approved_amount)
+          : i.l2_approved_amount !== null
+          ? Number(i.l2_approved_amount)
+          : i.l1_approved_amount !== null
+          ? Number(i.l1_approved_amount)
+          : "";
+      const cells = [
+        claimNoById.get(i.claim_id) || "", i.sr_no || "",
+        i.expense_for || "employee",
+        i.expense_for === "vendor" ? i.vendor_name || "" : i.emp_ref_name || "",
+        i.emp_ref_code || "", i.vendor_name || "",
+        day(i.expense_date), i.claim_type || "", i.billing_type || "",
+        i.work_category || i.category || "", i.sub_category || "",
+        i.po_number || "",
+        i.domain === "Others" ? `Others: ${i.other_domain || ""}` : i.domain || "",
+        i.client_name || "", i.site_route || "", num(i.estimate_wcc_amount),
+        i.description || "", i.bill_number || "",
+        Number(i.claimed_amount || 0),
+        num(i.l1_approved_amount), i.l1_reason || "",
+        num(i.l2_approved_amount), i.l2_reason || "",
+        num(i.final_approved_amount), i.final_reason || "",
+        financeAmount,
+      ];
+      const links = {};
+      for (let k = 0; k < maxItemDocs; k += 1) {
+        cells.push(docs[k] ? docs[k].name : "");
+        if (docs[k]) links[itemHeadersFixed.length + k] = docs[k];
+      }
+      return { cells, links };
+    });
+
     const wb = xlsx.utils.book_new();
-    xlsx.utils.book_append_sheet(
-      wb,
-      xlsx.utils.json_to_sheet(summarySheet.length ? summarySheet : [{ "Claim Number": "No data" }]),
-      "Claim Summary"
-    );
-    xlsx.utils.book_append_sheet(
-      wb,
-      xlsx.utils.json_to_sheet(detailSheet.length ? detailSheet : [{ "Claim Number": "No data" }]),
-      "Expense Details"
-    );
+    xlsx.utils.book_append_sheet(wb, sheetWithLinks(claimHeaders, claimRows), "Claims");
+    xlsx.utils.book_append_sheet(wb, sheetWithLinks(itemHeaders, itemRows), "Expense Items");
     const buffer = xlsx.write(wb, { type: "buffer", bookType: "xlsx" });
 
     res.setHeader("Content-Disposition", `attachment; filename="expense_claims_${new Date().toISOString().slice(0, 10)}.xlsx"`);

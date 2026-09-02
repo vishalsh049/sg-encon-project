@@ -158,6 +158,14 @@ export function saveFinance(id, payload) {
   });
 }
 
+export function financeSendBack(id, reason) {
+  return request(`${BASE}/finance/${id}/send-back`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ reason }),
+  });
+}
+
 export async function exportFinanceExcel(filters = {}) {
   const response = await authFetch(buildApiUrl(`${BASE}/finance-export${toQueryString(filters)}`));
   if (!response.ok) {

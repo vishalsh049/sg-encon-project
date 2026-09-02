@@ -119,7 +119,15 @@ function EmployeeParty({ item, patch }) {
       const e = res.data;
       setInfo(e);
       setEmpInput(e.employeeCode || code);
-      patch({ empRefCode: e.employeeCode || code, empRefName: e.employeeName || "" });
+      patch({
+        empRefCode: e.employeeCode || code,
+        empRefName: e.employeeName || "",
+        empRefDesignation: e.designation || "",
+        empRefCircle: e.circle || "",
+        empRefCmp: e.cmp || "",
+        bankAccount: e.bankAccount || "",
+        ifsc: e.ifsc || "",
+      });
     } catch (err) {
       setInfo(null);
       setError(
@@ -127,7 +135,10 @@ function EmployeeParty({ item, patch }) {
           ? "Employee not found. Please check the Employee ID / HRMS ID."
           : err?.message || "Employee lookup failed. Please try again."
       );
-      patch({ empRefCode: "", empRefName: "" });
+      patch({
+        empRefCode: "", empRefName: "", empRefDesignation: "", empRefCircle: "",
+        empRefCmp: "", bankAccount: "", ifsc: "",
+      });
     } finally {
       setBusy(false);
     }
@@ -358,7 +369,10 @@ export default function ExpenseItemCard({
               patch(
                 v === "employee"
                   ? { expenseFor: v, vendorId: null, vendorName: "", vendorType: "" }
-                  : { expenseFor: v, employeeType: "", empRefCode: "", empRefName: "" }
+                  : {
+                      expenseFor: v, employeeType: "", empRefCode: "", empRefName: "",
+                      empRefDesignation: "", empRefCircle: "", empRefCmp: "", bankAccount: "", ifsc: "",
+                    }
               )
             }
             options={[

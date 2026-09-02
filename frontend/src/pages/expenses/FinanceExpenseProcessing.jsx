@@ -6,11 +6,15 @@ import { Download, Loader2, RefreshCw, Search, SlidersHorizontal, X } from "luci
 import { CARD_SHELL } from "../../components/billingDashboard/theme";
 import ClaimStatusBadge from "../../components/expenses/ClaimStatusBadge";
 import { financeStatusMeta } from "../../lib/expenseClaimStatus";
+import { getPagePermission } from "../../utils/access";
+import { useUser } from "../../context/UserContext";
 import { formatCurrency, formatDate } from "../../utils/penaltyFormat";
 import { exportFinanceExcel, fetchFinanceClaims, fetchFinanceMeta } from "../../lib/expenseClaimsApi";
 
 const TABS = [
   { key: "pending", label: "Pending Finance", countKey: "pending" },
+  { key: "processing", label: "Processing", countKey: "processing" },
+  { key: "on_hold", label: "On Hold", countKey: "on_hold" },
   { key: "processed", label: "Processed", countKey: "processed" },
   { key: "rejected", label: "Rejected", countKey: "rejected" },
   { key: "all", label: "All Claims", countKey: "all" },
@@ -46,6 +50,8 @@ function FinanceBadge({ status }) {
 
 export default function FinanceExpenseProcessing() {
   const navigate = useNavigate();
+  const { user } = useUser();
+  const canDownload = getPagePermission(user, "expense-finance").download;
   const [tab, setTab] = useState("pending");
   const [search, setSearch] = useState("");
   const [debounced, setDebounced] = useState("");
@@ -59,7 +65,9 @@ export default function FinanceExpenseProcessing() {
   const [meta, setMeta] = useState({ departments: [], cmps: [], categories: [], approvers: [], financeStatuses: [] });
   const [rows, setRows] = useState([]);
   const [total, setTotal] = useState(0);
-  const [counts, setCounts] = useState({ pending: 0, processed: 0, rejected: 0, all: 0 });
+  const [counts, setCounts] = useState({
+    pending: 0, processing: 0, on_hold: 0, processed: 0, rejected: 0, all: 0,
+  });
   const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
 
@@ -123,24 +131,26 @@ export default function FinanceExpenseProcessing() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <button
-            type="button"
-            disabled={exporting}
-            onClick={async () => {
-              setExporting(true);
-              try {
-                await exportFinanceExcel({ tab, search: debounced, sort, dir, ...filters });
-              } catch (error) {
-                toast.error(error.message || "Export failed.");
-              } finally {
-                setExporting(false);
-              }
-            }}
-            className="inline-flex h-10 items-center gap-2 rounded-full border border-border-color bg-surface px-4 text-sm font-medium text-text-secondary transition hover:bg-surface-muted disabled:opacity-50"
-          >
-            {exporting ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />}
-            Export Excel
-          </button>
+          {canDownload ? (
+            <button
+              type="button"
+              disabled={exporting}
+              onClick={async () => {
+                setExporting(true);
+                try {
+                  await exportFinanceExcel({ tab, search: debounced, sort, dir, ...filters });
+                } catch (error) {
+                  toast.error(error.message || "Export failed.");
+                } finally {
+                  setExporting(false);
+                }
+              }}
+              className="inline-flex h-10 items-center gap-2 rounded-full border border-border-color bg-surface px-4 text-sm font-medium text-text-secondary transition hover:bg-surface-muted disabled:opacity-50"
+            >
+              {exporting ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />}
+              Export Excel
+            </button>
+          ) : null}
           <button
             type="button"
             onClick={load}

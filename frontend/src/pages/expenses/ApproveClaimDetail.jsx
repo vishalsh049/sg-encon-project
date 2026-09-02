@@ -272,6 +272,8 @@ export default function ApproveClaimDetail() {
             <Detail label="Designation" value={claim.designation} />
             <Detail label="Circle" value={claim.circle} />
             <Detail label="CMP" value={claim.cmp} />
+            <Detail label="Bank Account" value={claim.bankAccount} />
+            <Detail label="IFSC" value={claim.ifsc} />
           </dl>
         </div>
         <div className={`${CARD_SHELL} p-4`}>
