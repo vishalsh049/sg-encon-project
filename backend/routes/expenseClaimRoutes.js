@@ -3102,7 +3102,7 @@ router.get("/finance-export", requirePagePermission(FINANCE_PAGE, "download"), a
       "Claim Number", "Claim Date",
       "Claimant Name", "Claimant Employee ID",
       "Raised By Name", "Raised By Employee ID",
-      "Department", "Designation", "Circle", "CMP",
+      "Designation", "Circle", "CMP",
       "Bank Account", "IFSC", "Submitted Date", "Final Status", "Finance Status",
       "Total Claimed", "L1 Approved", "L2 Approved", "Final Approved",
       "L1 Approver", "L1 Approval Date", "L2 Approver", "L2 Approval Date",
@@ -3115,22 +3115,29 @@ router.get("/finance-export", requirePagePermission(FINANCE_PAGE, "download"), a
     const num = (v) => (v === null || v === undefined ? "" : Number(v));
     const day = (v) => (v ? String(v).slice(0, 10) : "");
 
+    // Every claim in this export has cleared Final Approval — buildFinanceFilters
+    // only ever selects current_status IN ('pending_finance','completed'), and a
+    // claim cannot reach those without Final Approval (rejected claims never get
+    // here). So "Final Status" is Approved for all of them; the internal
+    // "pending_finance" is a workflow-stage token, not an approval outcome.
+    const PROCESSED_FINANCE = new Set(["processed", "paid", "completed", "closed"]);
+    const finalStatusLabel = (c) =>
+      c.current_status === "rejected" ? "Rejected" : "Approved";
+    const financeStatusLabel = (c) =>
+      PROCESSED_FINANCE.has(String(c.finance_status || "").trim().toLowerCase())
+        ? "Processed"
+        : "In Finance";
+
     const claimRows = claims.map((c) => {
       const d = apprDates.get(c.id) || {};
       const docs = docsByClaim.get(c.id) || [];
-      const financeStatus =
-        c.finance_status ||
-        (["pending_finance", "processing", "on_hold", "completed", "final_approved"].includes(
-          c.current_status
-        )
-          ? "in_finance"
-          : "pending");
       const cells = [
         c.claim_number || "", day(c.created_at),
         c.employee_name || "", c.employee_code || "",
         c.raised_by_name || "", c.raised_by_code || "",
-        c.department || "", c.designation || "", c.circle || "", c.cost_centre || "",
-        c.bank_account || "", c.ifsc || "", day(c.submitted_at), c.current_status, financeStatus,
+        c.designation || "", c.circle || "", c.cost_centre || "",
+        c.bank_account || "", c.ifsc || "", day(c.submitted_at),
+        finalStatusLabel(c), financeStatusLabel(c),
         Number(c.total_claimed || 0), num(c.l1_approved_total), num(c.l2_approved_total),
         num(c.final_approved_total),
         c.l1_name || "", day(d.l1), c.l2_name || "", day(d.l2), c.final_name || "", day(d.final),
