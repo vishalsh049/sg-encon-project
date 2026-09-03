@@ -3013,14 +3013,6 @@ router.get("/finance-export", requirePagePermission(FINANCE_PAGE, "download"), a
     const [claims] = await pool.query(
       `SELECT c.*,
               u1.name AS l1_name, u2.name AS l2_name, u3.name AS final_name,
-              su.name AS raised_by_name,
-              COALESCE(NULLIF(su.employee_id, ''),
-                (SELECT p.employee_code FROM physical p
-                  WHERE p.company_email_id IS NOT NULL AND p.company_email_id <> ''
-                    AND TRIM(LOWER(p.company_email_id)) COLLATE utf8mb4_general_ci
-                        = TRIM(LOWER(su.email)) COLLATE utf8mb4_general_ci
-                    AND COALESCE(p.is_deleted, 0) = 0
-                  ORDER BY p.id ASC LIMIT 1)) AS raised_by_code,
               f.finance_status AS finance_status,
               (SELECT i.bank_account FROM expense_claim_items i
                  WHERE i.claim_id = c.id AND (i.expense_for = 'employee' OR i.expense_for IS NULL)
@@ -3108,7 +3100,6 @@ router.get("/finance-export", requirePagePermission(FINANCE_PAGE, "download"), a
     const claimHeadersFixed = [
       "Claim Number", "Claim Date",
       "Claimant Name", "Claimant Employee ID",
-      "Raised By Name", "Raised By Employee ID",
       "Designation", "Circle", "CMP",
       "Bank Account", "IFSC", "Submitted Date", "Final Status", "Finance Status",
       "Total Claimed", "L1 Approved", "L2 Approved", "Final Approved",
@@ -3141,7 +3132,6 @@ router.get("/finance-export", requirePagePermission(FINANCE_PAGE, "download"), a
       const cells = [
         c.claim_number || "", day(c.created_at),
         c.employee_name || "", c.employee_code || "",
-        c.raised_by_name || "", c.raised_by_code || "",
         c.designation || "", c.circle || "", c.cost_centre || "",
         c.bank_account || "", c.ifsc || "", day(c.submitted_at),
         finalStatusLabel(c), financeStatusLabel(c),
