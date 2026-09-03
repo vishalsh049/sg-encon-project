@@ -3,66 +3,10 @@ import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import { buildApiUrl } from "../lib/api";
 import { setStoredSession } from "../lib/session";
-import { getPageDisplayName } from "../lib/pageMap";
+import { getFirstAllowedPath } from "../lib/pageRoutes";
 import { useUser } from "../context/UserContext";
 import logo from "../assets/logo.png";
 import { Eye, EyeOff } from "lucide-react";
-
-const pageRouteMap = {
-  Dashboard: "/dashboard",
-  "Billing Dashboard": "/dashboard/billing",
-  "Billing Status": "/dashboard/billing/status",
-  Revenue: "/dashboard/billing/revenue",
-  "KPIs Penalty": "/dashboard/billing/penalties/kpis",
-  "General Penalties": "/dashboard/billing/penalties/general",
-  Physical: "/dashboard/manpower/physical",
-  Scrum: "/dashboard/manpower/scrum",
-  "Tower Reports": "/dashboard/reports/tower",
-  "Reports Dashboard": "/dashboard/reports",
-  "KPI Dashboard": "/dashboard/reports",
-  "NSO Fiber Performance": "/dashboard/reports/fiber/nso-dashboard",
-  "NSO Reports": "/dashboard/reports/fiber/nso",
-  "Fiber Reports": "/dashboard/reports/fiber/inventory",
-  Users: "/dashboard/users-access",
-  "Roles & Permissions": "/dashboard/users-access",
-  "HR Dashboard": "/dashboard/hr-dashboard",
-  Signoff: "/dashboard/manpower/signoff",
-};
-
-function getLoginRedirectPath(user) {
-  const rawPageAccess = Array.isArray(user?.pageAccess) ? user.pageAccess : [];
-  const viewablePagePermissions = Array.isArray(user?.pagePermissions)
-    ? user.pagePermissions
-        .filter((permission) => permission?.view)
-        .map((permission) => permission.page)
-    : [];
-
-  const allowedPages = rawPageAccess.length > 0 ? rawPageAccess : viewablePagePermissions;
-
-  if (allowedPages.length === 0) {
-    return "/dashboard";
-  }
-
-  const normalizedAllowedPages = allowedPages.map((page) =>
-    String(getPageDisplayName(page) || page || "").trim().toLowerCase()
-  );
-
-  if (normalizedAllowedPages.includes("dashboard")) {
-    return "/dashboard";
-  }
-
-  const firstAllowedRoute = allowedPages.find((page) => {
-    const displayName = getPageDisplayName(page);
-    return pageRouteMap[displayName] || pageRouteMap[page];
-  });
-
-  if (!firstAllowedRoute) {
-    return "/dashboard";
-  }
-
-  const displayName = getPageDisplayName(firstAllowedRoute);
-  return pageRouteMap[displayName] || pageRouteMap[firstAllowedRoute] || "/dashboard";
-}
 
 function Login() {
   const [loginId, setLoginId] = useState("");
@@ -98,7 +42,10 @@ const handleLogin = async (e) => {
      localStorage.setItem("token", res.data.token);
      setStoredSession(session);
      setUser(session);
-     navigate(getLoginRedirectPath(res.data.user), { replace: true });
+     // Land on the first page this user may View. If they can view nothing,
+     // go to /dashboard, where ProtectedRoute shows the "No access assigned"
+     // message (never the old 403 screen).
+     navigate(getFirstAllowedPath(session) || "/dashboard", { replace: true });
      return;
    }
 

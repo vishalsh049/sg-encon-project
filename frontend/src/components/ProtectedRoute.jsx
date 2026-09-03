@@ -1,9 +1,11 @@
 import React from "react";
+import { Navigate } from "react-router-dom";
 import { useUser } from "../context/UserContext";
 import { hasAccess } from "../utils/access";
-import AccessDenied from "./AccessDenied";
+import { getFirstAllowedPath } from "../lib/pageRoutes";
+import NoAccess from "./NoAccess";
 
-export default function ProtectedRoute({ page, children }) {
+export default function ProtectedRoute({ page, pages, children }) {
   const { user } = useUser();
 
   const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
@@ -17,21 +19,29 @@ export default function ProtectedRoute({ page, children }) {
     );
   }
 
-  // If there's no user (not authenticated), show access denied
+  // Not authenticated — send them to the login screen (no "Access Denied" page)
   if (!user) {
-    return <AccessDenied pageName={page} />;
+    return <Navigate to="/login" replace />;
   }
 
-  // No page-level restriction requested (e.g. a user's own Profile) — just require login
-  if (!page) {
+  // Accept a single `page` or any-of `pages`. No restriction at all (e.g. a
+  // user's own Profile) — just require login.
+  const required = pages && pages.length ? pages : page ? [page] : [];
+  if (required.length === 0) {
     return <>{children}</>;
   }
 
-  // Check if user has access to this specific page
-  const allowed = hasAccess(page, user);
+  // Has View permission for at least one of the required pages — render it
+  if (required.some((p) => hasAccess(p, user))) {
+    return <>{children}</>;
+  }
 
-  if (allowed) return <>{children}</>;
-
-  // User is authenticated but doesn't have access to this page
-  return <AccessDenied pageName={page} />;
+  // Authenticated but not allowed to view this page. Instead of a 403 screen,
+  // silently redirect to the first page the user CAN view. If they can view
+  // nothing at all, show the plain "No access assigned" message.
+  const firstAllowedPath = getFirstAllowedPath(user);
+  if (firstAllowedPath) {
+    return <Navigate to={firstAllowedPath} replace />;
+  }
+  return <NoAccess />;
 }

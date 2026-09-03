@@ -1,0 +1,10 @@
+# SPA fallback: serve index.html for any path that isn't a real file/dir
+# so client-side routes (e.g. /dashboard/reports/tower) work on direct load.
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /
+  RewriteRule ^index\.html$ - [L]
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteRule . /index.html [L]
+</IfModule>

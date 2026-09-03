@@ -132,6 +132,7 @@ const PAGE_IDS = {
   finance: "expense-finance",
   dashboard: "expense-claims-dashboard",
   admin: "expense-claims-admin",
+  advances: "expense-advances",
 };
 
 module.exports = {

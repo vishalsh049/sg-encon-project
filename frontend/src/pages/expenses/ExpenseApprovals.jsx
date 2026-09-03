@@ -11,10 +11,12 @@ import { useUser } from "../../context/UserContext";
 import { getPagePermission } from "../../utils/access";
 import { formatCurrency, formatDate } from "../../utils/penaltyFormat";
 import { bulkApproveClaims, fetchApprovals } from "../../lib/expenseClaimsApi";
+import { fetchAdvanceBillApprovals } from "../../lib/expenseAdvancesApi";
 
 const TABS = [
   { key: "pending", label: "Pending My Approval" },
   { key: "all", label: "All Assigned To Me" },
+  { key: "advance-bills", label: "Advance Bills" },
 ];
 const PAGE_SIZE = 20;
 const STAGE_LABEL = { l1: "L1", l2: "L2", final: "Final" };
@@ -40,8 +42,9 @@ export default function ExpenseApprovals() {
   const [bulkOpen, setBulkOpen] = useState(false);
   const [bulkBusy, setBulkBusy] = useState(false);
 
+  const isBillsTab = tab === "advance-bills";
   const colCount = 10 + (canApprove ? 1 : 0);
-  const actionableRows = rows.filter(isActionable);
+  const actionableRows = isBillsTab ? [] : rows.filter(isActionable);
   const allSelected = actionableRows.length > 0 && actionableRows.every((r) => selected.has(r.id));
 
   useEffect(() => {
@@ -56,7 +59,10 @@ export default function ExpenseApprovals() {
     setLoading(true);
     setSelected(new Set());
     try {
-      const res = await fetchApprovals({ tab, search: debounced, page, pageSize: PAGE_SIZE });
+      const res =
+        tab === "advance-bills"
+          ? await fetchAdvanceBillApprovals({ tab: "pending", search: debounced, page, pageSize: PAGE_SIZE })
+          : await fetchApprovals({ tab, search: debounced, page, pageSize: PAGE_SIZE });
       setRows(res.data || []);
       setTotal(res.total || 0);
     } catch (error) {
@@ -174,11 +180,90 @@ export default function ExpenseApprovals() {
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search claim number, employee, designation…"
+          placeholder={
+            isBillsTab
+              ? "Search bill number, advance number, employee…"
+              : "Search claim number, employee, designation…"
+          }
           className="w-full border-0 bg-transparent text-sm text-text-primary outline-none placeholder:text-text-muted"
         />
       </div>
 
+      {isBillsTab ? (
+        <div className={`${CARD_SHELL} overflow-hidden`}>
+          {isEmpty ? (
+            <div className="flex flex-col items-center justify-center gap-3 px-6 py-16 text-center">
+              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-violet-50 text-violet-600 dark:bg-violet-500/10 dark:text-violet-300">
+                <Inbox size={26} />
+              </div>
+              <h3 className="text-base font-semibold text-text-primary">No bills to verify</h3>
+              <p className="max-w-sm text-sm text-text-muted">
+                No advance bills are waiting on your verification right now.
+              </p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="min-w-[960px] w-full text-left text-sm">
+                <thead>
+                  <tr className="bg-surface-muted text-[11px] font-semibold uppercase tracking-[0.08em] text-text-muted">
+                    <th className="px-4 py-2.5">Bill No</th>
+                    <th className="px-4 py-2.5">Advance</th>
+                    <th className="px-4 py-2.5">Employee</th>
+                    <th className="px-4 py-2.5">SG Invoice</th>
+                    <th className="px-4 py-2.5">Service Month</th>
+                    <th className="px-4 py-2.5 text-right">Billed</th>
+                    <th className="px-4 py-2.5 text-right">Advance Paid</th>
+                    <th className="px-4 py-2.5">Stage</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border-color">
+                  {rows.map((row) => (
+                    <tr
+                      key={row.id}
+                      onClick={() =>
+                        navigate(`/dashboard/expense-claims/advances/bills/${row.id}`)
+                      }
+                      className="cursor-pointer transition hover:bg-surface-muted/60"
+                    >
+                      <td className="whitespace-nowrap px-4 py-2.5 font-semibold text-text-primary">
+                        {row.billNumber || "—"}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-2.5 text-text-secondary">
+                        {row.advanceNumber || "—"}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-2.5 text-text-secondary">
+                        {row.employeeName || "—"}
+                        {row.employeeCode ? (
+                          <span className="mt-0.5 block text-[11px] text-text-muted">
+                            {row.employeeCode}
+                          </span>
+                        ) : null}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-2.5 text-text-secondary">
+                        {row.sgInvoiceNo || "—"}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-2.5 text-text-secondary">
+                        {row.serviceMonth || "—"}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-2.5 text-right font-medium text-text-primary">
+                        {formatCurrency(row.billingAmount || 0)}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-2.5 text-right text-text-secondary">
+                        {formatCurrency(row.advanceTotalPaid || 0)}
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <span className="rounded border border-border-color px-1.5 py-0.5 text-[11px] font-medium text-text-secondary">
+                          {STAGE_LABEL[row.myStage] || row.myStage || "—"}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      ) : (
       <div className={`${CARD_SHELL} overflow-hidden`}>
         {isEmpty ? (
           <div className="flex flex-col items-center justify-center gap-3 px-6 py-16 text-center">
@@ -299,6 +384,7 @@ export default function ExpenseApprovals() {
           </div>
         )}
       </div>
+      )}
 
       {total > PAGE_SIZE ? (
         <div className="flex items-center justify-between text-sm text-text-secondary">

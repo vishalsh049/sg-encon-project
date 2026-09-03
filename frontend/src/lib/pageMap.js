@@ -20,6 +20,7 @@ export const PAGE_ID_MAP = {
   "my-expenses": "My Expenses",
   "expense-approvals": "Expense Approvals",
   "expense-finance": "Expense Finance",
+  "expense-advances": "Expense Advances",
   "expense-claims-dashboard": "Expense Claims Dashboard",
   "expense-claims-admin": "Expense Claims Admin",
 

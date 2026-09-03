@@ -48,6 +48,9 @@ import FinanceExpenseProcessing from "./pages/expenses/FinanceExpenseProcessing"
 import FinanceClaimDetail from "./pages/expenses/FinanceClaimDetail";
 import ExpenseClaimsDashboard from "./pages/expenses/ExpenseClaimsDashboard";
 import ExpenseClaimsAdmin from "./pages/expenses/ExpenseClaimsAdmin";
+import AdvancePayments from "./pages/expenses/AdvancePayments";
+import AdvanceDetail from "./pages/expenses/AdvanceDetail";
+import VerifyAdvanceBill from "./pages/expenses/VerifyAdvanceBill";
 
 function App() {
   return (
@@ -179,6 +182,26 @@ function App() {
   <Route path="expense-claims/finance/:id" element={
     <ProtectedRoute page={"Expense Finance"}>
       <FinanceClaimDetail />
+    </ProtectedRoute>
+  } />
+
+  {/* Advance Payments — post-approval money + bill closure. Visible to advance/
+      finance admins and to employees for their own advances (backend scopes). */}
+  <Route path="expense-claims/advances" element={
+    <ProtectedRoute pages={["Expense Advances", "Expense Finance", "My Expenses"]}>
+      <AdvancePayments />
+    </ProtectedRoute>
+  } />
+
+  <Route path="expense-claims/advances/bills/:billId" element={
+    <ProtectedRoute pages={["Expense Approvals", "Expense Advances", "Expense Finance", "My Expenses"]}>
+      <VerifyAdvanceBill />
+    </ProtectedRoute>
+  } />
+
+  <Route path="expense-claims/advances/:id" element={
+    <ProtectedRoute pages={["Expense Advances", "Expense Finance", "My Expenses"]}>
+      <AdvanceDetail />
     </ProtectedRoute>
   } />
 

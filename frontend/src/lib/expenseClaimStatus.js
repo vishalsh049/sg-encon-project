@@ -81,6 +81,61 @@ export function statusMeta(status) {
   };
 }
 
+// --- Advance Payment workflow — the two extra status dimensions ---------------
+// Approval status is the claim's own current_status (STATUS_META above).
+
+const NEUTRAL =
+  "bg-slate-50 text-slate-700 border-slate-200 dark:bg-slate-500/10 dark:text-slate-300 dark:border-slate-500/20";
+const AMBER =
+  "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20";
+const GREEN =
+  "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20";
+const VIOLET =
+  "bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-500/10 dark:text-violet-400 dark:border-violet-500/20";
+const ORANGE =
+  "bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-500/10 dark:text-orange-400 dark:border-orange-500/20";
+
+export const PAYMENT_STATUS_META = {
+  not_paid: { label: "Not Paid", className: NEUTRAL },
+  partially_paid: { label: "Partially Paid", className: AMBER },
+  fully_paid: { label: "Fully Paid", className: GREEN },
+};
+
+export const CLOSURE_STATUS_META = {
+  na: { label: "N/A", className: NEUTRAL },
+  open: { label: "Bill Closure Open", className: AMBER },
+  under_verification: { label: "Bills Under Verification", className: VIOLET },
+  refund_pending: { label: "Refund Pending", className: ORANGE },
+  additional_payment_pending: { label: "Additional Payment Pending", className: ORANGE },
+  closed: { label: "Closed", className: GREEN },
+};
+
+export function paymentStatusMeta(s) {
+  return PAYMENT_STATUS_META[s] || { label: s || "—", className: NEUTRAL };
+}
+export function closureStatusMeta(s) {
+  return CLOSURE_STATUS_META[s] || { label: s || "—", className: NEUTRAL };
+}
+
+// Advance bill status — reuses the claim status vocabulary plus a terminal
+// "approved".
+export const BILL_STATUS_META = {
+  draft: { label: "Draft", className: NEUTRAL },
+  pending_l1: { label: "Pending L1", className: AMBER },
+  pending_l2: { label: "Pending L2", className: VIOLET },
+  pending_final: { label: "Pending Final", className: ORANGE },
+  approved: { label: "Approved", className: GREEN },
+  returned: { label: "Returned", className: AMBER },
+  rejected: {
+    label: "Rejected",
+    className:
+      "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-500/10 dark:text-rose-400 dark:border-rose-500/20",
+  },
+};
+export function billStatusMeta(s) {
+  return BILL_STATUS_META[s] || { label: s || "—", className: NEUTRAL };
+}
+
 // Ordered stages for the progress tracker. Finance is a read-only destination,
 // NOT a processing step — the workflow ends when the claim lands there.
 export const TRACKER_STEPS = [

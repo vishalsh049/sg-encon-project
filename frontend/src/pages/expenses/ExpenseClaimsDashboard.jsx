@@ -26,6 +26,7 @@ import { CARD_SHELL } from "../../components/billingDashboard/theme";
 import KpiCard from "../../components/billingDashboard/KpiCard";
 import { formatIndianCompact } from "../../utils/penaltyFormat";
 import { fetchExpenseDashboard } from "../../lib/expenseClaimsApi";
+import { fetchAdvanceDashboard } from "../../lib/expenseAdvancesApi";
 
 const INPUT =
   "rounded-lg border border-border-color bg-surface px-2.5 py-1.5 text-sm text-text-primary outline-none focus:border-indigo-400";
@@ -33,13 +34,18 @@ const INPUT =
 export default function ExpenseClaimsDashboard() {
   const [range, setRange] = useState({ dateFrom: "", dateTo: "" });
   const [data, setData] = useState(null);
+  const [adv, setAdv] = useState(null);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetchExpenseDashboard(range);
+      const [res, advRes] = await Promise.all([
+        fetchExpenseDashboard(range),
+        fetchAdvanceDashboard().catch(() => null),
+      ]);
       setData(res.data);
+      setAdv(advRes?.data || null);
     } catch (error) {
       toast.error(error.message || "Failed to load the dashboard.");
     } finally {
@@ -94,6 +100,28 @@ export default function ExpenseClaimsDashboard() {
         <KpiCard compact accentKey="penalty" icon={Wallet} label="Total Reduced" value={loading ? "…" : formatIndianCompact(c.totalReduced ?? 0)} />
         <KpiCard compact accentKey="revenue" icon={Wallet} label="Total Processed" value={loading ? "…" : formatIndianCompact(c.totalProcessed ?? 0)} />
       </div>
+
+      {adv ? (
+        <div className="space-y-2">
+          <div className="text-[12px] font-semibold uppercase tracking-[0.2em] text-text-muted">
+            Advances
+          </div>
+          <div className="grid grid-cols-2 gap-2 lg:grid-cols-4 xl:grid-cols-6">
+            <KpiCard compact accentKey="neutral" icon={FileStack} label="Total Advances" value={loading ? "…" : adv.totalAdvances ?? 0} />
+            <KpiCard compact accentKey="pending" icon={Clock3} label="Not Paid" value={loading ? "…" : adv.payment?.notPaid ?? 0} />
+            <KpiCard compact accentKey="pending" icon={Clock3} label="Partially Paid" value={loading ? "…" : adv.payment?.partiallyPaid ?? 0} />
+            <KpiCard compact accentKey="completed" icon={CheckCircle2} label="Fully Paid" value={loading ? "…" : adv.payment?.fullyPaid ?? 0} />
+            <KpiCard compact accentKey="pending" icon={Clock3} label="Closure Open" value={loading ? "…" : adv.closure?.open ?? 0} />
+            <KpiCard compact accentKey="pending" icon={Clock3} label="Under Verification" value={loading ? "…" : adv.closure?.underVerification ?? 0} />
+            <KpiCard compact accentKey="penalty" icon={Wallet} label="Refund Pending" value={loading ? "…" : adv.closure?.refundPending ?? 0} />
+            <KpiCard compact accentKey="penalty" icon={Wallet} label="Addl. Pay Pending" value={loading ? "…" : adv.closure?.additionalPending ?? 0} />
+            <KpiCard compact accentKey="completed" icon={CheckCircle2} label="Closed" value={loading ? "…" : adv.closure?.closed ?? 0} />
+            <KpiCard compact accentKey="completed" icon={Wallet} label="Total Paid" value={loading ? "…" : formatIndianCompact(adv.money?.paid ?? 0)} />
+            <KpiCard compact accentKey="neutral" icon={Wallet} label="Total Billed" value={loading ? "…" : formatIndianCompact(adv.money?.billed ?? 0)} />
+            <KpiCard compact accentKey="revenue" icon={Wallet} label="Refunded" value={loading ? "…" : formatIndianCompact(adv.money?.refunded ?? 0)} />
+          </div>
+        </div>
+      ) : null}
 
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
         <ChartCard title="Claimed vs Approved by Category">

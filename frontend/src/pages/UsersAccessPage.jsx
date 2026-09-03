@@ -68,6 +68,7 @@ const pageAccessList = [
       "my-expenses",
       "expense-approvals",
       "expense-finance",
+      "expense-advances",
       "expense-claims-dashboard",
       "expense-claims-admin",
     ],

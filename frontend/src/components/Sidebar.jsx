@@ -144,6 +144,15 @@ function Sidebar({ closeSidebar, collapsed, onExpandRequest }) {
     accessPage: "Expense Finance",
   },
   {
+    // Finance / advance admins see every advance; a plain employee who can raise
+    // expenses sees their own advances here too (backend scopes the list).
+    key: "expense-advances",
+    label: "Advance Payments",
+    path: "/dashboard/expense-claims/advances",
+    icon: ReceiptText,
+    accessPages: ["Expense Advances", "Expense Finance", "My Expenses"],
+  },
+  {
     key: "expense-claims-dashboard",
     label: "Expense Dashboard",
     path: "/dashboard/expense-claims/dashboard",

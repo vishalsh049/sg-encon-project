@@ -234,6 +234,158 @@ async function ensureTablesOnce() {
     )
   `);
 
+  // ------------------------------------------------------------------------
+  // ADVANCE PAYMENT + BILL CLOSURE (Milestone A).
+  //
+  // An advance request re-uses the whole reimbursement engine: it is an
+  // expense_claims row with claim_kind='advance' plus exactly one synthetic
+  // expense_claim_items row (category 'Advance Request', claimed_amount =
+  // requested amount). This 1:1 extension row carries the advance-specific
+  // financial state; child tables (payments / bills / refunds / additional
+  // payments) arrive in later milestones.
+  // ------------------------------------------------------------------------
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS expense_advances (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      claim_id INT NOT NULL UNIQUE,
+      employee_user_id INT NULL,
+      requested_amount DECIMAL(14,2) NOT NULL DEFAULT 0,
+      approved_amount DECIMAL(14,2) NULL,
+      total_paid DECIMAL(14,2) NOT NULL DEFAULT 0,
+      total_refunded DECIMAL(14,2) NOT NULL DEFAULT 0,
+      total_additional_paid DECIMAL(14,2) NOT NULL DEFAULT 0,
+      total_approved_bills DECIMAL(14,2) NOT NULL DEFAULT 0,
+      payment_status VARCHAR(16) NOT NULL DEFAULT 'not_paid',
+      bill_closure_status VARCHAR(32) NOT NULL DEFAULT 'na',
+      closed_at DATETIME NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      INDEX idx_adv_employee (employee_user_id),
+      INDEX idx_adv_payment_status (payment_status),
+      INDEX idx_adv_closure_status (bill_closure_status)
+    )
+  `);
+
+  // Atomic per-year counter for the ADV-YYYY-000001 advance number. Separate
+  // from expense_claim_sequences so advance and reimbursement numbers do not
+  // share a run.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS expense_advance_sequences (
+      year INT NOT NULL PRIMARY KEY,
+      last_no INT NOT NULL DEFAULT 0
+    )
+  `);
+
+  // Per-year counter for the ADVB-YYYY-000001 advance bill number.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS expense_advance_bill_sequences (
+      year INT NOT NULL PRIMARY KEY,
+      last_no INT NOT NULL DEFAULT 0
+    )
+  `);
+
+  // One Advance -> many Finance payment transactions (Milestone B). Append-only:
+  // a correction is a new row, never an overwrite.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS expense_advance_payments (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      advance_id INT NOT NULL,
+      claim_id INT NOT NULL,
+      payment_date DATE NOT NULL,
+      paid_amount DECIMAL(14,2) NOT NULL,
+      payment_reference VARCHAR(120) NULL,
+      utr_reference VARCHAR(120) NULL,
+      remarks VARCHAR(1000) NULL,
+      attachment_id INT NULL,
+      is_reversal TINYINT(1) NOT NULL DEFAULT 0,
+      reverses_payment_id INT NULL,
+      created_by INT NULL,
+      created_by_name VARCHAR(160) NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_adv_pay_advance (advance_id),
+      INDEX idx_adv_pay_claim (claim_id)
+    )
+  `);
+
+  // One Advance -> many real bills submitted against it (Milestone C). Each bill
+  // is a single-amount document that runs its own L1/L2/Final verification.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS expense_advance_bills (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      advance_id INT NOT NULL,
+      claim_id INT NOT NULL,
+      bill_number VARCHAR(30) NULL UNIQUE,
+      po_number VARCHAR(80) NULL,
+      jms_id VARCHAR(80) NULL,
+      sg_invoice_no VARCHAR(120) NULL,
+      sg_invoice_date DATE NULL,
+      billing_amount DECIMAL(14,2) NOT NULL DEFAULT 0,
+      service_month VARCHAR(7) NULL,
+      description VARCHAR(1000) NULL,
+      bill_status VARCHAR(24) NOT NULL DEFAULT 'draft',
+      current_stage VARCHAR(16) NULL,
+      current_approver_user_id INT NULL,
+      l1_approver_user_id INT NULL,
+      l2_approver_user_id INT NULL,
+      final_approver_user_id INT NULL,
+      l1_approved_amount DECIMAL(14,2) NULL,
+      l1_decision VARCHAR(20) NULL,
+      l1_reason VARCHAR(500) NULL,
+      l2_approved_amount DECIMAL(14,2) NULL,
+      l2_decision VARCHAR(20) NULL,
+      l2_reason VARCHAR(500) NULL,
+      final_approved_amount DECIMAL(14,2) NULL,
+      final_decision VARCHAR(20) NULL,
+      final_reason VARCHAR(500) NULL,
+      approved_amount DECIMAL(14,2) NULL,
+      submitted_by INT NULL,
+      submitted_at DATETIME NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      INDEX idx_adv_bill_advance (advance_id),
+      INDEX idx_adv_bill_status (bill_status),
+      INDEX idx_adv_bill_current_approver (current_approver_user_id)
+    )
+  `);
+
+  // One Advance -> many refund receipts (Milestone D).
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS expense_advance_refunds (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      advance_id INT NOT NULL,
+      claim_id INT NOT NULL,
+      refund_amount DECIMAL(14,2) NOT NULL,
+      refund_date DATE NOT NULL,
+      refund_reference VARCHAR(120) NULL,
+      remarks VARCHAR(1000) NULL,
+      attachment_id INT NULL,
+      created_by INT NULL,
+      created_by_name VARCHAR(160) NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_adv_refund_advance (advance_id)
+    )
+  `);
+
+  // One Advance -> many additional payouts when approved bills exceed the
+  // advance (Milestone D).
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS expense_advance_additional_payments (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      advance_id INT NOT NULL,
+      claim_id INT NOT NULL,
+      amount DECIMAL(14,2) NOT NULL,
+      payment_date DATE NOT NULL,
+      payment_reference VARCHAR(120) NULL,
+      utr_reference VARCHAR(120) NULL,
+      remarks VARCHAR(1000) NULL,
+      attachment_id INT NULL,
+      created_by INT NULL,
+      created_by_name VARCHAR(160) NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_adv_addl_advance (advance_id)
+    )
+  `);
+
   // Phase 10 — in-portal notifications.
   await pool.query(`
     CREATE TABLE IF NOT EXISTS expense_claim_notifications (
@@ -378,6 +530,38 @@ async function ensureTablesOnce() {
   // identity then lives in employee_code / employee_name). The submitter is
   // always expense_claims.created_by. Safe/idempotent to run every boot.
   await pool.query(`ALTER TABLE expense_claims MODIFY employee_user_id INT NULL`).catch(() => {});
+
+  // Advance Payment workflow — 'reimbursement' (default, unchanged) | 'advance'.
+  // Every advance-specific branch keys off this column; existing rows are
+  // backfilled to 'reimbursement' by the NOT NULL DEFAULT.
+  await ensureColumn(
+    "expense_claims",
+    "claim_kind",
+    "VARCHAR(16) NOT NULL DEFAULT 'reimbursement'"
+  );
+
+  // Advance bill files reuse the existing attachment BLOB store + secure token
+  // route; this column links an attachment to an advance bill instead of a
+  // claim item. Audit rows likewise carry the bill they concern.
+  await ensureColumn("expense_claim_attachments", "advance_bill_id", "INT NULL");
+  await ensureColumn("expense_claim_audit", "advance_bill_id", "INT NULL");
+
+  // Set by the advance holder's "Finalise Bills" action (Milestone D): "I have
+  // no more bills to submit". Only then can an under-utilised advance move to
+  // refund_pending. Over-utilisation and exact settlement need no flag.
+  await ensureColumn("expense_advances", "bills_finalized", "TINYINT(1) NOT NULL DEFAULT 0");
+
+  // 'additional_payment_pending' is 26 chars — widen from the original VARCHAR(24)
+  // and repair any value truncated before this fix. Idempotent.
+  await pool
+    .query(`ALTER TABLE expense_advances MODIFY bill_closure_status VARCHAR(32) NOT NULL DEFAULT 'na'`)
+    .catch(() => {});
+  await pool
+    .query(
+      `UPDATE expense_advances SET bill_closure_status = 'additional_payment_pending'
+        WHERE bill_closure_status = 'additional_payment_pendi'`
+    )
+    .catch(() => {});
 
   await seedMasters();
 }
@@ -716,6 +900,8 @@ function mapClaim(row) {
   return {
     id: row.id,
     claimNumber: row.claim_number,
+    claimKind: row.claim_kind || "reimbursement",
+    purpose: row.purpose ?? null,
     employeeUserId: row.employee_user_id,
     employeeName: row.employee_name,
     employeeCode: row.employee_code,
@@ -829,6 +1015,7 @@ function mapAudit(row) {
     fromStatus: row.from_status,
     toStatus: row.to_status,
     itemId: row.item_id,
+    advanceBillId: row.advance_bill_id ?? null,
     oldAmount: row.old_amount === null ? null : Number(row.old_amount),
     newAmount: row.new_amount === null ? null : Number(row.new_amount),
     reason: row.reason,
@@ -841,8 +1028,8 @@ async function writeAudit(conn, entry) {
   await conn.query(
     `INSERT INTO expense_claim_audit
        (claim_id, actor_user_id, actor_name, stage, action, from_status, to_status,
-        item_id, old_amount, new_amount, reason, meta)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        item_id, advance_bill_id, old_amount, new_amount, reason, meta)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       entry.claimId,
       entry.actorUserId ?? null,
@@ -852,6 +1039,7 @@ async function writeAudit(conn, entry) {
       entry.fromStatus ?? null,
       entry.toStatus ?? null,
       entry.itemId ?? null,
+      entry.advanceBillId ?? null,
       entry.oldAmount ?? null,
       entry.newAmount ?? null,
       entry.reason ?? null,
@@ -884,6 +1072,164 @@ async function nextClaimNumber(conn, year) {
   );
   const seq = rows[0].last_no;
   return `EXP-${year}-${String(seq).padStart(6, "0")}`;
+}
+
+// Same contract as nextClaimNumber but for advance requests: ADV-YYYY-000001.
+async function nextAdvanceNumber(conn, year) {
+  await conn.query(
+    `INSERT INTO expense_advance_sequences (year, last_no) VALUES (?, 1)
+     ON DUPLICATE KEY UPDATE last_no = last_no + 1`,
+    [year]
+  );
+  const [rows] = await conn.query(
+    `SELECT last_no FROM expense_advance_sequences WHERE year = ?`,
+    [year]
+  );
+  const seq = rows[0].last_no;
+  return `ADV-${year}-${String(seq).padStart(6, "0")}`;
+}
+
+// ADVB-YYYY-000001 for an advance bill.
+async function nextAdvanceBillNumber(conn, year) {
+  await conn.query(
+    `INSERT INTO expense_advance_bill_sequences (year, last_no) VALUES (?, 1)
+     ON DUPLICATE KEY UPDATE last_no = last_no + 1`,
+    [year]
+  );
+  const [rows] = await conn.query(
+    `SELECT last_no FROM expense_advance_bill_sequences WHERE year = ?`,
+    [year]
+  );
+  return `ADVB-${year}-${String(rows[0].last_no).padStart(6, "0")}`;
+}
+
+// Bill statuses that mean "the employee is not finished with this bill yet".
+const OPEN_BILL_STATUSES = ["draft", "pending_l1", "pending_l2", "pending_final", "returned"];
+
+// Single source of truth for every derived number and the payment / closure
+// status on an advance. MUST be called inside an open transaction — it locks the
+// expense_advances row (FOR UPDATE) so concurrent payment / bill / refund writes
+// can never race to a wrong total. Returns the refreshed advance row (snake_case)
+// plus the computed reconciliation figures.
+async function recomputeAdvance(conn, claimId) {
+  const [advRows] = await conn.query(
+    `SELECT a.*, c.final_approved_total, c.current_status
+       FROM expense_advances a
+       JOIN expense_claims c ON c.id = a.claim_id
+      WHERE a.claim_id = ?
+      FOR UPDATE`,
+    [claimId]
+  );
+  const adv = advRows[0];
+  if (!adv) return null;
+
+  const approved =
+    adv.final_approved_total != null ? round2(Number(adv.final_approved_total)) : null;
+
+  const [[pay]] = await conn.query(
+    `SELECT COALESCE(SUM(paid_amount), 0) AS s FROM expense_advance_payments WHERE advance_id = ?`,
+    [adv.id]
+  );
+  const [[ref]] = await conn.query(
+    `SELECT COALESCE(SUM(refund_amount), 0) AS s FROM expense_advance_refunds WHERE advance_id = ?`,
+    [adv.id]
+  );
+  const [[addl]] = await conn.query(
+    `SELECT COALESCE(SUM(amount), 0) AS s FROM expense_advance_additional_payments WHERE advance_id = ?`,
+    [adv.id]
+  );
+  const [[bills]] = await conn.query(
+    `SELECT COALESCE(SUM(approved_amount), 0) AS s,
+            SUM(bill_status = 'approved') AS approved_count
+       FROM expense_advance_bills WHERE advance_id = ?`,
+    [adv.id]
+  );
+  const [[open]] = await conn.query(
+    `SELECT COUNT(*) AS c FROM expense_advance_bills
+      WHERE advance_id = ? AND bill_status IN (${OPEN_BILL_STATUSES.map(() => "?").join(",")})`,
+    [adv.id, ...OPEN_BILL_STATUSES]
+  );
+
+  const totalPaid = round2(Number(pay.s));
+  const totalRefunded = round2(Number(ref.s));
+  const totalAdditional = round2(Number(addl.s));
+  const totalApprovedBills = round2(Number(bills.s));
+  const approvedBillCount = Number(bills.approved_count || 0);
+  const openBillCount = Number(open.c || 0);
+
+  const unpaidApproved = approved == null ? 0 : round2(Math.max(approved - totalPaid, 0));
+  const remainingAdvance = round2(totalPaid + totalAdditional - totalApprovedBills - totalRefunded);
+  const additionalPayable = round2(
+    Math.max(totalApprovedBills - (totalPaid + totalAdditional), 0)
+  );
+
+  let paymentStatus = "not_paid";
+  if (totalPaid > 0) {
+    paymentStatus =
+      approved != null && totalPaid + 0.001 >= approved ? "fully_paid" : "partially_paid";
+  }
+
+  // Closure state machine. The explicit refund-pending / closed transitions that
+  // need a "no more bills" decision are finalised in Milestone D's reconcile
+  // endpoint; here we only move through the states the data unambiguously implies.
+  const billsFinalized = Boolean(adv.bills_finalized);
+  // True once real reconciliation activity has happened — only then can the
+  // advance auto-close on a zero balance. A freshly-approved advance with
+  // nothing paid and nothing billed has remaining 0 but must stay 'open'.
+  const reconciliationStarted =
+    approvedBillCount > 0 || billsFinalized || totalRefunded > 0.001 || totalAdditional > 0.001;
+
+  let closure = adv.bill_closure_status;
+  if (approved == null) {
+    closure = "na";
+  } else if (closure === "closed") {
+    closure = "closed"; // terminal — never auto-reopened
+  } else if (openBillCount > 0) {
+    closure = "under_verification";
+  } else if (additionalPayable > 0.001) {
+    // Approved bills exceed money out — the company owes the employee more.
+    closure = "additional_payment_pending";
+  } else if (reconciliationStarted && remainingAdvance <= 0.001) {
+    // Everything reconciles to zero — settled.
+    closure = "closed";
+  } else if (billsFinalized && remainingAdvance > 0.001) {
+    // Employee has declared "no more bills" and money is still unspent.
+    closure = "refund_pending";
+  } else {
+    // Paid, but the employee may still submit bills (or nothing has moved yet).
+    closure = "open";
+  }
+  const closedAt =
+    closure === "closed" ? adv.closed_at || new Date() : null;
+
+  await conn.query(
+    `UPDATE expense_advances SET
+       approved_amount = ?, total_paid = ?, total_refunded = ?, total_additional_paid = ?,
+       total_approved_bills = ?, payment_status = ?, bill_closure_status = ?, closed_at = ?
+     WHERE id = ?`,
+    [
+      approved, totalPaid, totalRefunded, totalAdditional, totalApprovedBills,
+      paymentStatus, closure, closedAt, adv.id,
+    ]
+  );
+
+  return {
+    ...adv,
+    approved_amount: approved,
+    total_paid: totalPaid,
+    total_refunded: totalRefunded,
+    total_additional_paid: totalAdditional,
+    total_approved_bills: totalApprovedBills,
+    payment_status: paymentStatus,
+    bill_closure_status: closure,
+    closed_at: closedAt,
+    // computed extras (not columns)
+    unpaid_approved: unpaidApproved,
+    remaining_advance: remainingAdvance,
+    additional_payable: additionalPayable,
+    open_bill_count: openBillCount,
+    approved_bill_count: approvedBillCount,
+  };
 }
 
 async function resolveApprovers(conn, category, amount) {
@@ -1389,6 +1735,15 @@ router.get("/claims", requirePagePermission(PAGE, "view"), async (req, res) => {
     const filters = ["(c.employee_user_id = ? OR c.created_by = ?)"];
     const params = [req.authUser.id, req.authUser.id];
 
+    // My Expenses lists reimbursement claims only — advances have their own
+    // pages. `?kind=advance` opts in; `?kind=all` drops the filter.
+    const kindParam = String(req.query.kind || "reimbursement").trim().toLowerCase();
+    if (kindParam === "advance") {
+      filters.push("c.claim_kind = 'advance'");
+    } else if (kindParam !== "all") {
+      filters.push("(c.claim_kind = 'reimbursement' OR c.claim_kind IS NULL)");
+    }
+
     const tabKey = String(tab || "all").trim().toLowerCase();
     if (tabKey !== "all" && TAB_STATUS_MAP[tabKey]) {
       const list = TAB_STATUS_MAP[tabKey];
@@ -1535,9 +1890,53 @@ async function persistItems(conn, claimId, items) {
 
 function parseClaimBody(body) {
   const items = Array.isArray(body?.items) ? body.items : [];
+  const claimKind =
+    String(body?.claimKind ?? body?.claim_kind ?? "reimbursement").trim().toLowerCase() === "advance"
+      ? "advance"
+      : "reimbursement";
   return {
     employeeCode: String(body?.employeeCode ?? "").trim() || null,
+    claimKind,
+    requestedAmount: toMoney(body?.requestedAmount ?? body?.requested_amount),
+    purpose: String(body?.purpose ?? "").trim() || null,
     items,
+  };
+}
+
+// The single synthetic expense item that represents an advance request. Its
+// shape matches validateItem()'s `value` output so persistItems() and the whole
+// approval engine treat it exactly like a normal item.
+function advanceSyntheticItem(amount, purpose, itemId = null) {
+  return {
+    id: itemId,
+    srNo: 1,
+    expenseDate: null,
+    category: "Advance Request",
+    subCategory: null,
+    description: purpose || null,
+    claimedAmount: Number.isFinite(amount) ? round2(amount) : 0,
+    billNumber: null,
+    expenseFor: "employee",
+    employeeType: null,
+    empRefCode: null,
+    empRefName: null,
+    empRefDesignation: null,
+    empRefCircle: null,
+    empRefCmp: null,
+    vendorId: null,
+    vendorName: null,
+    vendorType: null,
+    claimType: "advance",
+    billingType: null,
+    clientName: null,
+    workCategory: null,
+    poNumber: null,
+    domain: null,
+    otherDomain: null,
+    siteRoute: null,
+    estimateWccAmount: null,
+    bankAccount: null,
+    ifsc: null,
   };
 }
 
@@ -1653,15 +2052,23 @@ router.post("/claims", requirePagePermission(PAGE, "edit"), async (req, res) => 
   try {
     await ensureTables();
     const body = parseClaimBody(req.body);
+    const isAdvance = body.claimKind === "advance";
 
-    const parsedItems = [];
-    const errors = [];
-    body.items.forEach((raw, index) => {
-      const { errors: itemErrors, value } = validateItem(raw, index, [], { strict: false });
-      errors.push(...itemErrors);
-      parsedItems.push(value);
-    });
-    if (errors.length) throw httpError(400, "Please fix the highlighted rows.", { rowErrors: errors });
+    let parsedItems = [];
+    if (isAdvance) {
+      if (!Number.isFinite(body.requestedAmount) || body.requestedAmount <= 0) {
+        throw httpError(400, "Enter an advance amount greater than zero.");
+      }
+      parsedItems = [advanceSyntheticItem(body.requestedAmount, body.purpose)];
+    } else {
+      const errors = [];
+      body.items.forEach((raw, index) => {
+        const { errors: itemErrors, value } = validateItem(raw, index, [], { strict: false });
+        errors.push(...itemErrors);
+        parsedItems.push(value);
+      });
+      if (errors.length) throw httpError(400, "Please fix the highlighted rows.", { rowErrors: errors });
+    }
 
     const snap = await resolveEmployeeSnapshot(req.authUser, body.employeeCode);
 
@@ -1669,11 +2076,12 @@ router.post("/claims", requirePagePermission(PAGE, "edit"), async (req, res) => 
       const [ins] = await conn.query(
         `INSERT INTO expense_claims
            (employee_user_id, employee_name, employee_code, department, designation, circle,
-            cost_centre, current_status, current_stage, created_by)
-         VALUES (?, ?, ?, ?, ?, ?, ?, 'draft', 'employee', ?)`,
+            cost_centre, purpose, claim_kind, current_status, current_stage, created_by)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', 'employee', ?)`,
         [
           snap.employee_user_id, snap.employee_name, snap.employee_code, snap.department,
-          snap.designation, snap.circle, snap.cmp, req.authUser.id,
+          snap.designation, snap.circle, snap.cmp,
+          isAdvance ? body.purpose : null, body.claimKind, req.authUser.id,
         ]
       );
       const claimId = ins.insertId;
@@ -1686,11 +2094,13 @@ router.post("/claims", requirePagePermission(PAGE, "edit"), async (req, res) => 
         action: "DRAFT_CREATED",
         toStatus: "draft",
         meta: {
+          claimKind: body.claimKind,
           itemCount: parsedItems.length,
           claimantUserId: snap.employee_user_id,
           claimantEmployeeCode: snap.employee_code,
           submittedByUserId: req.authUser.id,
           onBehalfOf: snap.employee_user_id !== req.authUser.id,
+          ...(isAdvance ? { requestedAmount: round2(body.requestedAmount) } : {}),
         },
       });
       return claimId;
@@ -1728,15 +2138,31 @@ router.put("/claims/:id", requirePagePermission(PAGE, "edit"), async (req, res) 
     await ensureTables();
     const claim = await loadOwnEditableClaim(req.params.id, req.authUser);
     const body = parseClaimBody(req.body);
+    // Kind is fixed once the claim exists — a draft cannot flip between
+    // reimbursement and advance.
+    const isAdvance = claim.claim_kind === "advance";
 
-    const parsedItems = [];
-    const errors = [];
-    body.items.forEach((raw, index) => {
-      const { errors: itemErrors, value } = validateItem(raw, index, [], { strict: false });
-      errors.push(...itemErrors);
-      parsedItems.push(value);
-    });
-    if (errors.length) throw httpError(400, "Please fix the highlighted rows.", { rowErrors: errors });
+    let parsedItems = [];
+    if (isAdvance) {
+      if (!Number.isFinite(body.requestedAmount) || body.requestedAmount <= 0) {
+        throw httpError(400, "Enter an advance amount greater than zero.");
+      }
+      const [existRows] = await pool.query(
+        `SELECT id FROM expense_claim_items WHERE claim_id = ? ORDER BY id ASC LIMIT 1`,
+        [claim.id]
+      );
+      parsedItems = [
+        advanceSyntheticItem(body.requestedAmount, body.purpose, existRows[0]?.id || null),
+      ];
+    } else {
+      const errors = [];
+      body.items.forEach((raw, index) => {
+        const { errors: itemErrors, value } = validateItem(raw, index, [], { strict: false });
+        errors.push(...itemErrors);
+        parsedItems.push(value);
+      });
+      if (errors.length) throw httpError(400, "Please fix the highlighted rows.", { rowErrors: errors });
+    }
 
     const snap = await resolveEmployeeSnapshot(req.authUser, body.employeeCode);
 
@@ -1744,11 +2170,13 @@ router.put("/claims/:id", requirePagePermission(PAGE, "edit"), async (req, res) 
       await conn.query(
         `UPDATE expense_claims SET
            employee_user_id = ?, employee_name = ?, employee_code = ?, department = ?,
-           designation = ?, circle = ?, cost_centre = ?
+           designation = ?, circle = ?, cost_centre = ?${isAdvance ? ", purpose = ?" : ""}
          WHERE id = ?`,
         [
           snap.employee_user_id, snap.employee_name, snap.employee_code, snap.department,
-          snap.designation, snap.circle, snap.cmp, claim.id,
+          snap.designation, snap.circle, snap.cmp,
+          ...(isAdvance ? [body.purpose] : []),
+          claim.id,
         ]
       );
       const total = await persistItems(conn, claim.id, parsedItems);
@@ -1804,6 +2232,12 @@ router.delete("/claims/:id", async (req, res) => {
       await conn.query(`DELETE FROM expense_claim_audit WHERE claim_id = ?`, [claim.id]);
       await conn.query(`DELETE FROM expense_claim_finance WHERE claim_id = ?`, [claim.id]);
       await conn.query(`DELETE FROM expense_claim_notifications WHERE claim_id = ?`, [claim.id]);
+      // Advance workflow — extension row + every child transaction table.
+      await conn.query(`DELETE FROM expense_advance_payments WHERE claim_id = ?`, [claim.id]);
+      await conn.query(`DELETE FROM expense_advance_bills WHERE claim_id = ?`, [claim.id]);
+      await conn.query(`DELETE FROM expense_advance_refunds WHERE claim_id = ?`, [claim.id]);
+      await conn.query(`DELETE FROM expense_advance_additional_payments WHERE claim_id = ?`, [claim.id]);
+      await conn.query(`DELETE FROM expense_advances WHERE claim_id = ?`, [claim.id]);
       await conn.query(`DELETE FROM expense_claims WHERE id = ?`, [claim.id]);
     });
     res.json({ success: true });
@@ -1820,6 +2254,7 @@ router.post("/claims/:id/submit", requirePagePermission(PAGE, "edit"), async (re
   try {
     await ensureTables();
     const claim = await loadOwnEditableClaim(req.params.id, req.authUser);
+    const isAdvance = claim.claim_kind === "advance";
 
     const [items] = await pool.query(
       `SELECT * FROM expense_claim_items WHERE claim_id = ? ORDER BY sr_no ASC, id ASC`,
@@ -1834,15 +2269,23 @@ router.post("/claims/:id/submit", requirePagePermission(PAGE, "edit"), async (re
     const billCountByItem = new Map(attachRows.map((r) => [r.item_id, Number(r.c)]));
 
     const errors = [];
-    items.forEach((row, index) => {
-      // `row` carries snake_case columns; validateItem reads both cases.
-      const { errors: itemErrors } = validateItem(row, index, [], { strict: true });
-      errors.push(...itemErrors);
-      // A reimbursement (after-expense) claim must carry proof.
-      if ((row.claim_type || "").toLowerCase() === "reimbursement" && !billCountByItem.get(row.id)) {
-        errors.push(`Item ${index + 1}: attach a bill/invoice — required for a Reimbursement expense.`);
-      }
-    });
+    if (isAdvance) {
+      // The advance's synthetic item is not user-facing — validate only what an
+      // advance request needs. Bills are submitted later, against the paid
+      // advance, not here.
+      const amt = Number(items[0]?.claimed_amount || 0);
+      if (!(amt > 0)) errors.push("Enter an advance amount greater than zero.");
+    } else {
+      items.forEach((row, index) => {
+        // `row` carries snake_case columns; validateItem reads both cases.
+        const { errors: itemErrors } = validateItem(row, index, [], { strict: true });
+        errors.push(...itemErrors);
+        // A reimbursement (after-expense) claim must carry proof.
+        if ((row.claim_type || "").toLowerCase() === "reimbursement" && !billCountByItem.get(row.id)) {
+          errors.push(`Item ${index + 1}: attach a bill/invoice — required for a Reimbursement expense.`);
+        }
+      });
+    }
 
     // Each Employee-Expense item must point at a real employee master record.
     // Re-read every employee item's master fields from `physical` so the snapshot
@@ -1915,7 +2358,9 @@ router.post("/claims/:id/submit", requirePagePermission(PAGE, "edit"), async (re
         }
       }
 
-      const claimNumber = claim.claim_number || (await nextClaimNumber(conn, year));
+      const claimNumber =
+        claim.claim_number ||
+        (isAdvance ? await nextAdvanceNumber(conn, year) : await nextClaimNumber(conn, year));
 
       // Resubmission after a send-back: wipe every prior approval decision so the
       // chain starts clean. History stays intact in expense_claim_audit.
@@ -1989,6 +2434,18 @@ router.post("/claims/:id/submit", requirePagePermission(PAGE, "edit"), async (re
           submittedAt: new Date().toISOString(),
         },
       });
+
+      // Advance: create (or refresh, on resubmit) the 1:1 financial extension
+      // row. approved_amount / bill_closure_status stay null/'na' until the
+      // chain reaches Finance (see applyStageDecision).
+      if (isAdvance) {
+        await conn.query(
+          `INSERT INTO expense_advances (claim_id, employee_user_id, requested_amount)
+             VALUES (?, ?, ?)
+           ON DUPLICATE KEY UPDATE requested_amount = VALUES(requested_amount)`,
+          [claim.id, claim.employee_user_id, total]
+        );
+      }
 
       const onBehalf = claim.employee_user_id !== req.authUser.id;
       await notify(conn, {
@@ -2381,6 +2838,23 @@ async function applyStageDecision(conn, { claim, stage, items, prepared, remarks
       newAmount: stageTotal,
       meta: { finalApproved: stageTotal },
     });
+
+    // Advance claim just cleared the full approval chain: recompute the
+    // extension row (freezes approved_amount from final_approved_total, moves
+    // bill closure 'na' -> 'open'). Reimbursement claims are unaffected.
+    if (claim.claim_kind === "advance") {
+      await recomputeAdvance(conn, claim.id);
+      await writeAudit(conn, {
+        claimId: claim.id,
+        actorUserId: actorUser.id,
+        actorName: actorName(actorUser),
+        stage: "finance",
+        action: "ADVANCE_APPROVED",
+        toStatus: "pending_finance",
+        newAmount: round2(stageTotal),
+        meta: { approvedAdvance: round2(stageTotal) },
+      });
+    }
   }
 
   const verb = reduced > 0.001 ? "approved with changes" : "approved";
@@ -3923,3 +4397,33 @@ module.exports = router;
 // the same idempotent schema check — it needs the access_token column to exist
 // but is mounted outside this router.
 module.exports.ensureTables = ensureTables;
+
+// Shared internals reused by routes/expenseAdvanceRoutes.js (Advance Payment +
+// Bill Closure workflow). Keeping one implementation of the transaction wrapper,
+// audit writer, notifier, money helpers and approval-timeline builder avoids a
+// second, drifting copy.
+Object.assign(module.exports, {
+  pool,
+  withTransaction,
+  writeAudit,
+  notify,
+  round2,
+  formatINR,
+  httpError,
+  fail,
+  actorName,
+  isAdmin,
+  mapAudit,
+  buildApprovalTimeline,
+  recomputeAdvance,
+  nextAdvanceNumber,
+  nextAdvanceBillNumber,
+  buildLinkedWorkbook,
+  resolveApprovers,
+  lookupPhysicalEmployee,
+  loadEmployeeProfile,
+  newAccessToken,
+  assertValidBill,
+  billUpload,
+  OPEN_BILL_STATUSES,
+});
