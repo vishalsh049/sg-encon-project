@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
-import { CheckCheck, Inbox, Loader2, RefreshCw, Search, Trash2 } from "lucide-react";
+import { CheckCheck, Inbox, Loader2, RefreshCw, Search } from "lucide-react";
 
 import { CARD_SHELL } from "../../components/billingDashboard/theme";
 import ConfirmDialog from "../../components/ConfirmDialog";
@@ -10,7 +10,7 @@ import NotificationsCard from "../../components/expenses/NotificationsCard";
 import { useUser } from "../../context/UserContext";
 import { getPagePermission } from "../../utils/access";
 import { formatCurrency, formatDate } from "../../utils/penaltyFormat";
-import { bulkApproveClaims, deleteClaim, fetchApprovals } from "../../lib/expenseClaimsApi";
+import { bulkApproveClaims, fetchApprovals } from "../../lib/expenseClaimsApi";
 
 const TABS = [
   { key: "pending", label: "Pending My Approval" },
@@ -28,7 +28,6 @@ export default function ExpenseApprovals() {
   const navigate = useNavigate();
   const { user } = useUser();
   const perm = getPagePermission(user, "expense-approvals");
-  const canDelete = perm.delete;
   const canApprove = perm.edit;
   const [tab, setTab] = useState("pending");
   const [search, setSearch] = useState("");
@@ -37,13 +36,11 @@ export default function ExpenseApprovals() {
   const [rows, setRows] = useState([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
-  const [deleteTarget, setDeleteTarget] = useState(null);
-  const [deleting, setDeleting] = useState(false);
   const [selected, setSelected] = useState(() => new Set());
   const [bulkOpen, setBulkOpen] = useState(false);
   const [bulkBusy, setBulkBusy] = useState(false);
 
-  const colCount = 10 + (canApprove ? 1 : 0) + (canDelete ? 1 : 0);
+  const colCount = 10 + (canApprove ? 1 : 0);
   const actionableRows = rows.filter(isActionable);
   const allSelected = actionableRows.length > 0 && actionableRows.every((r) => selected.has(r.id));
 
@@ -114,21 +111,6 @@ export default function ExpenseApprovals() {
       toast.error(error.message || "Bulk approval failed.");
     } finally {
       setBulkBusy(false);
-    }
-  };
-
-  const handleDelete = async () => {
-    if (!deleteTarget) return;
-    setDeleting(true);
-    try {
-      await deleteClaim(deleteTarget.id);
-      toast.success("Claim deleted.");
-      setDeleteTarget(null);
-      load();
-    } catch (error) {
-      toast.error(error.message || "Failed to delete the claim.");
-    } finally {
-      setDeleting(false);
     }
   };
 
@@ -237,7 +219,6 @@ export default function ExpenseApprovals() {
                   <th className="px-4 py-2.5 text-right">Total Claimed</th>
                   <th className="px-4 py-2.5">Submitted</th>
                   <th className="px-4 py-2.5">Status</th>
-                  {canDelete ? <th className="px-4 py-2.5 text-right">Action</th> : null}
                 </tr>
               </thead>
               <tbody className="divide-y divide-border-color">
@@ -311,21 +292,6 @@ export default function ExpenseApprovals() {
                         <td className="px-4 py-2.5">
                           <ClaimStatusBadge status={row.status} />
                         </td>
-                        {canDelete ? (
-                          <td className="whitespace-nowrap px-4 py-2.5 text-right">
-                            <button
-                              type="button"
-                              title="Delete claim"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setDeleteTarget(row);
-                              }}
-                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-rose-200 text-rose-600 transition hover:bg-rose-50 dark:border-rose-500/30 dark:text-rose-400 dark:hover:bg-rose-500/10"
-                            >
-                              <Trash2 size={14} />
-                            </button>
-                          </td>
-                        ) : null}
                       </tr>
                     ))}
               </tbody>
@@ -379,18 +345,6 @@ export default function ExpenseApprovals() {
         busy={bulkBusy}
         onConfirm={handleBulkApprove}
         onCancel={() => !bulkBusy && setBulkOpen(false)}
-      />
-
-      <ConfirmDialog
-        open={Boolean(deleteTarget)}
-        title="Delete this claim?"
-        description={`This permanently removes ${
-          deleteTarget?.claimNumber ? `claim ${deleteTarget.claimNumber}` : "this claim"
-        }, all of its expense items, bills and approval history. This cannot be undone.`}
-        confirmLabel="Delete Claim"
-        busy={deleting}
-        onConfirm={handleDelete}
-        onCancel={() => !deleting && setDeleteTarget(null)}
       />
     </div>
   );

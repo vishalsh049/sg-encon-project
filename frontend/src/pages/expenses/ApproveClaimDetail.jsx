@@ -7,7 +7,6 @@ import {
   CornerUpLeft,
   FileText,
   Loader2,
-  Trash2,
   X,
 } from "lucide-react";
 
@@ -18,10 +17,8 @@ import ClaimProgressTracker from "../../components/expenses/ClaimProgressTracker
 import ClaimApprovalTimeline from "../../components/expenses/ClaimApprovalTimeline";
 import AuditTimeline from "../../components/expenses/AuditTimeline";
 import { useUser } from "../../context/UserContext";
-import { getPagePermission } from "../../utils/access";
 import { formatCurrency, formatDate } from "../../utils/penaltyFormat";
 import {
-  deleteClaim,
   fetchClaim,
   openBill,
   rejectClaim,
@@ -47,7 +44,6 @@ export default function ApproveClaimDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user } = useUser();
-  const canDelete = getPagePermission(user, "expense-approvals").delete;
 
   const [loading, setLoading] = useState(true);
   const [bundle, setBundle] = useState(null);
@@ -57,21 +53,6 @@ export default function ApproveClaimDetail() {
   const [reasonModal, setReasonModal] = useState(null); // "send_back" | "reject"
   const [reasonText, setReasonText] = useState("");
   const [busy, setBusy] = useState(false);
-  const [confirmDelete, setConfirmDelete] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-
-  const handleDelete = async () => {
-    setDeleting(true);
-    try {
-      await deleteClaim(id);
-      toast.success("Claim deleted.");
-      navigate("/dashboard/expense-claims/approvals", { replace: true });
-    } catch (error) {
-      toast.error(error.message || "Failed to delete the claim.");
-      setDeleting(false);
-      setConfirmDelete(false);
-    }
-  };
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -261,15 +242,6 @@ export default function ApproveClaimDetail() {
             {claim.department ? ` · ${claim.department}` : ""}
           </p>
         </div>
-        {canDelete ? (
-          <button
-            type="button"
-            onClick={() => setConfirmDelete(true)}
-            className="inline-flex h-10 items-center gap-2 rounded-full border border-rose-200 bg-surface px-4 text-sm font-medium text-rose-600 transition hover:bg-rose-50 dark:border-rose-500/20 dark:hover:bg-rose-500/10"
-          >
-            <Trash2 size={15} /> Delete Claim
-          </button>
-        ) : null}
       </div>
 
       <div className={`${CARD_SHELL} p-4`}>
@@ -598,18 +570,6 @@ export default function ApproveClaimDetail() {
           }}
         />
       ) : null}
-
-      <ConfirmDialog
-        open={confirmDelete}
-        title="Delete this claim?"
-        description={`This permanently removes ${
-          claim.claimNumber ? `claim ${claim.claimNumber}` : "this claim"
-        }, all of its expense items, bills and approval history. This cannot be undone.`}
-        confirmLabel="Delete Claim"
-        busy={deleting}
-        onConfirm={handleDelete}
-        onCancel={() => !deleting && setConfirmDelete(false)}
-      />
     </div>
   );
 }

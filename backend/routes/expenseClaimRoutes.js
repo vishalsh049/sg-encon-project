@@ -510,14 +510,13 @@ const isAdmin = (authUser) =>
   String(authUser?.roleName || "").trim().toLowerCase() === "admin";
 
 // Holding the "delete" permission on any of these Expense Claims screens grants
-// the privileged capability to remove a claim in any status. Finance is
-// deliberately excluded — the Finance module is strictly read-only, so a
-// Finance user can never delete a claim (only an admin, or a My Expenses /
-// Approvals / Dashboard / Admin delete grant, can). Kept in sync with PAGE_IDS
-// and the frontend permission map (frontend/src/utils/access.js).
+// the privileged capability to remove a claim in any status. Finance AND
+// Approvals are deliberately excluded — both are review-only surfaces, so a
+// user working the approvals queue can never delete a claim from there (only an
+// admin, or a My Expenses / Dashboard / Admin delete grant, can). Kept in sync
+// with PAGE_IDS and the frontend permission map (frontend/src/utils/access.js).
 const EXPENSE_CLAIM_PAGES = [
   PAGE_IDS.employee,
-  PAGE_IDS.approvals,
   PAGE_IDS.dashboard,
   PAGE_IDS.admin,
 ];
