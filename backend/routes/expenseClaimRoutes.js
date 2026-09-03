@@ -3017,7 +3017,8 @@ router.get("/finance-export", requirePagePermission(FINANCE_PAGE, "download"), a
               COALESCE(NULLIF(su.employee_id, ''),
                 (SELECT p.employee_code FROM physical p
                   WHERE p.company_email_id IS NOT NULL AND p.company_email_id <> ''
-                    AND TRIM(LOWER(p.company_email_id)) = TRIM(LOWER(su.email))
+                    AND TRIM(LOWER(p.company_email_id)) COLLATE utf8mb4_general_ci
+                        = TRIM(LOWER(su.email)) COLLATE utf8mb4_general_ci
                     AND COALESCE(p.is_deleted, 0) = 0
                   ORDER BY p.id ASC LIMIT 1)) AS raised_by_code,
               f.finance_status AS finance_status,
