@@ -104,10 +104,16 @@ function reconcile(row) {
 }
 
 function mapAdvanceRow(row) {
+  const partyKind = String(row.party_kind || "employee") === "vendor" ? "vendor" : "employee";
   return {
     id: row.id,
     claimId: row.claim_id,
     advanceNumber: row.claim_number,
+    partyKind,
+    vendorName: row.vendor_name || null,
+    vendorType: row.vendor_type || null,
+    // A vendor advance has no employee identity; `partyName` is what the UI shows.
+    partyName: partyKind === "vendor" ? row.vendor_name || "Vendor" : row.employee_name || null,
     employeeUserId: row.employee_user_id,
     employeeName: row.employee_name,
     employeeCode: row.employee_code,
@@ -406,11 +412,15 @@ router.get("/", async (req, res) => {
       `SELECT a.*, c.claim_number, c.employee_name, c.employee_code, c.department, c.circle,
               c.cost_centre AS cmp, c.purpose, c.current_status, c.submitted_at, c.created_by,
               su.name AS created_by_name,
+              it.expense_for AS party_kind, it.vendor_name, it.vendor_type,
               (SELECT COUNT(*) FROM expense_advance_bills b WHERE b.advance_id = a.id) AS bill_count,
               (SELECT COUNT(*) FROM expense_advance_bills b WHERE b.advance_id = a.id AND b.bill_status = 'approved') AS bill_approved_count
          FROM expense_advances a
          JOIN expense_claims c ON c.id = a.claim_id
          LEFT JOIN users su ON su.id = c.created_by
+         LEFT JOIN expense_claim_items it ON it.id = (
+           SELECT MIN(x.id) FROM expense_claim_items x WHERE x.claim_id = c.id
+         )
          ${where}
          ORDER BY a.updated_at DESC, a.id DESC
          LIMIT ? OFFSET ?`,
@@ -481,9 +491,13 @@ async function loadAdvanceOr404(id) {
             c.l1_approver_user_id, c.l2_approver_user_id, c.final_approver_user_id,
             c.l1_approved_total, c.l2_approved_total, c.final_approved_total,
             su.name AS created_by_name, su.employee_id AS created_by_code,
+            it.expense_for AS party_kind, it.vendor_name, it.vendor_type,
             u1.name AS l1_approver_name, u2.name AS l2_approver_name, u3.name AS final_approver_name
        FROM expense_advances a
        JOIN expense_claims c ON c.id = a.claim_id
+       LEFT JOIN expense_claim_items it ON it.id = (
+         SELECT MIN(x.id) FROM expense_claim_items x WHERE x.claim_id = c.id
+       )
        LEFT JOIN users su ON su.id = c.created_by
        LEFT JOIN users u1 ON u1.id = c.l1_approver_user_id
        LEFT JOIN users u2 ON u2.id = c.l2_approver_user_id
@@ -1468,6 +1482,22 @@ router.post("/:id/finalize-bills", async (req, res, next) => {
     }
     if (row.approved_amount == null) throw httpError(409, "This advance is not approved yet.");
     if (row.bill_closure_status === "closed") throw httpError(409, "This advance is already closed.");
+
+    // "Finalise Bills" only makes sense once money has actually moved or a bill
+    // has been submitted — it guards against accidentally closing a brand-new
+    // approved advance that was never paid.
+    const [[activity]] = await pool.query(
+      `SELECT
+         (SELECT COUNT(*) FROM expense_advance_bills WHERE advance_id = ?) AS bills,
+         (SELECT COUNT(*) FROM expense_advance_payments WHERE advance_id = ?) AS payments`,
+      [row.id, row.id]
+    );
+    if (Number(row.total_paid || 0) <= 0 && Number(activity.bills) === 0 && Number(activity.payments) === 0) {
+      throw httpError(
+        409,
+        "Nothing to finalise yet — record a Finance payment or submit a bill against this advance first."
+      );
+    }
 
     const [[open]] = await pool.query(
       `SELECT COUNT(*) AS c FROM expense_advance_bills

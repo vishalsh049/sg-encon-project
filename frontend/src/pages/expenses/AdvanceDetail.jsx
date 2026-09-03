@@ -297,7 +297,8 @@ export default function AdvanceDetail() {
   const canFinalize =
     (a.employeeUserId === user?.id || a.submittedByUserId === user?.id || canRecordPayment) &&
     a.billClosureStatus === "open" &&
-    noPendingBills;
+    noPendingBills &&
+    ((a.totalPaid || 0) > 0 || bills.length > 0);
   const INPUT =
     "w-full rounded-lg border border-border-color bg-surface px-2.5 py-1.5 text-sm text-text-primary outline-none focus:border-indigo-400";
 
@@ -322,7 +323,9 @@ export default function AdvanceDetail() {
             <Badge meta={closureStatusMeta(a.billClosureStatus)} />
           </div>
           <p className="mt-0.5 text-sm text-text-secondary">
-            {a.employeeName
+            {a.partyKind === "vendor"
+              ? `Vendor: ${a.vendorName || "—"}${a.vendorType ? ` · ${a.vendorType}` : ""}`
+              : a.employeeName
               ? `${a.employeeName}${a.employeeCode ? ` · ${a.employeeCode}` : ""}`
               : "Advance request"}
           </p>
@@ -524,8 +527,17 @@ export default function AdvanceDetail() {
           <h2 className="mb-3 text-sm font-semibold text-text-primary">Advance Information</h2>
           <dl className="grid grid-cols-2 gap-x-4 gap-y-2.5 text-sm">
             <Detail label="Advance No." value={a.advanceNumber} />
-            <Detail label="Employee" value={a.employeeName} />
-            <Detail label="Employee ID" value={a.employeeCode} />
+            {a.partyKind === "vendor" ? (
+              <>
+                <Detail label="Vendor" value={a.vendorName} />
+                <Detail label="Vendor Type" value={a.vendorType} />
+              </>
+            ) : (
+              <>
+                <Detail label="Employee" value={a.employeeName} />
+                <Detail label="Employee ID" value={a.employeeCode} />
+              </>
+            )}
             <Detail label="Department" value={a.department} />
             <Detail label="CMP" value={a.cmp} />
             <Detail label="Circle" value={a.circle} />

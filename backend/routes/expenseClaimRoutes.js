@@ -1894,9 +1894,17 @@ function parseClaimBody(body) {
     String(body?.claimKind ?? body?.claim_kind ?? "reimbursement").trim().toLowerCase() === "advance"
       ? "advance"
       : "reimbursement";
+  const expenseFor =
+    String(body?.expenseFor ?? body?.expense_for ?? "employee").trim().toLowerCase() === "vendor"
+      ? "vendor"
+      : "employee";
   return {
     employeeCode: String(body?.employeeCode ?? "").trim() || null,
     claimKind,
+    expenseFor,
+    vendorId: Number(body?.vendorId ?? body?.vendor_id) || null,
+    vendorName: String(body?.vendorName ?? body?.vendor_name ?? "").trim() || null,
+    vendorType: String(body?.vendorType ?? body?.vendor_type ?? "").trim() || null,
     requestedAmount: toMoney(body?.requestedAmount ?? body?.requested_amount),
     purpose: String(body?.purpose ?? "").trim() || null,
     items,
@@ -1905,8 +1913,10 @@ function parseClaimBody(body) {
 
 // The single synthetic expense item that represents an advance request. Its
 // shape matches validateItem()'s `value` output so persistItems() and the whole
-// approval engine treat it exactly like a normal item.
-function advanceSyntheticItem(amount, purpose, itemId = null) {
+// approval engine treat it exactly like a normal item. An advance can be for an
+// employee (default) or a vendor.
+function advanceSyntheticItem(amount, purpose, itemId = null, party = {}) {
+  const isVendor = party.expenseFor === "vendor";
   return {
     id: itemId,
     srNo: 1,
@@ -1916,16 +1926,16 @@ function advanceSyntheticItem(amount, purpose, itemId = null) {
     description: purpose || null,
     claimedAmount: Number.isFinite(amount) ? round2(amount) : 0,
     billNumber: null,
-    expenseFor: "employee",
+    expenseFor: isVendor ? "vendor" : "employee",
     employeeType: null,
     empRefCode: null,
     empRefName: null,
     empRefDesignation: null,
     empRefCircle: null,
     empRefCmp: null,
-    vendorId: null,
-    vendorName: null,
-    vendorType: null,
+    vendorId: isVendor ? party.vendorId || null : null,
+    vendorName: isVendor ? party.vendorName || null : null,
+    vendorType: isVendor ? party.vendorType || null : null,
     claimType: "advance",
     billingType: null,
     clientName: null,
@@ -2059,7 +2069,10 @@ router.post("/claims", requirePagePermission(PAGE, "edit"), async (req, res) => 
       if (!Number.isFinite(body.requestedAmount) || body.requestedAmount <= 0) {
         throw httpError(400, "Enter an advance amount greater than zero.");
       }
-      parsedItems = [advanceSyntheticItem(body.requestedAmount, body.purpose)];
+      if (body.expenseFor === "vendor" && !body.vendorId) {
+        throw httpError(400, "Select a vendor for this advance.");
+      }
+      parsedItems = [advanceSyntheticItem(body.requestedAmount, body.purpose, null, body)];
     } else {
       const errors = [];
       body.items.forEach((raw, index) => {
@@ -2071,6 +2084,19 @@ router.post("/claims", requirePagePermission(PAGE, "edit"), async (req, res) => 
     }
 
     const snap = await resolveEmployeeSnapshot(req.authUser, body.employeeCode);
+    if (isAdvance && body.expenseFor === "vendor") {
+      // Vendor advance — belongs to the submitter for scoping / self-approval,
+      // but carries no employee identity (the vendor lives on the item).
+      Object.assign(snap, {
+        employee_user_id: req.authUser.id,
+        employee_name: null,
+        employee_code: null,
+        department: null,
+        designation: null,
+        circle: null,
+        cmp: null,
+      });
+    }
 
     const result = await withTransaction(async (conn) => {
       const [ins] = await conn.query(
@@ -2147,12 +2173,15 @@ router.put("/claims/:id", requirePagePermission(PAGE, "edit"), async (req, res) 
       if (!Number.isFinite(body.requestedAmount) || body.requestedAmount <= 0) {
         throw httpError(400, "Enter an advance amount greater than zero.");
       }
+      if (body.expenseFor === "vendor" && !body.vendorId) {
+        throw httpError(400, "Select a vendor for this advance.");
+      }
       const [existRows] = await pool.query(
         `SELECT id FROM expense_claim_items WHERE claim_id = ? ORDER BY id ASC LIMIT 1`,
         [claim.id]
       );
       parsedItems = [
-        advanceSyntheticItem(body.requestedAmount, body.purpose, existRows[0]?.id || null),
+        advanceSyntheticItem(body.requestedAmount, body.purpose, existRows[0]?.id || null, body),
       ];
     } else {
       const errors = [];
@@ -2165,6 +2194,17 @@ router.put("/claims/:id", requirePagePermission(PAGE, "edit"), async (req, res) 
     }
 
     const snap = await resolveEmployeeSnapshot(req.authUser, body.employeeCode);
+    if (isAdvance && body.expenseFor === "vendor") {
+      Object.assign(snap, {
+        employee_user_id: req.authUser.id,
+        employee_name: null,
+        employee_code: null,
+        department: null,
+        designation: null,
+        circle: null,
+        cmp: null,
+      });
+    }
 
     await withTransaction(async (conn) => {
       await conn.query(

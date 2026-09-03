@@ -297,7 +297,7 @@ export default function AdvancePayments() {
               <thead>
                 <tr className="bg-surface-muted text-[11px] font-semibold uppercase tracking-[0.08em] text-text-muted">
                   <th className="px-4 py-2.5">Advance No</th>
-                  <th className="px-4 py-2.5">Employee</th>
+                  <th className="px-4 py-2.5">For</th>
                   <th className="px-4 py-2.5">Dept / CMP</th>
                   <th className="px-4 py-2.5 text-right">Requested</th>
                   <th className="px-4 py-2.5 text-right">Approved</th>
@@ -332,12 +332,12 @@ export default function AdvancePayments() {
                           </div>
                         </td>
                         <td className="whitespace-nowrap px-4 py-2.5 text-text-secondary">
-                          {row.employeeName || "—"}
-                          {row.employeeCode ? (
-                            <span className="mt-0.5 block text-[11px] text-text-muted">
-                              {row.employeeCode}
-                            </span>
-                          ) : null}
+                          {row.partyName || row.employeeName || "—"}
+                          <span className="mt-0.5 block text-[11px] text-text-muted">
+                            {row.partyKind === "vendor"
+                              ? `Vendor${row.vendorType ? ` · ${row.vendorType}` : ""}`
+                              : row.employeeCode || "Employee"}
+                          </span>
                         </td>
                         <td className="whitespace-nowrap px-4 py-2.5 text-text-secondary">
                           {row.department || "—"}

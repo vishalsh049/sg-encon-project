@@ -128,8 +128,10 @@ export default function VerifyAdvanceBill() {
           </span>
         </div>
         <p className="mt-0.5 text-sm text-text-secondary">
-          On advance {a.advanceNumber} · {a.employeeName}
-          {a.employeeCode ? ` · ${a.employeeCode}` : ""}
+          On advance {a.advanceNumber} ·{" "}
+          {a.partyKind === "vendor"
+            ? `Vendor: ${a.vendorName || "—"}`
+            : `${a.employeeName || "—"}${a.employeeCode ? ` · ${a.employeeCode}` : ""}`}
         </p>
       </div>
 

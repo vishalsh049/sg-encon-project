@@ -8,6 +8,8 @@ import ConfirmDialog from "../../components/ConfirmDialog";
 import ClaimProgressTracker from "../../components/expenses/ClaimProgressTracker";
 import EmployeePartyPicker from "../../components/expenses/EmployeePartyPicker";
 import ExpenseItemCard from "../../components/expenses/ExpenseItemCard";
+import EntitySelect from "../../components/expenses/EntitySelect";
+import AddVendorModal from "../../components/expenses/AddVendorModal";
 import { useUser } from "../../context/UserContext";
 import { formatCurrency } from "../../utils/penaltyFormat";
 import {
@@ -16,6 +18,7 @@ import {
   deleteClaim,
   fetchClaim,
   fetchExpenseMeta,
+  fetchVendors,
   openBill,
   submitClaim,
   updateClaim,
@@ -38,6 +41,9 @@ function blankClaimParty() {
     empRefCmp: "",
     bankAccount: "",
     ifsc: "",
+    vendorId: null,
+    vendorName: "",
+    vendorType: "",
   };
 }
 
@@ -113,6 +119,9 @@ function claimPartyFromBundle(bundle) {
     empRefCmp: first.empRefCmp || claim.cmp || "",
     bankAccount: first.bankAccount || "",
     ifsc: first.ifsc || "",
+    vendorId: first.vendorId || null,
+    vendorName: first.vendorName || "",
+    vendorType: first.vendorType || "",
   };
 }
 
@@ -132,6 +141,7 @@ export default function RaiseExpense() {
   const [claimKind, setClaimKind] = useState("reimbursement");
   const [advanceAmount, setAdvanceAmount] = useState("");
   const [advancePurpose, setAdvancePurpose] = useState("");
+  const [addVendorOpen, setAddVendorOpen] = useState(false);
 
   const [claimParty, setClaimParty] = useState(blankClaimParty());
   const [rows, setRows] = useState([blankRow()]);
@@ -244,9 +254,14 @@ export default function RaiseExpense() {
     // master snapshot from it. Each item still carries the (shared) employee
     // fields or its own vendor so downstream views need no change.
     if (claimKind === "advance") {
+      const isVendor = claimParty.expenseFor === "vendor";
       return {
         claimKind: "advance",
-        employeeCode: claimParty.empRefCode || null,
+        expenseFor: isVendor ? "vendor" : "employee",
+        employeeCode: isVendor ? null : claimParty.empRefCode || null,
+        vendorId: isVendor ? claimParty.vendorId || null : null,
+        vendorName: isVendor ? claimParty.vendorName || null : null,
+        vendorType: isVendor ? claimParty.vendorType || null : null,
         requestedAmount: Number(advanceAmount) || 0,
         purpose: advancePurpose.trim() || null,
       };
@@ -333,7 +348,9 @@ export default function RaiseExpense() {
     const map = {};
 
     if (claimKind === "advance") {
-      if (!claimParty.empRefCode) {
+      if (claimParty.expenseFor === "vendor") {
+        if (!claimParty.vendorId) errs.push("Select a vendor for this advance.");
+      } else if (!claimParty.empRefCode) {
         errs.push("Enter the Employee ID / HRMS ID and click Fetch before submitting.");
       }
       if (!(Number(advanceAmount) > 0)) {
@@ -627,14 +644,97 @@ export default function RaiseExpense() {
           <div>
             <h2 className="text-sm font-semibold text-text-primary">Advance Request</h2>
             <p className="mt-0.5 text-xs text-text-muted">
-              The employee this advance is for, the amount requested, and why. It runs through the
-              same L1 → L2 → Final approval chain; bills are added later, once the advance is paid.
+              Who the advance is for, the amount requested, and why. It runs through the same
+              L1 → L2 → Final approval chain; bills are added later, once the advance is paid.
             </p>
           </div>
-          <EmployeePartyPicker
-            value={claimParty}
-            onChange={(p) => setClaimParty((cp) => ({ ...cp, ...p, expenseFor: "employee" }))}
-          />
+
+          {/* Advance for an employee or a vendor */}
+          <div className="grid gap-2 sm:grid-cols-2">
+            {[
+              { value: "employee", label: "Employee Advance", icon: UserRound },
+              { value: "vendor", label: "Vendor Advance", icon: Building2 },
+            ].map((o) => {
+              const active = claimParty.expenseFor === o.value;
+              return (
+                <button
+                  key={o.value}
+                  type="button"
+                  onClick={() =>
+                    setClaimParty((cp) =>
+                      cp.expenseFor === o.value ? cp : { ...blankClaimParty(), expenseFor: o.value }
+                    )
+                  }
+                  className={`flex items-center gap-2 rounded-xl border p-3 text-left transition ${
+                    active
+                      ? "border-indigo-500 bg-indigo-50 dark:bg-indigo-500/10"
+                      : "border-border-color bg-surface hover:bg-surface-muted"
+                  }`}
+                >
+                  <span
+                    className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 ${
+                      active ? "border-indigo-500" : "border-border-color"
+                    }`}
+                  >
+                    {active ? <span className="h-2 w-2 rounded-full bg-indigo-500" /> : null}
+                  </span>
+                  <span className="flex items-center gap-1.5 text-sm font-semibold text-text-primary">
+                    <o.icon size={14} />
+                    {o.label}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          {claimParty.expenseFor === "vendor" ? (
+            <div className="space-y-2">
+              <span className="block text-[11px] font-semibold uppercase tracking-[0.1em] text-text-muted">
+                Vendor <span className="text-rose-500">*</span>
+              </span>
+              <EntitySelect
+                value={
+                  claimParty.vendorId
+                    ? { id: claimParty.vendorId, name: claimParty.vendorName }
+                    : null
+                }
+                onChange={(o) =>
+                  setClaimParty((cp) => ({
+                    ...cp,
+                    vendorId: o?.id || null,
+                    vendorName: o?.name || "",
+                    vendorType: o?.vendorType || "",
+                  }))
+                }
+                fetcher={async (q) => (await fetchVendors({ search: q })).data}
+                getLabel={(o) => o.name}
+                getSub={(o) => [o.vendorType, o.gstin].filter(Boolean).join(" · ")}
+                placeholder="Search / Select Vendor"
+                trailing={
+                  <button
+                    type="button"
+                    onClick={() => setAddVendorOpen(true)}
+                    className="inline-flex h-10 shrink-0 items-center rounded-xl border border-border-color bg-surface px-3 text-sm font-medium text-text-secondary hover:bg-surface-muted"
+                  >
+                    + Add
+                  </button>
+                }
+              />
+              {claimParty.vendorName ? (
+                <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-3 text-xs text-text-secondary dark:border-emerald-500/20 dark:bg-emerald-500/10">
+                  <span className="font-semibold text-emerald-700 dark:text-emerald-300">
+                    ✓ {claimParty.vendorName}
+                  </span>
+                  {claimParty.vendorType ? ` · ${claimParty.vendorType}` : ""}
+                </div>
+              ) : null}
+            </div>
+          ) : (
+            <EmployeePartyPicker
+              value={claimParty}
+              onChange={(p) => setClaimParty((cp) => ({ ...cp, ...p, expenseFor: "employee" }))}
+            />
+          )}
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="block">
               <span className="mb-1 block text-xs font-semibold text-text-secondary">
@@ -825,6 +925,21 @@ export default function RaiseExpense() {
       </div>
       </>
       )}
+
+      <AddVendorModal
+        open={addVendorOpen}
+        vendorTypes={meta?.vendorTypes || []}
+        defaultType={claimParty.vendorType || ""}
+        onClose={() => setAddVendorOpen(false)}
+        onCreated={(v) =>
+          setClaimParty((cp) => ({
+            ...cp,
+            vendorId: v.id,
+            vendorName: v.name,
+            vendorType: v.vendorType || cp.vendorType || "",
+          }))
+        }
+      />
 
       <ConfirmDialog
         open={confirmDelete}
