@@ -1,7 +1,8 @@
 import { Check, X } from "lucide-react";
 import { trackerState } from "../../lib/expenseClaimStatus";
 
-// Horizontal stepper: Raised -> L1 -> L2 -> Final -> Finance -> Completed.
+// Horizontal stepper: Raised -> L1 Approved -> L2 Approved -> Final Approved -> Finance.
+// Finance is the read-only end state, not a processing step.
 export default function ClaimProgressTracker({ status }) {
   const steps = trackerState(status);
 

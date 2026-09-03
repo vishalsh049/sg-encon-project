@@ -1,13 +1,16 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
-import { Inbox, Loader2, RefreshCw, Search } from "lucide-react";
+import { CheckCheck, Inbox, Loader2, RefreshCw, Search, Trash2 } from "lucide-react";
 
 import { CARD_SHELL } from "../../components/billingDashboard/theme";
+import ConfirmDialog from "../../components/ConfirmDialog";
 import ClaimStatusBadge from "../../components/expenses/ClaimStatusBadge";
 import NotificationsCard from "../../components/expenses/NotificationsCard";
+import { useUser } from "../../context/UserContext";
+import { getPagePermission } from "../../utils/access";
 import { formatCurrency, formatDate } from "../../utils/penaltyFormat";
-import { fetchApprovals } from "../../lib/expenseClaimsApi";
+import { bulkApproveClaims, deleteClaim, fetchApprovals } from "../../lib/expenseClaimsApi";
 
 const TABS = [
   { key: "pending", label: "Pending My Approval" },
@@ -15,9 +18,18 @@ const TABS = [
 ];
 const PAGE_SIZE = 20;
 const STAGE_LABEL = { l1: "L1", l2: "L2", final: "Final" };
+const PENDING = ["pending_l1", "pending_l2", "pending_final"];
+
+// A row can be bulk-approved only if it is currently sitting at this user's
+// approval stage (the backend re-checks, but keep the UI honest).
+const isActionable = (row) => Boolean(row.myStage) && PENDING.includes(row.status);
 
 export default function ExpenseApprovals() {
   const navigate = useNavigate();
+  const { user } = useUser();
+  const perm = getPagePermission(user, "expense-approvals");
+  const canDelete = perm.delete;
+  const canApprove = perm.edit;
   const [tab, setTab] = useState("pending");
   const [search, setSearch] = useState("");
   const [debounced, setDebounced] = useState("");
@@ -25,6 +37,15 @@ export default function ExpenseApprovals() {
   const [rows, setRows] = useState([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleting, setDeleting] = useState(false);
+  const [selected, setSelected] = useState(() => new Set());
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkBusy, setBulkBusy] = useState(false);
+
+  const colCount = 10 + (canApprove ? 1 : 0) + (canDelete ? 1 : 0);
+  const actionableRows = rows.filter(isActionable);
+  const allSelected = actionableRows.length > 0 && actionableRows.every((r) => selected.has(r.id));
 
   useEffect(() => {
     const t = setTimeout(() => {
@@ -36,6 +57,7 @@ export default function ExpenseApprovals() {
 
   const load = useCallback(async () => {
     setLoading(true);
+    setSelected(new Set());
     try {
       const res = await fetchApprovals({ tab, search: debounced, page, pageSize: PAGE_SIZE });
       setRows(res.data || []);
@@ -55,6 +77,61 @@ export default function ExpenseApprovals() {
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const isEmpty = !loading && rows.length === 0;
 
+  const toggleRow = (id) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+
+  const toggleAll = () =>
+    setSelected((prev) => {
+      if (actionableRows.every((r) => prev.has(r.id))) return new Set();
+      return new Set(actionableRows.map((r) => r.id));
+    });
+
+  const handleBulkApprove = async () => {
+    const ids = [...selected];
+    if (!ids.length) return;
+    setBulkBusy(true);
+    try {
+      const res = await bulkApproveClaims(ids);
+      const { approved = 0, failed = 0, results = [] } = res || {};
+      if (approved) {
+        toast.success(
+          `${approved} claim${approved === 1 ? "" : "s"} approved and forwarded${
+            failed ? `. ${failed} could not be approved.` : "."
+          }`
+        );
+      }
+      if (failed && !approved) {
+        const firstErr = results.find((r) => !r.ok)?.error;
+        toast.error(firstErr || `${failed} claim${failed === 1 ? "" : "s"} could not be approved.`);
+      }
+      setBulkOpen(false);
+      load();
+    } catch (error) {
+      toast.error(error.message || "Bulk approval failed.");
+    } finally {
+      setBulkBusy(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      await deleteClaim(deleteTarget.id);
+      toast.success("Claim deleted.");
+      setDeleteTarget(null);
+      load();
+    } catch (error) {
+      toast.error(error.message || "Failed to delete the claim.");
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -66,13 +143,26 @@ export default function ExpenseApprovals() {
             Claims waiting on your L1, L2 or Final approval.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={load}
-          className="inline-flex h-10 items-center gap-2 rounded-full border border-border-color bg-surface px-4 text-sm font-medium text-text-secondary transition hover:bg-surface-muted"
-        >
-          <RefreshCw size={15} className={loading ? "animate-spin" : ""} /> Refresh
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          {canApprove && selected.size > 0 ? (
+            <button
+              type="button"
+              onClick={() => setBulkOpen(true)}
+              disabled={bulkBusy}
+              className="inline-flex h-10 items-center gap-2 rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 px-5 text-sm font-semibold text-white shadow-sm transition hover:opacity-95 disabled:opacity-50"
+            >
+              {bulkBusy ? <Loader2 className="animate-spin" size={15} /> : <CheckCheck size={16} />}
+              Approve {selected.size} Selected
+            </button>
+          ) : null}
+          <button
+            type="button"
+            onClick={load}
+            className="inline-flex h-10 items-center gap-2 rounded-full border border-border-color bg-surface px-4 text-sm font-medium text-text-secondary transition hover:bg-surface-muted"
+          >
+            <RefreshCw size={15} className={loading ? "animate-spin" : ""} /> Refresh
+          </button>
+        </div>
       </div>
 
       <NotificationsCard />
@@ -125,6 +215,18 @@ export default function ExpenseApprovals() {
             <table className="min-w-[1040px] w-full text-left text-sm">
               <thead>
                 <tr className="bg-surface-muted text-[11px] font-semibold uppercase tracking-[0.08em] text-text-muted">
+                  {canApprove ? (
+                    <th className="w-10 px-3 py-2.5">
+                      <input
+                        type="checkbox"
+                        aria-label="Select all approvable claims on this page"
+                        className="h-4 w-4 cursor-pointer accent-emerald-600"
+                        checked={allSelected}
+                        disabled={actionableRows.length === 0}
+                        onChange={toggleAll}
+                      />
+                    </th>
+                  ) : null}
                   <th className="px-4 py-2.5">Claim No</th>
                   <th className="px-4 py-2.5">Employee</th>
                   <th className="px-4 py-2.5">Employee ID</th>
@@ -135,13 +237,14 @@ export default function ExpenseApprovals() {
                   <th className="px-4 py-2.5 text-right">Total Claimed</th>
                   <th className="px-4 py-2.5">Submitted</th>
                   <th className="px-4 py-2.5">Status</th>
+                  {canDelete ? <th className="px-4 py-2.5 text-right">Action</th> : null}
                 </tr>
               </thead>
               <tbody className="divide-y divide-border-color">
                 {loading && rows.length === 0
                   ? Array.from({ length: 5 }).map((_, i) => (
                       <tr key={i}>
-                        <td colSpan={10} className="px-4 py-3">
+                        <td colSpan={colCount} className="px-4 py-3">
                           <div className="h-4 w-full animate-pulse rounded bg-surface-muted" />
                         </td>
                       </tr>
@@ -150,8 +253,23 @@ export default function ExpenseApprovals() {
                       <tr
                         key={row.id}
                         onClick={() => navigate(`/dashboard/expense-claims/approvals/${row.id}`)}
-                        className="cursor-pointer transition hover:bg-surface-muted/60"
+                        className={`cursor-pointer transition hover:bg-surface-muted/60 ${
+                          selected.has(row.id) ? "bg-emerald-50/60 dark:bg-emerald-500/10" : ""
+                        }`}
                       >
+                        {canApprove ? (
+                          <td className="w-10 px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
+                            {isActionable(row) ? (
+                              <input
+                                type="checkbox"
+                                aria-label={`Select claim ${row.claimNumber || row.id}`}
+                                className="h-4 w-4 cursor-pointer accent-emerald-600"
+                                checked={selected.has(row.id)}
+                                onChange={() => toggleRow(row.id)}
+                              />
+                            ) : null}
+                          </td>
+                        ) : null}
                         <td className="whitespace-nowrap px-4 py-2.5 font-semibold text-text-primary">
                           {row.claimNumber || "—"}
                           {row.myStage ? (
@@ -162,6 +280,12 @@ export default function ExpenseApprovals() {
                         </td>
                         <td className="whitespace-nowrap px-4 py-2.5 text-text-secondary">
                           {row.employeeName || "—"}
+                          {row.submittedByName &&
+                          row.submittedByUserId !== row.employeeUserId ? (
+                            <span className="mt-0.5 block text-[11px] text-text-muted">
+                              raised by {row.submittedByName}
+                            </span>
+                          ) : null}
                         </td>
                         <td className="whitespace-nowrap px-4 py-2.5 text-text-secondary">
                           {row.employeeCode || "—"}
@@ -187,6 +311,21 @@ export default function ExpenseApprovals() {
                         <td className="px-4 py-2.5">
                           <ClaimStatusBadge status={row.status} />
                         </td>
+                        {canDelete ? (
+                          <td className="whitespace-nowrap px-4 py-2.5 text-right">
+                            <button
+                              type="button"
+                              title="Delete claim"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setDeleteTarget(row);
+                              }}
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-rose-200 text-rose-600 transition hover:bg-rose-50 dark:border-rose-500/30 dark:text-rose-400 dark:hover:bg-rose-500/10"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </td>
+                        ) : null}
                       </tr>
                     ))}
               </tbody>
@@ -226,6 +365,33 @@ export default function ExpenseApprovals() {
           <Loader2 className="animate-spin" size={13} /> Updating…
         </div>
       ) : null}
+
+      <ConfirmDialog
+        open={bulkOpen}
+        title={`Approve ${selected.size} claim${selected.size === 1 ? "" : "s"}?`}
+        description={
+          `Every expense item on ${selected.size === 1 ? "this claim" : "these claims"} will be approved in full ` +
+          `at the amount handed to your stage, and each claim moves to the next stage (or Finance). ` +
+          `Items an earlier approver already reduced or rejected pass through unchanged. This cannot be undone.`
+        }
+        confirmLabel={`Approve ${selected.size}`}
+        tone="primary"
+        busy={bulkBusy}
+        onConfirm={handleBulkApprove}
+        onCancel={() => !bulkBusy && setBulkOpen(false)}
+      />
+
+      <ConfirmDialog
+        open={Boolean(deleteTarget)}
+        title="Delete this claim?"
+        description={`This permanently removes ${
+          deleteTarget?.claimNumber ? `claim ${deleteTarget.claimNumber}` : "this claim"
+        }, all of its expense items, bills and approval history. This cannot be undone.`}
+        confirmLabel="Delete Claim"
+        busy={deleting}
+        onConfirm={handleDelete}
+        onCancel={() => !deleting && setDeleteTarget(null)}
+      />
     </div>
   );
 }

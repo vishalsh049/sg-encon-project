@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import toast from "react-hot-toast";
-import { ArrowLeft, Loader2, Plus, Save, Send, Trash2 } from "lucide-react";
+import { ArrowLeft, Building2, Loader2, Plus, Save, Send, Trash2, UserRound } from "lucide-react";
 
 import { CARD_SHELL } from "../../components/billingDashboard/theme";
 import ConfirmDialog from "../../components/ConfirmDialog";
 import ClaimProgressTracker from "../../components/expenses/ClaimProgressTracker";
+import EmployeePartyPicker from "../../components/expenses/EmployeePartyPicker";
 import ExpenseItemCard from "../../components/expenses/ExpenseItemCard";
+import { useUser } from "../../context/UserContext";
 import { formatCurrency } from "../../utils/penaltyFormat";
 import {
   createClaim,
@@ -23,11 +25,10 @@ import {
 const ALLOWED_EXT = ["pdf", "jpg", "jpeg", "png"];
 const emptyRowKey = () => `r-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 
-function blankRow() {
+// Employee identity is entered/fetched ONCE per claim (see EmployeePartyPicker)
+// and lives here at claim level — not on each item.
+function blankClaimParty() {
   return {
-    localKey: emptyRowKey(),
-    id: null,
-    expenseDate: "",
     expenseFor: "employee",
     employeeType: "",
     empRefCode: "",
@@ -37,6 +38,16 @@ function blankRow() {
     empRefCmp: "",
     bankAccount: "",
     ifsc: "",
+  };
+}
+
+function blankRow() {
+  return {
+    localKey: emptyRowKey(),
+    id: null,
+    expenseDate: "",
+    // Vendor is still selected per item (unchanged); employee identity is
+    // claim-level and merged in at payload time.
     vendorId: null,
     vendorName: "",
     vendorType: "",
@@ -66,15 +77,6 @@ function rowsFromBundle(bundle) {
     localKey: emptyRowKey(),
     id: item.id,
     expenseDate: item.expenseDate ? String(item.expenseDate).slice(0, 10) : "",
-    expenseFor: item.expenseFor || "employee",
-    employeeType: item.employeeType || "",
-    empRefCode: item.empRefCode || "",
-    empRefName: item.empRefName || "",
-    empRefDesignation: item.empRefDesignation || "",
-    empRefCircle: item.empRefCircle || "",
-    empRefCmp: item.empRefCmp || "",
-    bankAccount: item.bankAccount || "",
-    ifsc: item.ifsc || "",
     vendorId: item.vendorId || null,
     vendorName: item.vendorName || "",
     vendorType: item.vendorType || "",
@@ -94,8 +96,29 @@ function rowsFromBundle(bundle) {
   }));
 }
 
+// Reconstruct the claim-level party from a saved claim. The employee snapshot is
+// carried both on the claim and (duplicated) on each item; prefer the first
+// item's values, fall back to the claim header.
+function claimPartyFromBundle(bundle) {
+  const first = (bundle.items || [])[0] || {};
+  const expenseFor = (first.expenseFor || "employee") === "vendor" ? "vendor" : "employee";
+  const claim = bundle.claim || {};
+  return {
+    expenseFor,
+    employeeType: first.employeeType || "",
+    empRefCode: first.empRefCode || claim.employeeCode || "",
+    empRefName: first.empRefName || claim.employeeName || "",
+    empRefDesignation: first.empRefDesignation || claim.designation || "",
+    empRefCircle: first.empRefCircle || claim.circle || "",
+    empRefCmp: first.empRefCmp || claim.cmp || "",
+    bankAccount: first.bankAccount || "",
+    ifsc: first.ifsc || "",
+  };
+}
+
 export default function RaiseExpense() {
   const navigate = useNavigate();
+  const { user } = useUser();
   const { id: routeId } = useParams();
 
   const [loading, setLoading] = useState(true);
@@ -104,6 +127,7 @@ export default function RaiseExpense() {
   const [status, setStatus] = useState("draft");
   const [claimNumber, setClaimNumber] = useState(null);
 
+  const [claimParty, setClaimParty] = useState(blankClaimParty());
   const [rows, setRows] = useState([blankRow()]);
   const [collapsed, setCollapsed] = useState({}); // { [localKey]: true }
   const [itemErrorMap, setItemErrorMap] = useState({}); // { [localKey]: string[] }
@@ -133,6 +157,7 @@ export default function RaiseExpense() {
         setClaimId(b.claim.id);
         setStatus(b.claim.status);
         setClaimNumber(b.claim.claimNumber);
+        setClaimParty(claimPartyFromBundle(b));
         const mapped = rowsFromBundle(b);
         setRows(mapped.length ? mapped : [blankRow()]);
       }
@@ -165,21 +190,24 @@ export default function RaiseExpense() {
     setRows((prev) => (prev.length === 1 ? [blankRow()] : prev.filter((r) => r.localKey !== localKey)));
 
   function itemPayload(r) {
+    const isEmployee = claimParty.expenseFor !== "vendor";
     return {
       id: r.id || undefined,
       expenseDate: r.expenseDate || null,
-      expenseFor: r.expenseFor || "employee",
-      employeeType: r.employeeType || null,
-      empRefCode: r.empRefCode || null,
-      empRefName: r.empRefName || null,
-      empRefDesignation: r.empRefDesignation || null,
-      empRefCircle: r.empRefCircle || null,
-      empRefCmp: r.empRefCmp || null,
-      bankAccount: r.bankAccount || null,
-      ifsc: r.ifsc || null,
-      vendorId: r.vendorId || null,
-      vendorName: r.vendorName || null,
-      vendorType: r.vendorType || null,
+      // Party is claim-level: every item carries the same employee snapshot, or
+      // its own vendor selection.
+      expenseFor: isEmployee ? "employee" : "vendor",
+      employeeType: isEmployee ? claimParty.employeeType || null : null,
+      empRefCode: isEmployee ? claimParty.empRefCode || null : null,
+      empRefName: isEmployee ? claimParty.empRefName || null : null,
+      empRefDesignation: isEmployee ? claimParty.empRefDesignation || null : null,
+      empRefCircle: isEmployee ? claimParty.empRefCircle || null : null,
+      empRefCmp: isEmployee ? claimParty.empRefCmp || null : null,
+      bankAccount: isEmployee ? claimParty.bankAccount || null : null,
+      ifsc: isEmployee ? claimParty.ifsc || null : null,
+      vendorId: isEmployee ? null : r.vendorId || null,
+      vendorName: isEmployee ? null : r.vendorName || null,
+      vendorType: isEmployee ? null : r.vendorType || null,
       claimType: r.claimType || null,
       billingType: r.billingType || null,
       clientName: r.clientName || null,
@@ -197,9 +225,15 @@ export default function RaiseExpense() {
   }
 
   function buildPayload() {
-    // The claim belongs to the signed-in user; each item carries its own
-    // Employee / Vendor party. The server resolves the claimant from the token.
-    return { items: rows.map(itemPayload) };
+    // The claim belongs to the signed-in user. Employee identity is entered once
+    // at claim level and sent as `employeeCode`; the server resolves the full
+    // master snapshot from it. Each item still carries the (shared) employee
+    // fields or its own vendor so downstream views need no change.
+    return {
+      employeeCode:
+        claimParty.expenseFor !== "vendor" ? claimParty.empRefCode || null : null,
+      items: rows.map(itemPayload),
+    };
   }
 
   // Persists the current rows. Returns the fresh bundle, and reconciles
@@ -224,7 +258,7 @@ export default function RaiseExpense() {
       if (!silent) toast.success("Draft saved.");
       return b;
     },
-    [claimId, rows] // eslint-disable-line react-hooks/exhaustive-deps
+    [claimId, rows, claimParty] // eslint-disable-line react-hooks/exhaustive-deps
   );
 
   const handleSaveDraft = async () => {
@@ -246,10 +280,8 @@ export default function RaiseExpense() {
     const e = [];
     if (!r.expenseDate) e.push("Expense Date is required.");
     if (!(Number(r.claimedAmount) > 0)) e.push("Claimed Amount must be greater than zero.");
-    if (r.expenseFor === "employee") {
-      if (!r.empRefCode) e.push("Enter a valid Employee ID / HRMS ID and click Fetch.");
-    } else {
-      if (!r.vendorId) e.push("Select a Vendor.");
+    if (claimParty.expenseFor === "vendor" && !r.vendorId) {
+      e.push("Select a Vendor.");
     }
     if (!r.claimType) e.push("Claim Type is required.");
     if (!r.billingType) e.push("Billing Type is required.");
@@ -273,6 +305,9 @@ export default function RaiseExpense() {
   const clientValidate = () => {
     const errs = [];
     const map = {};
+    if (claimParty.expenseFor !== "vendor" && !claimParty.empRefCode) {
+      errs.push("Enter the Employee ID / HRMS ID and click Fetch before submitting.");
+    }
     if (!rows.length) errs.push("Add at least one expense item.");
     rows.forEach((r, i) => {
       const rowErrs = validateItemRow(r);
@@ -397,6 +432,18 @@ export default function RaiseExpense() {
 
   const busy = savingDraft || submitting || deleting;
 
+  // The claim's claimant resolves to the signed-in user when this is an Employee
+  // expense and either no Employee ID was entered or it matches the user's own.
+  const myCode = String(meta?.myProfile?.employeeCode || "").trim().toLowerCase();
+  const enteredCode = String(claimParty.empRefCode || "").trim().toLowerCase();
+  const claimantIsSelf =
+    claimParty.expenseFor === "employee" && (!enteredCode || enteredCode === myCode);
+  // Self-approval guard (spec §4/§5): a user configured as the L1 approver cannot
+  // submit their OWN claim. The page stays usable — they can still fix the
+  // claimant, save a draft, or ask an admin to change the chain — only Submit is
+  // blocked, and the backend enforces the same rule.
+  const blockSelfL1 = Boolean(meta?.selfIsL1Approver) && claimantIsSelf;
+
   return (
     <div className="space-y-3">
       {/* Header */}
@@ -439,7 +486,12 @@ export default function RaiseExpense() {
           <button
             type="button"
             onClick={handleSubmit}
-            disabled={busy}
+            disabled={busy || blockSelfL1}
+            title={
+              blockSelfL1
+                ? "You are configured as the L1 approver for your own claim. Ask an administrator to change the L1 approver, then submit."
+                : undefined
+            }
             className="inline-flex h-10 items-center gap-2 rounded-full bg-gradient-to-r from-indigo-500 to-violet-500 px-5 text-sm font-semibold text-white shadow-sm transition hover:opacity-95 disabled:opacity-50"
           >
             {submitting ? <Loader2 className="animate-spin" size={15} /> : <Send size={15} />}
@@ -448,9 +500,104 @@ export default function RaiseExpense() {
         </div>
       </div>
 
+      {blockSelfL1 ? (
+        <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700 dark:border-rose-500/20 dark:bg-rose-500/10 dark:text-rose-300">
+          <div className="font-semibold">You cannot submit your own expense claim</div>
+          <p className="mt-0.5">
+            You are currently configured as the <strong>L1 approver</strong>, so you would be
+            approving your own claim. Ask an administrator to set a different L1 approver in
+            <span className="whitespace-nowrap"> Expense Settings → Default Approval Chain</span>,
+            or raise this claim on behalf of another employee. You can still save it as a draft in
+            the meantime.
+          </p>
+        </div>
+      ) : null}
+
       {/* Progress */}
       <div className={`${CARD_SHELL} p-4`}>
         <ClaimProgressTracker status={status} />
+      </div>
+
+      {/* Claim party — entered ONCE for the whole claim */}
+      <div className={`${CARD_SHELL} space-y-4 p-4`}>
+        <div>
+          <h2 className="text-sm font-semibold text-text-primary">Expense For</h2>
+          <p className="mt-0.5 text-xs text-text-muted">
+            Choose once for the whole claim. Every expense item below uses this.
+          </p>
+        </div>
+        <div className="grid gap-2 sm:grid-cols-2">
+          {[
+            { value: "employee", label: "Employee Expense", icon: UserRound },
+            { value: "vendor", label: "Vendor Expense", icon: Building2 },
+          ].map((o) => {
+            const active = claimParty.expenseFor === o.value;
+            return (
+              <button
+                key={o.value}
+                type="button"
+                onClick={() =>
+                  setClaimParty((cp) =>
+                    cp.expenseFor === o.value
+                      ? cp
+                      : o.value === "employee"
+                      ? { ...blankClaimParty(), expenseFor: "employee" }
+                      : { ...blankClaimParty(), expenseFor: "vendor" }
+                  )
+                }
+                className={`flex items-start gap-2 rounded-xl border p-3 text-left transition ${
+                  active
+                    ? "border-indigo-500 bg-indigo-50 dark:bg-indigo-500/10"
+                    : "border-border-color bg-surface hover:bg-surface-muted"
+                }`}
+              >
+                <span
+                  className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 ${
+                    active ? "border-indigo-500" : "border-border-color"
+                  }`}
+                >
+                  {active ? <span className="h-2 w-2 rounded-full bg-indigo-500" /> : null}
+                </span>
+                <span className="flex items-center gap-1.5 text-sm font-semibold text-text-primary">
+                  <o.icon size={14} />
+                  {o.label}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        {claimParty.expenseFor === "employee" ? (
+          <>
+            <EmployeePartyPicker
+              value={claimParty}
+              onChange={(p) => setClaimParty((cp) => ({ ...cp, ...p }))}
+            />
+            <div className="rounded-xl border border-border-color bg-surface-muted/50 p-3 text-xs text-text-secondary">
+              <div>
+                <span className="font-semibold text-text-muted">Submitted by:</span>{" "}
+                {user?.name || "You"}
+              </div>
+              {claimParty.empRefName ? (
+                <div className="mt-0.5">
+                  <span className="font-semibold text-text-muted">Expense employee (claimant):</span>{" "}
+                  {claimParty.empRefName}
+                  {claimParty.empRefCode ? ` · ${claimParty.empRefCode}` : ""}
+                </div>
+              ) : null}
+              {claimParty.empRefName && user?.name && claimParty.empRefName.trim().toLowerCase() !== user.name.trim().toLowerCase() ? (
+                <div className="mt-1 text-amber-700 dark:text-amber-400">
+                  You are raising this on behalf of another employee — the claim will belong to
+                  them, and their approval chain applies. You remain recorded as the submitter.
+                </div>
+              ) : null}
+            </div>
+          </>
+        ) : (
+          <p className="rounded-xl border border-border-color bg-surface-muted/50 p-3 text-xs text-text-muted">
+            Each expense item below selects its own Vendor from the vendor master.
+          </p>
+        )}
       </div>
 
       {/* Validation summary */}
@@ -485,6 +632,7 @@ export default function RaiseExpense() {
             <div key={row.localKey}>
               <ExpenseItemCard
                 item={row}
+                party={claimParty}
                 index={index}
                 meta={meta}
                 errors={itemErrorMap[row.localKey] || []}

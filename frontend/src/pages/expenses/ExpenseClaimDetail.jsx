@@ -1,21 +1,42 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import toast from "react-hot-toast";
-import { ArrowLeft, FileText, Loader2, Pencil } from "lucide-react";
+import { ArrowLeft, FileText, Loader2, Pencil, Trash2 } from "lucide-react";
 
 import { CARD_SHELL } from "../../components/billingDashboard/theme";
+import ConfirmDialog from "../../components/ConfirmDialog";
 import ClaimStatusBadge from "../../components/expenses/ClaimStatusBadge";
 import ClaimProgressTracker from "../../components/expenses/ClaimProgressTracker";
+import ClaimApprovalTimeline from "../../components/expenses/ClaimApprovalTimeline";
 import AuditTimeline from "../../components/expenses/AuditTimeline";
 import ItemClassification from "../../components/expenses/ItemClassification";
+import { useUser } from "../../context/UserContext";
+import { getPagePermission } from "../../utils/access";
 import { formatCurrency, formatDate } from "../../utils/penaltyFormat";
-import { fetchClaim, openBill } from "../../lib/expenseClaimsApi";
+import { deleteClaim, fetchClaim, openBill } from "../../lib/expenseClaimsApi";
 
 export default function ExpenseClaimDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { user } = useUser();
+  const canDelete = getPagePermission(user, "my-expenses").delete;
   const [loading, setLoading] = useState(true);
   const [bundle, setBundle] = useState(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  const handleDelete = async () => {
+    setDeleting(true);
+    try {
+      await deleteClaim(id);
+      toast.success("Claim deleted.");
+      navigate("/dashboard/expense-claims/my", { replace: true });
+    } catch (error) {
+      toast.error(error.message || "Failed to delete the claim.");
+      setDeleting(false);
+      setConfirmDelete(false);
+    }
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -43,7 +64,11 @@ export default function ExpenseClaimDetail() {
     );
   }
 
-  const { claim, items, attachments, audit, finance } = bundle;
+  const { claim, items, attachments, audit, finance, timeline } = bundle;
+  const raisedOnBehalf =
+    claim.submittedByUserId != null &&
+    claim.employeeUserId != null &&
+    claim.submittedByUserId !== claim.employeeUserId;
   const attByItem = new Map();
   attachments.forEach((att) => {
     if (!attByItem.has(att.itemId)) attByItem.set(att.itemId, []);
@@ -76,16 +101,33 @@ export default function ExpenseClaimDetail() {
           <p className="mt-0.5 text-sm text-text-secondary">
             {claim.employeeName ? `${claim.employeeName}${claim.employeeCode ? ` · ${claim.employeeCode}` : ""}` : "Expense claim"}
           </p>
+          {raisedOnBehalf && claim.submittedByName ? (
+            <p className="mt-0.5 inline-flex items-center gap-1 rounded border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[11px] font-medium text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">
+              Raised on your behalf by {claim.submittedByName}
+              {claim.submittedByEmployeeCode ? ` · ${claim.submittedByEmployeeCode}` : ""}
+            </p>
+          ) : null}
         </div>
-        {editable ? (
-          <button
-            type="button"
-            onClick={() => navigate(`/dashboard/expense-claims/raise/${claim.id}`)}
-            className="inline-flex h-10 items-center gap-2 rounded-full border border-border-color bg-surface px-4 text-sm font-medium text-text-secondary transition hover:bg-surface-muted"
-          >
-            <Pencil size={15} /> Edit Claim
-          </button>
-        ) : null}
+        <div className="flex items-center gap-2">
+          {editable ? (
+            <button
+              type="button"
+              onClick={() => navigate(`/dashboard/expense-claims/raise/${claim.id}`)}
+              className="inline-flex h-10 items-center gap-2 rounded-full border border-border-color bg-surface px-4 text-sm font-medium text-text-secondary transition hover:bg-surface-muted"
+            >
+              <Pencil size={15} /> Edit Claim
+            </button>
+          ) : null}
+          {canDelete ? (
+            <button
+              type="button"
+              onClick={() => setConfirmDelete(true)}
+              className="inline-flex h-10 items-center gap-2 rounded-full border border-rose-200 bg-surface px-4 text-sm font-medium text-rose-600 transition hover:bg-rose-50 dark:border-rose-500/20 dark:hover:bg-rose-500/10"
+            >
+              <Trash2 size={15} /> Delete Claim
+            </button>
+          ) : null}
+        </div>
       </div>
 
       {/* Progress tracker */}
@@ -93,12 +135,18 @@ export default function ExpenseClaimDetail() {
         <ClaimProgressTracker status={claim.status} />
       </div>
 
+      {/* Approval status / timeline — real data from the claim's approval trail */}
+      <div className={`${CARD_SHELL} p-4`}>
+        <h2 className="mb-3 text-sm font-semibold text-text-primary">Approval Status</h2>
+        <ClaimApprovalTimeline timeline={timeline} claim={claim} />
+      </div>
+
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-        {/* Employee details */}
+        {/* Claimant details */}
         <div className={`${CARD_SHELL} p-4`}>
-          <h2 className="mb-3 text-sm font-semibold text-text-primary">Employee Details</h2>
+          <h2 className="mb-3 text-sm font-semibold text-text-primary">Claimant Details</h2>
           <dl className="grid grid-cols-2 gap-x-4 gap-y-2.5 text-sm">
-            <Detail label="Employee" value={claim.employeeName} />
+            <Detail label="Claimant" value={claim.employeeName} />
             <Detail label="Employee ID" value={claim.employeeCode} />
             <Detail label="Department" value={claim.department} />
             <Detail label="Designation" value={claim.designation} />
@@ -114,6 +162,16 @@ export default function ExpenseClaimDetail() {
           <h2 className="mb-3 text-sm font-semibold text-text-primary">Claim Details</h2>
           <dl className="grid grid-cols-2 gap-x-4 gap-y-2.5 text-sm">
             <Detail label="Submitted On" value={claim.submittedAt ? formatDate(claim.submittedAt.toString().slice(0, 10)) : "—"} />
+            <Detail
+              label="Raised By"
+              value={
+                claim.submittedByName
+                  ? `${claim.submittedByName}${claim.submittedByEmployeeCode ? ` · ${claim.submittedByEmployeeCode}` : ""}${
+                      raisedOnBehalf ? " (on behalf)" : ""
+                    }`
+                  : "—"
+              }
+            />
             <Detail label="Total Claimed" value={formatCurrency(claim.totalClaimed)} strong />
             {claim.l1ApprovedTotal != null ? (
               <Detail label="L1 Approved" value={formatCurrency(claim.l1ApprovedTotal)} />
@@ -254,6 +312,18 @@ export default function ExpenseClaimDetail() {
         <h2 className="mb-3 text-sm font-semibold text-text-primary">Claim History</h2>
         <AuditTimeline entries={audit} />
       </div>
+
+      <ConfirmDialog
+        open={confirmDelete}
+        title="Delete this claim?"
+        description={`This permanently removes ${
+          claim.claimNumber ? `claim ${claim.claimNumber}` : "this draft claim"
+        }, all of its expense items, bills and approval history. This cannot be undone.`}
+        confirmLabel="Delete Claim"
+        busy={deleting}
+        onConfirm={handleDelete}
+        onCancel={() => !deleting && setConfirmDelete(false)}
+      />
     </div>
   );
 }

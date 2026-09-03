@@ -33,25 +33,27 @@ export const STATUS_META = {
       "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20",
   },
   pending_finance: {
-    label: "Pending Finance",
-    dot: "bg-sky-500",
+    label: "In Finance",
+    dot: "bg-emerald-500",
     className:
-      "bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-500/10 dark:text-sky-400 dark:border-sky-500/20",
+      "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20",
   },
+  // Legacy statuses — no claim reaches these any more (Finance is read-only),
+  // but old records may still carry them, so keep labels for display.
   processing: {
-    label: "Processing",
-    dot: "bg-indigo-500",
+    label: "In Finance",
+    dot: "bg-emerald-500",
     className:
-      "bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-500/10 dark:text-indigo-400 dark:border-indigo-500/20",
+      "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20",
   },
   on_hold: {
-    label: "On Hold",
-    dot: "bg-slate-500",
+    label: "In Finance",
+    dot: "bg-emerald-500",
     className:
-      "bg-slate-50 text-slate-700 border-slate-200 dark:bg-slate-500/10 dark:text-slate-300 dark:border-slate-500/20",
+      "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20",
   },
   completed: {
-    label: "Completed",
+    label: "In Finance",
     dot: "bg-emerald-500",
     className:
       "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20",
@@ -70,17 +72,6 @@ export const STATUS_META = {
   },
 };
 
-export const FINANCE_STATUS_META = {
-  pending: { label: "Pending Processing", className: STATUS_META.pending_finance.className, dot: "bg-sky-500" },
-  processing: { label: "Processing", className: STATUS_META.processing.className, dot: "bg-indigo-500" },
-  processed: { label: "Processed", className: STATUS_META.completed.className, dot: "bg-emerald-500" },
-  on_hold: { label: "On Hold", className: STATUS_META.on_hold.className, dot: "bg-slate-500" },
-};
-
-export function financeStatusMeta(status) {
-  return FINANCE_STATUS_META[status] || FINANCE_STATUS_META.pending;
-}
-
 export function statusMeta(status) {
   return STATUS_META[status] || {
     label: status || "Unknown",
@@ -90,14 +81,14 @@ export function statusMeta(status) {
   };
 }
 
-// Ordered stages for the progress tracker.
+// Ordered stages for the progress tracker. Finance is a read-only destination,
+// NOT a processing step — the workflow ends when the claim lands there.
 export const TRACKER_STEPS = [
   { key: "raised", label: "Raised" },
   { key: "l1", label: "L1 Approved" },
   { key: "l2", label: "L2 Approved" },
   { key: "final", label: "Final Approved" },
-  { key: "finance", label: "Finance Processing" },
-  { key: "completed", label: "Completed" },
+  { key: "finance", label: "Finance / Archived" },
 ];
 
 // How far along a claim is: index of the step currently in progress.
@@ -112,16 +103,28 @@ const STATUS_TO_STEP = {
   pending_finance: 4,
   processing: 4,
   on_hold: 4,
-  completed: 6,
+  completed: 4,
   rejected: -1,
 };
 
+// Statuses that mean the claim has fully cleared final approval and is now in
+// Finance — every tracker step (including "Finance") is complete.
+const IN_FINANCE = new Set([
+  "final_approved",
+  "pending_finance",
+  "processing",
+  "on_hold",
+  "completed",
+]);
+
 export function trackerState(status) {
   const activeIndex = STATUS_TO_STEP[status] ?? 0;
+  const settled = IN_FINANCE.has(status);
   return TRACKER_STEPS.map((step, index) => {
     if (status === "rejected") {
       return { ...step, state: index === 0 ? "done" : "rejected" };
     }
+    if (settled) return { ...step, state: "done" };
     if (index < activeIndex) return { ...step, state: "done" };
     if (index === activeIndex) return { ...step, state: "current" };
     return { ...step, state: "pending" };

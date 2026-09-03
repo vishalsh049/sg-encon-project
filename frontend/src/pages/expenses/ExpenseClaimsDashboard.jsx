@@ -85,7 +85,7 @@ export default function ExpenseClaimsDashboard() {
         <KpiCard compact accentKey="pending" icon={Clock3} label="Pending L1" value={loading ? "…" : c.pendingL1 ?? 0} />
         <KpiCard compact accentKey="pending" icon={Clock3} label="Pending L2" value={loading ? "…" : c.pendingL2 ?? 0} />
         <KpiCard compact accentKey="pending" icon={Clock3} label="Pending Final" value={loading ? "…" : c.pendingFinal ?? 0} />
-        <KpiCard compact accentKey="pmLoss" icon={Landmark} label="Pending Finance" value={loading ? "…" : c.pendingFinance ?? 0} />
+        <KpiCard compact accentKey="pmLoss" icon={Landmark} label="In Finance" value={loading ? "…" : c.pendingFinance ?? 0} />
         <KpiCard compact accentKey="completed" icon={CheckCircle2} label="Completed" value={loading ? "…" : c.completed ?? 0} />
         <KpiCard compact accentKey="completed" icon={CheckCircle2} label="Approved" value={loading ? "…" : c.approved ?? 0} />
         <KpiCard compact accentKey="penalty" icon={ThumbsDown} label="Rejected" value={loading ? "…" : c.rejected ?? 0} />

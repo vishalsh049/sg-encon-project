@@ -5,54 +5,31 @@ import { Download, Loader2, RefreshCw, Search, SlidersHorizontal, X } from "luci
 
 import { CARD_SHELL } from "../../components/billingDashboard/theme";
 import ClaimStatusBadge from "../../components/expenses/ClaimStatusBadge";
-import { financeStatusMeta } from "../../lib/expenseClaimStatus";
 import { getPagePermission } from "../../utils/access";
 import { useUser } from "../../context/UserContext";
 import { formatCurrency, formatDate } from "../../utils/penaltyFormat";
 import { exportFinanceExcel, fetchFinanceClaims, fetchFinanceMeta } from "../../lib/expenseClaimsApi";
 
-const TABS = [
-  { key: "pending", label: "Pending Finance", countKey: "pending" },
-  { key: "processing", label: "Processing", countKey: "processing" },
-  { key: "on_hold", label: "On Hold", countKey: "on_hold" },
-  { key: "processed", label: "Processed", countKey: "processed" },
-  { key: "rejected", label: "Rejected", countKey: "rejected" },
-  { key: "all", label: "All Claims", countKey: "all" },
-];
-const CLAIM_STATUSES = [
-  "pending_l1", "pending_l2", "pending_final", "pending_finance", "completed", "rejected", "returned",
-];
 const SORTS = [
   { key: "submitted", label: "Submitted date" },
   { key: "claim", label: "Claim number" },
   { key: "claimed", label: "Claimed amount" },
-  { key: "approved", label: "Approved amount" },
-  { key: "processed", label: "Processed date" },
+  { key: "approved", label: "Final approved amount" },
 ];
 const PAGE_SIZE = 20;
 const EMPTY_FILTERS = {
   claimNumber: "", employee: "", employeeId: "", department: "", cmp: "",
   category: "", dateFrom: "", dateTo: "", claimMin: "", claimMax: "",
-  approvedMin: "", approvedMax: "", status: "", financeStatus: "", approver: "",
+  approvedMin: "", approvedMax: "", approver: "",
 };
 const INPUT =
   "w-full rounded-lg border border-border-color bg-surface px-2.5 py-1.5 text-sm text-text-primary outline-none focus:border-indigo-400";
-
-function FinanceBadge({ status }) {
-  const meta = financeStatusMeta(status);
-  return (
-    <span className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-1 text-[11px] font-semibold ${meta.className}`}>
-      <span className={`h-1.5 w-1.5 rounded-full ${meta.dot}`} />
-      {meta.label}
-    </span>
-  );
-}
 
 export default function FinanceExpenseProcessing() {
   const navigate = useNavigate();
   const { user } = useUser();
   const canDownload = getPagePermission(user, "expense-finance").download;
-  const [tab, setTab] = useState("pending");
+
   const [search, setSearch] = useState("");
   const [debounced, setDebounced] = useState("");
   const [showFilters, setShowFilters] = useState(false);
@@ -62,12 +39,9 @@ export default function FinanceExpenseProcessing() {
   const [dir, setDir] = useState("desc");
   const [page, setPage] = useState(1);
 
-  const [meta, setMeta] = useState({ departments: [], cmps: [], categories: [], approvers: [], financeStatuses: [] });
+  const [meta, setMeta] = useState({ departments: [], cmps: [], categories: [], approvers: [] });
   const [rows, setRows] = useState([]);
   const [total, setTotal] = useState(0);
-  const [counts, setCounts] = useState({
-    pending: 0, processing: 0, on_hold: 0, processed: 0, rejected: 0, all: 0,
-  });
   const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
 
@@ -89,17 +63,16 @@ export default function FinanceExpenseProcessing() {
     setLoading(true);
     try {
       const res = await fetchFinanceClaims({
-        tab, search: debounced, sort, dir, page, pageSize: PAGE_SIZE, ...filters,
+        search: debounced, sort, dir, page, pageSize: PAGE_SIZE, ...filters,
       });
       setRows(res.data || []);
       setTotal(res.total || 0);
-      if (res.counts) setCounts(res.counts);
     } catch (error) {
-      toast.error(error.message || "Failed to load the finance queue.");
+      toast.error(error.message || "Failed to load the finance list.");
     } finally {
       setLoading(false);
     }
-  }, [tab, debounced, sort, dir, page, filters]);
+  }, [debounced, sort, dir, page, filters]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -124,10 +97,11 @@ export default function FinanceExpenseProcessing() {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-lg font-semibold tracking-tight text-text-primary sm:text-xl">
-            Finance · Expense Processing
+            Finance — Approved Claims
           </h1>
           <p className="mt-0.5 text-sm text-text-secondary">
-            Fully approved claims waiting for payment, and everything already processed.
+            Every expense claim that has completed Final Approval. Read-only — open a claim to view
+            it and download its bills.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -138,7 +112,7 @@ export default function FinanceExpenseProcessing() {
               onClick={async () => {
                 setExporting(true);
                 try {
-                  await exportFinanceExcel({ tab, search: debounced, sort, dir, ...filters });
+                  await exportFinanceExcel({ search: debounced, sort, dir, ...filters });
                 } catch (error) {
                   toast.error(error.message || "Export failed.");
                 } finally {
@@ -161,30 +135,6 @@ export default function FinanceExpenseProcessing() {
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex flex-wrap gap-1 rounded-xl border border-border-color bg-surface p-1">
-        {TABS.map((t) => (
-          <button
-            key={t.key}
-            type="button"
-            onClick={() => {
-              setTab(t.key);
-              setPage(1);
-            }}
-            className={`rounded-lg px-3 py-1.5 text-sm font-semibold transition ${
-              tab === t.key
-                ? "bg-gradient-to-r from-indigo-500 to-violet-500 text-white shadow-sm"
-                : "text-text-secondary hover:bg-surface-muted"
-            }`}
-          >
-            {t.label}
-            <span className={`ml-1.5 text-xs ${tab === t.key ? "text-white/80" : "text-text-muted"}`}>
-              {counts[t.countKey] ?? 0}
-            </span>
-          </button>
-        ))}
-      </div>
-
       {/* Search + controls */}
       <div className={`${CARD_SHELL} p-3`}>
         <div className="flex flex-wrap items-center gap-2">
@@ -193,7 +143,7 @@ export default function FinanceExpenseProcessing() {
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search claim number, employee, department, purpose…"
+              placeholder="Search claim number, employee, department…"
               className="w-full border-0 bg-transparent text-sm text-text-primary outline-none placeholder:text-text-muted"
             />
           </div>
@@ -244,14 +194,6 @@ export default function FinanceExpenseProcessing() {
               <option value="">Any Approver (L1/L2/Final)</option>
               {meta.approvers.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
             </select>
-            <select className={INPUT} value={draft.financeStatus} onChange={(e) => setDraft({ ...draft, financeStatus: e.target.value })}>
-              <option value="">Any Finance Status</option>
-              {(meta.financeStatuses || []).map((s) => <option key={s} value={s}>{financeStatusMeta(s).label}</option>)}
-            </select>
-            <select className={INPUT} value={draft.status} onChange={(e) => setDraft({ ...draft, status: e.target.value })}>
-              <option value="">Any Claim Status</option>
-              {CLAIM_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
-            </select>
             <label className="flex items-center gap-1 text-xs text-text-muted">
               From
               <input type="date" className={INPUT} value={draft.dateFrom} onChange={(e) => setDraft({ ...draft, dateFrom: e.target.value })} />
@@ -291,21 +233,23 @@ export default function FinanceExpenseProcessing() {
       {/* Table */}
       <div className={`${CARD_SHELL} overflow-hidden`}>
         {!loading && rows.length === 0 ? (
-          <div className="px-6 py-16 text-center text-sm text-text-muted">No claims match this view.</div>
+          <div className="px-6 py-16 text-center text-sm text-text-muted">
+            No fully-approved claims match this view.
+          </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="min-w-[980px] w-full text-left text-sm">
+            <table className="min-w-[920px] w-full text-left text-sm">
               <thead>
                 <tr className="bg-surface-muted text-[11px] font-semibold uppercase tracking-[0.08em] text-text-muted">
                   <th className="px-4 py-2.5">Claim No</th>
                   <th className="px-4 py-2.5">Employee</th>
+                  <th className="px-4 py-2.5">Employee ID</th>
                   <th className="px-4 py-2.5">Department</th>
                   <th className="px-4 py-2.5">CMP</th>
+                  <th className="px-4 py-2.5">Circle</th>
                   <th className="px-4 py-2.5">Submitted</th>
                   <th className="px-4 py-2.5 text-right">Claimed</th>
                   <th className="px-4 py-2.5 text-right">Final Approved</th>
-                  <th className="px-4 py-2.5">Finance</th>
-                  <th className="px-4 py-2.5">Payment Ref</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border-color">
@@ -330,13 +274,20 @@ export default function FinanceExpenseProcessing() {
                           </div>
                         </td>
                         <td className="whitespace-nowrap px-4 py-2.5 text-text-secondary">
-                          {row.employeeName}
-                          <span className="ml-1 text-xs text-text-muted">
-                            {row.employeeCode ? `(${row.employeeCode})` : ""}
-                          </span>
+                          {row.employeeName || "—"}
+                          {row.submittedByName &&
+                          row.submittedByUserId !== row.employeeUserId ? (
+                            <span className="mt-0.5 block text-[11px] text-text-muted">
+                              raised by {row.submittedByName}
+                            </span>
+                          ) : null}
+                        </td>
+                        <td className="whitespace-nowrap px-4 py-2.5 text-text-secondary">
+                          {row.employeeCode || "—"}
                         </td>
                         <td className="whitespace-nowrap px-4 py-2.5 text-text-secondary">{row.department || "—"}</td>
                         <td className="whitespace-nowrap px-4 py-2.5 text-text-secondary">{row.cmp || "—"}</td>
+                        <td className="whitespace-nowrap px-4 py-2.5 text-text-secondary">{row.circle || "—"}</td>
                         <td className="whitespace-nowrap px-4 py-2.5 text-text-secondary">
                           {formatDate((row.submittedAt || "").toString().slice(0, 10))}
                         </td>
@@ -345,12 +296,6 @@ export default function FinanceExpenseProcessing() {
                         </td>
                         <td className="whitespace-nowrap px-4 py-2.5 text-right font-semibold text-emerald-600 dark:text-emerald-400">
                           {row.finalApprovedTotal != null ? formatCurrency(row.finalApprovedTotal) : "—"}
-                        </td>
-                        <td className="px-4 py-2.5">
-                          <FinanceBadge status={row.finance?.financeStatus} />
-                        </td>
-                        <td className="whitespace-nowrap px-4 py-2.5 text-text-secondary">
-                          {row.finance?.paymentReference || "—"}
                         </td>
                       </tr>
                     ))}

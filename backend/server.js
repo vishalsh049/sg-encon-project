@@ -226,6 +226,11 @@ registerRoute("./routes/authRoutes", "/api/auth");
 // Google Form webhook uses a shared-secret key (Apps Script cannot obtain a JWT),
 // so it must be mounted before the global auth middleware.
 registerRoute("./routes/trainingWebhookRoutes", "/api/training-webhook");
+// Expense Claim document links are opened directly from an exported Excel file,
+// which cannot send an Authorization header. This route authorises by a 256-bit
+// random per-document capability token instead, so it must be mounted before the
+// global auth middleware. See routes/expenseDocumentRoutes.js.
+registerRoute("./routes/expenseDocumentRoutes", "/api/expense-documents");
 app.use("/api", authMiddleware);
 
 // Report uploads and exports parse whole workbooks in memory, so they are the

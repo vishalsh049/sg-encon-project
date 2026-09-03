@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  Building2,
   ChevronDown,
   ChevronUp,
   FileText,
@@ -8,13 +7,12 @@ import {
   Paperclip,
   Trash2,
   Upload,
-  UserRound,
   X,
 } from "lucide-react";
 
 import EntitySelect from "./EntitySelect";
 import AddVendorModal from "./AddVendorModal";
-import { fetchPOs, fetchVendors, lookupEmployee } from "../../lib/expenseClaimsApi";
+import { fetchPOs, fetchVendors } from "../../lib/expenseClaimsApi";
 import { formatCurrency } from "../../utils/penaltyFormat";
 
 const FIELD =
@@ -101,115 +99,6 @@ function ReadOnlyInfo({ title, rows }) {
   );
 }
 
-// --- Employee Expense: ID + Fetch, read-only master details -----------------
-// Rendered with a stable key so switching party type remounts it clean.
-function EmployeeParty({ item, patch }) {
-  const [empInput, setEmpInput] = useState(item.empRefCode || "");
-  const [busy, setBusy] = useState(false);
-  const [info, setInfo] = useState(null);
-  const [error, setError] = useState("");
-
-  const fetchEmployee = async (codeArg) => {
-    const code = String(codeArg ?? empInput).trim();
-    if (!code) return;
-    setBusy(true);
-    setError("");
-    try {
-      const res = await lookupEmployee(code);
-      const e = res.data;
-      setInfo(e);
-      setEmpInput(e.employeeCode || code);
-      patch({
-        empRefCode: e.employeeCode || code,
-        empRefName: e.employeeName || "",
-        empRefDesignation: e.designation || "",
-        empRefCircle: e.circle || "",
-        empRefCmp: e.cmp || "",
-        bankAccount: e.bankAccount || "",
-        ifsc: e.ifsc || "",
-      });
-    } catch (err) {
-      setInfo(null);
-      setError(
-        err?.status === 404
-          ? "Employee not found. Please check the Employee ID / HRMS ID."
-          : err?.message || "Employee lookup failed. Please try again."
-      );
-      patch({
-        empRefCode: "", empRefName: "", empRefDesignation: "", empRefCircle: "",
-        empRefCmp: "", bankAccount: "", ifsc: "",
-      });
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  // Load master details once for an already-saved item.
-  useEffect(() => {
-    if (item.empRefCode) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      fetchEmployee(item.empRefCode);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  return (
-    <div className="space-y-3">
-      <Field label="Employee ID / HRMS ID" required>
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-          <input
-            className={`${FIELD} sm:max-w-xs ${
-              error
-                ? "border-rose-400 bg-rose-50 dark:bg-rose-500/10"
-                : item.empRefCode
-                ? "border-emerald-400"
-                : ""
-            }`}
-            placeholder="Enter Employee ID / HRMS ID"
-            value={empInput}
-            onChange={(e) => setEmpInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                fetchEmployee();
-              }
-            }}
-          />
-          <button
-            type="button"
-            onClick={() => fetchEmployee()}
-            disabled={busy || !empInput.trim()}
-            className="inline-flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-xl border border-border-color bg-surface px-5 text-sm font-medium text-text-secondary transition hover:bg-surface-muted disabled:opacity-50"
-          >
-            {busy ? <Loader2 className="animate-spin" size={14} /> : null}
-            Fetch
-          </button>
-        </div>
-      </Field>
-      {error ? (
-        <p className="text-sm font-medium text-rose-600 dark:text-rose-400">{error}</p>
-      ) : info && info.employeeCode === item.empRefCode ? (
-        <ReadOnlyInfo
-          title="Employee Found"
-          rows={[
-            ["Employee Name", info.employeeName],
-            ["Employee ID / HRMS ID", info.employeeCode],
-            ["Designation", info.designation],
-            ["Circle", info.circle],
-            ["CMP", info.cmp],
-            ["Bank Account No.", info.bankAccount],
-            ["IFSC Code", info.ifsc],
-          ]}
-        />
-      ) : (
-        <p className="text-xs text-text-muted">
-          Enter the Employee ID / HRMS ID and click Fetch to load details from the employee master.
-        </p>
-      )}
-    </div>
-  );
-}
-
 // --- Vendor Expense: search / select from the vendor master -----------------
 function VendorParty({ item, patch, onAddVendor, registerCreated }) {
   const [info, setInfo] = useState(null);
@@ -268,6 +157,7 @@ function VendorParty({ item, patch, onAddVendor, registerCreated }) {
 
 export default function ExpenseItemCard({
   item,
+  party = { expenseFor: "employee" },
   index,
   meta,
   errors = [],
@@ -298,13 +188,13 @@ export default function ExpenseItemCard({
 
   const summary = useMemo(() => {
     const bits = [];
-    if (item.expenseFor === "vendor") bits.push(item.vendorName ? `Vendor: ${item.vendorName}` : "Vendor");
-    else bits.push(item.empRefName ? item.empRefName : "Employee");
+    if (party.expenseFor === "vendor") bits.push(item.vendorName ? `Vendor: ${item.vendorName}` : "Vendor");
+    else bits.push(party.empRefName ? party.empRefName : "Employee");
     if (item.claimType) bits.push(item.claimType === "advance" ? "Advance" : "Reimbursement");
     if (item.workCategory) bits.push(item.workCategory);
     if (item.claimedAmount) bits.push(formatCurrency(Number(item.claimedAmount) || 0));
     return bits.join("  ·  ");
-  }, [item]);
+  }, [item, party]);
 
   const isOM = item.workCategory === "O&M";
   const isProject = item.workCategory === "Project";
@@ -360,31 +250,9 @@ export default function ExpenseItemCard({
             </ul>
           ) : null}
 
-          {/* Step 1 — expense for */}
-          <ChoiceCards
-            label="Expense For"
-            required
-            value={item.expenseFor}
-            onChange={(v) =>
-              patch(
-                v === "employee"
-                  ? { expenseFor: v, vendorId: null, vendorName: "", vendorType: "" }
-                  : {
-                      expenseFor: v, employeeType: "", empRefCode: "", empRefName: "",
-                      empRefDesignation: "", empRefCircle: "", empRefCmp: "", bankAccount: "", ifsc: "",
-                    }
-              )
-            }
-            options={[
-              { value: "employee", label: "Employee Expense", icon: UserRound },
-              { value: "vendor", label: "Vendor Expense", icon: Building2 },
-            ]}
-          />
-
-          {/* Step 2 — party details (dynamic, remounts on switch) */}
-          {item.expenseFor === "employee" ? (
-            <EmployeeParty key="employee-party" item={item} patch={patch} />
-          ) : (
+          {/* Party — employee identity is claim-level (entered once); only a
+              Vendor expense still picks its party per item. */}
+          {party.expenseFor === "vendor" ? (
             <VendorParty
               key="vendor-party"
               item={item}
@@ -393,9 +261,9 @@ export default function ExpenseItemCard({
               onAddVendor={() => setAddVendorOpen(true)}
               registerCreated={registerCreated}
             />
-          )}
+          ) : null}
 
-          {/* Step 3 — date */}
+          {/* Step 1 — date */}
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="Expense Date" required>
               <input

@@ -379,6 +379,7 @@ const handleDownload = async (fileName) => {
                   },
                   
                 ].map(({ label, value, note, icon: Icon, chip }) => (
+                  
                   <div
                     key={label}
                     className="rounded-[22px] bg-surface border border-border-color px-4 py-2"

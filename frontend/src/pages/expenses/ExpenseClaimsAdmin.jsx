@@ -421,7 +421,7 @@ function ApprovalChainCard({ users = [], reloadConfig, busy }) {
       const n = res?.data?.rerouted || 0;
       toast.success(
         n
-          ? `Approval chain saved. ${n} pending claim${n === 1 ? "" : "s"} re-routed to the new L1 approver.`
+          ? `Approval chain saved. ${n} in-flight claim${n === 1 ? "" : "s"} re-routed onto the new approvers.`
           : "Approval chain saved."
       );
       await load();

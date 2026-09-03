@@ -120,6 +120,16 @@ export function submitDecision(claimId, payload) {
   });
 }
 
+// Approve every item in full on each of the given claims and forward them to the
+// next stage. Returns { approved, failed, results: [{ id, ok, claimNumber, ... }] }.
+export function bulkApproveClaims(claimIds, remarks) {
+  return request(`${BASE}/approvals/bulk-approve`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ claimIds, remarks: remarks || undefined }),
+  });
+}
+
 export function sendBackClaim(claimId, reason) {
   return request(`${BASE}/claims/${claimId}/send-back`, {
     method: "POST",
@@ -136,7 +146,7 @@ export function rejectClaim(claimId, reason) {
   });
 }
 
-// --- Finance processing --------------------------------------------------
+// --- Finance (read-only repository of fully final-approved claims) --------
 
 export function fetchFinanceMeta() {
   return request(`${BASE}/finance-meta`);
@@ -148,22 +158,6 @@ export function fetchFinanceClaims(filters = {}) {
 
 export function fetchFinanceClaim(id) {
   return request(`${BASE}/finance/${id}`);
-}
-
-export function saveFinance(id, payload) {
-  return request(`${BASE}/finance/${id}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-}
-
-export function financeSendBack(id, reason) {
-  return request(`${BASE}/finance/${id}/send-back`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ reason }),
-  });
 }
 
 export async function exportFinanceExcel(filters = {}) {
@@ -247,6 +241,30 @@ export function markAllNotificationsRead() {
 
 export function billUrl(attachmentId) {
   return buildApiUrl(`${BASE}/attachments/${attachmentId}`);
+}
+
+/** Downloads a bill to disk. Fetches the bytes with the auth header, then hands
+ *  the browser a short-lived object URL on an <a download>. */
+export async function downloadBill(attachmentId, fileName) {
+  const response = await authFetch(billUrl(attachmentId));
+  if (!response.ok) {
+    let message = `Could not download the bill (${response.status})`;
+    try {
+      message = (await response.json())?.message || message;
+    } catch {
+      /* not json */
+    }
+    throw new Error(message);
+  }
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = fileName || `bill-${attachmentId}`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
 }
 
 /** Opens a bill in a new tab. The auth header can't ride on window.open, so we

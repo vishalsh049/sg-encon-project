@@ -1,13 +1,16 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
-import { Loader2, Pencil, Plus, RefreshCw, Search, Wallet } from "lucide-react";
+import { Loader2, Pencil, Plus, RefreshCw, Search, Trash2, Wallet } from "lucide-react";
 
 import { CARD_SHELL } from "../../components/billingDashboard/theme";
+import ConfirmDialog from "../../components/ConfirmDialog";
 import ClaimStatusBadge from "../../components/expenses/ClaimStatusBadge";
 import NotificationsCard from "../../components/expenses/NotificationsCard";
+import { useUser } from "../../context/UserContext";
+import { getPagePermission } from "../../utils/access";
 import { formatCurrency, formatDate } from "../../utils/penaltyFormat";
-import { fetchMyClaims } from "../../lib/expenseClaimsApi";
+import { deleteClaim, fetchMyClaims } from "../../lib/expenseClaimsApi";
 
 const TABS = [
   { key: "all", label: "All" },
@@ -33,6 +36,8 @@ function expenseDateRange(row) {
 
 export default function MyExpenses() {
   const navigate = useNavigate();
+  const { user } = useUser();
+  const canDelete = getPagePermission(user, "my-expenses").delete;
   const [tab, setTab] = useState("all");
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -41,6 +46,8 @@ export default function MyExpenses() {
   const [rows, setRows] = useState([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     const t = setTimeout(() => {
@@ -87,6 +94,21 @@ export default function MyExpenses() {
   const approvedValue = (row) => {
     const v = row.finalApprovedTotal ?? row.l2ApprovedTotal ?? row.l1ApprovedTotal;
     return v == null ? "—" : formatCurrency(v);
+  };
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      await deleteClaim(deleteTarget.id);
+      toast.success("Claim deleted.");
+      setDeleteTarget(null);
+      load();
+    } catch (error) {
+      toast.error(error.message || "Failed to delete the claim.");
+    } finally {
+      setDeleting(false);
+    }
   };
 
   return (
@@ -209,6 +231,18 @@ export default function MyExpenses() {
                           {row.claimNumber || (
                             <span className="italic text-text-muted">Draft</span>
                           )}
+                          {user?.id && row.employeeUserId && row.employeeUserId !== user.id ? (
+                            <span className="ml-1.5 rounded border border-amber-300 bg-amber-50 px-1 text-[10px] font-medium text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">
+                              for {row.employeeName || "another employee"}
+                            </span>
+                          ) : user?.id &&
+                            row.submittedByUserId &&
+                            row.submittedByUserId !== user.id &&
+                            row.employeeUserId === user.id ? (
+                            <span className="ml-1.5 rounded border border-sky-300 bg-sky-50 px-1 text-[10px] font-medium text-sky-700 dark:border-sky-500/30 dark:bg-sky-500/10 dark:text-sky-300">
+                              raised by {row.submittedByName || "another employee"}
+                            </span>
+                          ) : null}
                         </td>
                         <td className="whitespace-nowrap px-4 py-2.5 text-text-secondary">
                           {expenseDateRange(row)}
@@ -231,20 +265,35 @@ export default function MyExpenses() {
                           <ClaimStatusBadge status={row.status} />
                         </td>
                         <td className="whitespace-nowrap px-4 py-2.5 text-right">
-                          {row.status === "draft" || row.status === "returned" ? (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                navigate(`/dashboard/expense-claims/raise/${row.id}`);
-                              }}
-                              className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border-color px-2.5 text-xs font-semibold text-text-secondary transition hover:bg-surface-muted"
-                            >
-                              <Pencil size={13} /> Edit
-                            </button>
-                          ) : (
-                            <span className="text-xs text-text-muted">View</span>
-                          )}
+                          <div className="flex items-center justify-end gap-1.5">
+                            {row.status === "draft" || row.status === "returned" ? (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  navigate(`/dashboard/expense-claims/raise/${row.id}`);
+                                }}
+                                className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border-color px-2.5 text-xs font-semibold text-text-secondary transition hover:bg-surface-muted"
+                              >
+                                <Pencil size={13} /> Edit
+                              </button>
+                            ) : (
+                              <span className="text-xs text-text-muted">View</span>
+                            )}
+                            {canDelete ? (
+                              <button
+                                type="button"
+                                title="Delete claim"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setDeleteTarget(row);
+                                }}
+                                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-rose-200 text-rose-600 transition hover:bg-rose-50 dark:border-rose-500/30 dark:text-rose-400 dark:hover:bg-rose-500/10"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            ) : null}
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -286,6 +335,18 @@ export default function MyExpenses() {
           <Loader2 className="animate-spin" size={13} /> Updating…
         </div>
       ) : null}
+
+      <ConfirmDialog
+        open={Boolean(deleteTarget)}
+        title="Delete this claim?"
+        description={`This permanently removes ${
+          deleteTarget?.claimNumber ? `claim ${deleteTarget.claimNumber}` : "this draft claim"
+        }, all of its expense items, bills and approval history. This cannot be undone.`}
+        confirmLabel="Delete Claim"
+        busy={deleting}
+        onConfirm={handleDelete}
+        onCancel={() => !deleting && setDeleteTarget(null)}
+      />
     </div>
   );
 }

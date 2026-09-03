@@ -13,9 +13,15 @@
 // spend tracker). Nothing is shared.
 // -----------------------------------------------------------------------------
 
+const crypto = require("crypto");
 const express = require("express");
 const multer = require("multer");
-const xlsx = require("xlsx");
+const ExcelJS = require("exceljs");
+
+// 256-bit opaque capability token for a single document. Used to build the
+// secure, session-less URLs embedded in the Excel export (see
+// backend/routes/expenseDocumentRoutes.js). The DB id is never exposed there.
+const newAccessToken = () => crypto.randomBytes(32).toString("hex"); // 64 hex chars
 
 const router = express.Router();
 
@@ -179,11 +185,14 @@ async function ensureTablesOnce() {
       file_size INT NOT NULL DEFAULT 0,
       file_data LONGBLOB NOT NULL,
       checksum VARCHAR(64) NULL,
+      access_token CHAR(64) NULL,
+      token_expires_at DATETIME NULL,
       uploaded_by INT NULL,
       uploaded_by_name VARCHAR(160) NULL,
       uploaded_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       INDEX idx_att_claim (claim_id),
-      INDEX idx_att_item (item_id)
+      INDEX idx_att_item (item_id),
+      UNIQUE KEY uq_att_access_token (access_token)
     )
   `);
 
@@ -356,6 +365,20 @@ async function ensureTablesOnce() {
   // and null-safe for existing finance rows.
   await ensureColumn("expense_claim_finance", "payment_amount", "DECIMAL(14,2) NULL");
 
+  // Secure, session-less document links. `access_token` is a 256-bit random
+  // capability id used by GET /api/expense-documents/:token; `token_expires_at`
+  // is optional (NULL = the link is valid until the attachment is deleted).
+  await ensureColumn("expense_claim_attachments", "access_token", "CHAR(64) NULL");
+  await ensureColumn("expense_claim_attachments", "token_expires_at", "DATETIME NULL");
+  await backfillAttachmentTokens();
+  await ensureUniqueIndex("expense_claim_attachments", "uq_att_access_token", "access_token");
+
+  // employee_user_id is the CLAIMANT's portal user id. It is now nullable so a
+  // claim can be raised on behalf of an employee who has no portal login (their
+  // identity then lives in employee_code / employee_name). The submitter is
+  // always expense_claims.created_by. Safe/idempotent to run every boot.
+  await pool.query(`ALTER TABLE expense_claims MODIFY employee_user_id INT NULL`).catch(() => {});
+
   await seedMasters();
 }
 
@@ -365,6 +388,29 @@ async function ensureColumn(table, column, definition) {
     await pool.query(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
   } catch (error) {
     if (error.code !== "ER_DUP_FIELDNAME") throw error;
+  }
+}
+
+// Add a unique index only if it isn't already there (safe to run every boot).
+async function ensureUniqueIndex(table, indexName, columns) {
+  try {
+    await pool.query(`ALTER TABLE ${table} ADD UNIQUE KEY ${indexName} (${columns})`);
+  } catch (error) {
+    if (error.code !== "ER_DUP_KEYNAME") throw error;
+  }
+}
+
+// One-time migration: give every pre-existing attachment a capability token so
+// its Excel links work. Idempotent — after the first run no rows match.
+async function backfillAttachmentTokens() {
+  const [rows] = await pool.query(
+    `SELECT id FROM expense_claim_attachments WHERE access_token IS NULL OR access_token = ''`
+  );
+  for (const r of rows) {
+    await pool.query(`UPDATE expense_claim_attachments SET access_token = ? WHERE id = ?`, [
+      newAccessToken(),
+      r.id,
+    ]);
   }
 }
 
@@ -462,6 +508,22 @@ async function withTransaction(work) {
 
 const isAdmin = (authUser) =>
   String(authUser?.roleName || "").trim().toLowerCase() === "admin";
+
+// Holding the "delete" permission on any of these Expense Claims screens grants
+// the privileged capability to remove a claim in any status. Finance is
+// deliberately excluded — the Finance module is strictly read-only, so a
+// Finance user can never delete a claim (only an admin, or a My Expenses /
+// Approvals / Dashboard / Admin delete grant, can). Kept in sync with PAGE_IDS
+// and the frontend permission map (frontend/src/utils/access.js).
+const EXPENSE_CLAIM_PAGES = [
+  PAGE_IDS.employee,
+  PAGE_IDS.approvals,
+  PAGE_IDS.dashboard,
+  PAGE_IDS.admin,
+];
+const canDeleteAnyClaim = (authUser) =>
+  isAdmin(authUser) ||
+  EXPENSE_CLAIM_PAGES.some((page) => hasPagePermission(authUser, page, "delete"));
 
 function httpError(statusCode, message, details) {
   const error = new Error(message);
@@ -673,6 +735,16 @@ function mapClaim(row) {
     finalApproverUserId: row.final_approver_user_id,
     currentApproverUserId: row.current_approver_user_id,
     createdBy: row.created_by,
+    // Alias: the logged-in user who raised/submitted the claim. May differ from
+    // employeeUserId (the claimant) when raised on someone else's behalf.
+    submittedByUserId: row.created_by,
+    submittedByName: row.created_by_name || null, // present only when the query joins it
+    submittedByEmployeeCode: row.created_by_code || null, // present only when the query joins it
+    // Per-stage approver names + approval timestamps — present only when the
+    // query / bundle builder joins them (claim detail, approvals detail, finance).
+    l1ApproverName: row.l1_approver_name || null,
+    l2ApproverName: row.l2_approver_name || null,
+    finalApproverName: row.final_approver_name || null,
     createdAt: row.created_at,
     submittedAt: row.submitted_at,
     updatedAt: row.updated_at,
@@ -830,8 +902,87 @@ async function resolveApprovers(conn, category, amount) {
   return rows[0] || null;
 }
 
+// Actions in the audit trail that timestamp the completion of an approval stage.
+const STAGE_DONE_ACTIONS = {
+  l1: ["L1_APPROVED", "L1_APPROVED_WITH_CHANGES"],
+  l2: ["L2_APPROVED", "L2_APPROVED_WITH_CHANGES"],
+  final: ["FINAL_APPROVED", "FINAL_APPROVED_WITH_CHANGES"],
+};
+
+// Build the per-stage approval summary the claim-detail timeline renders. Uses
+// only real data: the frozen approver ids/names, the claim's current status, the
+// per-stage approved totals, and the audit trail for timestamps. Every stage is
+// one of: approved | rejected | pending | skipped (no approver in the chain).
+function buildApprovalTimeline(claim, auditRows) {
+  const stageAt = (stage) => {
+    const acts = STAGE_DONE_ACTIONS[stage] || [];
+    const hit = [...auditRows].reverse().find(
+      (a) => a.stage === stage && acts.includes(a.action)
+    );
+    return hit ? hit.created_at : null;
+  };
+  const rejected = [...auditRows].reverse().find((a) => a.action === "REJECTED") || null;
+  const sentBack = [...auditRows].reverse().find((a) => a.action === "SENT_BACK") || null;
+  const status = claim.current_status;
+
+  const stageState = (stage, approverId, approvedTotal) => {
+    if (rejected && rejected.stage === stage) {
+      return { status: "rejected", at: rejected.created_at, reason: rejected.reason || null };
+    }
+    if (!approverId) return { status: "skipped", at: null };
+    if (approvedTotal != null) return { status: "approved", at: stageAt(stage) };
+    if (status === "rejected") return { status: "not_reached", at: null };
+    if (status === STAGE_PENDING_STATUS[stage]) return { status: "pending", at: null };
+    // Claim has moved past this stage without a recorded total (legacy) — or has
+    // not reached it yet.
+    const order = ["pending_l1", "pending_l2", "pending_final", "pending_finance"];
+    const stageIdx = { l1: 0, l2: 1, final: 2 }[stage];
+    const curIdx = order.indexOf(status);
+    if (curIdx > stageIdx) return { status: "approved", at: stageAt(stage) };
+    return { status: "pending", at: null };
+  };
+
+  return {
+    raised: {
+      at: claim.submitted_at || claim.created_at || null,
+      byUserId: claim.created_by || null,
+      byName: claim.created_by_name || null,
+      claimantUserId: claim.employee_user_id || null,
+      claimantName: claim.employee_name || null,
+      onBehalf: claim.employee_user_id != null && claim.employee_user_id !== claim.created_by,
+      sentBackAt: sentBack ? sentBack.created_at : null,
+      sentBackReason: sentBack ? sentBack.reason || null : null,
+    },
+    l1: {
+      approverUserId: claim.l1_approver_user_id || null,
+      approverName: claim.l1_approver_name || null,
+      ...stageState("l1", claim.l1_approver_user_id, claim.l1_approved_total),
+    },
+    l2: {
+      approverUserId: claim.l2_approver_user_id || null,
+      approverName: claim.l2_approver_name || null,
+      ...stageState("l2", claim.l2_approver_user_id, claim.l2_approved_total),
+    },
+    final: {
+      approverUserId: claim.final_approver_user_id || null,
+      approverName: claim.final_approver_name || null,
+      ...stageState("final", claim.final_approver_user_id, claim.final_approved_total),
+    },
+  };
+}
+
 async function fetchClaimBundle(claimId) {
-  const [claimRows] = await pool.query(`SELECT * FROM expense_claims WHERE id = ?`, [claimId]);
+  const [claimRows] = await pool.query(
+    `SELECT c.*, su.name AS created_by_name, su.employee_id AS created_by_code,
+            u1.name AS l1_approver_name, u2.name AS l2_approver_name, u3.name AS final_approver_name
+     FROM expense_claims c
+     LEFT JOIN users su ON su.id = c.created_by
+     LEFT JOIN users u1 ON u1.id = c.l1_approver_user_id
+     LEFT JOIN users u2 ON u2.id = c.l2_approver_user_id
+     LEFT JOIN users u3 ON u3.id = c.final_approver_user_id
+     WHERE c.id = ?`,
+    [claimId]
+  );
   const claim = claimRows[0];
   if (!claim) return null;
 
@@ -871,12 +1022,30 @@ async function fetchClaimBundle(claimId) {
     mappedClaim.ifsc = firstEmp.ifsc || null;
   }
 
+  // Real, DB-derived approval timeline for the claim-detail / approvals /
+  // finance screens. `financeStatus` is "in_finance" once the claim has cleared
+  // final approval (or a legacy finance row says otherwise).
+  const timeline = buildApprovalTimeline(claim, audit);
+  const financeStatus = financeRows[0]?.finance_status
+    ? financeRows[0].finance_status
+    : ["pending_finance", "processing", "on_hold", "completed", "final_approved"].includes(
+        claim.current_status
+      )
+    ? "in_finance"
+    : "pending";
+  mappedClaim.financeStatus = financeStatus;
+  timeline.finance = {
+    status: financeStatus === "pending" ? "pending" : "in_finance",
+    at: financeStatus === "pending" ? null : timeline.final.at || timeline.l2.at || timeline.l1.at,
+  };
+
   return {
     claim: mappedClaim,
     items: items.map(mapItem),
     attachments: attachments.map(mapAttachment),
     audit: audit.map(mapAudit),
     finance: financeRows[0] ? mapFinance(financeRows[0]) : null,
+    timeline,
   };
 }
 
@@ -904,7 +1073,8 @@ function mapFinance(row) {
 // personally assigned to).
 function canViewClaim(authUser, claimRow) {
   if (isAdmin(authUser)) return true;
-  if (claimRow.employee_user_id === authUser.id) return true;
+  if (claimRow.employee_user_id != null && claimRow.employee_user_id === authUser.id) return true;
+  if (claimRow.created_by != null && claimRow.created_by === authUser.id) return true; // submitter
   if (
     [
       claimRow.current_approver_user_id,
@@ -988,12 +1158,20 @@ router.get("/meta", requirePagePermission(PAGE, "view"), async (req, res) => {
   try {
     await ensureTables();
 
-    const [categories, profile, vtRows, etRows] = await Promise.all([
+    const [categories, profile, vtRows, etRows, chainRule] = await Promise.all([
       getActiveCategories(),
       loadEmployeeProfile(req.authUser.id),
       pool.query(`SELECT name FROM expense_vendor_types WHERE is_active = 1 ORDER BY name ASC`),
       pool.query(`SELECT name FROM expense_employee_types WHERE is_active = 1 ORDER BY name ASC`),
+      getCatchAllRule(),
     ]);
+
+    // Lets the Raise Expense form warn a user, before they submit, that they are
+    // the configured L1 approver for their own claim (self-approval is blocked
+    // for the claimant). Admin-managed global chain — see Expense Settings.
+    const selfIsL1Approver = Boolean(
+      chainRule?.l1_user_id && chainRule.l1_user_id === req.authUser.id
+    );
 
     res.json({
       success: true,
@@ -1019,6 +1197,12 @@ router.get("/meta", requirePagePermission(PAGE, "view"), async (req, res) => {
         },
         allowedFileTypes: ALLOWED_BILL_EXTENSIONS,
         maxFileBytes: MAX_BILL_BYTES,
+        selfIsL1Approver,
+        approvalChain: {
+          l1UserId: chainRule?.l1_user_id ?? null,
+          l2UserId: chainRule?.l2_user_id ?? null,
+          finalUserId: chainRule?.final_user_id ?? null,
+        },
       },
     });
   } catch (error) {
@@ -1200,8 +1384,11 @@ router.get("/claims", requirePagePermission(PAGE, "view"), async (req, res) => {
     const pageSize = Math.min(Math.max(Number(req.query.pageSize) || 20, 1), 200);
     const offset = (page - 1) * pageSize;
 
-    const filters = ["c.employee_user_id = ?"];
-    const params = [req.authUser.id];
+    // "My Expenses" = claims that belong to me (I am the claimant) OR that I
+    // raised on someone else's behalf (I am the submitter). The frontend tags
+    // the latter as "raised for <name>" so they don't read as my own expense.
+    const filters = ["(c.employee_user_id = ? OR c.created_by = ?)"];
+    const params = [req.authUser.id, req.authUser.id];
 
     const tabKey = String(tab || "all").trim().toLowerCase();
     if (tabKey !== "all" && TAB_STATUS_MAP[tabKey]) {
@@ -1233,10 +1420,12 @@ router.get("/claims", requirePagePermission(PAGE, "view"), async (req, res) => {
     );
     const [rows] = await pool.query(
       `SELECT c.*,
+              su.name AS created_by_name, su.employee_id AS created_by_code,
               (SELECT COUNT(*) FROM expense_claim_items i WHERE i.claim_id = c.id) AS item_count,
               (SELECT MIN(i.expense_date) FROM expense_claim_items i WHERE i.claim_id = c.id) AS expense_date_from,
               (SELECT MAX(i.expense_date) FROM expense_claim_items i WHERE i.claim_id = c.id) AS expense_date_to
        FROM expense_claims c
+       LEFT JOIN users su ON su.id = c.created_by
        WHERE ${whereClause}
        ORDER BY (c.current_status = 'draft') DESC, c.updated_at DESC, c.id DESC
        LIMIT ? OFFSET ?`,
@@ -1387,9 +1576,46 @@ async function lookupPhysicalEmployee(employeeCode) {
   };
 }
 
-// The controlled employee-master snapshot stored on a claim. An HRMS / Employee
-// ID (when supplied) is authoritative and resolved from `physical`; otherwise we
-// fall back to the logged-in user's own `users` record.
+// Find the portal login that belongs to an employee-master record, if one exists.
+// Returns a numeric users.id, or null when that employee has no portal account.
+// Primary match is on users.employee_id; when that column is not populated we
+// fall back to the employee master's company email -> users.email so a claim
+// raised on behalf of that employee still lands in their "My Expenses".
+async function findUserByEmployeeCode(employeeCode, email) {
+  const code = String(employeeCode || "").trim();
+  const mail = String(email || "").trim();
+  if (!code && !mail) return null;
+  if (code) {
+    const [rows] = await pool.query(
+      `SELECT id FROM users
+       WHERE TRIM(LOWER(employee_id)) = TRIM(LOWER(?))
+         AND LOWER(COALESCE(status, 'active')) = 'active'
+       LIMIT 1`,
+      [code]
+    );
+    if (rows[0]?.id != null) return rows[0].id;
+  }
+  if (mail) {
+    const [rows] = await pool.query(
+      `SELECT id FROM users
+       WHERE TRIM(LOWER(email)) = TRIM(LOWER(?))
+         AND LOWER(COALESCE(status, 'active')) = 'active'
+       LIMIT 1`,
+      [mail]
+    );
+    if (rows[0]?.id != null) return rows[0].id;
+  }
+  return null;
+}
+
+// The controlled employee-master snapshot stored on a claim, PLUS the claimant's
+// portal user id. `employee_user_id` is the CLAIMANT (whose expense this is),
+// which is NOT necessarily the logged-in user filling the form:
+//   * no Employee ID supplied  -> claimant is the logged-in user
+//   * Employee ID supplied     -> claimant is that employee: their portal user
+//                                 id if they have a login, otherwise null (the
+//                                 claimant is identified by employee_code alone)
+// The submitter is recorded separately as expense_claims.created_by.
 async function resolveEmployeeSnapshot(authUser, employeeCode) {
   const code = String(employeeCode || "").trim();
   if (code) {
@@ -1397,8 +1623,21 @@ async function resolveEmployeeSnapshot(authUser, employeeCode) {
     if (!emp) {
       throw httpError(400, `Employee ID "${code}" was not found in the employee master.`);
     }
+    const resolvedCode = emp.employeeCode || code;
+    let claimantUserId = await findUserByEmployeeCode(resolvedCode, emp.email);
+    if (claimantUserId == null) {
+      // No portal login matched by employee code. If the fetched employee IS the
+      // logged-in user (raising their own claim), fall back to their id so
+      // self-approval protection still applies even when users.employee_id is
+      // not populated. A genuinely different employee with no login stays null.
+      const me = await loadEmployeeProfile(authUser.id);
+      const myCode = String(me?.employee_id || "").trim().toLowerCase();
+      if (myCode && myCode === resolvedCode.trim().toLowerCase()) {
+        claimantUserId = authUser.id;
+      }
+    }
     return {
-      employee_user_id: authUser.id,
+      employee_user_id: claimantUserId,
       employee_name: emp.employeeName || null,
       employee_code: emp.employeeCode,
       department: emp.department || null,
@@ -1447,7 +1686,13 @@ router.post("/claims", requirePagePermission(PAGE, "edit"), async (req, res) => 
         stage: "employee",
         action: "DRAFT_CREATED",
         toStatus: "draft",
-        meta: { itemCount: parsedItems.length },
+        meta: {
+          itemCount: parsedItems.length,
+          claimantUserId: snap.employee_user_id,
+          claimantEmployeeCode: snap.employee_code,
+          submittedByUserId: req.authUser.id,
+          onBehalfOf: snap.employee_user_id !== req.authUser.id,
+        },
       });
       return claimId;
     });
@@ -1463,8 +1708,12 @@ async function loadOwnEditableClaim(claimId, authUser) {
   const [rows] = await pool.query(`SELECT * FROM expense_claims WHERE id = ?`, [claimId]);
   const claim = rows[0];
   if (!claim) throw httpError(404, "Claim not found.");
-  if (claim.employee_user_id !== authUser.id) {
-    throw httpError(403, "You can only edit your own claims.");
+  // Editable by the claimant (whose expense it is), the submitter who raised it
+  // on their behalf (created_by), or an admin.
+  const isClaimant = claim.employee_user_id != null && claim.employee_user_id === authUser.id;
+  const isSubmitter = claim.created_by != null && claim.created_by === authUser.id;
+  if (!isClaimant && !isSubmitter && !isAdmin(authUser)) {
+    throw httpError(403, "You can only edit claims that belong to you or that you raised.");
   }
   if (!EMPLOYEE_EDITABLE_STATUSES.includes(claim.current_status)) {
     throw httpError(
@@ -1495,11 +1744,12 @@ router.put("/claims/:id", requirePagePermission(PAGE, "edit"), async (req, res) 
     await withTransaction(async (conn) => {
       await conn.query(
         `UPDATE expense_claims SET
-           employee_name = ?, employee_code = ?, department = ?, designation = ?, circle = ?, cost_centre = ?
+           employee_user_id = ?, employee_name = ?, employee_code = ?, department = ?,
+           designation = ?, circle = ?, cost_centre = ?
          WHERE id = ?`,
         [
-          snap.employee_name, snap.employee_code, snap.department, snap.designation, snap.circle,
-          snap.cmp, claim.id,
+          snap.employee_user_id, snap.employee_name, snap.employee_code, snap.department,
+          snap.designation, snap.circle, snap.cmp, claim.id,
         ]
       );
       const total = await persistItems(conn, claim.id, parsedItems);
@@ -1523,30 +1773,43 @@ router.put("/claims/:id", requirePagePermission(PAGE, "edit"), async (req, res) 
   }
 });
 
-router.delete("/claims/:id", requirePagePermission(PAGE, "edit"), async (req, res) => {
+// Delete a claim. Two paths:
+//  1. The owner removing their own untouched draft — needs only "edit" on My
+//     Expenses (this is the "Delete Draft" button in Raise Expense / My Expenses).
+//  2. A privileged user with "delete" on any Expense Claims page (or an admin)
+//     removing ANY claim in ANY status, from the approvals / finance / detail
+//     screens. This permanently drops the claim and its full history.
+router.delete("/claims/:id", async (req, res) => {
   try {
     await ensureTables();
     const [rows] = await pool.query(`SELECT * FROM expense_claims WHERE id = ?`, [req.params.id]);
     const claim = rows[0];
     if (!claim) throw httpError(404, "Claim not found.");
-    if (claim.employee_user_id !== req.authUser.id && !isAdmin(req.authUser)) {
-      throw httpError(403, "You can only delete your own claims.");
-    }
-    if (claim.current_status !== "draft") {
+
+    const privileged = canDeleteAnyClaim(req.authUser);
+    const ownDraft =
+      (claim.employee_user_id === req.authUser.id || claim.created_by === req.authUser.id) &&
+      claim.current_status === "draft" &&
+      hasPagePermission(req.authUser, PAGE, "edit");
+
+    if (!privileged && !ownDraft) {
       throw httpError(
-        409,
-        "Only drafts can be deleted. A submitted claim stays in history permanently."
+        403,
+        "You do not have permission to delete this claim. Ask an administrator to grant Delete on an Expense Claims page."
       );
     }
+
     await withTransaction(async (conn) => {
       await conn.query(`DELETE FROM expense_claim_attachments WHERE claim_id = ?`, [claim.id]);
       await conn.query(`DELETE FROM expense_claim_items WHERE claim_id = ?`, [claim.id]);
       await conn.query(`DELETE FROM expense_claim_audit WHERE claim_id = ?`, [claim.id]);
+      await conn.query(`DELETE FROM expense_claim_finance WHERE claim_id = ?`, [claim.id]);
+      await conn.query(`DELETE FROM expense_claim_notifications WHERE claim_id = ?`, [claim.id]);
       await conn.query(`DELETE FROM expense_claims WHERE id = ?`, [claim.id]);
     });
     res.json({ success: true });
   } catch (error) {
-    fail(res, error, "Failed to delete the draft.");
+    fail(res, error, "Failed to delete the claim.");
   }
 });
 
@@ -1627,11 +1890,30 @@ router.post("/claims/:id/submit", requirePagePermission(PAGE, "edit"), async (re
           "Approvers have not been set up yet. Ask an administrator to open Expense Settings → Default Approval Chain and choose the L1 and L2 approvers (Final is optional)."
         );
       }
-      if (approvers.l1_user_id === claim.employee_user_id) {
-        throw httpError(
-          409,
-          "The configured L1 approver is you. An administrator must assign a different approver."
-        );
+      // Self-approval guard — always checked against the CLAIMANT (whose expense
+      // this is), never the submitter. It is fine for the L1/L2/Final approver to
+      // be the person who raised the claim on someone else's behalf.
+      //
+      // L1 is a hard block: the claim cannot move at all if the claimant would be
+      // their own first approver. L2 / Final where the claimant is the approver
+      // are auto-skipped downstream (see nextAfterStage), so they only block when
+      // skipping them would leave NOBODY to approve before Finance.
+      if (claim.employee_user_id != null) {
+        const cid = claim.employee_user_id;
+        if (approvers.l1_user_id === cid) {
+          throw httpError(
+            409,
+            "You are currently configured as the L1 approver for your own expense claim, so it cannot be submitted. Ask an administrator to set a different L1 approver in Expense Settings → Default Approval Chain, then submit again."
+          );
+        }
+        const l2Ok = approvers.l2_user_id && approvers.l2_user_id !== cid;
+        const finalOk = approvers.final_user_id && approvers.final_user_id !== cid;
+        if (!l2Ok && !finalOk) {
+          throw httpError(
+            409,
+            "You are configured as every remaining approver for your own expense claim, so it cannot be submitted. Ask an administrator to set different L2 / Final approvers in Expense Settings → Default Approval Chain."
+          );
+        }
       }
 
       const claimNumber = claim.claim_number || (await nextClaimNumber(conn, year));
@@ -1696,15 +1978,28 @@ router.post("/claims/:id/submit", requirePagePermission(PAGE, "edit"), async (re
         fromStatus: claim.current_status,
         toStatus: "pending_l1",
         newAmount: total,
-        meta: { claimNumber, itemCount: items.length, l1ApproverUserId: approvers.l1_user_id },
+        meta: {
+          claimNumber,
+          itemCount: items.length,
+          l1ApproverUserId: approvers.l1_user_id,
+          claimantUserId: claim.employee_user_id,
+          claimantEmployeeCode: claimEmpCode,
+          submittedByUserId: req.authUser.id,
+          submittedByName: actorName(req.authUser),
+          onBehalfOf: claim.employee_user_id !== req.authUser.id,
+          submittedAt: new Date().toISOString(),
+        },
       });
 
+      const onBehalf = claim.employee_user_id !== req.authUser.id;
       await notify(conn, {
         userId: approvers.l1_user_id,
         claimId: claim.id,
         claimNumber,
         type: "approval_pending",
-        message: `${claim.employee_name || "An employee"} submitted claim ${claimNumber} (${formatINR(total)}) for your L1 approval.`,
+        message: onBehalf
+          ? `${actorName(req.authUser)} submitted claim ${claimNumber} (${formatINR(total)}) on behalf of ${claim.employee_name || "an employee"} for your L1 approval.`
+          : `${claim.employee_name || "An employee"} submitted claim ${claimNumber} (${formatINR(total)}) for your L1 approval.`,
       });
     });
 
@@ -1739,12 +2034,14 @@ router.post(
 
       const [ins] = await pool.query(
         `INSERT INTO expense_claim_attachments
-           (claim_id, item_id, file_name, file_type, file_size, file_data, uploaded_by, uploaded_by_name)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+           (claim_id, item_id, file_name, file_type, file_size, file_data, access_token,
+            uploaded_by, uploaded_by_name)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           claim.id, itemRows[0].id, req.file.originalname,
           req.file.mimetype || "application/octet-stream",
-          req.file.size, req.file.buffer, req.authUser.id, actorName(req.authUser),
+          req.file.size, req.file.buffer, newAccessToken(),
+          req.authUser.id, actorName(req.authUser),
         ]
       );
 
@@ -1780,7 +2077,7 @@ router.get("/attachments/:attId", requireExpenseModuleView, async (req, res) => 
   try {
     await ensureTables();
     const [rows] = await pool.query(
-      `SELECT a.*, c.employee_user_id, c.current_approver_user_id, c.l1_approver_user_id,
+      `SELECT a.*, c.employee_user_id, c.created_by, c.current_approver_user_id, c.l1_approver_user_id,
               c.l2_approver_user_id, c.final_approver_user_id
        FROM expense_claim_attachments a
        JOIN expense_claims c ON c.id = a.claim_id
@@ -1808,7 +2105,7 @@ router.delete("/attachments/:attId", requirePagePermission(PAGE, "edit"), async 
   try {
     await ensureTables();
     const [rows] = await pool.query(
-      `SELECT a.id, a.claim_id, a.item_id, a.file_name, c.employee_user_id, c.current_status
+      `SELECT a.id, a.claim_id, a.item_id, a.file_name, c.employee_user_id, c.created_by, c.current_status
        FROM expense_claim_attachments a
        JOIN expense_claims c ON c.id = a.claim_id
        WHERE a.id = ?`,
@@ -1816,8 +2113,12 @@ router.delete("/attachments/:attId", requirePagePermission(PAGE, "edit"), async 
     );
     const att = rows[0];
     if (!att) throw httpError(404, "Attachment not found.");
-    if (att.employee_user_id !== req.authUser.id && !isAdmin(req.authUser)) {
-      throw httpError(403, "You can only change bills on your own claims.");
+    if (
+      att.employee_user_id !== req.authUser.id &&
+      att.created_by !== req.authUser.id &&
+      !isAdmin(req.authUser)
+    ) {
+      throw httpError(403, "You can only change bills on claims that belong to you or that you raised.");
     }
     if (!EMPLOYEE_EDITABLE_STATUSES.includes(att.current_status)) {
       throw httpError(409, "Bills cannot be changed after the claim has been submitted.");
@@ -1938,6 +2239,7 @@ router.get("/approvals", requirePagePermission(APPROVALS_PAGE, "view"), async (r
     );
     const [rows] = await pool.query(
       `SELECT c.*,
+              su.name AS created_by_name, su.employee_id AS created_by_code,
               (SELECT COUNT(*) FROM expense_claim_items i WHERE i.claim_id = c.id) AS item_count,
               (SELECT i.emp_ref_code FROM expense_claim_items i
                 WHERE i.claim_id = c.id AND (i.expense_for = 'employee' OR i.expense_for IS NULL)
@@ -1948,6 +2250,7 @@ router.get("/approvals", requirePagePermission(APPROVALS_PAGE, "view"), async (r
                   AND i.emp_ref_code IS NOT NULL AND i.emp_ref_code <> ''
                 ORDER BY i.sr_no ASC, i.id ASC LIMIT 1) AS first_emp_name
        FROM expense_claims c
+       LEFT JOIN users su ON su.id = c.created_by
        WHERE ${whereClause}
        ORDER BY ${orderBy}
        LIMIT ? OFFSET ?`,
@@ -1995,6 +2298,113 @@ async function loadClaimForApprover(claimId, authUser, { requirePending = true }
     throw httpError(403, "This claim is not assigned to you for approval.");
   }
   return claim;
+}
+
+const STATUS_TO_STAGE = { pending_l1: "l1", pending_l2: "l2", pending_final: "final" };
+
+// Apply one approver's per-item decisions inside an open transaction: write each
+// item's stage columns + per-item audit, roll the claim to the next stage,
+// record the stage audit, and notify the employee + next approver. Shared by the
+// single-claim decision route and the bulk-approve route so both behave
+// identically. `prepared` is [{ item, approved, normalized, reason, itemStatus }].
+async function applyStageDecision(conn, { claim, stage, items, prepared, remarks, actorUser }) {
+  const prefix = STAGE_COL_PREFIX[stage];
+  const stageTotal = round2(prepared.reduce((sum, p) => sum + p.approved, 0));
+  const claimed = round2(items.reduce((sum, i) => sum + Number(i.claimed_amount || 0), 0));
+  const reduced = round2(claimed - stageTotal);
+  const next = nextAfterStage(stage, claim);
+
+  for (const p of prepared) {
+    await conn.query(
+      `UPDATE expense_claim_items SET
+         ${prefix}_approved_amount = ?, ${prefix}_decision = ?, ${prefix}_reason = ?, status = ?
+       WHERE id = ? AND claim_id = ?`,
+      [p.approved, p.normalized, p.reason, p.itemStatus, p.item.id, claim.id]
+    );
+    await writeAudit(conn, {
+      claimId: claim.id,
+      actorUserId: actorUser.id,
+      actorName: actorName(actorUser),
+      stage,
+      action:
+        p.normalized === "rejected"
+          ? "ITEM_REJECTED"
+          : p.normalized === "approved_partial"
+          ? "ITEM_APPROVED_PARTIAL"
+          : "ITEM_APPROVED_FULL",
+      itemId: p.item.id,
+      oldAmount: Number(p.item.claimed_amount || 0),
+      newAmount: p.approved,
+      reason: p.reason,
+    });
+  }
+
+  const reachedFinance = next.status === "pending_finance";
+
+  const claimUpdates = [`${prefix}_approved_total = ?`];
+  const claimParams = [stageTotal];
+  if (reachedFinance && prefix !== "final") {
+    // This level was the last approver (no final approver configured), so its
+    // total IS the final approved amount.
+    claimUpdates.push("final_approved_total = ?");
+    claimParams.push(stageTotal);
+  }
+  claimUpdates.push("current_status = ?", "current_stage = ?", "current_approver_user_id = ?");
+  claimParams.push(next.status, next.stage, next.approverId);
+
+  await conn.query(
+    `UPDATE expense_claims SET ${claimUpdates.join(", ")} WHERE id = ?`,
+    [...claimParams, claim.id]
+  );
+
+  await writeAudit(conn, {
+    claimId: claim.id,
+    actorUserId: actorUser.id,
+    actorName: actorName(actorUser),
+    stage,
+    action: reduced > 0.001 ? `${STAGE_LABEL[stage].toUpperCase()}_APPROVED_WITH_CHANGES` : `${STAGE_LABEL[stage].toUpperCase()}_APPROVED`,
+    fromStatus: claim.current_status,
+    toStatus: next.status,
+    newAmount: stageTotal,
+    reason: remarks,
+    meta: { claimed, approved: stageTotal, reduced, nextApproverUserId: next.approverId },
+  });
+
+  if (reachedFinance) {
+    await writeAudit(conn, {
+      claimId: claim.id,
+      actorUserId: actorUser.id,
+      actorName: actorName(actorUser),
+      stage: "finance",
+      action: "MOVED_TO_FINANCE",
+      fromStatus: claim.current_status,
+      toStatus: "pending_finance",
+      newAmount: stageTotal,
+      meta: { finalApproved: stageTotal },
+    });
+  }
+
+  const verb = reduced > 0.001 ? "approved with changes" : "approved";
+  await notify(conn, {
+    userId: claim.employee_user_id,
+    claimId: claim.id,
+    claimNumber: claim.claim_number,
+    type: reachedFinance ? "final_approved" : `${stage}_approved`,
+    message: reachedFinance
+      ? `Claim ${claim.claim_number} is fully approved (${formatINR(stageTotal)}) and is now with Finance.`
+      : `${STAGE_LABEL[stage]} ${verb} claim ${claim.claim_number} — ${formatINR(stageTotal)}. Now pending ${STAGE_LABEL[next.stage] || next.stage} approval.`,
+  });
+  if (!reachedFinance && next.approverId) {
+    await notify(conn, {
+      userId: next.approverId,
+      claimId: claim.id,
+      claimNumber: claim.claim_number,
+      type: "approval_pending",
+      message: `Claim ${claim.claim_number} (${formatINR(stageTotal)}) is pending your ${STAGE_LABEL[next.stage] || next.stage} approval.`,
+    });
+  }
+
+  return { stageTotal, reduced, next, reachedFinance };
 }
 
 // POST /api/expense-claims/claims/:id/decision — approve every item, then forward.
@@ -2094,118 +2504,90 @@ router.post("/claims/:id/decision", requirePagePermission(APPROVALS_PAGE, "edit"
     }
     if (errors.length) throw httpError(400, "This decision cannot be saved yet.", { rowErrors: errors });
 
-    const prefix = STAGE_COL_PREFIX[stage];
-    const stageTotal = round2(prepared.reduce((sum, p) => sum + p.approved, 0));
-    const claimed = round2(items.reduce((sum, i) => sum + Number(i.claimed_amount || 0), 0));
-    const reduced = round2(claimed - stageTotal);
-    const next = nextAfterStage(stage, claim);
-
     await withTransaction(async (conn) => {
-      for (const p of prepared) {
-        await conn.query(
-          `UPDATE expense_claim_items SET
-             ${prefix}_approved_amount = ?, ${prefix}_decision = ?, ${prefix}_reason = ?, status = ?
-           WHERE id = ? AND claim_id = ?`,
-          [p.approved, p.normalized, p.reason, p.itemStatus, p.item.id, claim.id]
-        );
-        await writeAudit(conn, {
-          claimId: claim.id,
-          actorUserId: req.authUser.id,
-          actorName: actorName(req.authUser),
-          stage,
-          action:
-            p.normalized === "rejected"
-              ? "ITEM_REJECTED"
-              : p.normalized === "approved_partial"
-              ? "ITEM_APPROVED_PARTIAL"
-              : "ITEM_APPROVED_FULL",
-          itemId: p.item.id,
-          oldAmount: Number(p.item.claimed_amount || 0),
-          newAmount: p.approved,
-          reason: p.reason,
-        });
-      }
-
-      const reachedFinance = next.status === "pending_finance";
-
-      const claimUpdates = [`${prefix}_approved_total = ?`];
-      const claimParams = [stageTotal];
-      if (reachedFinance && prefix !== "final") {
-        // This level was the last approver (no final approver configured), so
-        // its total IS the final approved amount.
-        claimUpdates.push("final_approved_total = ?");
-        claimParams.push(stageTotal);
-      }
-      claimUpdates.push("current_status = ?", "current_stage = ?", "current_approver_user_id = ?");
-      claimParams.push(next.status, next.stage, next.approverId);
-
-      await conn.query(
-        `UPDATE expense_claims SET ${claimUpdates.join(", ")} WHERE id = ?`,
-        [...claimParams, claim.id]
-      );
-
-      await writeAudit(conn, {
-        claimId: claim.id,
-        actorUserId: req.authUser.id,
-        actorName: actorName(req.authUser),
-        stage,
-        action: reduced > 0.001 ? `${STAGE_LABEL[stage].toUpperCase()}_APPROVED_WITH_CHANGES` : `${STAGE_LABEL[stage].toUpperCase()}_APPROVED`,
-        fromStatus: claim.current_status,
-        toStatus: next.status,
-        newAmount: stageTotal,
-        reason: remarks,
-        meta: { claimed, approved: stageTotal, reduced, nextApproverUserId: next.approverId },
-      });
-
-      if (reachedFinance) {
-        // Open the finance record (idempotent — a resubmitted claim may already
-        // have one from a previous run).
-        await conn.query(
-          `INSERT INTO expense_claim_finance (claim_id, finance_status)
-           VALUES (?, 'pending')
-           ON DUPLICATE KEY UPDATE finance_status = 'pending', payment_reference = NULL,
-             payment_date = NULL, processed_by = NULL, processed_by_user_id = NULL, processed_at = NULL`,
-          [claim.id]
-        );
-        await writeAudit(conn, {
-          claimId: claim.id,
-          actorUserId: req.authUser.id,
-          actorName: actorName(req.authUser),
-          stage: "finance",
-          action: "MOVED_TO_FINANCE",
-          fromStatus: claim.current_status,
-          toStatus: "pending_finance",
-          newAmount: stageTotal,
-          meta: { finalApproved: stageTotal },
-        });
-      }
-
-      // Notify the employee of the outcome, and the next approver if there is one.
-      const verb = reduced > 0.001 ? "approved with changes" : "approved";
-      await notify(conn, {
-        userId: claim.employee_user_id,
-        claimId: claim.id,
-        claimNumber: claim.claim_number,
-        type: reachedFinance ? "final_approved" : `${stage}_approved`,
-        message: reachedFinance
-          ? `Claim ${claim.claim_number} is fully approved (${formatINR(stageTotal)}) and is now with Finance.`
-          : `${STAGE_LABEL[stage]} ${verb} claim ${claim.claim_number} — ${formatINR(stageTotal)}. Now pending ${STAGE_LABEL[next.stage] || next.stage} approval.`,
-      });
-      if (!reachedFinance && next.approverId) {
-        await notify(conn, {
-          userId: next.approverId,
-          claimId: claim.id,
-          claimNumber: claim.claim_number,
-          type: "approval_pending",
-          message: `Claim ${claim.claim_number} (${formatINR(stageTotal)}) is pending your ${STAGE_LABEL[next.stage] || next.stage} approval.`,
-        });
-      }
+      await applyStageDecision(conn, { claim, stage, items, prepared, remarks, actorUser: req.authUser });
     });
 
     const bundle = await fetchClaimBundle(claim.id);
     res.json({ success: true, data: bundle });
   } catch (error) {
     fail(res, error, "Failed to record the approval decision.");
+  }
+});
+
+// POST /api/expense-claims/approvals/bulk-approve — from the Approvals list:
+// approve EVERY item in full on each selected claim and forward it to the next
+// stage. Never partially approves or rejects. Each claim is validated and
+// committed independently; the response reports per-claim success/failure so one
+// bad claim (e.g. no longer assigned to you) does not block the rest.
+router.post("/approvals/bulk-approve", requirePagePermission(APPROVALS_PAGE, "edit"), async (req, res) => {
+  try {
+    await ensureTables();
+
+    const ids = [
+      ...new Set(
+        (Array.isArray(req.body?.claimIds) ? req.body.claimIds : [])
+          .map((v) => Number(v))
+          .filter((n) => Number.isInteger(n) && n > 0)
+      ),
+    ];
+    if (!ids.length) throw httpError(400, "Select at least one claim to approve.");
+    if (ids.length > 50) throw httpError(400, "You can bulk-approve at most 50 claims at a time.");
+    const remarks = String(req.body?.remarks ?? "").trim() || null;
+
+    const results = [];
+    for (const id of ids) {
+      try {
+        const claim = await loadClaimForApprover(id, req.authUser);
+        const stage = STATUS_TO_STAGE[claim.current_status];
+        if (!stage) {
+          results.push({ id, ok: false, error: "This claim is not awaiting approval." });
+          continue;
+        }
+        const [items] = await pool.query(
+          `SELECT * FROM expense_claim_items WHERE claim_id = ? ORDER BY sr_no ASC, id ASC`,
+          [id]
+        );
+        if (!items.length) {
+          results.push({ id, ok: false, claimNumber: claim.claim_number, error: "This claim has no expense items." });
+          continue;
+        }
+
+        // Approve each item at the amount handed to this stage (claimed for L1,
+        // the previous level's approved amount for L2 / Final). An item an
+        // upstream level already zeroed passes straight through as rejected.
+        const prepared = items.map((item) => {
+          const ceiling = round2(itemCeiling(stage, item));
+          return {
+            item,
+            approved: ceiling,
+            normalized: ceiling <= 0 ? "rejected" : "approved_full",
+            reason: null,
+            itemStatus: ceiling <= 0 ? "rejected" : "approved",
+          };
+        });
+
+        let outcome;
+        await withTransaction(async (conn) => {
+          outcome = await applyStageDecision(conn, { claim, stage, items, prepared, remarks, actorUser: req.authUser });
+        });
+        results.push({
+          id,
+          ok: true,
+          claimNumber: claim.claim_number,
+          stage,
+          approvedTotal: outcome.stageTotal,
+          forwardedTo: outcome.reachedFinance ? "finance" : outcome.next.stage,
+        });
+      } catch (err) {
+        results.push({ id, ok: false, error: err.message || "Approval failed." });
+      }
+    }
+
+    const approved = results.filter((r) => r.ok).length;
+    res.json({ success: true, approved, failed: results.length - approved, results });
+  } catch (error) {
+    fail(res, error, "Bulk approval failed.");
   }
 });
 
@@ -2306,19 +2688,24 @@ router.post("/claims/:id/reject", requirePagePermission(APPROVALS_PAGE, "edit"),
 });
 
 // ===========================================================================
-// PHASE 5 — Finance processing. Picks up claims that reached final approval
-// (current_status = 'pending_finance') and records payment.
+// PHASE 5 — Finance. A READ-ONLY repository of claims that have completed final
+// approval. Finance is NOT an approval stage and NOT a payment-processing stage:
+// once a claim is fully approved it is simply available here to view / download.
+// There is no finance-processing action, status, Save or Send Back.
 // ===========================================================================
 
 const FINANCE_PAGE = PAGE_IDS.finance; // "expense-finance"
-const FINANCE_STATUSES = ["pending", "processing", "processed", "on_hold"];
+
+// A claim is "in Finance" once it has cleared final approval. `completed` is a
+// legacy status for claims that were finance-processed before this module became
+// read-only — those stay visible here so nothing disappears from Finance.
+const FINANCE_VISIBLE_STATUSES = ["pending_finance", "completed"];
 
 const FINANCE_SORT_COLUMNS = {
   submitted: "c.submitted_at",
   claim: "c.claim_number",
   claimed: "c.total_claimed",
   approved: "c.final_approved_total",
-  processed: "f.processed_at",
 };
 
 function financeRow(row) {
@@ -2328,6 +2715,13 @@ function financeRow(row) {
     employeeUserId: row.employee_user_id,
     employeeName: row.employee_name,
     employeeCode: row.employee_code,
+    // Explicit claimant / raised-by split (spec §9, §18). employee* stays as an
+    // alias so existing readers keep working.
+    claimantName: row.employee_name,
+    claimantCode: row.employee_code,
+    submittedByUserId: row.created_by,
+    submittedByName: row.raised_by_name || null,
+    submittedByEmployeeCode: row.raised_by_code || null,
     department: row.department,
     designation: row.designation,
     circle: row.circle,
@@ -2363,23 +2757,11 @@ function buildFinanceFilters(req) {
   const filters = [];
   const params = [];
 
-  const tab = String(q.tab || "pending").trim().toLowerCase();
-  if (tab === "pending") {
-    // Truly untouched — reached finance, not yet picked up / held / paid.
-    filters.push(
-      "c.current_status = 'pending_finance' AND COALESCE(f.finance_status, 'pending') = 'pending'"
-    );
-  } else if (tab === "processing") {
-    filters.push("c.current_status = 'pending_finance' AND f.finance_status = 'processing'");
-  } else if (tab === "on_hold") {
-    filters.push("c.current_status = 'pending_finance' AND f.finance_status = 'on_hold'");
-  } else if (tab === "processed") {
-    filters.push("c.current_status = 'completed'");
-  } else if (tab === "rejected") {
-    filters.push("c.current_status = 'rejected'");
-  } else {
-    filters.push("c.claim_number IS NOT NULL"); // "all"
-  }
+  // Finance always and only shows fully final-approved claims.
+  filters.push(
+    `c.current_status IN (${FINANCE_VISIBLE_STATUSES.map(() => "?").join(",")})`
+  );
+  params.push(...FINANCE_VISIBLE_STATUSES);
 
   const like = (v) => `%${v}%`;
   if (q.search) {
@@ -2438,14 +2820,6 @@ function buildFinanceFilters(req) {
     filters.push("c.final_approved_total <= ?");
     params.push(Number(q.approvedMax) || 0);
   }
-  if (q.status) {
-    filters.push("c.current_status = ?");
-    params.push(q.status);
-  }
-  if (q.financeStatus) {
-    filters.push("COALESCE(f.finance_status, 'pending') = ?");
-    params.push(q.financeStatus);
-  }
   if (q.approver) {
     filters.push(
       "(c.l1_approver_user_id = ? OR c.l2_approver_user_id = ? OR c.final_approver_user_id = ?)"
@@ -2466,7 +2840,7 @@ function buildFinanceFilters(req) {
     params.push(Number(q.final) || 0);
   }
 
-  return { filters: filters.length ? filters.join(" AND ") : "1=1", params, tab };
+  return { filters: filters.length ? filters.join(" AND ") : "1=1", params };
 }
 
 const FINANCE_BASE_FROM = `
@@ -2475,6 +2849,7 @@ const FINANCE_BASE_FROM = `
   LEFT JOIN users u1 ON u1.id = c.l1_approver_user_id
   LEFT JOIN users u2 ON u2.id = c.l2_approver_user_id
   LEFT JOIN users u3 ON u3.id = c.final_approver_user_id
+  LEFT JOIN users su ON su.id = c.created_by
 `;
 
 router.get("/finance-meta", requirePagePermission(FINANCE_PAGE, "view"), async (req, res) => {
@@ -2507,7 +2882,6 @@ router.get("/finance-meta", requirePagePermission(FINANCE_PAGE, "view"), async (
         cmps: cmps.map((r) => r.cmp),
         categories: categories.map((r) => r.name),
         approvers: approvers.map((r) => ({ id: r.id, name: r.name })),
-        financeStatuses: FINANCE_STATUSES,
       },
     });
   } catch (error) {
@@ -2515,10 +2889,11 @@ router.get("/finance-meta", requirePagePermission(FINANCE_PAGE, "view"), async (
   }
 });
 
+// Read-only list of every claim that has completed final approval.
 router.get("/finance", requirePagePermission(FINANCE_PAGE, "view"), async (req, res) => {
   try {
     await ensureTables();
-    const { filters, params, tab } = buildFinanceFilters(req);
+    const { filters, params } = buildFinanceFilters(req);
 
     const page = Math.max(Number(req.query.page) || 1, 1);
     const pageSize = Math.min(Math.max(Number(req.query.pageSize) || 20, 1), 200);
@@ -2527,11 +2902,7 @@ router.get("/finance", requirePagePermission(FINANCE_PAGE, "view"), async (req, 
     const sortKey = String(req.query.sort || "").toLowerCase();
     const sortCol = FINANCE_SORT_COLUMNS[sortKey];
     const dir = String(req.query.dir || "").toLowerCase() === "asc" ? "ASC" : "DESC";
-    const orderBy = sortCol
-      ? `${sortCol} ${dir}, c.id DESC`
-      : tab === "pending"
-      ? "c.submitted_at ASC, c.id ASC"
-      : "c.updated_at DESC, c.id DESC";
+    const orderBy = sortCol ? `${sortCol} ${dir}, c.id DESC` : "c.submitted_at DESC, c.id DESC";
 
     const [countRows] = await pool.query(
       `SELECT COUNT(*) AS total ${FINANCE_BASE_FROM} WHERE ${filters}`,
@@ -2541,6 +2912,7 @@ router.get("/finance", requirePagePermission(FINANCE_PAGE, "view"), async (req, 
       `SELECT c.*, f.finance_status, f.payment_reference, f.payment_date, f.payment_amount, f.finance_remarks,
               f.processed_by, f.processed_at,
               u1.name AS l1_approver_name, u2.name AS l2_approver_name, u3.name AS final_approver_name,
+              su.name AS raised_by_name, su.employee_id AS raised_by_code,
               (SELECT COUNT(*) FROM expense_claim_items i WHERE i.claim_id = c.id) AS item_count
        ${FINANCE_BASE_FROM}
        WHERE ${filters}
@@ -2549,36 +2921,15 @@ router.get("/finance", requirePagePermission(FINANCE_PAGE, "view"), async (req, 
       [...params, pageSize, offset]
     );
 
-    // Tab counters for the header chips.
-    const [tally] = await pool.query(
-      `SELECT
-         SUM(c.current_status = 'pending_finance' AND COALESCE(f.finance_status, 'pending') = 'pending') AS pending,
-         SUM(c.current_status = 'pending_finance' AND f.finance_status = 'processing') AS processing,
-         SUM(c.current_status = 'pending_finance' AND f.finance_status = 'on_hold') AS on_hold,
-         SUM(c.current_status = 'completed') AS processed,
-         SUM(c.current_status = 'rejected') AS rejected,
-         SUM(c.claim_number IS NOT NULL) AS total
-       FROM expense_claims c
-       LEFT JOIN expense_claim_finance f ON f.claim_id = c.id`
-    );
-
     res.json({
       success: true,
       data: rows.map(financeRow),
       total: countRows[0].total,
       page,
       pageSize,
-      counts: {
-        pending: Number(tally[0].pending || 0),
-        processing: Number(tally[0].processing || 0),
-        on_hold: Number(tally[0].on_hold || 0),
-        processed: Number(tally[0].processed || 0),
-        rejected: Number(tally[0].rejected || 0),
-        all: Number(tally[0].total || 0),
-      },
     });
   } catch (error) {
-    fail(res, error, "Failed to load the finance queue.");
+    fail(res, error, "Failed to load the finance list.");
   }
 });
 
@@ -2610,200 +2961,33 @@ router.get("/finance/:id", requirePagePermission(FINANCE_PAGE, "view"), async (r
   }
 });
 
-router.post("/finance/:id", requirePagePermission(FINANCE_PAGE, "edit"), async (req, res) => {
-  try {
-    await ensureTables();
-    const [claimRows] = await pool.query(`SELECT * FROM expense_claims WHERE id = ?`, [req.params.id]);
-    const claim = claimRows[0];
-    if (!claim) throw httpError(404, "Claim not found.");
-    if (!["pending_finance", "completed"].includes(claim.current_status)) {
-      throw httpError(409, "Finance can only process a claim that has completed final approval.");
-    }
-
-    const financeStatus = String(req.body?.financeStatus || "").trim().toLowerCase();
-    if (!FINANCE_STATUSES.includes(financeStatus)) {
-      throw httpError(400, `Finance status must be one of: ${FINANCE_STATUSES.join(", ")}.`);
-    }
-    const paymentReference = String(req.body?.paymentReference ?? "").trim() || null;
-    const financeRemarks = String(req.body?.financeRemarks ?? "").trim() || null;
-    const paymentDate = normalizeDate(req.body?.paymentDate);
-    if (paymentDate === undefined) throw httpError(400, "Payment Date is not a valid date.");
-
-    // Payment amount — optional, but never more than the final approved amount.
-    const finalApproved =
-      claim.final_approved_total === null ? null : Number(claim.final_approved_total);
-    const rawAmount = req.body?.paymentAmount;
-    let paymentAmount =
-      rawAmount === "" || rawAmount === null || rawAmount === undefined ? null : toMoney(rawAmount);
-    if (paymentAmount !== null && Number.isNaN(paymentAmount)) {
-      throw httpError(400, "Payment Amount is not a valid number.");
-    }
-    if (paymentAmount !== null && paymentAmount < 0) {
-      throw httpError(400, "Payment Amount cannot be negative.");
-    }
-    if (paymentAmount !== null && finalApproved !== null && paymentAmount > finalApproved + 0.001) {
-      throw httpError(
-        400,
-        `Payment Amount cannot exceed the Final Approved amount (${formatINR(finalApproved)}).`
-      );
-    }
-
-    if (financeStatus === "processed") {
-      if (!paymentReference) throw httpError(400, "A Payment Reference Number is required to mark a claim Processed.");
-      if (!paymentDate) throw httpError(400, "A Payment Date is required to mark a claim Processed.");
-      // Default a processed claim's paid amount to the full final-approved amount.
-      if (paymentAmount === null) paymentAmount = finalApproved;
-    }
-
-    const nextClaimStatus = financeStatus === "processed" ? "completed" : "pending_finance";
-    const nextStage = financeStatus === "processed" ? "completed" : "finance";
-    const processedBy = financeStatus === "processed" ? actorName(req.authUser) : null;
-    const processedByUserId = financeStatus === "processed" ? req.authUser.id : null;
-
-    await withTransaction(async (conn) => {
-      await conn.query(
-        `INSERT INTO expense_claim_finance
-           (claim_id, finance_status, payment_reference, payment_date, payment_amount, finance_remarks,
-            processed_by, processed_by_user_id, processed_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ${financeStatus === "processed" ? "NOW()" : "NULL"})
-         ON DUPLICATE KEY UPDATE
-           finance_status = VALUES(finance_status),
-           payment_reference = VALUES(payment_reference),
-           payment_date = VALUES(payment_date),
-           payment_amount = VALUES(payment_amount),
-           finance_remarks = VALUES(finance_remarks),
-           processed_by = VALUES(processed_by),
-           processed_by_user_id = VALUES(processed_by_user_id),
-           processed_at = ${financeStatus === "processed" ? "NOW()" : "NULL"}`,
-        [claim.id, financeStatus, paymentReference, paymentDate, paymentAmount, financeRemarks, processedBy, processedByUserId]
-      );
-
-      await conn.query(
-        `UPDATE expense_claims SET current_status = ?, current_stage = ?, current_approver_user_id = NULL
-         WHERE id = ?`,
-        [nextClaimStatus, nextStage, claim.id]
-      );
-
-      await writeAudit(conn, {
-        claimId: claim.id,
-        actorUserId: req.authUser.id,
-        actorName: actorName(req.authUser),
-        stage: "finance",
-        action: `FINANCE_${financeStatus.toUpperCase()}`,
-        fromStatus: claim.current_status,
-        toStatus: nextClaimStatus,
-        newAmount: claim.final_approved_total === null ? null : Number(claim.final_approved_total),
-        reason: financeRemarks,
-        meta: { financeStatus, paymentReference, paymentDate, paymentAmount },
-      });
-
-      if (financeStatus === "processed") {
-        await notify(conn, {
-          userId: claim.employee_user_id,
-          claimId: claim.id,
-          claimNumber: claim.claim_number,
-          type: "finance_processed",
-          message: `Claim ${claim.claim_number} has been processed by Finance${
-            paymentAmount !== null ? ` — ${formatINR(paymentAmount)}` : ""
-          }. Payment reference: ${paymentReference}.`,
-        });
-      } else if (financeStatus === "on_hold") {
-        await notify(conn, {
-          userId: claim.employee_user_id,
-          claimId: claim.id,
-          claimNumber: claim.claim_number,
-          type: "finance_on_hold",
-          message: `Claim ${claim.claim_number} was put on hold by Finance${financeRemarks ? `: ${financeRemarks}` : "."}`,
-        });
-      }
-
-    });
-
-    const bundle = await fetchClaimBundle(claim.id);
-    bundle.approvers = await approverNames(claim);
-    res.json({ success: true, data: bundle });
-  } catch (error) {
-    fail(res, error, "Failed to update finance processing.");
-  }
-});
-
-// POST /api/expense-claims/finance/:id/send-back — Finance returns a claim to the
-// employee for correction. On resubmission the claim restarts at pending_l1 with
-// every prior L1/L2/Final decision cleared (see the submit route), so a claim that
-// was materially changed after finance review is re-approved end to end.
-router.post("/finance/:id/send-back", requirePagePermission(FINANCE_PAGE, "edit"), async (req, res) => {
-  try {
-    await ensureTables();
-    const [claimRows] = await pool.query(`SELECT * FROM expense_claims WHERE id = ?`, [req.params.id]);
-    const claim = claimRows[0];
-    if (!claim) throw httpError(404, "Claim not found.");
-    if (claim.current_status !== "pending_finance") {
-      throw httpError(409, "Finance can only send back a claim that is pending finance processing.");
-    }
-    const reason = String(req.body?.reason ?? "").trim();
-    if (!reason) throw httpError(400, "A reason is required when Finance sends a claim back.");
-
-    await withTransaction(async (conn) => {
-      await conn.query(
-        `UPDATE expense_claims SET
-           current_status = 'returned', current_stage = 'employee', current_approver_user_id = NULL
-         WHERE id = ?`,
-        [claim.id]
-      );
-      // Reset the finance record — no partial payment capture survives a send-back.
-      await conn.query(
-        `UPDATE expense_claim_finance SET
-           finance_status = 'pending', payment_reference = NULL, payment_date = NULL,
-           payment_amount = NULL, finance_remarks = NULL,
-           processed_by = NULL, processed_by_user_id = NULL, processed_at = NULL
-         WHERE claim_id = ?`,
-        [claim.id]
-      );
-      await writeAudit(conn, {
-        claimId: claim.id,
-        actorUserId: req.authUser.id,
-        actorName: actorName(req.authUser),
-        stage: "finance",
-        action: "FINANCE_SENT_BACK",
-        fromStatus: claim.current_status,
-        toStatus: "returned",
-        reason,
-      });
-      await notify(conn, {
-        userId: claim.employee_user_id,
-        claimId: claim.id,
-        claimNumber: claim.claim_number,
-        type: "returned",
-        message: `Claim ${claim.claim_number} was sent back by Finance (${actorName(req.authUser)}): ${reason}. Correct it and resubmit — it will go through the approval chain again.`,
-      });
-    });
-
-    const bundle = await fetchClaimBundle(claim.id);
-    bundle.approvers = await approverNames(claim);
-    res.json({ success: true, data: bundle });
-  } catch (error) {
-    fail(res, error, "Failed to send the claim back.");
-  }
-});
-
 // ===========================================================================
 // PHASE 6 — Excel export (respects the finance filter set). Two sheets.
 // ===========================================================================
 
-// Builds a worksheet from a header row + data rows, then decorates chosen cells
-// with real Excel hyperlinks (cell.l). `rows[i].links` maps a 0-based column
-// index to { name, url }.
-function sheetWithLinks(headers, rows) {
-  const aoa = [headers, ...rows.map((r) => r.cells)];
-  const ws = xlsx.utils.aoa_to_sheet(aoa);
-  rows.forEach((r, ri) => {
-    Object.entries(r.links || {}).forEach(([col, link]) => {
-      if (!link || !link.url) return;
-      const ref = xlsx.utils.encode_cell({ r: ri + 1, c: Number(col) });
-      ws[ref] = { t: "s", v: link.name || "Open document", l: { Target: link.url, Tooltip: "Open document" } };
+// Build an .xlsx buffer from one or more sheets. Each sheet is
+// { name, headers: [...], rows: [{ cells: [...], links: { <0-based col>: { name, url } } }] }.
+// A "linked" cell is written as a real Excel hyperlink and styled in the
+// standard hyperlink blue + underline so it visibly reads as clickable.
+const HYPERLINK_FONT = { color: { argb: "FF0563C1" }, underline: true };
+
+async function buildLinkedWorkbook(sheets) {
+  const wb = new ExcelJS.Workbook();
+  for (const sheet of sheets) {
+    const ws = wb.addWorksheet(String(sheet.name).slice(0, 31));
+    ws.addRow(sheet.headers);
+    ws.getRow(1).font = { bold: true };
+    sheet.rows.forEach((r) => {
+      const row = ws.addRow(r.cells);
+      Object.entries(r.links || {}).forEach(([col, link]) => {
+        if (!link || !link.url) return;
+        const cell = row.getCell(Number(col) + 1); // ExcelJS columns are 1-based
+        cell.value = { text: link.name || "Open document", hyperlink: link.url, tooltip: "Open document" };
+        cell.font = HYPERLINK_FONT;
+      });
     });
-  });
-  return ws;
+  }
+  return wb.xlsx.writeBuffer();
 }
 
 const APPROVAL_AUDIT_ACTIONS = [
@@ -2818,18 +3002,19 @@ router.get("/finance-export", requirePagePermission(FINANCE_PAGE, "download"), a
     await ensureTables();
     const { filters, params } = buildFinanceFilters(req);
 
-    // Auth-gated document links. Opening one requires a signed-in browser session
-    // with access to the claim (see the /attachments/:id route) — the export
-    // never exposes a public URL.
+    // Secure, session-less document links for the spreadsheet. Each points at
+    // GET /api/expense-documents/:token where the token is a 256-bit random
+    // capability id (never the DB row id), so a link cannot be guessed or
+    // enumerated, and it stops working the moment the attachment is deleted.
     const baseUrl =
       process.env.PUBLIC_API_BASE_URL || `${req.protocol}://${req.get("host")}`;
-    const attUrl = (id) => `${baseUrl}/api/expense-claims/attachments/${id}`;
+    const docUrl = (token) => `${baseUrl}/api/expense-documents/${token}`;
 
     const [claims] = await pool.query(
       `SELECT c.*,
-              f.finance_status, f.payment_reference, f.payment_date, f.payment_amount,
-              f.finance_remarks, f.processed_by, f.processed_at,
               u1.name AS l1_name, u2.name AS l2_name, u3.name AS final_name,
+              su.name AS raised_by_name, su.employee_id AS raised_by_code,
+              f.finance_status AS finance_status,
               (SELECT i.bank_account FROM expense_claim_items i
                  WHERE i.claim_id = c.id AND (i.expense_for = 'employee' OR i.expense_for IS NULL)
                    AND i.bank_account IS NOT NULL AND i.bank_account <> ''
@@ -2872,13 +3057,14 @@ router.get("/finance-export", requirePagePermission(FINANCE_PAGE, "download"), a
     const docsByItem = new Map();
     if (ids.length) {
       const [atts] = await pool.query(
-        `SELECT id, claim_id, item_id, file_name FROM expense_claim_attachments
+        `SELECT id, claim_id, item_id, file_name, access_token FROM expense_claim_attachments
          WHERE claim_id IN (${placeholders})
          ORDER BY claim_id ASC, item_id ASC, id ASC`,
         ids
       );
       atts.forEach((a) => {
-        const doc = { name: a.file_name || `bill-${a.id}`, url: attUrl(a.id) };
+        if (!a.access_token) return; // no capability token → no working link; skip it
+        const doc = { name: a.file_name || `bill-${a.id}`, url: docUrl(a.access_token) };
         if (!docsByClaim.has(a.claim_id)) docsByClaim.set(a.claim_id, []);
         docsByClaim.get(a.claim_id).push(doc);
         if (a.item_id != null) {
@@ -2910,13 +3096,17 @@ router.get("/finance-export", requirePagePermission(FINANCE_PAGE, "download"), a
     );
 
     // ---- Sheet 1: Claims (one row per claim) ------------------------------
+    // Read-only export of fully final-approved claims. No finance-processing /
+    // payment columns — Finance is a view-only repository.
     const claimHeadersFixed = [
-      "Claim Number", "Employee Name", "Employee ID", "Department", "Designation", "Circle", "CMP",
-      "Bank Account", "IFSC", "Submitted Date", "Status", "Finance Status",
-      "Total Claimed", "L1 Approved", "L2 Approved", "Final Approved", "Payment Amount",
+      "Claim Number", "Claim Date",
+      "Claimant Name", "Claimant Employee ID",
+      "Raised By Name", "Raised By Employee ID",
+      "Department", "Designation", "Circle", "CMP",
+      "Bank Account", "IFSC", "Submitted Date", "Final Status", "Finance Status",
+      "Total Claimed", "L1 Approved", "L2 Approved", "Final Approved",
       "L1 Approver", "L1 Approval Date", "L2 Approver", "L2 Approval Date",
       "Final Approver", "Final Approval Date",
-      "Payment Reference", "Payment Date", "Finance Remarks", "Created Date", "Completed Date",
     ];
     const claimHeaders = [
       ...claimHeadersFixed,
@@ -2928,16 +3118,22 @@ router.get("/finance-export", requirePagePermission(FINANCE_PAGE, "download"), a
     const claimRows = claims.map((c) => {
       const d = apprDates.get(c.id) || {};
       const docs = docsByClaim.get(c.id) || [];
+      const financeStatus =
+        c.finance_status ||
+        (["pending_finance", "processing", "on_hold", "completed", "final_approved"].includes(
+          c.current_status
+        )
+          ? "in_finance"
+          : "pending");
       const cells = [
-        c.claim_number || "", c.employee_name || "", c.employee_code || "", c.department || "",
-        c.designation || "", c.circle || "", c.cost_centre || "",
-        c.bank_account || "", c.ifsc || "", day(c.submitted_at), c.current_status,
-        c.finance_status || (c.current_status === "completed" ? "processed" : "pending"),
+        c.claim_number || "", day(c.created_at),
+        c.employee_name || "", c.employee_code || "",
+        c.raised_by_name || "", c.raised_by_code || "",
+        c.department || "", c.designation || "", c.circle || "", c.cost_centre || "",
+        c.bank_account || "", c.ifsc || "", day(c.submitted_at), c.current_status, financeStatus,
         Number(c.total_claimed || 0), num(c.l1_approved_total), num(c.l2_approved_total),
-        num(c.final_approved_total), num(c.payment_amount),
+        num(c.final_approved_total),
         c.l1_name || "", day(d.l1), c.l2_name || "", day(d.l2), c.final_name || "", day(d.final),
-        c.payment_reference || "", day(c.payment_date), c.finance_remarks || "",
-        day(c.created_at), c.current_status === "completed" ? day(c.processed_at) : "",
       ];
       const links = {};
       for (let k = 0; k < maxClaimDocs; k += 1) {
@@ -2953,7 +3149,7 @@ router.get("/finance-export", requirePagePermission(FINANCE_PAGE, "download"), a
       "Expense Date", "Claim Type", "Billing Type", "Expense Category", "Sub Category",
       "PO Number", "Domain", "Client", "Site / Route", "WCC Amount", "Description", "Bill Number",
       "Claimed Amount", "L1 Approved", "L1 Reason", "L2 Approved", "L2 Reason",
-      "Final Approved", "Final Reason", "Finance Amount",
+      "Final Approved", "Final Reason",
     ];
     const itemHeaders = [
       ...itemHeadersFixed,
@@ -2963,14 +3159,6 @@ router.get("/finance-export", requirePagePermission(FINANCE_PAGE, "download"), a
 
     const itemRows = items.map((i) => {
       const docs = docsByItem.get(i.id) || [];
-      const financeAmount =
-        i.final_approved_amount !== null
-          ? Number(i.final_approved_amount)
-          : i.l2_approved_amount !== null
-          ? Number(i.l2_approved_amount)
-          : i.l1_approved_amount !== null
-          ? Number(i.l1_approved_amount)
-          : "";
       const cells = [
         claimNoById.get(i.claim_id) || "", i.sr_no || "",
         i.expense_for || "employee",
@@ -2986,7 +3174,6 @@ router.get("/finance-export", requirePagePermission(FINANCE_PAGE, "download"), a
         num(i.l1_approved_amount), i.l1_reason || "",
         num(i.l2_approved_amount), i.l2_reason || "",
         num(i.final_approved_amount), i.final_reason || "",
-        financeAmount,
       ];
       const links = {};
       for (let k = 0; k < maxItemDocs; k += 1) {
@@ -2996,14 +3183,20 @@ router.get("/finance-export", requirePagePermission(FINANCE_PAGE, "download"), a
       return { cells, links };
     });
 
-    const wb = xlsx.utils.book_new();
-    xlsx.utils.book_append_sheet(wb, sheetWithLinks(claimHeaders, claimRows), "Claims");
-    xlsx.utils.book_append_sheet(wb, sheetWithLinks(itemHeaders, itemRows), "Expense Items");
-    const buffer = xlsx.write(wb, { type: "buffer", bookType: "xlsx" });
+    const raw = await buildLinkedWorkbook([
+      { name: "Claims", headers: claimHeaders, rows: claimRows },
+      { name: "Expense Items", headers: itemHeaders, rows: itemRows },
+    ]);
+    const buffer = Buffer.isBuffer(raw) ? raw : Buffer.from(raw);
+    // A valid .xlsx is a zip archive — it must start with the "PK" magic bytes.
+    if (buffer.length < 4 || buffer[0] !== 0x50 || buffer[1] !== 0x4b) {
+      throw new Error("Generated workbook is not a valid xlsx archive");
+    }
 
     res.setHeader("Content-Disposition", `attachment; filename="expense_claims_${new Date().toISOString().slice(0, 10)}.xlsx"`);
     res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-    res.send(buffer);
+    res.setHeader("Content-Length", buffer.length);
+    res.end(buffer);
   } catch (error) {
     fail(res, error, "Failed to export claims.");
   }
@@ -3515,43 +3708,84 @@ router.put("/admin/approval-chain", requirePagePermission(ADMIN_PAGE, "edit"), a
       );
     }
 
-    // Re-point claims that are still waiting for their very first (L1) approval —
-    // a claim froze its approver ids at submit time, so without this a chain
-    // change would never reach claims that were submitted earlier.
-    const [pendingL1] = await pool.query(
-      `SELECT id, claim_number, total_claimed, current_approver_user_id
-       FROM expense_claims WHERE current_status = 'pending_l1' AND employee_user_id <> ?`,
-      [l1]
-    );
-    const toReroute = pendingL1.filter((c) => c.current_approver_user_id !== l1);
-    if (pendingL1.length) {
+    // Re-point in-flight claims onto the new chain. A claim freezes its approver
+    // ids at submit time, so without this a chain change never reaches claims
+    // that were already submitted. We only re-point the stages a claim has NOT
+    // yet completed; stages already approved keep their historical approver id.
+    // The "current approver" pointer moves only when the stage the claim is
+    // sitting on is the one whose approver changed.
+    const stagePlans = [
+      {
+        status: "pending_l1",
+        stage: "l1",
+        label: "L1",
+        setCols: { l1_approver_user_id: l1, l2_approver_user_id: l2, final_approver_user_id: fin },
+        currentId: l1,
+      },
+      {
+        status: "pending_l2",
+        stage: "l2",
+        label: "L2",
+        // L1 already approved — keep l1_approver_user_id as the historical record.
+        setCols: { l2_approver_user_id: l2, final_approver_user_id: fin },
+        currentId: l2,
+      },
+      {
+        status: "pending_final",
+        stage: "final",
+        label: "final",
+        setCols: { final_approver_user_id: fin },
+        currentId: fin,
+      },
+    ];
+
+    let reroutedCount = 0;
+    for (const plan of stagePlans) {
+      // Final approver is optional. If it was cleared, leave claims already at
+      // the final stage on their existing Final approver so they can still be
+      // actioned (removing it mid-flight would strand them).
+      if (plan.status === "pending_final" && !fin) continue;
+      if (!plan.currentId) continue;
+
+      const [claims] = await pool.query(
+        `SELECT id, claim_number, total_claimed, current_approver_user_id
+         FROM expense_claims
+         WHERE current_status = ? AND employee_user_id <> ?`,
+        [plan.status, plan.currentId]
+      );
+      if (!claims.length) continue;
+
+      const cols = Object.keys(plan.setCols);
+      const vals = cols.map((c) => plan.setCols[c]);
       await pool.query(
         `UPDATE expense_claims
-         SET l1_approver_user_id = ?, l2_approver_user_id = ?, final_approver_user_id = ?,
-             current_approver_user_id = ?
-         WHERE current_status = 'pending_l1' AND employee_user_id <> ?`,
-        [l1, l2, fin, l1, l1]
+         SET ${cols.map((c) => `${c} = ?`).join(", ")}, current_approver_user_id = ?
+         WHERE current_status = ? AND employee_user_id <> ?`,
+        [...vals, plan.currentId, plan.status, plan.currentId]
       );
-      for (const c of toReroute) {
+
+      for (const c of claims) {
+        if (c.current_approver_user_id === plan.currentId) continue; // no real change
+        reroutedCount += 1;
         await notify(pool, {
-          userId: l1,
+          userId: plan.currentId,
           claimId: c.id,
           claimNumber: c.claim_number,
           type: "approval_pending",
-          message: `Claim ${c.claim_number} (${formatINR(Number(c.total_claimed || 0))}) is now routed to you for L1 approval.`,
+          message: `Claim ${c.claim_number} (${formatINR(Number(c.total_claimed || 0))}) is now routed to you for ${plan.label} approval.`,
         });
         await writeAudit(pool, {
           claimId: c.id,
           actorUserId: req.authUser.id,
           actorName: actorName(req.authUser),
-          stage: "l1",
+          stage: plan.stage,
           action: "APPROVERS_REROUTED",
-          meta: { l1UserId: l1, l2UserId: l2, finalUserId: fin },
+          meta: { l1UserId: l1, l2UserId: l2, finalUserId: fin, stage: plan.stage },
         });
       }
     }
 
-    res.json({ success: true, data: { rerouted: toReroute.length } });
+    res.json({ success: true, data: { rerouted: reroutedCount } });
   } catch (error) {
     fail(res, error, "Failed to save the approval chain.");
   }
@@ -3682,3 +3916,7 @@ router.post("/notifications/read-all", async (req, res) => {
 });
 
 module.exports = router;
+// Exposed so the public document route (routes/expenseDocumentRoutes.js) can run
+// the same idempotent schema check — it needs the access_token column to exist
+// but is mounted outside this router.
+module.exports.ensureTables = ensureTables;
