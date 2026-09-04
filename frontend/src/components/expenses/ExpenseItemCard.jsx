@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  AlertTriangle,
   ChevronDown,
   ChevronUp,
   FileText,
   Loader2,
-  Paperclip,
   Trash2,
-  Upload,
+  UploadCloud,
   X,
 } from "lucide-react";
 
@@ -16,10 +16,11 @@ import { fetchPOs, fetchVendors } from "../../lib/expenseClaimsApi";
 import { formatCurrency } from "../../utils/penaltyFormat";
 
 const FIELD =
-  "h-10 w-full rounded-xl border border-border-color bg-surface px-3 text-sm text-text-primary outline-none transition focus:border-indigo-400 disabled:bg-surface-muted disabled:text-text-muted";
+  "h-11 w-full rounded-lg border border-border-color bg-surface px-3 text-sm text-text-primary outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/15 disabled:bg-surface-muted disabled:text-text-muted";
 const AREA =
-  "w-full rounded-xl border border-border-color bg-surface px-3 py-2 text-sm text-text-primary outline-none transition focus:border-indigo-400";
-const LABEL = "mb-1 block text-[11px] font-semibold uppercase tracking-[0.1em] text-text-muted";
+  "w-full rounded-lg border border-border-color bg-surface px-3 py-2.5 text-sm text-text-primary outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/15";
+const LABEL = "mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.08em] text-text-muted";
+const DESC_SOFT_LIMIT = 500;
 
 function Field({ label, required, hint, children, className = "" }) {
   return (
@@ -47,8 +48,9 @@ function ChoiceCards({ label, required, options, value, onChange, cols = 2 }) {
             <button
               key={o.value}
               type="button"
+              aria-pressed={active}
               onClick={() => onChange(o.value)}
-              className={`flex items-start gap-2 rounded-xl border p-3 text-left transition ${
+              className={`flex items-start gap-2 rounded-lg border p-3 text-left transition focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/40 ${
                 active
                   ? "border-indigo-500 bg-indigo-50 dark:bg-indigo-500/10"
                   : "border-border-color bg-surface hover:bg-surface-muted"
@@ -78,18 +80,20 @@ function ChoiceCards({ label, required, options, value, onChange, cols = 2 }) {
   );
 }
 
-// Read-only summary of a fetched master record (employee / vendor).
+// Read-only summary of a fetched master record (vendor).
 function ReadOnlyInfo({ title, rows }) {
   const visible = rows.filter(([, v]) => v !== null && v !== undefined && String(v) !== "");
   if (!visible.length) return null;
   return (
-    <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-3 dark:border-emerald-500/20 dark:bg-emerald-500/10">
-      <div className="mb-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300">✓ {title}</div>
-      <dl className="grid grid-cols-1 gap-x-4 gap-y-1.5 sm:grid-cols-2 lg:grid-cols-3">
+    <div className="rounded-lg border border-emerald-200 bg-emerald-50/70 p-3 dark:border-emerald-500/20 dark:bg-emerald-500/10">
+      <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-emerald-700 dark:text-emerald-300">
+        ✓ {title}
+      </div>
+      <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 sm:grid-cols-3 lg:grid-cols-4">
         {visible.map(([k, v]) => (
           <div key={k} className="min-w-0">
-            <dt className="text-[10px] font-semibold uppercase tracking-wide text-text-muted">{k}</dt>
-            <dd className="truncate text-sm text-text-primary" title={String(v)}>
+            <dt className="text-[10px] font-medium uppercase tracking-wide text-text-muted">{k}</dt>
+            <dd className="truncate text-[13px] text-text-primary" title={String(v)}>
               {v}
             </dd>
           </div>
@@ -133,7 +137,7 @@ function VendorParty({ item, patch, onAddVendor, registerCreated }) {
             <button
               type="button"
               onClick={onAddVendor}
-              className="inline-flex h-10 shrink-0 items-center gap-1 rounded-xl border border-indigo-200 bg-indigo-50 px-3 text-sm font-semibold text-indigo-700 transition hover:bg-indigo-100 dark:border-indigo-500/20 dark:bg-indigo-500/10 dark:text-indigo-300"
+              className="inline-flex h-11 shrink-0 items-center gap-1 rounded-lg border border-indigo-200 bg-indigo-50 px-3 text-sm font-semibold text-indigo-700 transition hover:bg-indigo-100 dark:border-indigo-500/20 dark:bg-indigo-500/10 dark:text-indigo-300"
             >
               + Add
             </button>
@@ -169,10 +173,12 @@ export default function ExpenseItemCard({
   attachments = [],
   uploading,
   onPickFile,
+  onDropFiles,
   onOpenBill,
   onRemoveBill,
 }) {
   const [addVendorOpen, setAddVendorOpen] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
   const patch = (p) => onChange(p);
 
   // Bridge so the Add-Vendor modal can push its new record into <VendorParty>.
@@ -181,42 +187,66 @@ export default function ExpenseItemCard({
     vendorCreatedSetterRef.current = fn;
   }, []);
 
-  const claimTypeOpts = (meta?.claimTypes || []).map((t) => ({ ...t }));
   const billingOpts = (meta?.billingTypes || []).map((t) => ({ ...t }));
   const workCats = meta?.workCategories || ["O&M", "OOS", "Project"];
   const domains = meta?.domains || ["Fiber", "FTTx", "Utility", "Others"];
 
   const summary = useMemo(() => {
     const bits = [];
-    if (party.expenseFor === "vendor") bits.push(item.vendorName ? `Vendor: ${item.vendorName}` : "Vendor");
+    if (party.expenseFor === "vendor") bits.push(item.vendorName ? item.vendorName : "Vendor");
     else bits.push(party.empRefName ? party.empRefName : "Employee");
-    if (item.claimType) bits.push(item.claimType === "advance" ? "Advance" : "Reimbursement");
     if (item.workCategory) bits.push(item.workCategory);
     if (item.claimedAmount) bits.push(formatCurrency(Number(item.claimedAmount) || 0));
+    if (item.expenseDate) {
+      const d = new Date(item.expenseDate);
+      if (!Number.isNaN(d.getTime())) {
+        bits.push(
+          d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })
+        );
+      }
+    }
     return bits.join("  ·  ");
   }, [item, party]);
 
   const isOM = item.workCategory === "O&M";
   const isProject = item.workCategory === "Project";
   const needsPO = ["O&M", "OOS", "Project"].includes(item.workCategory);
+  const billRequired = item.claimType === "reimbursement";
+  const descLen = (item.description || "").length;
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    setDragOver(false);
+    const files = e.dataTransfer?.files;
+    if (files && files.length && onDropFiles) onDropFiles(files);
+  };
 
   return (
-    <div className="rounded-2xl border border-border-color/70 bg-surface/60">
+    <div className="overflow-hidden rounded-xl border border-border-color bg-surface">
       {/* card header */}
-      <div className="flex items-center justify-between gap-2 border-b border-border-color/70 px-4 py-2.5">
+      <div
+        className={`flex items-center justify-between gap-2 px-4 py-3 ${
+          collapsed ? "" : "border-b border-border-color/70 bg-surface-muted/30"
+        }`}
+      >
         <button
           type="button"
           onClick={onToggle}
-          className="flex min-w-0 items-center gap-2 text-left"
+          aria-expanded={!collapsed}
+          className="flex min-w-0 items-center gap-2.5 text-left"
         >
-          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-xs font-bold text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-300">
-            {index + 1}
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-xs font-bold text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-300">
+            {String(index + 1).padStart(2, "0")}
           </span>
           <span className="min-w-0">
-            <span className="block text-sm font-semibold text-text-primary">Expense Item {index + 1}</span>
+            <span className="block text-sm font-semibold text-text-primary">
+              Expense Item {index + 1}
+            </span>
             {collapsed && summary ? (
               <span className="block truncate text-xs text-text-muted">{summary}</span>
-            ) : null}
+            ) : (
+              <span className="block text-xs text-text-muted">Enter the expense item details below</span>
+            )}
           </span>
         </button>
         <div className="flex shrink-0 items-center gap-1">
@@ -225,6 +255,7 @@ export default function ExpenseItemCard({
               type="button"
               onClick={onRemove}
               title="Remove item"
+              aria-label={`Remove expense item ${index + 1}`}
               className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-border-color text-text-muted transition hover:border-rose-300 hover:text-rose-600"
             >
               <Trash2 size={14} />
@@ -233,6 +264,7 @@ export default function ExpenseItemCard({
           <button
             type="button"
             onClick={onToggle}
+            aria-label={collapsed ? "Expand item" : "Collapse item"}
             className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-text-muted hover:bg-surface-muted"
           >
             {collapsed ? <ChevronDown size={16} /> : <ChevronUp size={16} />}
@@ -241,13 +273,21 @@ export default function ExpenseItemCard({
       </div>
 
       {collapsed ? null : (
-        <div className="space-y-4 p-4">
+        <div className="space-y-5 p-4">
           {errors.length ? (
-            <ul className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700 dark:border-rose-500/20 dark:bg-rose-500/10 dark:text-rose-300">
-              {errors.map((e, i) => (
-                <li key={i}>• {e}</li>
-              ))}
-            </ul>
+            <div
+              role="alert"
+              className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2.5 text-xs text-rose-700 dark:border-rose-500/20 dark:bg-rose-500/10 dark:text-rose-300"
+            >
+              <div className="mb-1 flex items-center gap-1.5 font-semibold">
+                <AlertTriangle size={13} /> Please resolve the following
+              </div>
+              <ul className="list-disc space-y-0.5 pl-5">
+                {errors.map((e, i) => (
+                  <li key={i}>{e}</li>
+                ))}
+              </ul>
+            </div>
           ) : null}
 
           {/* Party — employee identity is claim-level (entered once); only a
@@ -263,7 +303,7 @@ export default function ExpenseItemCard({
             />
           ) : null}
 
-          {/* Step 1 — date */}
+          {/* Expense date */}
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="Expense Date" required>
               <input
@@ -275,22 +315,15 @@ export default function ExpenseItemCard({
             </Field>
           </div>
 
-          {/* Step 4 — claim type */}
-          <ChoiceCards
-            label="Claim Type"
-            required
-            value={item.claimType}
-            onChange={(v) => patch({ claimType: v })}
-            options={claimTypeOpts.map((t) => ({ value: t.value, label: t.label, hint: t.hint }))}
-          />
-
-          {/* Step 5 — billing type */}
+          {/* Billing type */}
           <div className="space-y-3">
             <ChoiceCards
               label="Billing Type"
               required
               value={item.billingType}
-              onChange={(v) => patch(v === "billable" ? { billingType: v } : { billingType: v, clientName: "" })}
+              onChange={(v) =>
+                patch(v === "billable" ? { billingType: v } : { billingType: v, clientName: "" })
+              }
               options={billingOpts.map((t) => ({ value: t.value, label: t.label }))}
             />
             {item.billingType === "billable" ? (
@@ -307,7 +340,7 @@ export default function ExpenseItemCard({
             ) : null}
           </div>
 
-          {/* Step 6 — expense category */}
+          {/* Expense category + conditional PO / domain */}
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="Expense Category" required>
               <select
@@ -317,7 +350,6 @@ export default function ExpenseItemCard({
                   const v = e.target.value;
                   patch({
                     workCategory: v,
-                    // reset category-specific fields
                     domain: v === "O&M" ? item.domain : "",
                     otherDomain: "",
                     estimateWccAmount: v === "Project" ? item.estimateWccAmount : null,
@@ -332,10 +364,8 @@ export default function ExpenseItemCard({
                 ))}
               </select>
             </Field>
-          </div>
 
-          {needsPO ? (
-            <div className="grid gap-3 sm:grid-cols-2">
+            {needsPO ? (
               <Field label="PO No." required>
                 <EntitySelect
                   value={item.poNumber ? { id: item.poNumber, poNumber: item.poNumber } : null}
@@ -345,7 +375,8 @@ export default function ExpenseItemCard({
                     if (o.domain && !item.domain && isOM) next.domain = o.domain;
                     if (o.clientName && !item.clientName) next.clientName = o.clientName;
                     if (o.siteRoute && !item.siteRoute) next.siteRoute = o.siteRoute;
-                    if (isProject && o.estimateWccAmount != null) next.estimateWccAmount = o.estimateWccAmount;
+                    if (isProject && o.estimateWccAmount != null)
+                      next.estimateWccAmount = o.estimateWccAmount;
                     patch(next);
                   }}
                   fetcher={async (q) => (await fetchPOs({ category: item.workCategory, search: q })).data}
@@ -354,51 +385,55 @@ export default function ExpenseItemCard({
                   placeholder="Search / Select PO"
                 />
               </Field>
+            ) : null}
 
-              {isOM ? (
-                <Field label="Domain" required>
-                  <select
-                    className={FIELD}
-                    value={item.domain}
-                    onChange={(e) => patch({ domain: e.target.value, otherDomain: "" })}
-                  >
-                    <option value="">Select Domain</option>
-                    {domains.map((dm) => (
-                      <option key={dm} value={dm}>
-                        {dm}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-              ) : null}
+            {needsPO && isOM ? (
+              <Field label="Domain" required>
+                <select
+                  className={FIELD}
+                  value={item.domain}
+                  onChange={(e) => patch({ domain: e.target.value, otherDomain: "" })}
+                >
+                  <option value="">Select Domain</option>
+                  {domains.map((dm) => (
+                    <option key={dm} value={dm}>
+                      {dm}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            ) : null}
 
-              {isOM && item.domain === "Others" ? (
-                <Field label="Other Domain Name" required>
-                  <input
-                    className={FIELD}
-                    value={item.otherDomain}
-                    onChange={(e) => patch({ otherDomain: e.target.value })}
-                    placeholder="Enter Domain Name"
-                  />
-                </Field>
-              ) : null}
+            {needsPO && isOM && item.domain === "Others" ? (
+              <Field label="Other Domain Name" required>
+                <input
+                  className={FIELD}
+                  value={item.otherDomain}
+                  onChange={(e) => patch({ otherDomain: e.target.value })}
+                  placeholder="Enter Domain Name"
+                />
+              </Field>
+            ) : null}
 
-              {isProject ? (
-                <Field label="Estimate WCC Amount" hint="Auto-filled from the PO / Project master">
-                  <input
-                    className={`${FIELD} opacity-80`}
-                    readOnly
-                    value={item.estimateWccAmount != null && item.estimateWccAmount !== "" ? item.estimateWccAmount : ""}
-                    placeholder="From PO"
-                  />
-                </Field>
-              ) : null}
-            </div>
-          ) : null}
+            {needsPO && isProject ? (
+              <Field label="Estimate WCC Amount" hint="Auto-filled from the PO / Project master">
+                <input
+                  className={`${FIELD} opacity-80`}
+                  readOnly
+                  value={
+                    item.estimateWccAmount != null && item.estimateWccAmount !== ""
+                      ? item.estimateWccAmount
+                      : ""
+                  }
+                  placeholder="From PO"
+                />
+              </Field>
+            ) : null}
+          </div>
 
-          {/* common tail fields */}
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Field label="Site / Route Details" required className="sm:col-span-2">
+          {/* Site / route + description */}
+          <div className="grid gap-3">
+            <Field label="Site / Route Details" required>
               <input
                 className={FIELD}
                 value={item.siteRoute}
@@ -406,25 +441,42 @@ export default function ExpenseItemCard({
                 placeholder="e.g. Node BLR-04 → BLR-11, Sector 21"
               />
             </Field>
-            <Field label="Expense Description" required className="sm:col-span-2">
+            <Field label="Expense Description" required>
               <textarea
-                rows={2}
+                rows={3}
                 className={AREA}
                 value={item.description}
                 onChange={(e) => patch({ description: e.target.value })}
-                placeholder="What was the expense for?"
+                placeholder="What was the expense for? Provide brief details…"
               />
+              <span
+                className={`mt-1 block text-right text-[11px] ${
+                  descLen > DESC_SOFT_LIMIT ? "text-amber-600 dark:text-amber-400" : "text-text-muted"
+                }`}
+              >
+                {descLen}/{DESC_SOFT_LIMIT}
+              </span>
             </Field>
-            <Field label="Claimed Amount" required>
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                className={FIELD}
-                value={item.claimedAmount}
-                onChange={(e) => patch({ claimedAmount: e.target.value })}
-                placeholder="0.00"
-              />
+          </div>
+
+          {/* Amounts */}
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="Claimed Amount (₹)" required>
+              <div className="flex items-stretch overflow-hidden rounded-lg border border-border-color bg-surface transition focus-within:border-indigo-400 focus-within:ring-2 focus-within:ring-indigo-500/15">
+                <span className="flex items-center border-r border-border-color bg-surface-muted/50 px-3 text-sm font-semibold text-text-muted">
+                  ₹
+                </span>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  inputMode="decimal"
+                  className="h-11 w-full bg-transparent px-3 text-sm text-text-primary outline-none"
+                  value={item.claimedAmount}
+                  onChange={(e) => patch({ claimedAmount: e.target.value })}
+                  placeholder="0.00"
+                />
+              </div>
             </Field>
             <Field label="Bill Number">
               <input
@@ -434,55 +486,96 @@ export default function ExpenseItemCard({
                 placeholder="Invoice / bill no."
               />
             </Field>
-            <Field
-              label={`Attach Bill / Invoice${item.claimType === "reimbursement" ? " *" : ""}`}
-              className="sm:col-span-2"
+          </div>
+
+          {/* Supporting documents — drag & drop, per item */}
+          <div>
+            <span className={LABEL}>
+              Supporting Documents {billRequired ? <span className="text-rose-500">*</span> : null}
+            </span>
+            <div
+              onDragOver={(e) => {
+                e.preventDefault();
+                setDragOver(true);
+              }}
+              onDragLeave={() => setDragOver(false)}
+              onDrop={handleDrop}
+              className={`flex flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-dashed px-4 py-6 text-center transition ${
+                dragOver
+                  ? "border-indigo-400 bg-indigo-50/60 dark:bg-indigo-500/10"
+                  : billRequired && !attachments.length
+                  ? "border-amber-300 bg-amber-50/50 dark:border-amber-500/30 dark:bg-amber-500/10"
+                  : "border-border-color bg-surface-muted/30"
+              }`}
             >
-              <div className="flex flex-wrap items-center gap-2">
-                {attachments.map((att) => (
-                  <span
-                    key={att.id}
-                    className="inline-flex h-9 items-center gap-1 rounded-lg border border-border-color bg-surface px-2 text-xs"
-                  >
-                    <FileText size={13} className="text-indigo-500" />
-                    <button
-                      type="button"
-                      onClick={() => onOpenBill(att.id)}
-                      className="max-w-[140px] truncate text-indigo-600 hover:underline dark:text-indigo-300"
-                      title={att.fileName}
-                    >
-                      {att.fileName}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => onRemoveBill(att.id)}
-                      className="text-text-muted hover:text-rose-600"
-                    >
-                      <X size={12} />
-                    </button>
-                  </span>
-                ))}
+              <UploadCloud
+                size={22}
+                className={dragOver ? "text-indigo-500" : "text-text-muted"}
+              />
+              <div className="text-sm font-medium text-text-secondary">
+                Drag &amp; drop files here or{" "}
                 <button
                   type="button"
                   onClick={onPickFile}
                   disabled={uploading}
-                  className={`inline-flex h-9 items-center gap-1.5 rounded-lg border px-3 text-xs font-medium transition disabled:opacity-50 ${
-                    item.claimType === "reimbursement" && !attachments.length
-                      ? "border-amber-300 bg-amber-50 text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300"
-                      : "border-border-color bg-surface text-text-secondary hover:bg-surface-muted"
-                  }`}
+                  className="font-semibold text-indigo-600 hover:underline disabled:opacity-50 dark:text-indigo-300"
                 >
-                  {uploading ? (
-                    <Loader2 className="animate-spin" size={12} />
-                  ) : attachments.length ? (
-                    <Upload size={12} />
-                  ) : (
-                    <Paperclip size={12} />
-                  )}
-                  {attachments.length ? "Add another" : "Attach bill"}
+                  click to upload
                 </button>
               </div>
-            </Field>
+              <div className="text-[11px] text-text-muted">
+                PDF, JPG, PNG · max 10&nbsp;MB each · multiple files allowed
+              </div>
+              {uploading ? (
+                <div className="mt-1 inline-flex items-center gap-1.5 text-[11px] font-medium text-indigo-600 dark:text-indigo-300">
+                  <Loader2 className="animate-spin" size={12} /> Uploading…
+                </div>
+              ) : null}
+            </div>
+
+            {attachments.length ? (
+              <ul className="mt-2 space-y-1.5">
+                {attachments.map((att) => (
+                  <li
+                    key={att.id}
+                    className="flex items-center justify-between gap-2 rounded-lg border border-border-color bg-surface px-3 py-2"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => onOpenBill(att.id)}
+                      className="flex min-w-0 items-center gap-2 text-left"
+                      title={att.fileName}
+                    >
+                      <FileText size={15} className="shrink-0 text-indigo-500" />
+                      <span className="truncate text-[13px] text-indigo-600 hover:underline dark:text-indigo-300">
+                        {att.fileName}
+                      </span>
+                      {att.fileSize ? (
+                        <span className="shrink-0 text-[11px] text-text-muted">
+                          {Math.max(1, Math.round(att.fileSize / 1024))} KB
+                        </span>
+                      ) : null}
+                    </button>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <span
+                        className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-600 dark:text-emerald-400"
+                        title="Uploaded"
+                      >
+                        ✓
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => onRemoveBill(att.id)}
+                        aria-label={`Remove ${att.fileName}`}
+                        className="text-text-muted transition hover:text-rose-600"
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
           </div>
         </div>
       )}

@@ -1,9 +1,23 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import toast from "react-hot-toast";
-import { ArrowLeft, Banknote, Building2, Loader2, Plus, Receipt, Save, Send, Trash2, UserRound } from "lucide-react";
+import {
+  ArrowLeft,
+  Banknote,
+  Building2,
+  Check,
+  ChevronRight,
+  FileText,
+  Loader2,
+  Plus,
+  Receipt,
+  Save,
+  Send,
+  ShieldCheck,
+  Trash2,
+  UserRound,
+} from "lucide-react";
 
-import { CARD_SHELL } from "../../components/billingDashboard/theme";
 import ConfirmDialog from "../../components/ConfirmDialog";
 import ClaimProgressTracker from "../../components/expenses/ClaimProgressTracker";
 import EmployeePartyPicker from "../../components/expenses/EmployeePartyPicker";
@@ -11,7 +25,6 @@ import ExpenseItemCard from "../../components/expenses/ExpenseItemCard";
 import EntitySelect from "../../components/expenses/EntitySelect";
 import AddVendorModal from "../../components/expenses/AddVendorModal";
 import { useUser } from "../../context/UserContext";
-import { formatCurrency } from "../../utils/penaltyFormat";
 import {
   createClaim,
   deleteBill,
@@ -27,6 +40,43 @@ import {
 
 const ALLOWED_EXT = ["pdf", "jpg", "jpeg", "png"];
 const emptyRowKey = () => `r-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+
+// Premium, calm card shell for this form — subtle border + soft shadow, no
+// hover animation (this is a data-entry surface, not a dashboard tile).
+const FORM_CARD =
+  "rounded-xl border border-border-color bg-surface shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_24px_-12px_rgba(15,23,42,0.12)]";
+
+const money = (n) =>
+  `₹${Number(n || 0).toLocaleString("en-IN", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+
+const GUIDELINES = [
+  "Ensure bills are valid and readable",
+  "Mention the correct expense category",
+  "Provide a detailed description",
+  "Multiple items can be added in one claim",
+  "Submit before month end",
+];
+
+// Section wrapper — numbered header, title, subtitle.
+function SectionCard({ num, title, subtitle, children, bodyClassName = "space-y-4 p-4 sm:p-5" }) {
+  return (
+    <section className={FORM_CARD}>
+      <header className="flex items-start gap-3 border-b border-border-color/70 px-4 py-3.5 sm:px-5">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-sm font-bold text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-300">
+          {num}
+        </span>
+        <div className="min-w-0">
+          <h2 className="text-[15px] font-semibold text-text-primary">{title}</h2>
+          {subtitle ? <p className="mt-0.5 text-xs text-text-secondary">{subtitle}</p> : null}
+        </div>
+      </header>
+      <div className={bodyClassName}>{children}</div>
+    </section>
+  );
+}
 
 // Employee identity is entered/fetched ONCE per claim (see EmployeePartyPicker)
 // and lives here at claim level — not on each item.
@@ -57,7 +107,11 @@ function blankRow() {
     vendorId: null,
     vendorName: "",
     vendorType: "",
-    claimType: "",
+    // Claim type is chosen once at claim level (Section 01). Every item in a
+    // Reimbursement claim is a reimbursement item — the field is kept in sync
+    // here so the payload / server validation are unchanged, but it is no
+    // longer asked for again on each item card.
+    claimType: "reimbursement",
     billingType: "",
     clientName: "",
     workCategory: "",
@@ -86,7 +140,9 @@ function rowsFromBundle(bundle) {
     vendorId: item.vendorId || null,
     vendorName: item.vendorName || "",
     vendorType: item.vendorType || "",
-    claimType: item.claimType || "",
+    // rowsFromBundle only runs for a Reimbursement claim, so every item is a
+    // reimbursement item (the per-item Claim Type control was removed).
+    claimType: "reimbursement",
     billingType: item.billingType || "",
     clientName: item.clientName || "",
     workCategory: item.workCategory || "",
@@ -423,21 +479,29 @@ export default function RaiseExpense() {
 
   const pickFile = (localKey) => fileInputs.current[localKey]?.click();
 
-  const handleFileChosen = async (row, file) => {
-    if (!file) return;
+  const fileIsValid = (file) => {
     const ext = (file.name.split(".").pop() || "").toLowerCase();
     if (!ALLOWED_EXT.includes(ext)) {
-      toast.error("Only PDF, JPG, JPEG or PNG files are allowed.");
-      return;
+      toast.error(`"${file.name}" — only PDF, JPG, JPEG or PNG files are allowed.`);
+      return false;
     }
     if (file.size > 10 * 1024 * 1024) {
-      toast.error("File exceeds the 10 MB limit.");
-      return;
+      toast.error(`"${file.name}" exceeds the 10 MB limit.`);
+      return false;
     }
+    return true;
+  };
+
+  // One or many files, from the picker or a drag-drop. The draft (and this
+  // row's server id) is materialised ONCE up front, then every file is sent
+  // through the existing single-file upload API — unchanged.
+  const handleDropFiles = async (row, fileList) => {
+    const files = Array.from(fileList || []).filter(fileIsValid);
+    if (!files.length) return;
     setUploadingKey(row.localKey);
     try {
-      let itemId = row.id;
       let effectiveClaimId = claimId;
+      let itemId = row.id;
       if (!effectiveClaimId || !itemId) {
         const b = await persistDraft({ silent: true });
         effectiveClaimId = b.claim.id;
@@ -447,13 +511,15 @@ export default function RaiseExpense() {
       if (!effectiveClaimId || !itemId) {
         throw new Error("Save the row before attaching a bill.");
       }
-      const res = await uploadBill(effectiveClaimId, itemId, file);
-      setRows((prev) =>
-        prev.map((r) =>
-          r.localKey === row.localKey ? { ...r, attachments: [...r.attachments, res.data] } : r
-        )
-      );
-      toast.success("Bill attached.");
+      for (const file of files) {
+        const res = await uploadBill(effectiveClaimId, itemId, file);
+        setRows((prev) =>
+          prev.map((r) =>
+            r.localKey === row.localKey ? { ...r, attachments: [...r.attachments, res.data] } : r
+          )
+        );
+      }
+      toast.success(files.length > 1 ? `${files.length} bills attached.` : "Bill attached.");
     } catch (error) {
       toast.error(error.message || "Failed to upload the bill.");
     } finally {
@@ -486,6 +552,8 @@ export default function RaiseExpense() {
   }
 
   const busy = savingDraft || submitting || deleting;
+  const isAdvance = claimKind === "advance";
+  const kindWord = isAdvance ? "Advance" : "Claim";
 
   // The claim's claimant resolves to the signed-in user when this is an Employee
   // expense and either no Employee ID was entered or it matches the user's own.
@@ -499,70 +567,71 @@ export default function RaiseExpense() {
   // blocked, and the backend enforces the same rule.
   const blockSelfL1 = Boolean(meta?.selfIsL1Approver) && claimantIsSelf;
 
+  const pageTitle = claimNumber
+    ? `Edit ${kindWord} ${claimNumber}`
+    : isAdvance
+    ? "Raise Advance"
+    : "Raise Expense";
+
+  const saveDraftBtn = (full = false) => (
+    <SaveDraftButton onClick={handleSaveDraft} busy={busy} saving={savingDraft} full={full} />
+  );
+  const submitBtn = (full = false) => (
+    <SubmitButton
+      onClick={handleSubmit}
+      busy={busy}
+      blocked={blockSelfL1}
+      submitting={submitting}
+      label={`Submit ${kindWord}`}
+      full={full}
+    />
+  );
+
   return (
-    <div className="space-y-3">
-      {/* Header */}
-      <div className="flex flex-wrap items-start justify-between gap-3">
+    <div>
+      {/* Breadcrumb */}
+      <nav className="flex items-center gap-1 text-xs font-medium text-text-muted">
+        <button
+          type="button"
+          onClick={() => navigate("/dashboard/expense-claims/my")}
+          className="transition hover:text-text-primary"
+        >
+          My Expenses
+        </button>
+        <ChevronRight size={13} />
+        <span className="text-text-secondary">Raise Expense</span>
+      </nav>
+
+      {/* Title + top actions */}
+      <div className="mt-2 flex flex-wrap items-start justify-between gap-3">
         <div>
-          <button
-            type="button"
-            onClick={() => navigate("/dashboard/expense-claims/my")}
-            className="mb-1 inline-flex items-center gap-1.5 text-xs font-medium text-text-secondary hover:text-text-primary"
-          >
-            <ArrowLeft size={14} /> My Expenses
-          </button>
-          <h1 className="text-lg font-semibold tracking-tight text-text-primary sm:text-xl">
-            {claimNumber
-              ? `Edit ${claimKind === "advance" ? "Advance" : "Claim"} ${claimNumber}`
-              : claimKind === "advance"
-              ? "Raise Advance"
-              : "Raise Expense"}
+          <h1 className="text-2xl font-semibold tracking-tight text-text-primary sm:text-[28px]">
+            {pageTitle}
           </h1>
-          <p className="mt-0.5 text-sm text-text-secondary">
-            {claimKind === "advance"
+          <p className="mt-1 text-sm text-text-secondary">
+            {isAdvance
               ? "Request funds before the expense. Approved advances are paid by Finance, then closed against real bills."
-              : "Build each expense step by step. One claim can hold many items — each with its own Employee or Vendor."}
+              : "Build your expense step by step. One claim can contain multiple items."}
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="hidden flex-wrap items-center gap-2 sm:flex">
           {claimId ? (
             <button
               type="button"
               onClick={() => setConfirmDelete(true)}
               disabled={busy}
-              className="inline-flex h-10 items-center gap-2 rounded-full border border-border-color bg-surface px-4 text-sm font-medium text-rose-600 transition hover:bg-rose-50 disabled:opacity-50 dark:hover:bg-rose-500/10"
+              className="inline-flex h-11 items-center gap-2 rounded-lg border border-border-color bg-surface px-4 text-sm font-semibold text-rose-600 transition hover:bg-rose-50 disabled:opacity-50 dark:hover:bg-rose-500/10"
             >
               <Trash2 size={15} /> Delete Draft
             </button>
           ) : null}
-          <button
-            type="button"
-            onClick={handleSaveDraft}
-            disabled={busy}
-            className="inline-flex h-10 items-center gap-2 rounded-full border border-border-color bg-surface px-4 text-sm font-medium text-text-secondary transition hover:bg-surface-muted disabled:opacity-50"
-          >
-            {savingDraft ? <Loader2 className="animate-spin" size={15} /> : <Save size={15} />}
-            Save as Draft
-          </button>
-          <button
-            type="button"
-            onClick={handleSubmit}
-            disabled={busy || blockSelfL1}
-            title={
-              blockSelfL1
-                ? "You are configured as the L1 approver for your own claim. Ask an administrator to change the L1 approver, then submit."
-                : undefined
-            }
-            className="inline-flex h-10 items-center gap-2 rounded-full bg-gradient-to-r from-indigo-500 to-violet-500 px-5 text-sm font-semibold text-white shadow-sm transition hover:opacity-95 disabled:opacity-50"
-          >
-            {submitting ? <Loader2 className="animate-spin" size={15} /> : <Send size={15} />}
-            Submit {claimKind === "advance" ? "Advance" : "Claim"}
-          </button>
+          {saveDraftBtn()}
+          {submitBtn()}
         </div>
       </div>
 
       {blockSelfL1 ? (
-        <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700 dark:border-rose-500/20 dark:bg-rose-500/10 dark:text-rose-300">
+        <div className="mt-3 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700 dark:border-rose-500/20 dark:bg-rose-500/10 dark:text-rose-300">
           <div className="font-semibold">You cannot submit your own expense claim</div>
           <p className="mt-0.5">
             You are currently configured as the <strong>L1 approver</strong>, so you would be
@@ -574,62 +643,14 @@ export default function RaiseExpense() {
         </div>
       ) : null}
 
-      {/* Progress */}
-      <div className={`${CARD_SHELL} p-4`}>
-        <ClaimProgressTracker status={status} />
-      </div>
-
-      {/* Claim Type — Reimbursement (default) vs Advance. Locked once created. */}
-      <div className={`${CARD_SHELL} space-y-3 p-4`}>
-        <div>
-          <h2 className="text-sm font-semibold text-text-primary">Claim Type</h2>
-          <p className="mt-0.5 text-xs text-text-muted">
-            {claimId
-              ? "Claim type is fixed for an existing claim."
-              : "Reimbursement is for money already spent. Advance is money requested before the bill exists."}
-          </p>
-        </div>
-        <div className="grid gap-2 sm:grid-cols-2">
-          {[
-            { value: "reimbursement", label: "Reimbursement", icon: Receipt, hint: "Spent already · attach bills" },
-            { value: "advance", label: "Advance", icon: Banknote, hint: "Request funds first · bills later" },
-          ].map((o) => {
-            const active = claimKind === o.value;
-            return (
-              <button
-                key={o.value}
-                type="button"
-                disabled={Boolean(claimId)}
-                onClick={() => setClaimKind(o.value)}
-                className={`flex items-start gap-2 rounded-xl border p-3 text-left transition disabled:cursor-not-allowed disabled:opacity-60 ${
-                  active
-                    ? "border-indigo-500 bg-indigo-50 dark:bg-indigo-500/10"
-                    : "border-border-color bg-surface hover:bg-surface-muted"
-                }`}
-              >
-                <span
-                  className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 ${
-                    active ? "border-indigo-500" : "border-border-color"
-                  }`}
-                >
-                  {active ? <span className="h-2 w-2 rounded-full bg-indigo-500" /> : null}
-                </span>
-                <span>
-                  <span className="flex items-center gap-1.5 text-sm font-semibold text-text-primary">
-                    <o.icon size={14} />
-                    {o.label}
-                  </span>
-                  <span className="mt-0.5 block text-xs text-text-muted">{o.hint}</span>
-                </span>
-              </button>
-            );
-          })}
-        </div>
+      {/* Approval progress stepper */}
+      <div className={`${FORM_CARD} mt-3 px-4 py-4 sm:px-5`}>
+        <ClaimProgressTracker status={status} showDescriptions />
       </div>
 
       {/* Validation summary */}
       {rowErrors.length ? (
-        <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700 dark:border-rose-500/20 dark:bg-rose-500/10 dark:text-rose-300">
+        <div className="mt-3 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700 dark:border-rose-500/20 dark:bg-rose-500/10 dark:text-rose-300">
           <div className="mb-1 font-semibold">Please resolve the following:</div>
           <ul className="list-disc space-y-0.5 pl-5">
             {rowErrors.map((err, i) => (
@@ -639,292 +660,426 @@ export default function RaiseExpense() {
         </div>
       ) : null}
 
-      {claimKind === "advance" ? (
-        <div className={`${CARD_SHELL} space-y-4 p-4`}>
-          <div>
-            <h2 className="text-sm font-semibold text-text-primary">Advance Request</h2>
-            <p className="mt-0.5 text-xs text-text-muted">
-              Who the advance is for, the amount requested, and why. It runs through the same
-              L1 → L2 → Final approval chain; bills are added later, once the advance is paid.
-            </p>
-          </div>
-
-          {/* Advance for an employee or a vendor */}
-          <div className="grid gap-2 sm:grid-cols-2">
-            {[
-              { value: "employee", label: "Employee Advance", icon: UserRound },
-              { value: "vendor", label: "Vendor Advance", icon: Building2 },
-            ].map((o) => {
-              const active = claimParty.expenseFor === o.value;
-              return (
-                <button
-                  key={o.value}
-                  type="button"
-                  onClick={() =>
-                    setClaimParty((cp) =>
-                      cp.expenseFor === o.value ? cp : { ...blankClaimParty(), expenseFor: o.value }
-                    )
-                  }
-                  className={`flex items-center gap-2 rounded-xl border p-3 text-left transition ${
-                    active
-                      ? "border-indigo-500 bg-indigo-50 dark:bg-indigo-500/10"
-                      : "border-border-color bg-surface hover:bg-surface-muted"
-                  }`}
-                >
-                  <span
-                    className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 ${
-                      active ? "border-indigo-500" : "border-border-color"
-                    }`}
-                  >
-                    {active ? <span className="h-2 w-2 rounded-full bg-indigo-500" /> : null}
-                  </span>
-                  <span className="flex items-center gap-1.5 text-sm font-semibold text-text-primary">
-                    <o.icon size={14} />
-                    {o.label}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-
-          {claimParty.expenseFor === "vendor" ? (
-            <div className="space-y-2">
-              <span className="block text-[11px] font-semibold uppercase tracking-[0.1em] text-text-muted">
-                Vendor <span className="text-rose-500">*</span>
+      {/* Main grid — form (≈75%) + summary sidebar (≈25%) */}
+      <div className="mt-3 grid gap-3 lg:grid-cols-[minmax(0,1fr)_320px] xl:grid-cols-[minmax(0,1fr)_344px]">
+        {/* LEFT — the form */}
+        <div className="min-w-0 space-y-3">
+          <SectionCard
+            num="01"
+            title={isAdvance ? "Advance Request" : "Claim Type & Employee"}
+            subtitle={
+              isAdvance
+                ? "Who the advance is for, the amount requested, and why."
+                : "Select claim type, expense type and employee details."
+            }
+          >
+            {/* Claim kind — Reimbursement vs Advance. Locked once created. */}
+            <div>
+              <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.08em] text-text-muted">
+                Claim Type <span className="text-rose-500">*</span>
               </span>
-              <EntitySelect
-                value={
-                  claimParty.vendorId
-                    ? { id: claimParty.vendorId, name: claimParty.vendorName }
-                    : null
-                }
-                onChange={(o) =>
-                  setClaimParty((cp) => ({
-                    ...cp,
-                    vendorId: o?.id || null,
-                    vendorName: o?.name || "",
-                    vendorType: o?.vendorType || "",
-                  }))
-                }
-                fetcher={async (q) => (await fetchVendors({ search: q })).data}
-                getLabel={(o) => o.name}
-                getSub={(o) => [o.vendorType, o.gstin].filter(Boolean).join(" · ")}
-                placeholder="Search / Select Vendor"
-                trailing={
-                  <button
-                    type="button"
-                    onClick={() => setAddVendorOpen(true)}
-                    className="inline-flex h-10 shrink-0 items-center rounded-xl border border-border-color bg-surface px-3 text-sm font-medium text-text-secondary hover:bg-surface-muted"
-                  >
-                    + Add
-                  </button>
-                }
-              />
-              {claimParty.vendorName ? (
-                <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-3 text-xs text-text-secondary dark:border-emerald-500/20 dark:bg-emerald-500/10">
-                  <span className="font-semibold text-emerald-700 dark:text-emerald-300">
-                    ✓ {claimParty.vendorName}
-                  </span>
-                  {claimParty.vendorType ? ` · ${claimParty.vendorType}` : ""}
-                </div>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {[
+                  {
+                    value: "reimbursement",
+                    label: "Reimbursement",
+                    icon: Receipt,
+                    hint: "Spent already · attach bills",
+                  },
+                  {
+                    value: "advance",
+                    label: "Advance",
+                    icon: Banknote,
+                    hint: "Request funds first · bills later",
+                  },
+                ].map((o) => {
+                  const active = claimKind === o.value;
+                  return (
+                    <button
+                      key={o.value}
+                      type="button"
+                      aria-pressed={active}
+                      disabled={Boolean(claimId)}
+                      onClick={() => setClaimKind(o.value)}
+                      className={`flex items-start gap-2 rounded-lg border p-3 text-left transition disabled:cursor-not-allowed disabled:opacity-60 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/40 ${
+                        active
+                          ? "border-indigo-500 bg-indigo-50 dark:bg-indigo-500/10"
+                          : "border-border-color bg-surface hover:bg-surface-muted"
+                      }`}
+                    >
+                      <span
+                        className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 ${
+                          active ? "border-indigo-500" : "border-border-color"
+                        }`}
+                      >
+                        {active ? <span className="h-2 w-2 rounded-full bg-indigo-500" /> : null}
+                      </span>
+                      <span className="min-w-0">
+                        <span className="flex items-center gap-1.5 text-sm font-semibold text-text-primary">
+                          <o.icon size={14} />
+                          {o.label}
+                        </span>
+                        <span className="mt-0.5 block text-xs text-text-muted">{o.hint}</span>
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+              {claimId ? (
+                <p className="mt-1.5 text-[11px] text-text-muted">
+                  Claim type is fixed for an existing claim.
+                </p>
               ) : null}
             </div>
-          ) : (
-            <EmployeePartyPicker
-              value={claimParty}
-              onChange={(p) => setClaimParty((cp) => ({ ...cp, ...p, expenseFor: "employee" }))}
-            />
-          )}
-          <div className="grid gap-3 sm:grid-cols-2">
-            <label className="block">
-              <span className="mb-1 block text-xs font-semibold text-text-secondary">
-                Advance Amount (₹)
+
+            {/* Expense For */}
+            <div>
+              <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.08em] text-text-muted">
+                Expense For <span className="text-rose-500">*</span>
               </span>
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                inputMode="decimal"
-                value={advanceAmount}
-                onChange={(e) => setAdvanceAmount(e.target.value)}
-                placeholder="e.g. 100000"
-                className="w-full rounded-xl border border-border-color bg-surface px-3 py-2 text-sm outline-none focus:border-indigo-500"
-              />
-            </label>
-            <div className="flex flex-col justify-end">
-              <span className="mb-1 block text-xs font-semibold text-text-secondary">Requested</span>
-              <div className="rounded-xl border border-border-color bg-surface-muted/50 px-3 py-2 text-sm font-bold text-text-primary">
-                {formatCurrency(Number(advanceAmount) || 0)}
+              <div className="grid gap-2 sm:grid-cols-2">
+                {[
+                  {
+                    value: "employee",
+                    label: "Employee Expense",
+                    icon: UserRound,
+                    hint: "Your own expense",
+                  },
+                  {
+                    value: "vendor",
+                    label: "Vendor Expense",
+                    icon: Building2,
+                    hint: "On behalf of vendor",
+                  },
+                ].map((o) => {
+                  const active = claimParty.expenseFor === o.value;
+                  return (
+                    <button
+                      key={o.value}
+                      type="button"
+                      aria-pressed={active}
+                      onClick={() =>
+                        setClaimParty((cp) =>
+                          cp.expenseFor === o.value
+                            ? cp
+                            : { ...blankClaimParty(), expenseFor: o.value }
+                        )
+                      }
+                      className={`flex items-start gap-2 rounded-lg border p-3 text-left transition focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/40 ${
+                        active
+                          ? "border-indigo-500 bg-indigo-50 dark:bg-indigo-500/10"
+                          : "border-border-color bg-surface hover:bg-surface-muted"
+                      }`}
+                    >
+                      <span
+                        className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 ${
+                          active ? "border-indigo-500" : "border-border-color"
+                        }`}
+                      >
+                        {active ? <span className="h-2 w-2 rounded-full bg-indigo-500" /> : null}
+                      </span>
+                      <span className="min-w-0">
+                        <span className="flex items-center gap-1.5 text-sm font-semibold text-text-primary">
+                          <o.icon size={14} />
+                          {o.label}
+                        </span>
+                        <span className="mt-0.5 block text-xs text-text-muted">{o.hint}</span>
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
             </div>
-          </div>
-          <label className="block">
-            <span className="mb-1 block text-xs font-semibold text-text-secondary">Purpose</span>
-            <textarea
-              rows={3}
-              value={advancePurpose}
-              onChange={(e) => setAdvancePurpose(e.target.value)}
-              placeholder="Project travel / site activity / material procurement…"
-              className="w-full rounded-xl border border-border-color bg-surface px-3 py-2 text-sm outline-none focus:border-indigo-500"
-            />
-          </label>
-          <div className="rounded-xl border border-border-color bg-surface-muted/50 p-3 text-xs text-text-secondary">
-            <span className="font-semibold text-text-muted">Submitted by:</span> {user?.name || "You"}
-          </div>
-        </div>
-      ) : (
-      <>
-      {/* Claim party — entered ONCE for the whole claim */}
-      <div className={`${CARD_SHELL} space-y-4 p-4`}>
-        <div>
-          <h2 className="text-sm font-semibold text-text-primary">Expense For</h2>
-          <p className="mt-0.5 text-xs text-text-muted">
-            Choose once for the whole claim. Every expense item below uses this.
-          </p>
-        </div>
-        <div className="grid gap-2 sm:grid-cols-2">
-          {[
-            { value: "employee", label: "Employee Expense", icon: UserRound },
-            { value: "vendor", label: "Vendor Expense", icon: Building2 },
-          ].map((o) => {
-            const active = claimParty.expenseFor === o.value;
-            return (
+
+            {/* Party detail */}
+            {claimParty.expenseFor === "employee" ? (
+              <>
+                <EmployeePartyPicker
+                  value={claimParty}
+                  onChange={(p) => setClaimParty((cp) => ({ ...cp, ...p, expenseFor: "employee" }))}
+                />
+                <div className="rounded-lg border border-border-color bg-surface-muted/40 p-3 text-xs text-text-secondary">
+                  <div>
+                    <span className="font-semibold text-text-muted">Submitted by:</span>{" "}
+                    {user?.name || "You"}
+                  </div>
+                  {claimParty.empRefName ? (
+                    <div className="mt-0.5">
+                      <span className="font-semibold text-text-muted">Expense employee (claimant):</span>{" "}
+                      {claimParty.empRefName}
+                      {claimParty.empRefCode ? ` · ${claimParty.empRefCode}` : ""}
+                    </div>
+                  ) : null}
+                  {claimParty.empRefName &&
+                  user?.name &&
+                  claimParty.empRefName.trim().toLowerCase() !== user.name.trim().toLowerCase() ? (
+                    <div className="mt-1 text-amber-700 dark:text-amber-400">
+                      You are raising this on behalf of another employee — the claim will belong to
+                      them, and their approval chain applies. You remain recorded as the submitter.
+                    </div>
+                  ) : null}
+                </div>
+              </>
+            ) : (
+              <div className="space-y-2">
+                <span className="block text-[11px] font-semibold uppercase tracking-[0.08em] text-text-muted">
+                  Vendor <span className="text-rose-500">*</span>
+                </span>
+                <EntitySelect
+                  value={
+                    claimParty.vendorId
+                      ? { id: claimParty.vendorId, name: claimParty.vendorName }
+                      : null
+                  }
+                  onChange={(o) =>
+                    setClaimParty((cp) => ({
+                      ...cp,
+                      vendorId: o?.id || null,
+                      vendorName: o?.name || "",
+                      vendorType: o?.vendorType || "",
+                    }))
+                  }
+                  fetcher={async (q) => (await fetchVendors({ search: q })).data}
+                  getLabel={(o) => o.name}
+                  getSub={(o) => [o.vendorType, o.gstin].filter(Boolean).join(" · ")}
+                  placeholder="Search / Select Vendor"
+                  trailing={
+                    <button
+                      type="button"
+                      onClick={() => setAddVendorOpen(true)}
+                      className="inline-flex h-11 shrink-0 items-center rounded-lg border border-border-color bg-surface px-3 text-sm font-medium text-text-secondary hover:bg-surface-muted"
+                    >
+                      + Add
+                    </button>
+                  }
+                />
+                {claimParty.vendorName ? (
+                  <div className="rounded-lg border border-emerald-200 bg-emerald-50/70 p-3 text-xs text-text-secondary dark:border-emerald-500/20 dark:bg-emerald-500/10">
+                    <span className="font-semibold text-emerald-700 dark:text-emerald-300">
+                      ✓ {claimParty.vendorName}
+                    </span>
+                    {claimParty.vendorType ? ` · ${claimParty.vendorType}` : ""}
+                  </div>
+                ) : isAdvance ? null : (
+                  <p className="rounded-lg border border-dashed border-border-color bg-surface-muted/40 p-3 text-xs text-text-muted">
+                    Select the vendor this expense is raised on behalf of. It applies to every
+                    expense item in this claim.
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Advance-only fields */}
+            {isAdvance ? (
+              <>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className="block">
+                    <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.08em] text-text-muted">
+                      Advance Amount (₹) <span className="text-rose-500">*</span>
+                    </span>
+                    <div className="flex items-stretch overflow-hidden rounded-lg border border-border-color bg-surface transition focus-within:border-indigo-400 focus-within:ring-2 focus-within:ring-indigo-500/15">
+                      <span className="flex items-center border-r border-border-color bg-surface-muted/50 px-3 text-sm font-semibold text-text-muted">
+                        ₹
+                      </span>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        inputMode="decimal"
+                        value={advanceAmount}
+                        onChange={(e) => setAdvanceAmount(e.target.value)}
+                        placeholder="0.00"
+                        className="h-11 w-full bg-transparent px-3 text-sm text-text-primary outline-none"
+                      />
+                    </div>
+                  </label>
+                  <div className="flex flex-col justify-end">
+                    <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.08em] text-text-muted">
+                      Requested
+                    </span>
+                    <div className="flex h-11 items-center rounded-lg border border-border-color bg-surface-muted/50 px-3 text-sm font-bold text-text-primary">
+                      {money(Number(advanceAmount) || 0)}
+                    </div>
+                  </div>
+                </div>
+                <label className="block">
+                  <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.08em] text-text-muted">
+                    Purpose
+                  </span>
+                  <textarea
+                    rows={3}
+                    value={advancePurpose}
+                    onChange={(e) => setAdvancePurpose(e.target.value)}
+                    placeholder="Project travel / site activity / material procurement…"
+                    className="w-full rounded-lg border border-border-color bg-surface px-3 py-2.5 text-sm outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/15"
+                  />
+                </label>
+                <div className="rounded-lg border border-border-color bg-surface-muted/40 p-3 text-xs text-text-secondary">
+                  <span className="font-semibold text-text-muted">Submitted by:</span>{" "}
+                  {user?.name || "You"}
+                </div>
+              </>
+            ) : null}
+          </SectionCard>
+
+          {/* Expense items — reimbursement only */}
+          {!isAdvance ? (
+            <SectionCard
+              num="02"
+              title="Expense Details"
+              subtitle="Add one or many expense items. Each keeps its own values, documents and totals."
+              bodyClassName="p-3 sm:p-4"
+            >
+              <div className="space-y-3">
+                {rows.map((row, index) => (
+                  <div key={row.localKey}>
+                    <ExpenseItemCard
+                      item={row}
+                      party={claimParty}
+                      index={index}
+                      meta={meta}
+                      errors={itemErrorMap[row.localKey] || []}
+                      collapsed={Boolean(collapsed[row.localKey])}
+                      onToggle={() =>
+                        setCollapsed((p) => ({ ...p, [row.localKey]: !p[row.localKey] }))
+                      }
+                      onChange={(p) => setRow(row.localKey, p)}
+                      onRemove={() => removeRow(row.localKey)}
+                      removable={rows.length > 1}
+                      attachments={row.attachments}
+                      uploading={uploadingKey === row.localKey}
+                      onPickFile={() => pickFile(row.localKey)}
+                      onDropFiles={(files) => handleDropFiles(row, files)}
+                      onOpenBill={(attId) => openBill(attId).catch((err) => toast.error(err.message))}
+                      onRemoveBill={(attId) => handleRemoveBill(row, attId)}
+                    />
+                    <input
+                      ref={(el) => (fileInputs.current[row.localKey] = el)}
+                      type="file"
+                      multiple
+                      accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
+                      className="hidden"
+                      onChange={(e) => {
+                        handleDropFiles(row, e.target.files);
+                        e.target.value = "";
+                      }}
+                    />
+                  </div>
+                ))}
+              </div>
+
               <button
-                key={o.value}
+                type="button"
+                onClick={addRow}
+                className="mt-3 inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg border border-dashed border-indigo-300 bg-indigo-50/50 text-sm font-semibold text-indigo-700 transition hover:bg-indigo-100/60 dark:border-indigo-500/30 dark:bg-indigo-500/10 dark:text-indigo-300"
+              >
+                <Plus size={16} /> Add Another Expense Item
+              </button>
+            </SectionCard>
+          ) : null}
+        </div>
+
+        {/* RIGHT — sticky summary rail */}
+        <aside className="space-y-3 lg:sticky lg:top-4 lg:self-start">
+          {/* Claim Summary */}
+          <div className={FORM_CARD}>
+            <header className="border-b border-border-color/70 px-4 py-3">
+              <h3 className="text-sm font-semibold text-text-primary">Claim Summary</h3>
+              <p className="mt-0.5 text-[11px] text-text-secondary">Overview of this claim</p>
+            </header>
+            <div className="space-y-3 p-4">
+              {isAdvance ? (
+                <>
+                  <SummaryRow label="Claim Type" value="Advance" />
+                  <SummaryRow
+                    label="Advance For"
+                    value={claimParty.expenseFor === "vendor" ? "Vendor" : "Employee"}
+                  />
+                  <div className="rounded-lg bg-indigo-50 px-3 py-2.5 dark:bg-indigo-500/10">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-indigo-500 dark:text-indigo-300">
+                      Advance Requested
+                    </div>
+                    <div className="mt-0.5 text-xl font-bold text-text-primary">
+                      {money(Number(advanceAmount) || 0)}
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <SummaryRow label="Total Items" value={String(rows.length)} />
+                  <SummaryRow label="Total Claimed Amount" value={money(totalClaimed)} />
+                  <div className="rounded-lg bg-indigo-50 px-3 py-2.5 dark:bg-indigo-500/10">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-indigo-500 dark:text-indigo-300">
+                      Total Claim Amount
+                    </div>
+                    <div className="mt-0.5 text-xl font-bold text-text-primary">
+                      {money(totalClaimed)}
+                    </div>
+                  </div>
+                </>
+              )}
+              <p className="pt-1 text-[11px] leading-relaxed text-text-muted">
+                After you submit, the claim moves to <span className="font-medium text-text-secondary">L1 Approval</span> and
+                follows the approval chain shown above.
+              </p>
+            </div>
+          </div>
+
+          {/* Important Guidelines */}
+          <div className={FORM_CARD}>
+            <header className="border-b border-border-color/70 px-4 py-3">
+              <h3 className="text-sm font-semibold text-text-primary">Important Guidelines</h3>
+            </header>
+            <ul className="space-y-2 p-4">
+              {GUIDELINES.map((g) => (
+                <li key={g} className="flex items-start gap-2 text-xs text-text-secondary">
+                  <Check size={14} className="mt-0.5 shrink-0 text-emerald-500" />
+                  <span>{g}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {/* Need Help */}
+          <div className={FORM_CARD}>
+            <div className="space-y-2 p-4">
+              <div className="flex items-center gap-1.5 text-sm font-semibold text-text-primary">
+                <ShieldCheck size={15} className="text-indigo-500" /> Need Help?
+              </div>
+              <p className="text-xs text-text-secondary">
+                For any queries related to expense claims, please contact your HR or Finance team.
+              </p>
+              <button
                 type="button"
                 onClick={() =>
-                  setClaimParty((cp) =>
-                    cp.expenseFor === o.value
-                      ? cp
-                      : o.value === "employee"
-                      ? { ...blankClaimParty(), expenseFor: "employee" }
-                      : { ...blankClaimParty(), expenseFor: "vendor" }
-                  )
+                  toast("Expense policy: please refer to the Finance team for the latest version.")
                 }
-                className={`flex items-start gap-2 rounded-xl border p-3 text-left transition ${
-                  active
-                    ? "border-indigo-500 bg-indigo-50 dark:bg-indigo-500/10"
-                    : "border-border-color bg-surface hover:bg-surface-muted"
-                }`}
+                className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-border-color bg-surface px-3 text-xs font-semibold text-text-secondary transition hover:bg-surface-muted"
               >
-                <span
-                  className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 ${
-                    active ? "border-indigo-500" : "border-border-color"
-                  }`}
-                >
-                  {active ? <span className="h-2 w-2 rounded-full bg-indigo-500" /> : null}
-                </span>
-                <span className="flex items-center gap-1.5 text-sm font-semibold text-text-primary">
-                  <o.icon size={14} />
-                  {o.label}
-                </span>
+                <FileText size={13} /> View Expense Policy
               </button>
-            );
-          })}
-        </div>
-
-        {claimParty.expenseFor === "employee" ? (
-          <>
-            <EmployeePartyPicker
-              value={claimParty}
-              onChange={(p) => setClaimParty((cp) => ({ ...cp, ...p }))}
-            />
-            <div className="rounded-xl border border-border-color bg-surface-muted/50 p-3 text-xs text-text-secondary">
-              <div>
-                <span className="font-semibold text-text-muted">Submitted by:</span>{" "}
-                {user?.name || "You"}
-              </div>
-              {claimParty.empRefName ? (
-                <div className="mt-0.5">
-                  <span className="font-semibold text-text-muted">Expense employee (claimant):</span>{" "}
-                  {claimParty.empRefName}
-                  {claimParty.empRefCode ? ` · ${claimParty.empRefCode}` : ""}
-                </div>
-              ) : null}
-              {claimParty.empRefName && user?.name && claimParty.empRefName.trim().toLowerCase() !== user.name.trim().toLowerCase() ? (
-                <div className="mt-1 text-amber-700 dark:text-amber-400">
-                  You are raising this on behalf of another employee — the claim will belong to
-                  them, and their approval chain applies. You remain recorded as the submitter.
-                </div>
-              ) : null}
             </div>
-          </>
-        ) : (
-          <p className="rounded-xl border border-border-color bg-surface-muted/50 p-3 text-xs text-text-muted">
-            Each expense item below selects its own Vendor from the vendor master.
-          </p>
-        )}
+          </div>
+        </aside>
       </div>
 
-      {/* Expense Items — one editable card per item, progressive disclosure */}
-      <div className={`${CARD_SHELL} overflow-hidden`}>
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border-color/70 px-4 py-3">
-          <h2 className="text-sm font-semibold text-text-primary">
-            Expense Items ({rows.length})
-          </h2>
+      {/* Sticky bottom action bar */}
+      <div className="sticky bottom-0 z-20 -mx-3 -mb-3 mt-3 border-t border-border-color bg-surface/95 px-3 py-3 backdrop-blur md:-mx-4 md:-mb-4 md:px-4 lg:-mx-5 lg:-mb-5 lg:px-5">
+        <div className="flex items-center justify-between gap-2">
           <button
             type="button"
-            onClick={addRow}
-            className="inline-flex h-9 items-center gap-1.5 rounded-full border border-indigo-200 bg-indigo-50 px-3.5 text-sm font-semibold text-indigo-700 transition hover:bg-indigo-100 dark:border-indigo-500/20 dark:bg-indigo-500/10 dark:text-indigo-300"
+            onClick={() => navigate("/dashboard/expense-claims/my")}
+            disabled={busy}
+            className="inline-flex h-11 items-center gap-1.5 rounded-lg border border-border-color bg-surface px-4 text-sm font-semibold text-text-secondary transition hover:bg-surface-muted disabled:opacity-50"
           >
-            <Plus size={15} /> Add Expense
+            <ArrowLeft size={15} /> Cancel
           </button>
-        </div>
-
-        <div className="space-y-3 p-3 sm:p-4">
-          {rows.map((row, index) => (
-            <div key={row.localKey}>
-              <ExpenseItemCard
-                item={row}
-                party={claimParty}
-                index={index}
-                meta={meta}
-                errors={itemErrorMap[row.localKey] || []}
-                collapsed={Boolean(collapsed[row.localKey])}
-                onToggle={() =>
-                  setCollapsed((p) => ({ ...p, [row.localKey]: !p[row.localKey] }))
-                }
-                onChange={(p) => setRow(row.localKey, p)}
-                onRemove={() => removeRow(row.localKey)}
-                removable={rows.length > 1}
-                attachments={row.attachments}
-                uploading={uploadingKey === row.localKey}
-                onPickFile={() => pickFile(row.localKey)}
-                onOpenBill={(attId) => openBill(attId).catch((err) => toast.error(err.message))}
-                onRemoveBill={(attId) => handleRemoveBill(row, attId)}
-              />
-              <input
-                ref={(el) => (fileInputs.current[row.localKey] = el)}
-                type="file"
-                accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
-                className="hidden"
-                onChange={(e) => {
-                  handleFileChosen(row, e.target.files?.[0]);
-                  e.target.value = "";
-                }}
-              />
-            </div>
-          ))}
-        </div>
-
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border-color/70 bg-surface-muted/50 px-4 py-3">
-          <button
-            type="button"
-            onClick={addRow}
-            className="inline-flex items-center gap-1.5 text-sm font-semibold text-indigo-600 hover:text-indigo-700 dark:text-indigo-300"
-          >
-            <Plus size={15} /> Add Expense
-          </button>
-          <div className="text-right">
-            <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-text-muted">
-              Total Expense Claimed
-            </div>
-            <div className="text-xl font-bold text-text-primary">{formatCurrency(totalClaimed)}</div>
+          <div className="flex flex-1 items-center justify-end gap-2 sm:flex-none">
+            {saveDraftBtn()}
+            {submitBtn()}
           </div>
         </div>
       </div>
-      </>
-      )}
 
       <AddVendorModal
         open={addVendorOpen}
@@ -951,5 +1106,51 @@ export default function RaiseExpense() {
         onCancel={() => setConfirmDelete(false)}
       />
     </div>
+  );
+}
+
+function SummaryRow({ label, value }) {
+  return (
+    <div className="flex items-center justify-between gap-2">
+      <span className="text-xs text-text-secondary">{label}</span>
+      <span className="text-sm font-semibold text-text-primary">{value}</span>
+    </div>
+  );
+}
+
+function SaveDraftButton({ onClick, busy, saving, full }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={busy}
+      className={`inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-border-color bg-surface px-4 text-sm font-semibold text-text-secondary transition hover:bg-surface-muted disabled:opacity-50 ${
+        full ? "flex-1" : ""
+      }`}
+    >
+      {saving ? <Loader2 className="animate-spin" size={15} /> : <Save size={15} />}
+      Save as Draft
+    </button>
+  );
+}
+
+function SubmitButton({ onClick, busy, blocked, submitting, label, full }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={busy || blocked}
+      title={
+        blocked
+          ? "You are configured as the L1 approver for your own claim. Ask an administrator to change the L1 approver, then submit."
+          : undefined
+      }
+      className={`inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-indigo-500 to-violet-500 px-5 text-sm font-semibold text-white shadow-sm transition hover:opacity-95 disabled:opacity-50 ${
+        full ? "flex-1" : ""
+      }`}
+    >
+      {submitting ? <Loader2 className="animate-spin" size={15} /> : <Send size={15} />}
+      {label}
+    </button>
   );
 }

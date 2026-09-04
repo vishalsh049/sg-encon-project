@@ -1,29 +1,43 @@
 import { useEffect, useState } from "react";
-import { Loader2 } from "lucide-react";
+import { CheckCircle2, Loader2, Search, UserRound } from "lucide-react";
 
 import { lookupEmployee } from "../../lib/expenseClaimsApi";
 
 const FIELD =
-  "h-10 w-full rounded-xl border border-border-color bg-surface px-3 text-sm text-text-primary outline-none transition focus:border-indigo-400 disabled:bg-surface-muted disabled:text-text-muted";
-const LABEL = "mb-1 block text-[11px] font-semibold uppercase tracking-[0.1em] text-text-muted";
+  "h-11 w-full rounded-lg border border-border-color bg-surface px-3 text-sm text-text-primary outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/15 disabled:bg-surface-muted disabled:text-text-muted";
+const LABEL = "mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.08em] text-text-muted";
 
-// Read-only summary of the fetched employee master record.
-function ReadOnlyInfo({ title, rows }) {
-  const visible = rows.filter(([, v]) => v !== null && v !== undefined && String(v) !== "");
-  if (!visible.length) return null;
+// Compact horizontal panel for the fetched employee master record — a light
+// info strip that does not eat vertical space.
+function EmployeeInfoPanel({ info }) {
+  const cells = [
+    ["Name", info.employeeName],
+    ["Employee ID", info.employeeCode],
+    ["Designation", info.designation],
+    ["Circle", info.circle],
+    ["CMP", info.cmp],
+    ["Bank A/C", info.bankAccount],
+    ["IFSC", info.ifsc],
+  ].filter(([, v]) => v !== null && v !== undefined && String(v).trim() !== "");
+
   return (
-    <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-3 dark:border-emerald-500/20 dark:bg-emerald-500/10">
-      <div className="mb-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300">✓ {title}</div>
-      <dl className="grid grid-cols-1 gap-x-4 gap-y-1.5 sm:grid-cols-2 lg:grid-cols-3">
-        {visible.map(([k, v]) => (
+    <div className="rounded-lg border border-emerald-200 bg-emerald-50/70 p-3 dark:border-emerald-500/20 dark:bg-emerald-500/10">
+      <div className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-emerald-700 dark:text-emerald-300">
+        <CheckCircle2 size={13} /> Employee Information
+      </div>
+      <dl className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-3 lg:grid-cols-4">
+        {cells.map(([k, v]) => (
           <div key={k} className="min-w-0">
-            <dt className="text-[10px] font-semibold uppercase tracking-wide text-text-muted">{k}</dt>
-            <dd className="truncate text-sm text-text-primary" title={String(v)}>
+            <dt className="text-[10px] font-medium uppercase tracking-wide text-text-muted">{k}</dt>
+            <dd className="truncate text-[13px] font-medium text-text-primary" title={String(v)}>
               {v}
             </dd>
           </div>
         ))}
       </dl>
+      <p className="mt-2 text-[10px] text-text-muted">
+        Applies to every expense item in this claim.
+      </p>
     </div>
   );
 }
@@ -76,7 +90,7 @@ export default function EmployeePartyPicker({ value, onChange }) {
   };
 
   // Re-load the master details once when editing a claim that already has an
-  // employee fetched, so the read-only card shows on open.
+  // employee fetched, so the info panel shows on open.
   useEffect(() => {
     if (value.empRefCode) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -85,9 +99,11 @@ export default function EmployeePartyPicker({ value, onChange }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const resolved = info && info.employeeCode === value.empRefCode;
+
   return (
     <div className="space-y-3">
-      <label className="block">
+      <div>
         <span className={LABEL}>
           Employee ID / HRMS ID <span className="text-rose-500">*</span>
         </span>
@@ -102,6 +118,7 @@ export default function EmployeePartyPicker({ value, onChange }) {
             }`}
             placeholder="Enter Employee ID / HRMS ID"
             value={empInput}
+            aria-invalid={Boolean(error)}
             onChange={(e) => setEmpInput(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter") {
@@ -114,33 +131,25 @@ export default function EmployeePartyPicker({ value, onChange }) {
             type="button"
             onClick={() => fetchEmployee()}
             disabled={busy || !empInput.trim()}
-            className="inline-flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-xl border border-border-color bg-surface px-5 text-sm font-medium text-text-secondary transition hover:bg-surface-muted disabled:opacity-50"
+            className="inline-flex h-11 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-border-color bg-surface px-5 text-sm font-semibold text-text-secondary transition hover:bg-surface-muted disabled:opacity-50"
           >
-            {busy ? <Loader2 className="animate-spin" size={14} /> : null}
+            {busy ? <Loader2 className="animate-spin" size={14} /> : <Search size={14} />}
             Fetch
           </button>
         </div>
-      </label>
+      </div>
       {error ? (
         <p className="text-sm font-medium text-rose-600 dark:text-rose-400">{error}</p>
-      ) : info && info.employeeCode === value.empRefCode ? (
-        <ReadOnlyInfo
-          title="Employee Found — used for every expense item in this claim"
-          rows={[
-            ["Employee Name", info.employeeName],
-            ["Employee ID / HRMS ID", info.employeeCode],
-            ["Designation", info.designation],
-            ["Circle", info.circle],
-            ["CMP", info.cmp],
-            ["Bank Account No.", info.bankAccount],
-            ["IFSC Code", info.ifsc],
-          ]}
-        />
+      ) : resolved ? (
+        <EmployeeInfoPanel info={info} />
       ) : (
-        <p className="text-xs text-text-muted">
-          Enter the Employee ID / HRMS ID and click Fetch to load details from the employee master.
-          These details apply to every expense item in this claim.
-        </p>
+        <div className="flex items-start gap-2.5 rounded-lg border border-dashed border-border-color bg-surface-muted/40 p-3 text-xs text-text-muted">
+          <UserRound size={15} className="mt-0.5 shrink-0" />
+          <span>
+            Enter the Employee ID / HRMS ID and click <strong>Fetch</strong> to load details from
+            the employee master. These details apply to every expense item in this claim.
+          </span>
+        </div>
       )}
     </div>
   );
